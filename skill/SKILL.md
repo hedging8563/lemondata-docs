@@ -1,21 +1,6 @@
 ---
 name: lemondata-api-integration
-description: Quickly integrate LemonData's hundreds of AI APIs with automatic code generation in multiple languages
-triggers:
-  - "LemonData"
-  - "lemondata"
-  - "API integration"
-  - "AI API"
-  - "GPT"
-  - "Claude"
-  - "Gemini"
-  - "image generation"
-  - "video generation"
-  - "music generation"
-  - "3D model"
-  - "text to speech"
-  - "speech to text"
-  - "embeddings"
+description: Integrate LemonData AI APIs (GPT, Claude, Gemini, DeepSeek, image generation, video generation, music, 3D, TTS, STT, embeddings) into your code. Use when the user mentions LemonData, AI API integration, or wants to use models like GPT-4o, Claude, Gemini, Midjourney, Flux, Sora, Suno, or Tripo3D. Generates code in Python, JavaScript, Go, PHP, or cURL.
 ---
 
 # LemonData API Integration Assistant
@@ -34,7 +19,7 @@ You are a LemonData API integration expert. Help users quickly find and integrat
 ### Step 1: Get API Key
 
 First, ask if the user has a LemonData API Key:
-- If not, guide them to https://lemondata.cc/dashboard/api-keys to create one
+- If not, guide them to https://lemondata.cc/dashboard/api to create one
 - API Key format: `sk-...` (same as OpenAI format)
 
 ### Step 2: Understand Requirements
@@ -44,14 +29,14 @@ Identify the API category the user needs:
 | Category | Example Models | API Endpoint |
 |----------|---------------|--------------|
 | 💬 Chat Completion | GPT-4o, Claude, Gemini | `/v1/chat/completions` |
-| 🎨 Image Generation | DALL-E 3, Midjourney, Flux | `/v1/images/generations` |
+| 🎨 Image Generation | Midjourney, Flux, Stable Diffusion | `/v1/images/generations` |
 | 🎬 Video Generation | Sora, Runway, Kling, Luma | `/v1/video/generations` |
 | 🎵 Music Generation | Suno | `/v1/music/generations` |
 | 🗿 3D Model | Tripo3D | `/v1/3d/generations` |
 | 🎤 Text to Speech | TTS | `/v1/audio/speech` |
 | 🎧 Speech to Text | Whisper | `/v1/audio/transcriptions` |
 | 📊 Embeddings | text-embedding-3 | `/v1/embeddings` |
-| 🔄 Rerank | bge-reranker | `/v1/rerank` |
+| 🔄 Rerank | bce-reranker, qwen3-rerank | `/v1/rerank` |
 
 ### Step 3: Search APIs
 
@@ -250,13 +235,13 @@ message = client.messages.create(
 ## FAQ
 
 **Q: Where do I get an API Key?**
-A: Sign in at https://lemondata.cc/dashboard/api-keys to create one
+A: Sign in at https://lemondata.cc/dashboard/api to create one
 
 **Q: Which models are supported?**
-A: Hundreds of models including GPT, Claude, Gemini, DeepSeek, Llama, etc. Full list at https://lemondata.cc/models
+A: Hundreds of models including GPT, Claude, Gemini, DeepSeek, Llama, etc. Full list at https://lemondata.cc/en/models
 
 **Q: What's the pricing?**
-A: 30% lower than official prices. Details at https://lemondata.cc/pricing
+A: 30% lower than official prices. Details at https://lemondata.cc/#pricing
 
 **Q: Which SDKs are supported?**
 A: Fully compatible with OpenAI SDK (Python, Node.js, Go, etc.), plus Anthropic SDK and Google Gemini SDK
@@ -265,6 +250,6 @@ A: Fully compatible with OpenAI SDK (Python, Node.js, Go, etc.), plus Anthropic 
 
 - Website: https://lemondata.cc
 - API Documentation: https://docs.lemondata.cc
-- Pricing: https://lemondata.cc/pricing
-- Models: https://lemondata.cc/models
+- Pricing: https://lemondata.cc/#pricing
+- Models: https://lemondata.cc/en/models
 - Dashboard: https://lemondata.cc/dashboard

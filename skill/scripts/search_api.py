@@ -100,7 +100,7 @@ def get_model_category(model_id: str, owned_by: str) -> str:
         return "🗿 3D Models"
 
     # Image generation
-    if any(x in model_lower for x in ["dall-e", "dalle", "midjourney", "flux", "sd", "stable", "imagen", "ideogram"]):
+    if any(x in model_lower for x in ["midjourney", "flux", "sd", "stable", "imagen", "ideogram", "kling-image"]):
         return "🎨 Image Generation"
 
     # Audio

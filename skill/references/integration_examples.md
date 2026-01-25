@@ -65,10 +65,9 @@ client = OpenAI(
 )
 
 response = client.images.generate(
-    model="dall-e-3",
+    model="flux-1.1-pro",
     prompt="A beautiful sunset over mountains",
     size="1024x1024",
-    quality="standard",
     n=1
 )
 
@@ -208,10 +207,9 @@ const client = new OpenAI({
 });
 
 const response = await client.images.generate({
-  model: 'dall-e-3',
+  model: 'flux-1.1-pro',
   prompt: 'A beautiful sunset over mountains',
   size: '1024x1024',
-  quality: 'standard',
   n: 1
 });
 
@@ -365,7 +363,7 @@ curl_setopt_array($ch, [
         'Authorization: Bearer sk-your-api-key'
     ],
     CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'dall-e-3',
+        'model' => 'flux-1.1-pro',
         'prompt' => 'A beautiful sunset over mountains',
         'size' => '1024x1024',
         'n' => 1
@@ -404,7 +402,7 @@ curl -X POST "https://api.lemondata.cc/v1/images/generations" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk-your-api-key" \
   -d '{
-    "model": "dall-e-3",
+    "model": "flux-1.1-pro",
     "prompt": "A beautiful sunset over mountains",
     "size": "1024x1024",
     "n": 1
