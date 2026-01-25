@@ -13,6 +13,17 @@ Set `stream: true` in your request:
 
 <CodeGroup>
 
+```bash cURL
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Write a short poem"}],
+    "stream": true
+  }'
+```
+
 ```python Python
 from openai import OpenAI
 
@@ -54,15 +65,67 @@ for await (const chunk of stream) {
 }
 ```
 
-```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Write a short poem"}],
-    "stream": true
-  }'
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "io"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    stream, _ := client.CreateChatCompletionStream(
+        context.Background(),
+        openai.ChatCompletionRequest{
+            Model:  "gpt-4o",
+            Messages: []openai.ChatCompletionMessage{
+                {Role: openai.ChatMessageRoleUser, Content: "Write a short poem"},
+            },
+            Stream: true,
+        },
+    )
+    defer stream.Close()
+
+    for {
+        response, err := stream.Recv()
+        if err == io.EOF {
+            break
+        }
+        fmt.Print(response.Choices[0].Delta.Content)
+    }
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'gpt-4o',
+        'messages' => [['role' => 'user', 'content' => 'Write a short poem']],
+        'stream' => true
+    ]),
+    CURLOPT_WRITEFUNCTION => function($ch, $data) {
+        echo $data;
+        return strlen($data);
+    }
+]);
+
+curl_exec($ch);
+curl_close($ch);
 ```
 
 </CodeGroup>
