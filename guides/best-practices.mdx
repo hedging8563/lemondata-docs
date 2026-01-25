@@ -1,0 +1,308 @@
+---
+title: "Best Practices"
+description: "Optimize your LemonData API usage for cost, performance, and reliability"
+---
+
+## Model Selection
+
+Choosing the right model can significantly impact cost and quality.
+
+### Task-Based Recommendations
+
+| Task | Recommended Models | Reasoning |
+|------|-------------------|-----------|
+| **Simple Q&A** | `gpt-4o-mini`, `gemini-2.0-flash` | Fast, cheap, good enough |
+| **Complex reasoning** | `o1`, `claude-3-5-sonnet`, `deepseek-r1` | Better logic and planning |
+| **Coding** | `claude-sonnet-4`, `gpt-4o`, `deepseek-coder` | Optimized for code |
+| **Creative writing** | `claude-3-5-sonnet`, `gpt-4o` | Better prose quality |
+| **Vision/Images** | `gpt-4o`, `claude-3-5-sonnet`, `gemini-2.0-flash` | Native vision support |
+| **Long context** | `gemini-2.5-pro`, `claude-3-5-sonnet` | 1M+ token windows |
+| **Cost-sensitive** | `gpt-4o-mini`, `gemini-2.0-flash`, `deepseek-v3` | Best value |
+
+### Cost Tiers
+
+```
+$$$$ Premium: o1, claude-opus-4, gpt-4o
+$$$  Standard: claude-3-5-sonnet, gpt-4o
+$$   Budget:   gpt-4o-mini, gemini-2.0-flash
+$    Economy:  deepseek-v3, llama-3.3-70b
+```
+
+## Cost Optimization
+
+### 1. Use Smaller Models First
+
+```python
+def smart_query(question: str, complexity: str = "auto"):
+    """Use cheaper models for simple tasks."""
+
+    if complexity == "simple":
+        model = "gpt-4o-mini"
+    elif complexity == "complex":
+        model = "gpt-4o"
+    else:
+        # Start cheap, escalate if needed
+        model = "gpt-4o-mini"
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": question}]
+    )
+    return response
+```
+
+### 2. Set max_tokens
+
+Always set a reasonable `max_tokens` limit:
+
+```python
+# ❌ Bad: No limit, could generate thousands of tokens
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Summarize this article"}]
+)
+
+# ✅ Good: Limit response length
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Summarize this article"}],
+    max_tokens=500  # Reasonable limit for a summary
+)
+```
+
+### 3. Optimize Prompts
+
+```python
+# ❌ Verbose prompt (more input tokens)
+prompt = """
+I would like you to please help me by analyzing the following text
+and providing a comprehensive summary of the main points. Please be
+thorough but also concise in your response. The text is as follows:
+{text}
+"""
+
+# ✅ Concise prompt (fewer tokens)
+prompt = "Summarize the key points:\n{text}"
+```
+
+### 4. Enable Caching
+
+Take advantage of [semantic caching](/guides/caching):
+
+```python
+# For repeated similar queries, caching provides major savings
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is machine learning?"}],
+    temperature=0  # Deterministic = better cache hits
+)
+```
+
+### 5. Batch Similar Requests
+
+```python
+# ❌ Many small requests
+for question in questions:
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": question}]
+    )
+
+# ✅ Fewer larger requests
+combined_prompt = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": f"Answer each question:\n{combined_prompt}"}]
+)
+```
+
+## Performance Optimization
+
+### 1. Use Streaming for UX
+
+Streaming improves perceived performance:
+
+```python
+stream = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Write a long essay"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+### 2. Choose Fast Models for Interactive Use
+
+| Use Case | Recommended | Latency |
+|----------|-------------|---------|
+| Chat UI | `gpt-4o-mini`, `gemini-2.0-flash` | ~200ms first token |
+| Tab completion | `claude-3-5-haiku` | ~150ms first token |
+| Background processing | `gpt-4o`, `claude-3-5-sonnet` | ~500ms first token |
+
+### 3. Set Timeouts
+
+```python
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+    timeout=60.0  # 60 second timeout
+)
+```
+
+## Reliability
+
+### 1. Implement Retries
+
+```python
+import time
+from openai import RateLimitError, APIError
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError:
+            wait = 2 ** attempt
+            print(f"Rate limited, waiting {wait}s...")
+            time.sleep(wait)
+        except APIError as e:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(1)
+    raise Exception("Max retries exceeded")
+```
+
+### 2. Handle Errors Gracefully
+
+```python
+from openai import APIError, AuthenticationError, RateLimitError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError:
+    # Check API key
+    notify_admin("Invalid API key")
+except RateLimitError:
+    # Queue for later or use backup
+    add_to_queue(request)
+except APIError as e:
+    if e.status_code == 402:
+        notify_admin("Balance low")
+    elif e.status_code >= 500:
+        # Server error, retry later
+        schedule_retry(request)
+```
+
+### 3. Use Fallback Models
+
+```python
+FALLBACK_CHAIN = ["gpt-4o", "claude-3-5-sonnet", "gemini-2.0-flash"]
+
+def chat_with_fallback(messages):
+    for model in FALLBACK_CHAIN:
+        try:
+            return client.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+        except APIError:
+            continue
+    raise Exception("All models failed")
+```
+
+## Security
+
+### 1. Protect API Keys
+
+```python
+# ❌ Never hardcode keys
+client = OpenAI(api_key="sk-abc123...")
+
+# ✅ Use environment variables
+import os
+client = OpenAI(api_key=os.environ["LEMONDATA_API_KEY"])
+```
+
+### 2. Validate User Input
+
+```python
+def validate_message(content: str) -> bool:
+    """Validate user input before sending to API."""
+    if len(content) > 100000:
+        raise ValueError("Message too long")
+    # Add other validation as needed
+    return True
+```
+
+### 3. Set API Key Limits
+
+Create separate API keys with spending limits for:
+- Development/testing
+- Production
+- Different applications
+
+## Monitoring
+
+### 1. Track Usage
+
+Check your dashboard regularly for:
+- Token usage by model
+- Cost breakdown
+- Cache hit rates
+- Error rates
+
+### 2. Log Important Metrics
+
+```python
+import logging
+
+response = client.chat.completions.create(...)
+
+logging.info({
+    "model": response.model,
+    "prompt_tokens": response.usage.prompt_tokens,
+    "completion_tokens": response.usage.completion_tokens,
+    "total_tokens": response.usage.total_tokens,
+})
+```
+
+### 3. Set Up Alerts
+
+Configure low balance alerts in your dashboard to avoid service interruption.
+
+## Checklist
+
+<AccordionGroup>
+  <Accordion title="Cost optimization">
+    - [ ] Using appropriate model for each task
+    - [ ] Setting max_tokens limits
+    - [ ] Prompts are concise
+    - [ ] Caching enabled where appropriate
+    - [ ] Batching similar requests
+  </Accordion>
+
+  <Accordion title="Performance">
+    - [ ] Streaming for interactive UX
+    - [ ] Fast models for real-time use
+    - [ ] Timeouts configured
+  </Accordion>
+
+  <Accordion title="Reliability">
+    - [ ] Retry logic implemented
+    - [ ] Error handling in place
+    - [ ] Fallback models configured
+  </Accordion>
+
+  <Accordion title="Security">
+    - [ ] API keys in environment variables
+    - [ ] Input validation
+    - [ ] Separate keys for dev/prod
+    - [ ] Spending limits set
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,193 @@
+---
+title: "Intelligent Caching"
+description: "Reduce costs and latency with context-aware semantic caching"
+---
+
+## Overview
+
+LemonData provides an intelligent caching system that can significantly reduce your API costs and response latency. Our caching goes beyond simple request matching - it understands the **semantic meaning** of your prompts.
+
+<CardGroup cols={2}>
+  <Card title="Cost Savings" icon="piggy-bank">
+    Cache hits are billed at a fraction of the normal cost.
+  </Card>
+  <Card title="Faster Responses" icon="bolt">
+    Cached responses are returned instantly, no model inference needed.
+  </Card>
+  <Card title="Context-Aware" icon="brain">
+    Semantic matching finds similar requests even with different wording.
+  </Card>
+  <Card title="Privacy Controls" icon="shield">
+    Full control over what gets cached and shared.
+  </Card>
+</CardGroup>
+
+## How It Works
+
+LemonData uses a two-layer caching system:
+
+### Layer 1: Response Cache (Exact Match)
+
+For deterministic requests (`temperature=0`), we cache the exact response:
+
+- **Match**: Identical model, messages, and parameters
+- **Speed**: Instant (microseconds)
+- **Best for**: Repeated identical queries
+
+### Layer 2: Semantic Cache (Similarity Match)
+
+For all requests, we also check semantic similarity:
+
+- **Match**: Similar meaning, even with different wording
+- **Threshold**: 92% similarity (configurable)
+- **Best for**: FAQ-style queries, common questions
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (92%+ semantic similarity)
+```
+
+## Cache Headers
+
+### Request Headers
+
+Control caching behavior per-request:
+
+```bash
+# Skip cache lookup, always call the model
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
+```
+
+| Header | Value | Effect |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | Skip cache, fresh response |
+| `Cache-Control: no-store` | - | Don't cache this response |
+
+### Response Headers
+
+Every response includes cache status:
+
+```
+X-Cache: HIT           # Response served from cache
+X-Cache: MISS          # Fresh response from model
+X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
+```
+
+## Checking Cache Status
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+```
+
+## Cache Billing
+
+Cache hits are significantly cheaper than fresh requests:
+
+| Type | Cost |
+|------|------|
+| Cache HIT | ~70% discount |
+| Cache MISS | Full price |
+
+The exact discount is shown in your dashboard usage logs.
+
+## Privacy Controls
+
+### API Key Level
+
+Configure caching behavior for each API key in your dashboard:
+
+| Mode | Description |
+|------|-------------|
+| **Default** | Cache enabled, may share with similar requests |
+| **No Share** | Cache enabled, but responses are private to your account |
+| **Disabled** | No caching at all |
+
+### Request Level
+
+Override per-request:
+
+```bash
+# Disable caching for this request
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Cache-Control: no-store" \
+  -d '...'
+```
+
+## Cache Feedback
+
+If you receive an incorrect cached response, you can report it:
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**Feedback types:**
+- `wrong_answer` - Factually incorrect
+- `outdated` - Information is stale
+- `irrelevant` - Doesn't match the question
+- `other` - Other issues
+
+When a cache entry receives enough negative feedback, it's automatically invalidated.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use temperature=0 for cacheable queries">
+    Deterministic settings maximize cache hit rates.
+  </Accordion>
+
+  <Accordion title="Standardize prompt formats">
+    Consistent formatting improves semantic matching.
+  </Accordion>
+
+  <Accordion title="Use no-cache for time-sensitive queries">
+    Current events, real-time data should skip cache.
+  </Accordion>
+
+  <Accordion title="Monitor cache hit rates">
+    Check your dashboard for cache statistics and savings.
+  </Accordion>
+</AccordionGroup>
+
+## When NOT to Cache
+
+Disable caching for:
+
+- **Real-time information**: Stock prices, weather, news
+- **Personalized content**: User-specific recommendations
+- **Creative tasks**: When variety is desired
+- **Sensitive data**: Confidential information
+
+```python
+# For time-sensitive queries
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_headers={"Cache-Control": "no-cache"}
+)
+```
