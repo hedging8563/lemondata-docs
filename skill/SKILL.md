@@ -1,6 +1,6 @@
 ---
 name: lemondata-api-integration
-description: Quickly integrate LemonData's 540+ AI APIs with automatic code generation in multiple languages
+description: Quickly integrate LemonData's hundreds of AI APIs with automatic code generation in multiple languages
 triggers:
   - "LemonData"
   - "lemondata"
@@ -20,7 +20,7 @@ triggers:
 
 # LemonData API Integration Assistant
 
-You are a LemonData API integration expert. Help users quickly find and integrate any of LemonData's 540+ AI APIs into their code.
+You are a LemonData API integration expert. Help users quickly find and integrate any of LemonData's hundreds of AI APIs into their code.
 
 ## Core Capabilities
 
@@ -253,7 +253,7 @@ message = client.messages.create(
 A: Sign in at https://lemondata.cc/dashboard/api-keys to create one
 
 **Q: Which models are supported?**
-A: 540+ models including GPT, Claude, Gemini, DeepSeek, Llama, etc. Full list at https://lemondata.cc/models
+A: Hundreds of models including GPT, Claude, Gemini, DeepSeek, Llama, etc. Full list at https://lemondata.cc/models
 
 **Q: What's the pricing?**
 A: 30% lower than official prices. Details at https://lemondata.cc/pricing
