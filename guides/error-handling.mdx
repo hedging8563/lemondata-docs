@@ -1,0 +1,208 @@
+---
+title: "Error Handling"
+description: "Handle API errors gracefully"
+---
+
+## Error Response Format
+
+All errors return a consistent JSON format:
+
+```json
+{
+  "error": {
+    "message": "Human-readable error description",
+    "type": "error_type",
+    "code": "error_code",
+    "param": "parameter_name"  // Optional, for validation errors
+  }
+}
+```
+
+## HTTP Status Codes
+
+| Code | Description |
+|------|-------------|
+| 400 | Bad Request - Invalid parameters |
+| 401 | Unauthorized - Invalid or missing API key |
+| 402 | Payment Required - Insufficient balance |
+| 404 | Not Found - Model or resource not found |
+| 429 | Too Many Requests - Rate limit exceeded |
+| 500 | Internal Server Error |
+| 502 | Bad Gateway - Upstream provider error |
+| 503 | Service Unavailable - All channels failed |
+
+## Error Types
+
+### Authentication Errors (401)
+
+| Type | Description |
+|------|-------------|
+| `unauthorized` | No API key provided |
+| `invalid_api_key` | API key format is incorrect |
+| `expired_api_key` | API key has been revoked |
+
+```python
+from openai import OpenAI, AuthenticationError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError as e:
+    print(f"Authentication failed: {e.message}")
+```
+
+### Payment Errors (402)
+
+| Type | Description |
+|------|-------------|
+| `insufficient_balance` | Account balance is too low |
+| `quota_exceeded` | API key usage limit reached |
+
+```python
+from openai import OpenAI, APIStatusError
+
+try:
+    response = client.chat.completions.create(...)
+except APIStatusError as e:
+    if e.status_code == 402:
+        print("Please top up your account balance")
+```
+
+### Validation Errors (400)
+
+| Type | Description |
+|------|-------------|
+| `invalid_request_error` | Request parameters are invalid |
+| `context_length_exceeded` | Input too long for model |
+| `model_not_found` | Requested model doesn't exist |
+
+```json
+{
+  "error": {
+    "message": "model: 'gpt-999' is not a valid model",
+    "type": "invalid_request_error",
+    "param": "model"
+  }
+}
+```
+
+### Rate Limit Errors (429)
+
+When you exceed rate limits:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+**Headers included:**
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1234567890
+Retry-After: 60
+```
+
+### Upstream Errors (502, 503)
+
+| Type | Description |
+|------|-------------|
+| `upstream_error` | Provider returned an error |
+| `all_channels_failed` | No available providers |
+| `timeout_error` | Request timed out |
+
+## Handling Errors in Python
+
+```python
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            raise
+        except APIConnectionError as e:
+            print(f"Connection error: {e}")
+            raise
+        except APIError as e:
+            print(f"API error: {e.status_code} - {e.message}")
+            raise
+```
+
+## Handling Errors in JavaScript
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function chatWithRetry(messages, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages
+      });
+    } catch (error) {
+      if (error instanceof OpenAI.RateLimitError) {
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Implement exponential backoff">
+    When rate limited, wait progressively longer between retries:
+    ```python
+    wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+    ```
+  </Accordion>
+
+  <Accordion title="Set timeouts">
+    Always set reasonable timeouts to avoid hanging requests:
+    ```python
+    client = OpenAI(timeout=60.0)  # 60 second timeout
+    ```
+  </Accordion>
+
+  <Accordion title="Log errors for debugging">
+    Log the full error response including request ID for support:
+    ```python
+    except APIError as e:
+        logger.error(f"API Error: {e.status_code} - {e.message}")
+    ```
+  </Accordion>
+
+  <Accordion title="Handle model-specific errors">
+    Some models have specific requirements (e.g., max tokens, image formats).
+    Validate inputs before making requests.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,149 @@
+---
+title: "Get Video Status"
+api: "GET /v1/video/generations/{task_id}"
+description: "Retrieves the status and result of a video generation task"
+---
+
+## Path Parameters
+
+<ParamField path="task_id" type="string" required>
+  The task ID returned from the create video request.
+</ParamField>
+
+## Response
+
+<ResponseField name="task_id" type="string">
+  Task identifier.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Task status: `pending`, `processing`, `completed`, `failed`.
+</ResponseField>
+
+<ResponseField name="progress" type="number">
+  Progress percentage (0-100).
+</ResponseField>
+
+<ResponseField name="video_url" type="string">
+  URL of the generated video (when completed).
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message (if failed).
+</ResponseField>
+
+<ResponseField name="created_at" type="integer">
+  Creation timestamp.
+</ResponseField>
+
+<ResponseField name="completed_at" type="integer">
+  Completion timestamp (when done).
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl "https://api.lemondata.cc/v1/video/generations/video_abc123" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+import time
+
+task_id = "video_abc123"
+
+while True:
+    response = requests.get(
+        f"https://api.lemondata.cc/v1/video/generations/{task_id}",
+        headers={"Authorization": "Bearer sk-your-api-key"}
+    )
+
+    data = response.json()
+    print(f"Status: {data['status']}, Progress: {data.get('progress', 0)}%")
+
+    if data["status"] == "completed":
+        print(f"Video URL: {data['video_url']}")
+        break
+    elif data["status"] == "failed":
+        print(f"Error: {data['error']}")
+        break
+
+    time.sleep(5)  # Poll every 5 seconds
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response (pending)
+{
+  "task_id": "video_abc123",
+  "status": "pending",
+  "progress": 0,
+  "model": "kling-v2.6-pro",
+  "created_at": 1706000000
+}
+```
+
+```json Response (processing)
+{
+  "task_id": "video_abc123",
+  "status": "processing",
+  "progress": 45,
+  "model": "kling-v2.6-pro",
+  "created_at": 1706000000
+}
+```
+
+```json Response (completed)
+{
+  "task_id": "video_abc123",
+  "status": "completed",
+  "progress": 100,
+  "video_url": "https://cdn.lemondata.cc/videos/abc123.mp4",
+  "model": "kling-v2.6-pro",
+  "created_at": 1706000000,
+  "completed_at": 1706000060
+}
+```
+
+```json Response (failed)
+{
+  "task_id": "video_abc123",
+  "status": "failed",
+  "error": "Content policy violation",
+  "model": "kling-v2.6-pro",
+  "created_at": 1706000000
+}
+```
+</ResponseExample>
+
+## Polling Best Practices
+
+- Poll every 5-10 seconds
+- Implement exponential backoff for long tasks
+- Set a maximum timeout (e.g., 10 minutes)
+- Handle `failed` status gracefully
+
+```python
+import time
+
+def wait_for_video(task_id, max_wait=600, interval=5):
+    """Wait for video with timeout."""
+    start = time.time()
+
+    while time.time() - start < max_wait:
+        response = requests.get(
+            f"https://api.lemondata.cc/v1/video/generations/{task_id}",
+            headers={"Authorization": "Bearer sk-your-api-key"}
+        )
+        data = response.json()
+
+        if data["status"] == "completed":
+            return data["video_url"]
+        elif data["status"] == "failed":
+            raise Exception(data.get("error", "Video generation failed"))
+
+        time.sleep(interval)
+
+    raise TimeoutError("Video generation timed out")
+```
+

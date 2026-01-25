@@ -1,0 +1,230 @@
+---
+title: "Anthropic SDK"
+description: "Use LemonData with the Anthropic SDK for Claude models"
+---
+
+## Overview
+
+LemonData supports the native Anthropic Messages API format. Use the official Anthropic SDK with LemonData to access Claude models.
+
+## Installation
+
+<CodeGroup>
+
+```bash Python
+pip install anthropic
+```
+
+```bash Node.js
+npm install @anthropic-ai/sdk
+```
+
+</CodeGroup>
+
+## Configuration
+
+<CodeGroup>
+
+```python Python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc"
+)
+```
+
+```javascript JavaScript
+import Anthropic from '@anthropic-ai/sdk';
+
+const client = new Anthropic({
+  apiKey: 'sk-your-lemondata-key',
+  baseURL: 'https://api.lemondata.cc'
+});
+```
+
+</CodeGroup>
+
+<Note>
+  Note: The base URL is `https://api.lemondata.cc` (without `/v1`) for the Anthropic SDK.
+</Note>
+
+## Basic Usage
+
+```python
+message = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "Hello, Claude!"}
+    ]
+)
+
+print(message.content[0].text)
+```
+
+## With System Prompt
+
+```python
+message = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    system="You are a helpful coding assistant.",
+    messages=[
+        {"role": "user", "content": "Write a Python function to reverse a string"}
+    ]
+)
+```
+
+## Streaming
+
+```python
+with client.messages.stream(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Tell me a story"}]
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+```
+
+## Vision
+
+```python
+import base64
+
+# From URL
+message = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "What's in this image?"},
+            {
+                "type": "image",
+                "source": {
+                    "type": "url",
+                    "url": "https://example.com/image.jpg"
+                }
+            }
+        ]
+    }]
+)
+
+# From base64
+with open("image.png", "rb") as f:
+    image_data = base64.b64encode(f.read()).decode()
+
+message = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Describe this image"},
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": image_data
+                }
+            }
+        ]
+    }]
+)
+```
+
+## Tool Use
+
+```python
+message = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    tools=[{
+        "name": "get_weather",
+        "description": "Get the weather for a location",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "City name"}
+            },
+            "required": ["location"]
+        }
+    }],
+    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}]
+)
+
+# Check for tool use
+for block in message.content:
+    if block.type == "tool_use":
+        print(f"Tool: {block.name}")
+        print(f"Input: {block.input}")
+```
+
+## Extended Thinking (Claude 3.7+)
+
+For models that support extended thinking:
+
+```python
+message = client.messages.create(
+    model="claude-3-7-sonnet-20250219-thinking",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex math problem..."}]
+)
+
+# Access thinking blocks
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Response: {block.text}")
+```
+
+## Available Claude Models
+
+| Model | Best For |
+|-------|----------|
+| `claude-3-5-sonnet-20241022` | General purpose, coding |
+| `claude-3-5-haiku-20241022` | Fast responses |
+| `claude-3-7-sonnet-20250219` | Latest Sonnet |
+| `claude-3-7-sonnet-20250219-thinking` | Extended thinking |
+| `claude-opus-4-20250805` | Complex reasoning |
+| `claude-sonnet-4-20250514` | Balanced performance |
+
+## Error Handling
+
+```python
+from anthropic import APIError, RateLimitError, AuthenticationError
+
+try:
+    message = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except AuthenticationError:
+    print("Invalid API key")
+except RateLimitError:
+    print("Rate limit exceeded")
+except APIError as e:
+    print(f"API error: {e.status_code}")
+```
+
+## Comparison: OpenAI SDK vs Anthropic SDK
+
+Both work with LemonData for Claude models:
+
+| Feature | OpenAI SDK | Anthropic SDK |
+|---------|-----------|---------------|
+| Base URL | `https://api.lemondata.cc/v1` | `https://api.lemondata.cc` |
+| Endpoint | `/chat/completions` | `/v1/messages` |
+| System prompt | In messages array | Separate `system` parameter |
+| Extended thinking | Not supported | Supported |
+
+Choose based on your preference or existing codebase.

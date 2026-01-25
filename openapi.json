@@ -1,0 +1,2109 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LemonData AI Gateway",
+    "description": "Access **300+ AI models** through a unified OpenAI-compatible API. Supports chat completions, embeddings, image generation, audio (TTS/STT), and video generation.\n\n**Base URL:** `https://api.lemondata.cc`\n\n**Authentication:** Include your API key in the `Authorization` header: `Bearer sk-xxx`",
+    "version": "1.0.0",
+    "termsOfService": "https://lemondata.cc/tos",
+    "contact": {
+      "name": "Technical Support",
+      "email": "support@lemondata.cc"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.lemondata.cc",
+      "description": "Production server"
+    },
+    {
+      "url": "http://localhost:3001",
+      "description": "Local development (API Gateway)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Chat",
+      "description": "Chat completions API (OpenAI-compatible)"
+    },
+    {
+      "name": "Embeddings",
+      "description": "Text embeddings API"
+    },
+    {
+      "name": "Images",
+      "description": "Image generation API"
+    },
+    {
+      "name": "Audio",
+      "description": "Audio processing API (TTS & STT)"
+    },
+    {
+      "name": "Video",
+      "description": "Video generation API"
+    },
+    {
+      "name": "Models",
+      "description": "Available models listing"
+    },
+    {
+      "name": "Anthropic",
+      "description": "Anthropic-compatible Messages API"
+    },
+    {
+      "name": "Gemini",
+      "description": "Google Gemini-compatible API"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/chat/completions": {
+      "post": {
+        "tags": ["Chat"],
+        "summary": "Create chat completion",
+        "description": "Creates a model response for the given chat conversation. Supports streaming and function calling.",
+        "operationId": "createChatCompletion",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Basic chat completion",
+                  "value": {
+                    "model": "gpt-4o",
+                    "messages": [
+                      {"role": "system", "content": "You are a helpful assistant."},
+                      {"role": "user", "content": "Hello!"}
+                    ]
+                  }
+                },
+                "streaming": {
+                  "summary": "Streaming response",
+                  "value": {
+                    "model": "gpt-4o",
+                    "messages": [{"role": "user", "content": "Tell me a story"}],
+                    "stream": true
+                  }
+                },
+                "function_calling": {
+                  "summary": "Function calling",
+                  "value": {
+                    "model": "gpt-4o",
+                    "messages": [{"role": "user", "content": "What's the weather in Tokyo?"}],
+                    "tools": [
+                      {
+                        "type": "function",
+                        "function": {
+                          "name": "get_weather",
+                          "description": "Get weather for a location",
+                          "parameters": {
+                            "type": "object",
+                            "properties": {
+                              "location": {"type": "string"}
+                            },
+                            "required": ["location"]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-Sent Events stream with JSON chunks"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "502": {
+            "$ref": "#/components/responses/UpstreamError"
+          },
+          "503": {
+            "$ref": "#/components/responses/AllChannelsFailed"
+          }
+        }
+      }
+    },
+    "/v1/embeddings": {
+      "post": {
+        "tags": ["Embeddings"],
+        "summary": "Create embeddings",
+        "description": "Creates an embedding vector representing the input text.",
+        "operationId": "createEmbedding",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbeddingRequest"
+              },
+              "examples": {
+                "single": {
+                  "summary": "Single text embedding",
+                  "value": {
+                    "model": "text-embedding-3-small",
+                    "input": "The quick brown fox jumps over the lazy dog"
+                  }
+                },
+                "batch": {
+                  "summary": "Batch embeddings",
+                  "value": {
+                    "model": "text-embedding-3-small",
+                    "input": ["Hello world", "How are you?"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/images/generations": {
+      "post": {
+        "tags": ["Images"],
+        "summary": "Create image",
+        "description": "Creates an image given a prompt.",
+        "operationId": "createImage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageGenerationRequest"
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Basic image generation",
+                  "value": {
+                    "model": "dall-e-3",
+                    "prompt": "A white siamese cat",
+                    "size": "1024x1024"
+                  }
+                },
+                "hd": {
+                  "summary": "HD quality image",
+                  "value": {
+                    "model": "dall-e-3",
+                    "prompt": "A beautiful sunset over mountains",
+                    "size": "1792x1024",
+                    "quality": "hd",
+                    "style": "vivid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/audio/speech": {
+      "post": {
+        "tags": ["Audio"],
+        "summary": "Create speech",
+        "description": "Generates audio from the input text (Text-to-Speech).",
+        "operationId": "createSpeech",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AudioSpeechRequest"
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Basic TTS",
+                  "value": {
+                    "model": "tts-1",
+                    "input": "Hello, welcome to LemonData!",
+                    "voice": "alloy"
+                  }
+                },
+                "hd": {
+                  "summary": "HD quality TTS",
+                  "value": {
+                    "model": "tts-1-hd",
+                    "input": "This is high quality speech synthesis.",
+                    "voice": "nova",
+                    "response_format": "mp3",
+                    "speed": 1.0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Audio file",
+            "content": {
+              "audio/mpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/opus": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/aac": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/flac": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/audio/transcriptions": {
+      "post": {
+        "tags": ["Audio"],
+        "summary": "Create transcription",
+        "description": "Transcribes audio into text (Speech-to-Text).",
+        "operationId": "createTranscription",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AudioTranscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioTranscriptionResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/videos/generations": {
+      "post": {
+        "tags": ["Video"],
+        "summary": "Create video generation task",
+        "description": "Creates a video generation task. Videos are generated asynchronously. Use the task ID to poll for completion.",
+        "operationId": "createVideo",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoGenerationRequest"
+              },
+              "examples": {
+                "text_to_video": {
+                  "summary": "Text-to-Video",
+                  "value": {
+                    "model": "sora-2",
+                    "prompt": "A cinematic shot of a golden retriever running through a field of sunflowers",
+                    "duration": 5,
+                    "aspect_ratio": "16:9"
+                  }
+                },
+                "image_to_video": {
+                  "summary": "Image-to-Video",
+                  "value": {
+                    "model": "kling-v1",
+                    "prompt": "Make this image come alive with gentle movement",
+                    "image_url": "https://example.com/image.jpg",
+                    "duration": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/videos/generations/{id}": {
+      "get": {
+        "tags": ["Video"],
+        "summary": "Get video task status",
+        "description": "Retrieves the status and result of a video generation task.",
+        "operationId": "getVideoTask",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The video task ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoTaskResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "tags": ["Models"],
+        "summary": "List models",
+        "description": "Lists the currently available models.",
+        "operationId": "listModels",
+        "responses": {
+          "200": {
+            "description": "List of models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/models/{model}": {
+      "get": {
+        "tags": ["Models"],
+        "summary": "Get model",
+        "description": "Retrieves a model instance, providing basic information about the model.",
+        "operationId": "getModel",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "description": "The model ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Model information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Model"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Model not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/messages": {
+      "post": {
+        "tags": ["Anthropic"],
+        "summary": "Create message (Anthropic-compatible)",
+        "description": "Creates a model response using Anthropic's native request format. Supports Claude models with vision and streaming.\n\n**Authentication:** Use `x-api-key` header or `Authorization: Bearer` header.",
+        "operationId": "createAnthropicMessage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnthropicMessagesRequest"
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Basic message",
+                  "value": {
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 1024,
+                    "messages": [
+                      {"role": "user", "content": "Hello, Claude!"}
+                    ]
+                  }
+                },
+                "with_system": {
+                  "summary": "With system prompt",
+                  "value": {
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 1024,
+                    "system": "You are a helpful assistant.",
+                    "messages": [
+                      {"role": "user", "content": "What is 2+2?"}
+                    ]
+                  }
+                },
+                "streaming": {
+                  "summary": "Streaming response",
+                  "value": {
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 1024,
+                    "stream": true,
+                    "messages": [
+                      {"role": "user", "content": "Tell me a story"}
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnthropicMessagesResponse"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Anthropic-style SSE stream with message_start, content_block_delta, message_stop events"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimitExceeded"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1beta/models/{model}:generateContent": {
+      "post": {
+        "tags": ["Gemini"],
+        "summary": "Generate content (Gemini-compatible)",
+        "description": "Generates content using Google Gemini API format. Supports text and vision models.\n\n**Authentication:** Use `?key=` query parameter, `x-goog-api-key` header, or `Authorization: Bearer` header.",
+        "operationId": "geminiGenerateContent",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "description": "Model name (e.g., gemini-1.5-pro)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "required": false,
+            "description": "API key (alternative to header auth)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeminiRequest"
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Basic text generation",
+                  "value": {
+                    "contents": [
+                      {
+                        "parts": [{"text": "Hello, Gemini!"}]
+                      }
+                    ]
+                  }
+                },
+                "with_config": {
+                  "summary": "With generation config",
+                  "value": {
+                    "contents": [
+                      {
+                        "parts": [{"text": "Explain quantum computing"}]
+                      }
+                    ],
+                    "generationConfig": {
+                      "temperature": 0.7,
+                      "maxOutputTokens": 1024
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1beta/models/{model}:streamGenerateContent": {
+      "post": {
+        "tags": ["Gemini"],
+        "summary": "Stream generate content (Gemini-compatible)",
+        "description": "Streams content generation using Google Gemini API format. Returns Server-Sent Events.\n\n**Authentication:** Use `?key=` query parameter, `x-goog-api-key` header, or `Authorization: Bearer` header.",
+        "operationId": "geminiStreamGenerateContent",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "description": "Model name (e.g., gemini-1.5-pro)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "required": false,
+            "description": "API key (alternative to header auth)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeminiRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Streaming response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "SSE stream with Gemini response chunks"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "API Key authentication. Get your API key from the dashboard."
+      }
+    },
+    "schemas": {
+      "ChatCompletionRequest": {
+        "type": "object",
+        "required": ["model", "messages"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "ID of the model to use (e.g., gpt-4o, claude-3-5-sonnet)",
+            "example": "gpt-4o"
+          },
+          "messages": {
+            "type": "array",
+            "description": "A list of messages comprising the conversation",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "minItems": 1
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 1,
+            "description": "Sampling temperature (0-2)"
+          },
+          "top_p": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 1,
+            "description": "Nucleus sampling probability"
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 1,
+            "description": "Number of completions to generate"
+          },
+          "stream": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, returns a stream of events"
+          },
+          "stop": {
+            "oneOf": [
+              {"type": "string"},
+              {"type": "array", "items": {"type": "string"}, "maxItems": 4}
+            ],
+            "description": "Stop sequences"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum number of tokens to generate"
+          },
+          "max_completion_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum completion tokens (for o1 models)"
+          },
+          "presence_penalty": {
+            "type": "number",
+            "minimum": -2,
+            "maximum": 2,
+            "default": 0,
+            "description": "Presence penalty (-2 to 2)"
+          },
+          "frequency_penalty": {
+            "type": "number",
+            "minimum": -2,
+            "maximum": 2,
+            "default": 0,
+            "description": "Frequency penalty (-2 to 2)"
+          },
+          "tools": {
+            "type": "array",
+            "description": "List of tools the model may call",
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            }
+          },
+          "tool_choice": {
+            "oneOf": [
+              {"type": "string", "enum": ["none", "auto", "required"]},
+              {
+                "type": "object",
+                "properties": {
+                  "type": {"type": "string", "enum": ["function"]},
+                  "function": {
+                    "type": "object",
+                    "properties": {
+                      "name": {"type": "string"}
+                    },
+                    "required": ["name"]
+                  }
+                },
+                "required": ["type", "function"]
+              }
+            ],
+            "description": "Controls which function is called"
+          },
+          "response_format": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["text", "json_object"]
+              }
+            },
+            "description": "Response format specification"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Seed for deterministic generation"
+          },
+          "user": {
+            "type": "string",
+            "description": "End-user identifier for abuse detection"
+          }
+        }
+      },
+      "ChatMessage": {
+        "type": "object",
+        "required": ["role"],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["system", "user", "assistant", "function", "tool", "developer"],
+            "description": "The role of the message author"
+          },
+          "content": {
+            "oneOf": [
+              {"type": "string"},
+              {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {"type": "string", "enum": ["text"]},
+                        "text": {"type": "string"}
+                      },
+                      "required": ["type", "text"]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {"type": "string", "enum": ["image_url"]},
+                        "image_url": {
+                          "type": "object",
+                          "properties": {
+                            "url": {"type": "string"},
+                            "detail": {"type": "string", "enum": ["auto", "low", "high"]}
+                          },
+                          "required": ["url"]
+                        }
+                      },
+                      "required": ["type", "image_url"]
+                    }
+                  ]
+                }
+              },
+              {"type": "null"}
+            ],
+            "description": "Message content (text or multimodal)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the function/tool (for function/tool messages)"
+          },
+          "tool_calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            },
+            "description": "Tool calls made by the assistant"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "description": "ID of the tool call being responded to"
+          }
+        }
+      },
+      "Tool": {
+        "type": "object",
+        "required": ["type", "function"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["function"],
+            "description": "Tool type (currently only 'function')"
+          },
+          "function": {
+            "$ref": "#/components/schemas/FunctionDefinition"
+          }
+        }
+      },
+      "FunctionDefinition": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Function name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Function description"
+          },
+          "parameters": {
+            "type": "object",
+            "description": "JSON Schema for function parameters"
+          }
+        }
+      },
+      "ToolCall": {
+        "type": "object",
+        "required": ["id", "type", "function"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Tool call ID"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["function"]
+          },
+          "function": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "arguments": {"type": "string"}
+            },
+            "required": ["name", "arguments"]
+          }
+        }
+      },
+      "ChatCompletionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the completion",
+            "example": "chatcmpl-abc123"
+          },
+          "object": {
+            "type": "string",
+            "enum": ["chat.completion"],
+            "description": "Object type"
+          },
+          "created": {
+            "type": "integer",
+            "description": "Unix timestamp of creation"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model used for completion"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatChoice"
+            }
+          },
+          "usage": {
+            "$ref": "#/components/schemas/UsageInfo"
+          },
+          "system_fingerprint": {
+            "type": "string",
+            "description": "System fingerprint"
+          }
+        }
+      },
+      "ChatChoice": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "Choice index"
+          },
+          "message": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": ["assistant"]
+              },
+              "content": {
+                "type": "string",
+                "nullable": true
+              },
+              "tool_calls": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ToolCall"
+                }
+              },
+              "refusal": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "finish_reason": {
+            "type": "string",
+            "enum": ["stop", "length", "tool_calls", "content_filter"],
+            "nullable": true,
+            "description": "Reason for completion"
+          }
+        }
+      },
+      "UsageInfo": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "description": "Tokens in the prompt"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "description": "Tokens in the completion"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "description": "Total tokens used"
+          },
+          "prompt_tokens_details": {
+            "type": "object",
+            "properties": {
+              "cached_tokens": {"type": "integer"},
+              "audio_tokens": {"type": "integer"}
+            }
+          },
+          "completion_tokens_details": {
+            "type": "object",
+            "properties": {
+              "reasoning_tokens": {"type": "integer"},
+              "audio_tokens": {"type": "integer"}
+            }
+          }
+        }
+      },
+      "EmbeddingRequest": {
+        "type": "object",
+        "required": ["model", "input"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "ID of the model to use",
+            "example": "text-embedding-3-small"
+          },
+          "input": {
+            "oneOf": [
+              {"type": "string"},
+              {"type": "array", "items": {"type": "string"}}
+            ],
+            "description": "Input text(s) to embed"
+          },
+          "encoding_format": {
+            "type": "string",
+            "enum": ["float", "base64"],
+            "default": "float",
+            "description": "Output format"
+          },
+          "dimensions": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Output vector dimensions"
+          },
+          "user": {
+            "type": "string",
+            "description": "End-user identifier"
+          }
+        }
+      },
+      "EmbeddingResponse": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["list"]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "object": {
+                  "type": "string",
+                  "enum": ["embedding"]
+                },
+                "index": {
+                  "type": "integer"
+                },
+                "embedding": {
+                  "oneOf": [
+                    {"type": "array", "items": {"type": "number"}},
+                    {"type": "string"}
+                  ]
+                }
+              }
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "prompt_tokens": {"type": "integer"},
+              "total_tokens": {"type": "integer"}
+            }
+          }
+        }
+      },
+      "ImageGenerationRequest": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Image description"
+          },
+          "model": {
+            "type": "string",
+            "default": "dall-e-3",
+            "description": "Model to use"
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 1,
+            "description": "Number of images to generate"
+          },
+          "size": {
+            "type": "string",
+            "enum": ["256x256", "512x512", "1024x1024", "1792x1024", "1024x1792"],
+            "default": "1024x1024",
+            "description": "Image size"
+          },
+          "quality": {
+            "type": "string",
+            "enum": ["standard", "hd"],
+            "default": "standard",
+            "description": "Image quality (dall-e-3 only)"
+          },
+          "style": {
+            "type": "string",
+            "enum": ["vivid", "natural"],
+            "default": "vivid",
+            "description": "Image style (dall-e-3 only)"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": ["url", "b64_json"],
+            "default": "url",
+            "description": "Response format"
+          },
+          "user": {
+            "type": "string",
+            "description": "End-user identifier"
+          }
+        }
+      },
+      "ImageGenerationResponse": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "integer",
+            "description": "Unix timestamp"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "description": "Image URL"
+                },
+                "b64_json": {
+                  "type": "string",
+                  "description": "Base64 encoded image"
+                },
+                "revised_prompt": {
+                  "type": "string",
+                  "description": "Revised prompt (dall-e-3)"
+                }
+              }
+            }
+          }
+        }
+      },
+      "AudioSpeechRequest": {
+        "type": "object",
+        "required": ["model", "input", "voice"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "TTS model (tts-1 or tts-1-hd)",
+            "example": "tts-1"
+          },
+          "input": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Text to synthesize"
+          },
+          "voice": {
+            "type": "string",
+            "enum": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+            "description": "Voice to use"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": ["mp3", "opus", "aac", "flac", "wav", "pcm"],
+            "default": "mp3",
+            "description": "Audio format"
+          },
+          "speed": {
+            "type": "number",
+            "minimum": 0.25,
+            "maximum": 4.0,
+            "default": 1.0,
+            "description": "Speech speed"
+          }
+        }
+      },
+      "AudioTranscriptionRequest": {
+        "type": "object",
+        "required": ["file", "model"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "Audio file to transcribe"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model to use (whisper-1)",
+            "example": "whisper-1"
+          },
+          "language": {
+            "type": "string",
+            "description": "ISO-639-1 language code"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Optional prompt text"
+          },
+          "response_format": {
+            "type": "string",
+            "enum": ["json", "text", "srt", "verbose_json", "vtt"],
+            "default": "json",
+            "description": "Response format"
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Sampling temperature"
+          }
+        }
+      },
+      "AudioTranscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Transcribed text"
+          },
+          "task": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "number"
+          },
+          "words": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "word": {"type": "string"},
+                "start": {"type": "number"},
+                "end": {"type": "number"}
+              }
+            }
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "integer"},
+                "start": {"type": "number"},
+                "end": {"type": "number"},
+                "text": {"type": "string"}
+              }
+            }
+          }
+        }
+      },
+      "VideoGenerationRequest": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Video description"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model to use (e.g., sora-2, kling-v1)"
+          },
+          "image": {
+            "type": "string",
+            "description": "Base64 encoded image (for image-to-video)"
+          },
+          "image_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Image URL (for image-to-video)"
+          },
+          "duration": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60,
+            "description": "Video duration in seconds"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+            "description": "Video aspect ratio"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": ["720p", "1080p", "4k"],
+            "description": "Video resolution"
+          },
+          "fps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 120,
+            "description": "Frames per second"
+          },
+          "negative_prompt": {
+            "type": "string",
+            "description": "What to avoid in the video"
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Seed for reproducibility"
+          },
+          "cfg_scale": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Prompt adherence strength"
+          },
+          "motion_strength": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Motion intensity"
+          },
+          "start_image": {
+            "type": "string",
+            "description": "First frame image"
+          },
+          "end_image": {
+            "type": "string",
+            "description": "Last frame image"
+          },
+          "user": {
+            "type": "string",
+            "description": "End-user identifier"
+          }
+        }
+      },
+      "VideoGenerationResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Task ID"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "processing", "completed", "failed"],
+            "description": "Task status"
+          },
+          "created": {
+            "type": "integer",
+            "description": "Unix timestamp"
+          },
+          "model": {
+            "type": "string"
+          },
+          "video": {
+            "type": "object",
+            "properties": {
+              "url": {"type": "string"},
+              "duration": {"type": "number"},
+              "width": {"type": "integer"},
+              "height": {"type": "integer"}
+            }
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {"type": "string"},
+              "message": {"type": "string"}
+            }
+          }
+        }
+      },
+      "VideoTaskResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "processing", "completed", "failed"]
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "created": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "video": {
+            "type": "object",
+            "properties": {
+              "url": {"type": "string"},
+              "duration": {"type": "number"},
+              "width": {"type": "integer"},
+              "height": {"type": "integer"}
+            }
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {"type": "string"},
+              "message": {"type": "string"}
+            }
+          }
+        }
+      },
+      "ModelsResponse": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["list"]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            }
+          }
+        }
+      },
+      "Model": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Model identifier",
+            "example": "gpt-4o"
+          },
+          "object": {
+            "type": "string",
+            "enum": ["model"]
+          },
+          "created": {
+            "type": "integer",
+            "description": "Unix timestamp"
+          },
+          "owned_by": {
+            "type": "string",
+            "description": "Model provider",
+            "example": "openai"
+          }
+        }
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "Error message"
+              },
+              "type": {
+                "type": "string",
+                "description": "Error type",
+                "enum": [
+                  "unauthorized",
+                  "invalid_api_key",
+                  "expired_api_key",
+                  "insufficient_balance",
+                  "quota_exceeded",
+                  "invalid_request_error",
+                  "model_not_found",
+                  "context_length_exceeded",
+                  "rate_limit_exceeded",
+                  "server_error",
+                  "upstream_error",
+                  "all_channels_failed",
+                  "timeout_error"
+                ]
+              },
+              "code": {
+                "type": "string",
+                "description": "Error code"
+              },
+              "param": {
+                "type": "string",
+                "description": "Parameter that caused the error"
+              },
+              "upstream": {
+                "type": "string",
+                "description": "Upstream provider that caused the error"
+              }
+            },
+            "required": ["message", "type"]
+          }
+        }
+      },
+      "ValidationError": {
+        "allOf": [
+          {"$ref": "#/components/schemas/ApiError"},
+          {
+            "type": "object",
+            "properties": {
+              "validation_errors": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {"type": "string"},
+                    "message": {"type": "string"},
+                    "code": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "AnthropicMessagesRequest": {
+        "type": "object",
+        "required": ["model", "max_tokens", "messages"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Model to use (e.g., claude-3-5-sonnet-20241022)",
+            "example": "claude-3-5-sonnet-20241022"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum number of tokens to generate"
+          },
+          "messages": {
+            "type": "array",
+            "description": "Messages in the conversation",
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["user", "assistant"]
+                },
+                "content": {
+                  "oneOf": [
+                    {"type": "string"},
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {"type": "string", "enum": ["text", "image"]},
+                          "text": {"type": "string"},
+                          "source": {
+                            "type": "object",
+                            "properties": {
+                              "type": {"type": "string", "enum": ["base64", "url"]},
+                              "media_type": {"type": "string"},
+                              "data": {"type": "string"},
+                              "url": {"type": "string"}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "system": {
+            "type": "string",
+            "description": "System prompt"
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "top_p": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "stop_sequences": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "stream": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "AnthropicMessagesResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "msg_01XFDUDYJgAACzvnptvVoYEL"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["message"]
+          },
+          "role": {
+            "type": "string",
+            "enum": ["assistant"]
+          },
+          "model": {
+            "type": "string"
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {"type": "string", "enum": ["text"]},
+                "text": {"type": "string"}
+              }
+            }
+          },
+          "stop_reason": {
+            "type": "string",
+            "enum": ["end_turn", "max_tokens", "stop_sequence", "tool_use"]
+          },
+          "stop_sequence": {
+            "type": "string",
+            "nullable": true
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "input_tokens": {"type": "integer"},
+              "output_tokens": {"type": "integer"}
+            }
+          }
+        }
+      },
+      "GeminiRequest": {
+        "type": "object",
+        "required": ["contents"],
+        "properties": {
+          "contents": {
+            "type": "array",
+            "description": "Conversation contents",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": ["user", "model"]
+                },
+                "parts": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {"text": {"type": "string"}}
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "inlineData": {
+                            "type": "object",
+                            "properties": {
+                              "mimeType": {"type": "string"},
+                              "data": {"type": "string"}
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "systemInstruction": {
+            "type": "object",
+            "properties": {
+              "parts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {"text": {"type": "string"}}
+                }
+              }
+            }
+          },
+          "generationConfig": {
+            "type": "object",
+            "properties": {
+              "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+              "topP": {"type": "number", "minimum": 0, "maximum": 1},
+              "topK": {"type": "integer", "minimum": 1},
+              "maxOutputTokens": {"type": "integer", "minimum": 1},
+              "stopSequences": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "safetySettings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {"type": "string"},
+                "threshold": {"type": "string"}
+              }
+            }
+          }
+        }
+      },
+      "GeminiResponse": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "content": {
+                  "type": "object",
+                  "properties": {
+                    "role": {"type": "string"},
+                    "parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {"text": {"type": "string"}}
+                      }
+                    }
+                  }
+                },
+                "finishReason": {"type": "string"},
+                "safetyRatings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "category": {"type": "string"},
+                      "probability": {"type": "string"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "usageMetadata": {
+            "type": "object",
+            "properties": {
+              "promptTokenCount": {"type": "integer"},
+              "candidatesTokenCount": {"type": "integer"},
+              "totalTokenCount": {"type": "integer"}
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad Request - Invalid input",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "example": {
+              "error": {
+                "message": "model: Model is required",
+                "type": "invalid_request_error",
+                "param": "model"
+              },
+              "validation_errors": [
+                {"field": "model", "message": "Model is required"}
+              ]
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized - Invalid or missing API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "error": {
+                "message": "Invalid API key provided",
+                "type": "invalid_api_key"
+              }
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "Payment Required - Insufficient balance or quota exceeded",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "error": {
+                "message": "Insufficient balance. Please top up your account.",
+                "type": "insufficient_balance"
+              }
+            }
+          }
+        }
+      },
+      "RateLimitExceeded": {
+        "description": "Rate Limit Exceeded",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "error": {
+                "message": "Rate limit exceeded. Please slow down.",
+                "type": "rate_limit_exceeded"
+              }
+            }
+          }
+        },
+        "headers": {
+          "X-RateLimit-Limit": {
+            "description": "Request limit per minute",
+            "schema": {"type": "integer"}
+          },
+          "X-RateLimit-Remaining": {
+            "description": "Remaining requests",
+            "schema": {"type": "integer"}
+          },
+          "X-RateLimit-Reset": {
+            "description": "Unix timestamp when limit resets",
+            "schema": {"type": "integer"}
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Internal Server Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "error": {
+                "message": "An internal error occurred",
+                "type": "server_error"
+              }
+            }
+          }
+        }
+      },
+      "UpstreamError": {
+        "description": "Upstream Provider Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "error": {
+                "message": "Upstream provider returned an error",
+                "type": "upstream_error",
+                "upstream": "openai"
+              }
+            }
+          }
+        }
+      },
+      "AllChannelsFailed": {
+        "description": "All Channels Failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiError"
+            },
+            "example": {
+              "error": {
+                "message": "All available channels failed to process the request",
+                "type": "all_channels_failed"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
