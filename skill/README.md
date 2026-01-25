@@ -46,7 +46,7 @@ This will automatically install the skill to all detected coding agents (Claude 
    ```
    https://github.com/hedging8563/lemondata-api-skill
    ```
-3. Claude Code will automatically recognize and load the skill
+3. Claude Code will recognize it as a skill repository and help you install it
 
 ### Option 3: Git Clone
 
