@@ -25,7 +25,9 @@ All errors return a consistent JSON format:
 | 400 | Bad Request - Invalid parameters |
 | 401 | Unauthorized - Invalid or missing API key |
 | 402 | Payment Required - Insufficient balance |
+| 403 | Forbidden - Access denied or model not allowed |
 | 404 | Not Found - Model or resource not found |
+| 413 | Payload Too Large - Input or file size exceeded |
 | 429 | Too Many Requests - Rate limit exceeded |
 | 500 | Internal Server Error |
 | 502 | Bad Gateway - Upstream provider error |
@@ -54,7 +56,7 @@ except AuthenticationError as e:
 
 | Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | Account balance is too low |
+| `insufficient_quota` | `insufficient_quota` | Account balance is too low |
 | `quota_exceeded` | `quota_exceeded` | API key usage limit reached |
 
 ```python
@@ -65,6 +67,23 @@ try:
 except APIStatusError as e:
     if e.status_code == 402:
         print("Please top up your account balance")
+```
+
+### Access Errors (403)
+
+| Type | Code | Description |
+|------|------|-------------|
+| `access_denied` | `access_denied` | Access to resource denied |
+| `access_denied` | `model_not_allowed` | Model not allowed for this API key |
+
+```json
+{
+  "error": {
+    "message": "You don't have permission to access this model",
+    "type": "access_denied",
+    "code": "model_not_allowed"
+  }
+}
 ```
 
 ### Validation Errors (400)
@@ -93,7 +112,8 @@ When you exceed rate limits:
 {
   "error": {
     "message": "Rate limit exceeded. Please slow down.",
-    "type": "rate_limit_exceeded"
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
   }
 }
 ```
@@ -106,6 +126,25 @@ X-RateLimit-Remaining: 0
 X-RateLimit-Reset: 1234567890
 Retry-After: 60
 ```
+
+### Payload Too Large (413)
+
+When input or file size exceeds limits:
+
+```json
+{
+  "error": {
+    "message": "Input size exceeds maximum allowed",
+    "type": "invalid_request_error",
+    "code": "payload_too_large"
+  }
+}
+```
+
+Common causes:
+- Image file too large (max 20MB)
+- Audio file too large (max 25MB)
+- Input text exceeds model context length
 
 ### Upstream Errors (502, 503)
 
