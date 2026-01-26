@@ -1,0 +1,202 @@
+---
+title: "تعديل صورة"
+api: "POST /v1/images/edits"
+description: "تعديل صورة بناءً على وصف نصي وصورة مصدر"
+---
+
+## نظرة عامة
+
+إنشاء صورة معدلة أو موسعة من صورة أصلية ووصف نصي. يتطلب نوع المحتوى `multipart/form-data`.
+
+## جسم الطلب
+
+<ParamField body="image" type="file" required>
+  الصورة المراد تعديلها. يجب أن تكون ملف PNG صالح، أقل من 4MB، ومربعة. يجب أن تحتوي الصورة على مناطق شفافة حيث يُراد التعديل.
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  وصف نصي للتعديل المطلوب.
+</ParamField>
+
+<ParamField body="mask" type="file">
+  صورة إضافية تشير مناطقها الشفافة بالكامل إلى أماكن التعديل. يجب أن تكون ملف PNG صالح، أقل من 4MB، وبنفس أبعاد `image`.
+</ParamField>
+
+<ParamField body="model" type="string" default="dall-e-2">
+  النموذج المستخدم لتعديل الصورة. حالياً يُدعم `dall-e-2` فقط.
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  عدد الصور المراد إنشاؤها. يجب أن يكون بين 1 و 10.
+</ParamField>
+
+<ParamField body="size" type="string">
+  حجم الصور المُنشأة. يجب أن يكون أحد: `256x256`، `512x512`، أو `1024x1024`.
+</ParamField>
+
+<ParamField body="response_format" type="string" default="url">
+  تنسيق إرجاع الصور المُنشأة. يجب أن يكون `url` أو `b64_json`.
+</ParamField>
+
+<ParamField body="user" type="string">
+  معرف فريد يمثل المستخدم النهائي لمراقبة سوء الاستخدام.
+</ParamField>
+
+## الاستجابة
+
+<ResponseField name="created" type="integer">
+  الطابع الزمني Unix لوقت إنشاء الصور.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  مصفوفة الصور المُنشأة.
+
+  كل عنصر يحتوي على:
+  - `url` (string): رابط الصورة المعدلة (إذا كان response_format هو `url`)
+  - `b64_json` (string): الصورة بترميز Base64 (إذا كان response_format هو `b64_json`)
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/images/edits" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "image=@sunlit_lounge.png" \
+  -F "mask=@mask.png" \
+  -F "prompt=A sunlit indoor lounge area with a pool" \
+  -F "n=1" \
+  -F "size=1024x1024"
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.images.edit(
+    model="dall-e-2",
+    image=open("sunlit_lounge.png", "rb"),
+    mask=open("mask.png", "rb"),
+    prompt="A sunlit indoor lounge area with a pool",
+    n=1,
+    size="1024x1024"
+)
+
+print(response.data[0].url)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+import fs from 'fs';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.images.edit({
+  model: 'dall-e-2',
+  image: fs.createReadStream('sunlit_lounge.png'),
+  mask: fs.createReadStream('mask.png'),
+  prompt: 'A sunlit indoor lounge area with a pool',
+  n: 1,
+  size: '1024x1024'
+});
+
+console.log(response.data[0].url);
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "io"
+    "mime/multipart"
+    "net/http"
+    "os"
+)
+
+func main() {
+    body := &bytes.Buffer{}
+    writer := multipart.NewWriter(body)
+
+    image, _ := os.Open("sunlit_lounge.png")
+    defer image.Close()
+    part, _ := writer.CreateFormFile("image", "sunlit_lounge.png")
+    io.Copy(part, image)
+
+    mask, _ := os.Open("mask.png")
+    defer mask.Close()
+    maskPart, _ := writer.CreateFormFile("mask", "mask.png")
+    io.Copy(maskPart, mask)
+
+    writer.WriteField("prompt", "A sunlit indoor lounge area with a pool")
+    writer.WriteField("n", "1")
+    writer.WriteField("size", "1024x1024")
+    writer.Close()
+
+    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/images/edits", body)
+    req.Header.Set("Authorization", "Bearer sk-your-api-key")
+    req.Header.Set("Content-Type", writer.FormDataContentType())
+
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+
+    result, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(result))
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/images/edits');
+
+$image = new CURLFile('sunlit_lounge.png', 'image/png', 'sunlit_lounge.png');
+$mask = new CURLFile('mask.png', 'image/png', 'mask.png');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => [
+        'image' => $image,
+        'mask' => $mask,
+        'prompt' => 'A sunlit indoor lounge area with a pool',
+        'n' => 1,
+        'size' => '1024x1024'
+    ]
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['data'][0]['url'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json الاستجابة
+{
+  "created": 1706000000,
+  "data": [
+    {
+      "url": "https://..."
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## ملاحظات
+
+<Note>
+  تعديل الصور متاح فقط مع DALL-E 2. يجب أن تحتوي الصورة على مناطق شفافة تشير إلى أماكن التعديل، أو يمكنك توفير صورة قناع منفصلة.
+</Note>

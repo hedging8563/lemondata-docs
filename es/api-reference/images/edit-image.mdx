@@ -1,0 +1,202 @@
+---
+title: "Editar imagen"
+api: "POST /v1/images/edits"
+description: "Edita una imagen dado un prompt y una imagen de origen"
+---
+
+## Descripcion general
+
+Crea una imagen editada o extendida dada una imagen original y un prompt. Requiere el tipo de contenido `multipart/form-data`.
+
+## Cuerpo de la solicitud
+
+<ParamField body="image" type="file" required>
+  La imagen a editar. Debe ser un archivo PNG valido, menor de 4MB y cuadrado. La imagen debe tener transparencia donde se desean las ediciones.
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  Una descripcion de texto de la edicion deseada.
+</ParamField>
+
+<ParamField body="mask" type="file">
+  Una imagen adicional cuyas areas completamente transparentes indican donde se debe editar la imagen. Debe ser un archivo PNG valido, menor de 4MB y tener las mismas dimensiones que `image`.
+</ParamField>
+
+<ParamField body="model" type="string" default="dall-e-2">
+  El modelo a usar para la edicion de imagen. Actualmente solo se admite `dall-e-2`.
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  El numero de imagenes a generar. Debe estar entre 1 y 10.
+</ParamField>
+
+<ParamField body="size" type="string">
+  El tamano de las imagenes generadas. Debe ser uno de `256x256`, `512x512` o `1024x1024`.
+</ParamField>
+
+<ParamField body="response_format" type="string" default="url">
+  El formato en que se devuelven las imagenes generadas. Debe ser `url` o `b64_json`.
+</ParamField>
+
+<ParamField body="user" type="string">
+  Un identificador unico que representa a su usuario final para monitoreo de abuso.
+</ParamField>
+
+## Respuesta
+
+<ResponseField name="created" type="integer">
+  Marca de tiempo Unix de cuando se crearon las imagenes.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array de imagenes generadas.
+
+  Cada objeto contiene:
+  - `url` (string): URL de la imagen editada (si response_format es `url`)
+  - `b64_json` (string): Imagen codificada en Base64 (si response_format es `b64_json`)
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/images/edits" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "image=@sunlit_lounge.png" \
+  -F "mask=@mask.png" \
+  -F "prompt=A sunlit indoor lounge area with a pool" \
+  -F "n=1" \
+  -F "size=1024x1024"
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.images.edit(
+    model="dall-e-2",
+    image=open("sunlit_lounge.png", "rb"),
+    mask=open("mask.png", "rb"),
+    prompt="A sunlit indoor lounge area with a pool",
+    n=1,
+    size="1024x1024"
+)
+
+print(response.data[0].url)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+import fs from 'fs';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.images.edit({
+  model: 'dall-e-2',
+  image: fs.createReadStream('sunlit_lounge.png'),
+  mask: fs.createReadStream('mask.png'),
+  prompt: 'A sunlit indoor lounge area with a pool',
+  n: 1,
+  size: '1024x1024'
+});
+
+console.log(response.data[0].url);
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "io"
+    "mime/multipart"
+    "net/http"
+    "os"
+)
+
+func main() {
+    body := &bytes.Buffer{}
+    writer := multipart.NewWriter(body)
+
+    image, _ := os.Open("sunlit_lounge.png")
+    defer image.Close()
+    part, _ := writer.CreateFormFile("image", "sunlit_lounge.png")
+    io.Copy(part, image)
+
+    mask, _ := os.Open("mask.png")
+    defer mask.Close()
+    maskPart, _ := writer.CreateFormFile("mask", "mask.png")
+    io.Copy(maskPart, mask)
+
+    writer.WriteField("prompt", "A sunlit indoor lounge area with a pool")
+    writer.WriteField("n", "1")
+    writer.WriteField("size", "1024x1024")
+    writer.Close()
+
+    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/images/edits", body)
+    req.Header.Set("Authorization", "Bearer sk-your-api-key")
+    req.Header.Set("Content-Type", writer.FormDataContentType())
+
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+
+    result, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(result))
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/images/edits');
+
+$image = new CURLFile('sunlit_lounge.png', 'image/png', 'sunlit_lounge.png');
+$mask = new CURLFile('mask.png', 'image/png', 'mask.png');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => [
+        'image' => $image,
+        'mask' => $mask,
+        'prompt' => 'A sunlit indoor lounge area with a pool',
+        'n' => 1,
+        'size' => '1024x1024'
+    ]
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['data'][0]['url'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Respuesta
+{
+  "created": 1706000000,
+  "data": [
+    {
+      "url": "https://..."
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Notas
+
+<Note>
+  Las ediciones de imagen solo estan disponibles con DALL-E 2. La imagen debe tener areas transparentes que indiquen donde se debe aplicar la edicion, o puede proporcionar una imagen de mascara separada.
+</Note>

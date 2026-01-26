@@ -1,0 +1,287 @@
+---
+title: "Créer une image"
+api: "POST /v1/images/generations"
+description: "Crée une image à partir d'un prompt"
+---
+
+## Corps de la requête
+
+<ParamField body="model" type="string" default="dall-e-3">
+  Modèle à utiliser (ex: `dall-e-3`, `flux-pro`, `midjourney`).
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  Description textuelle de l'image souhaitée.
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  Nombre d'images à générer (1-4, selon le modèle).
+</ParamField>
+
+<ParamField body="size" type="string" default="1024x1024">
+  Taille de l'image. Les options varient selon le modèle :
+  - DALL-E 3 : `1024x1024`, `1792x1024`, `1024x1792`
+  - Autres modèles : `512x512`, `1024x1024`, etc.
+</ParamField>
+
+<ParamField body="quality" type="string" default="standard">
+  Qualité de l'image (`standard` ou `hd`). DALL-E 3 uniquement.
+</ParamField>
+
+<ParamField body="response_format" type="string" default="url">
+  Format de réponse : `url` ou `b64_json`.
+</ParamField>
+
+<ParamField body="style" type="string" default="vivid">
+  Style pour DALL-E 3 : `vivid` ou `natural`.
+</ParamField>
+
+<ParamField body="user" type="string">
+  Identifiant unique pour l'utilisateur final.
+</ParamField>
+
+## Réponse
+
+### Réponse synchrone (DALL-E, Flux Schnell, etc.)
+
+<ResponseField name="created" type="integer">
+  Horodatage Unix de la création.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Tableau des images générées.
+
+  Chaque objet contient :
+  - `url` (string) : URL de l'image générée
+  - `b64_json` (string) : Image encodée en Base64 (si demandé)
+  - `revised_prompt` (string) : Le prompt utilisé (DALL-E 3)
+</ResponseField>
+
+### Réponse asynchrone (Midjourney, Flux Pro, Ideogram, etc.)
+
+Certains modèles nécessitent un temps de traitement plus long et renvoient une réponse asynchrone :
+
+<ResponseField name="created" type="integer">
+  Horodatage Unix de la création.
+</ResponseField>
+
+<ResponseField name="task_id" type="string">
+  Identifiant unique de la tâche pour le polling.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Statut initial : `pending`.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  URL relative pour interroger les résultats (ex: `/v1/images/generations/{task_id}`).
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Tableau avec des données provisoires. `url` sera vide jusqu'à la fin du traitement.
+</ResponseField>
+
+<Note>
+Lorsque vous recevez `status: "pending"`, utilisez l'endpoint [Obtenir le statut de l'image](/fr/api-reference/images/get-image-status) pour interroger le résultat.
+</Note>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "dall-e-3",
+    "prompt": "A white cat sitting on a windowsill watching rain",
+    "size": "1024x1024",
+    "quality": "standard",
+    "n": 1
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.images.generate(
+    model="dall-e-3",
+    prompt="A white cat sitting on a windowsill watching rain",
+    size="1024x1024",
+    quality="standard",
+    n=1
+)
+
+print(response.data[0].url)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.images.generate({
+  model: 'dall-e-3',
+  prompt: 'A white cat sitting on a windowsill watching rain',
+  size: '1024x1024',
+  quality: 'standard',
+  n: 1
+});
+
+console.log(response.data[0].url);
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateImage(
+        context.Background(),
+        openai.ImageRequest{
+            Model:   "dall-e-3",
+            Prompt:  "A white cat sitting on a windowsill watching rain",
+            Size:    openai.CreateImageSize1024x1024,
+            Quality: openai.CreateImageQualityStandard,
+            N:       1,
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(resp.Data[0].URL)
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/images/generations');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'dall-e-3',
+        'prompt' => 'A white cat sitting on a windowsill watching rain',
+        'size' => '1024x1024',
+        'quality' => 'standard',
+        'n' => 1
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['data'][0]['url'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Réponse synchrone
+{
+  "created": 1706000000,
+  "data": [
+    {
+      "url": "https://...",
+      "revised_prompt": "A fluffy white cat with bright eyes sitting peacefully on a wooden windowsill, watching raindrops stream down the glass window..."
+    }
+  ]
+}
+```
+
+```json Réponse asynchrone (Midjourney, Flux Pro, etc.)
+{
+  "created": 1706000000,
+  "task_id": "img_abc123def456",
+  "status": "pending",
+  "poll_url": "/v1/images/generations/img_abc123def456",
+  "data": [
+    {
+      "url": "",
+      "revised_prompt": "a red apple"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Modèles disponibles
+
+| Modèle | Type | Caractéristiques |
+|--------|------|------------------|
+| `dall-e-3` | Sync | Meilleure qualité, amélioration du prompt |
+| `dall-e-2` | Sync | Plus rapide, plus abordable |
+| `flux-pro` | **Async** | Photoréaliste, haute qualité |
+| `flux-schnell` | Sync | Très rapide |
+| `midjourney` | **Async** | Style artistique |
+| `ideogram-v3` | **Async** | Meilleur rendu de texte |
+| `stable-diffusion-3` | Sync | Open source, personnalisable |
+
+<Tip>
+Les **modèles asynchrones** renvoient `status: "pending"` et nécessitent un polling. Consultez [Obtenir le statut de l'image](/fr/api-reference/images/get-image-status) pour savoir comment récupérer les résultats.
+</Tip>
+
+## Gestion des réponses asynchrones
+
+Pour les modèles asynchrones, vérifiez si la réponse contient `status: "pending"` :
+
+```python
+import requests
+import time
+
+def generate_image(prompt, model="midjourney"):
+    # Create image request
+    response = requests.post(
+        "https://api.lemondata.cc/v1/images/generations",
+        headers={"Authorization": "Bearer sk-your-api-key"},
+        json={"model": model, "prompt": prompt}
+    )
+    data = response.json()
+
+    # Check if async
+    if data.get("status") == "pending":
+        task_id = data["task_id"]
+        print(f"Async task started: {task_id}")
+
+        # Poll for result
+        while True:
+            status_resp = requests.get(
+                f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                headers={"Authorization": "Bearer sk-your-api-key"}
+            )
+            status_data = status_resp.json()
+
+            if status_data["status"] == "completed":
+                return status_data["data"][0]["url"]
+            elif status_data["status"] == "failed":
+                raise Exception(status_data.get("error", "Generation failed"))
+
+            time.sleep(3)
+    else:
+        # Sync response
+        return data["data"][0]["url"]
+
+# Usage
+url = generate_image("a beautiful sunset over mountains", model="midjourney")
+print(f"Generated image: {url}")
+```

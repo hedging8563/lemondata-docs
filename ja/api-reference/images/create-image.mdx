@@ -1,0 +1,287 @@
+---
+title: "画像を作成"
+api: "POST /v1/images/generations"
+description: "プロンプトから画像を生成します"
+---
+
+## リクエストボディ
+
+<ParamField body="model" type="string" default="dall-e-3">
+  使用するモデル（例：`dall-e-3`、`flux-pro`、`midjourney`）。
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  生成したい画像のテキスト説明。
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  生成する画像の数（1-4、モデルにより異なる）。
+</ParamField>
+
+<ParamField body="size" type="string" default="1024x1024">
+  画像サイズ。モデルによりオプションが異なります：
+  - DALL-E 3: `1024x1024`、`1792x1024`、`1024x1792`
+  - その他のモデル: `512x512`、`1024x1024` など
+</ParamField>
+
+<ParamField body="quality" type="string" default="standard">
+  画像品質（`standard` または `hd`）。DALL-E 3 のみ。
+</ParamField>
+
+<ParamField body="response_format" type="string" default="url">
+  レスポンス形式：`url` または `b64_json`。
+</ParamField>
+
+<ParamField body="style" type="string" default="vivid">
+  DALL-E 3 のスタイル：`vivid` または `natural`。
+</ParamField>
+
+<ParamField body="user" type="string">
+  エンドユーザーの一意識別子。
+</ParamField>
+
+## レスポンス
+
+### 同期レスポンス（DALL-E、Flux Schnell など）
+
+<ResponseField name="created" type="integer">
+  作成時の Unix タイムスタンプ。
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  生成された画像の配列。
+
+  各オブジェクトには以下が含まれます：
+  - `url` (string): 生成された画像の URL
+  - `b64_json` (string): Base64 エンコードされた画像（リクエスト時に指定した場合）
+  - `revised_prompt` (string): 使用されたプロンプト（DALL-E 3）
+</ResponseField>
+
+### 非同期レスポンス（Midjourney、Flux Pro、Ideogram など）
+
+一部のモデルは処理に時間がかかるため、非同期レスポンスを返します：
+
+<ResponseField name="created" type="integer">
+  作成時の Unix タイムスタンプ。
+</ResponseField>
+
+<ResponseField name="task_id" type="string">
+  ポーリング用の一意のタスク識別子。
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  初期ステータス：`pending`。
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  結果をポーリングするための相対 URL（例：`/v1/images/generations/{task_id}`）。
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  プレースホルダーデータを含む配列。`url` は完了するまで空です。
+</ResponseField>
+
+<Note>
+`status: "pending"` を受け取った場合は、[画像ステータスを取得](/ja/api-reference/images/get-image-status) エンドポイントを使用して結果をポーリングしてください。
+</Note>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "dall-e-3",
+    "prompt": "A white cat sitting on a windowsill watching rain",
+    "size": "1024x1024",
+    "quality": "standard",
+    "n": 1
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.images.generate(
+    model="dall-e-3",
+    prompt="A white cat sitting on a windowsill watching rain",
+    size="1024x1024",
+    quality="standard",
+    n=1
+)
+
+print(response.data[0].url)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.images.generate({
+  model: 'dall-e-3',
+  prompt: 'A white cat sitting on a windowsill watching rain',
+  size: '1024x1024',
+  quality: 'standard',
+  n: 1
+});
+
+console.log(response.data[0].url);
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateImage(
+        context.Background(),
+        openai.ImageRequest{
+            Model:   "dall-e-3",
+            Prompt:  "A white cat sitting on a windowsill watching rain",
+            Size:    openai.CreateImageSize1024x1024,
+            Quality: openai.CreateImageQualityStandard,
+            N:       1,
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(resp.Data[0].URL)
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/images/generations');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'dall-e-3',
+        'prompt' => 'A white cat sitting on a windowsill watching rain',
+        'size' => '1024x1024',
+        'quality' => 'standard',
+        'n' => 1
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['data'][0]['url'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json 同期レスポンス
+{
+  "created": 1706000000,
+  "data": [
+    {
+      "url": "https://...",
+      "revised_prompt": "A fluffy white cat with bright eyes sitting peacefully on a wooden windowsill, watching raindrops stream down the glass window..."
+    }
+  ]
+}
+```
+
+```json 非同期レスポンス（Midjourney、Flux Pro など）
+{
+  "created": 1706000000,
+  "task_id": "img_abc123def456",
+  "status": "pending",
+  "poll_url": "/v1/images/generations/img_abc123def456",
+  "data": [
+    {
+      "url": "",
+      "revised_prompt": "a red apple"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## 利用可能なモデル
+
+| モデル | タイプ | 特徴 |
+|-------|------|----------|
+| `dall-e-3` | 同期 | 最高品質、プロンプト強化 |
+| `dall-e-2` | 同期 | 高速、より手頃な価格 |
+| `flux-pro` | **非同期** | フォトリアリスティック、高品質 |
+| `flux-schnell` | 同期 | 非常に高速 |
+| `midjourney` | **非同期** | アーティスティックなスタイル |
+| `ideogram-v3` | **非同期** | 最高のテキストレンダリング |
+| `stable-diffusion-3` | 同期 | オープンソース、カスタマイズ可能 |
+
+<Tip>
+**非同期モデル**は `status: "pending"` を返し、ポーリングが必要です。結果の取得方法については[画像ステータスを取得](/ja/api-reference/images/get-image-status)を参照してください。
+</Tip>
+
+## 非同期レスポンスの処理
+
+非同期モデルの場合、レスポンスに `status: "pending"` が含まれているか確認してください：
+
+```python
+import requests
+import time
+
+def generate_image(prompt, model="midjourney"):
+    # 画像生成リクエストを作成
+    response = requests.post(
+        "https://api.lemondata.cc/v1/images/generations",
+        headers={"Authorization": "Bearer sk-your-api-key"},
+        json={"model": model, "prompt": prompt}
+    )
+    data = response.json()
+
+    # 非同期かどうかを確認
+    if data.get("status") == "pending":
+        task_id = data["task_id"]
+        print(f"Async task started: {task_id}")
+
+        # 結果をポーリング
+        while True:
+            status_resp = requests.get(
+                f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                headers={"Authorization": "Bearer sk-your-api-key"}
+            )
+            status_data = status_resp.json()
+
+            if status_data["status"] == "completed":
+                return status_data["data"][0]["url"]
+            elif status_data["status"] == "failed":
+                raise Exception(status_data.get("error", "Generation failed"))
+
+            time.sleep(3)
+    else:
+        # 同期レスポンス
+        return data["data"][0]["url"]
+
+# 使用例
+url = generate_image("a beautiful sunset over mountains", model="midjourney")
+print(f"Generated image: {url}")
+```

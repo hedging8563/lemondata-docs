@@ -1,0 +1,202 @@
+---
+title: "Görsel Düzenle"
+api: "POST /v1/images/edits"
+description: "Bir prompt ve kaynak görsel ile görsel düzenler"
+---
+
+## Genel Bakış
+
+Orijinal bir görsel ve prompt verildiğinde düzenlenmiş veya genişletilmiş bir görsel oluşturur. `multipart/form-data` içerik türü gerektirir.
+
+## İstek Gövdesi
+
+<ParamField body="image" type="file" required>
+  Düzenlenecek görsel. Geçerli bir PNG dosyası, 4MB'dan küçük ve kare olmalıdır. Görsel, düzenleme istenen yerlerde şeffaflığa sahip olmalıdır.
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  İstenen düzenlemenin metin açıklaması.
+</ParamField>
+
+<ParamField body="mask" type="file">
+  Tamamen şeffaf alanları görselin nerede düzenlenmesi gerektiğini gösteren ek bir görsel. Geçerli bir PNG dosyası, 4MB'dan küçük ve `image` ile aynı boyutlarda olmalıdır.
+</ParamField>
+
+<ParamField body="model" type="string" default="dall-e-2">
+  Görsel düzenleme için kullanılacak model. Şu anda sadece `dall-e-2` desteklenmektedir.
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  Oluşturulacak görsel sayısı. 1 ile 10 arasında olmalıdır.
+</ParamField>
+
+<ParamField body="size" type="string">
+  Oluşturulan görsellerin boyutu. `256x256`, `512x512` veya `1024x1024` olmalıdır.
+</ParamField>
+
+<ParamField body="response_format" type="string" default="url">
+  Oluşturulan görsellerin döndürüleceği format. `url` veya `b64_json` olmalıdır.
+</ParamField>
+
+<ParamField body="user" type="string">
+  Kötüye kullanım izleme için son kullanıcınızı temsil eden benzersiz tanımlayıcı.
+</ParamField>
+
+## Yanıt
+
+<ResponseField name="created" type="integer">
+  Görsellerin oluşturulduğu Unix zaman damgası.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Oluşturulan görseller dizisi.
+
+  Her nesne şunları içerir:
+  - `url` (string): Düzenlenmiş görselin URL'si (response_format `url` ise)
+  - `b64_json` (string): Base64 kodlu görsel (response_format `b64_json` ise)
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/images/edits" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "image=@sunlit_lounge.png" \
+  -F "mask=@mask.png" \
+  -F "prompt=A sunlit indoor lounge area with a pool" \
+  -F "n=1" \
+  -F "size=1024x1024"
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.images.edit(
+    model="dall-e-2",
+    image=open("sunlit_lounge.png", "rb"),
+    mask=open("mask.png", "rb"),
+    prompt="A sunlit indoor lounge area with a pool",
+    n=1,
+    size="1024x1024"
+)
+
+print(response.data[0].url)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+import fs from 'fs';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.images.edit({
+  model: 'dall-e-2',
+  image: fs.createReadStream('sunlit_lounge.png'),
+  mask: fs.createReadStream('mask.png'),
+  prompt: 'A sunlit indoor lounge area with a pool',
+  n: 1,
+  size: '1024x1024'
+});
+
+console.log(response.data[0].url);
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "io"
+    "mime/multipart"
+    "net/http"
+    "os"
+)
+
+func main() {
+    body := &bytes.Buffer{}
+    writer := multipart.NewWriter(body)
+
+    image, _ := os.Open("sunlit_lounge.png")
+    defer image.Close()
+    part, _ := writer.CreateFormFile("image", "sunlit_lounge.png")
+    io.Copy(part, image)
+
+    mask, _ := os.Open("mask.png")
+    defer mask.Close()
+    maskPart, _ := writer.CreateFormFile("mask", "mask.png")
+    io.Copy(maskPart, mask)
+
+    writer.WriteField("prompt", "A sunlit indoor lounge area with a pool")
+    writer.WriteField("n", "1")
+    writer.WriteField("size", "1024x1024")
+    writer.Close()
+
+    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/images/edits", body)
+    req.Header.Set("Authorization", "Bearer sk-your-api-key")
+    req.Header.Set("Content-Type", writer.FormDataContentType())
+
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+
+    result, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(result))
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/images/edits');
+
+$image = new CURLFile('sunlit_lounge.png', 'image/png', 'sunlit_lounge.png');
+$mask = new CURLFile('mask.png', 'image/png', 'mask.png');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => [
+        'image' => $image,
+        'mask' => $mask,
+        'prompt' => 'A sunlit indoor lounge area with a pool',
+        'n' => 1,
+        'size' => '1024x1024'
+    ]
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['data'][0]['url'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Yanıt
+{
+  "created": 1706000000,
+  "data": [
+    {
+      "url": "https://..."
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Notlar
+
+<Note>
+  Görsel düzenleme sadece DALL-E 2 ile kullanılabilir. Görsel, düzenlemenin nereye uygulanacağını gösteren şeffaf alanlara sahip olmalı veya ayrı bir maske görseli sağlayabilirsiniz.
+</Note>

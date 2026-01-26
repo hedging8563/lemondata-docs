@@ -1,0 +1,287 @@
+---
+title: "이미지 생성"
+api: "POST /v1/images/generations"
+description: "프롬프트를 기반으로 이미지를 생성합니다"
+---
+
+## 요청 본문
+
+<ParamField body="model" type="string" default="dall-e-3">
+  사용할 모델 (예: `dall-e-3`, `flux-pro`, `midjourney`).
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  원하는 이미지에 대한 텍스트 설명.
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  생성할 이미지 수 (1-4, 모델에 따라 다름).
+</ParamField>
+
+<ParamField body="size" type="string" default="1024x1024">
+  이미지 크기. 모델에 따라 옵션이 다릅니다:
+  - DALL-E 3: `1024x1024`, `1792x1024`, `1024x1792`
+  - 기타 모델: `512x512`, `1024x1024` 등
+</ParamField>
+
+<ParamField body="quality" type="string" default="standard">
+  이미지 품질 (`standard` 또는 `hd`). DALL-E 3 전용.
+</ParamField>
+
+<ParamField body="response_format" type="string" default="url">
+  응답 형식: `url` 또는 `b64_json`.
+</ParamField>
+
+<ParamField body="style" type="string" default="vivid">
+  DALL-E 3 스타일: `vivid` 또는 `natural`.
+</ParamField>
+
+<ParamField body="user" type="string">
+  최종 사용자의 고유 식별자.
+</ParamField>
+
+## 응답
+
+### 동기 응답 (DALL-E, Flux Schnell 등)
+
+<ResponseField name="created" type="integer">
+  생성 시점의 Unix 타임스탬프.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  생성된 이미지 배열.
+
+  각 객체에 포함된 항목:
+  - `url` (string): 생성된 이미지의 URL
+  - `b64_json` (string): Base64로 인코딩된 이미지 (요청 시)
+  - `revised_prompt` (string): 사용된 프롬프트 (DALL-E 3)
+</ResponseField>
+
+### 비동기 응답 (Midjourney, Flux Pro, Ideogram 등)
+
+일부 모델은 처리 시간이 더 오래 걸리며 비동기 응답을 반환합니다:
+
+<ResponseField name="created" type="integer">
+  생성 시점의 Unix 타임스탬프.
+</ResponseField>
+
+<ResponseField name="task_id" type="string">
+  폴링을 위한 고유 작업 식별자.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  초기 상태: `pending`.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  결과를 폴링할 상대 URL (예: `/v1/images/generations/{task_id}`).
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  플레이스홀더 데이터가 포함된 배열. `url`은 완료될 때까지 비어 있습니다.
+</ResponseField>
+
+<Note>
+`status: "pending"`을 받으면 [이미지 상태 조회](/ko/api-reference/images/get-image-status) 엔드포인트를 사용하여 결과를 폴링하세요.
+</Note>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "dall-e-3",
+    "prompt": "A white cat sitting on a windowsill watching rain",
+    "size": "1024x1024",
+    "quality": "standard",
+    "n": 1
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.images.generate(
+    model="dall-e-3",
+    prompt="A white cat sitting on a windowsill watching rain",
+    size="1024x1024",
+    quality="standard",
+    n=1
+)
+
+print(response.data[0].url)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.images.generate({
+  model: 'dall-e-3',
+  prompt: 'A white cat sitting on a windowsill watching rain',
+  size: '1024x1024',
+  quality: 'standard',
+  n: 1
+});
+
+console.log(response.data[0].url);
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateImage(
+        context.Background(),
+        openai.ImageRequest{
+            Model:   "dall-e-3",
+            Prompt:  "A white cat sitting on a windowsill watching rain",
+            Size:    openai.CreateImageSize1024x1024,
+            Quality: openai.CreateImageQualityStandard,
+            N:       1,
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(resp.Data[0].URL)
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/images/generations');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'dall-e-3',
+        'prompt' => 'A white cat sitting on a windowsill watching rain',
+        'size' => '1024x1024',
+        'quality' => 'standard',
+        'n' => 1
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['data'][0]['url'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json 동기 응답
+{
+  "created": 1706000000,
+  "data": [
+    {
+      "url": "https://...",
+      "revised_prompt": "A fluffy white cat with bright eyes sitting peacefully on a wooden windowsill, watching raindrops stream down the glass window..."
+    }
+  ]
+}
+```
+
+```json 비동기 응답 (Midjourney, Flux Pro 등)
+{
+  "created": 1706000000,
+  "task_id": "img_abc123def456",
+  "status": "pending",
+  "poll_url": "/v1/images/generations/img_abc123def456",
+  "data": [
+    {
+      "url": "",
+      "revised_prompt": "a red apple"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## 사용 가능한 모델
+
+| 모델 | 유형 | 특징 |
+|-------|------|----------|
+| `dall-e-3` | 동기 | 최고 품질, 프롬프트 향상 |
+| `dall-e-2` | 동기 | 더 빠르고 저렴함 |
+| `flux-pro` | **비동기** | 사실적, 고품질 |
+| `flux-schnell` | 동기 | 매우 빠름 |
+| `midjourney` | **비동기** | 예술적 스타일 |
+| `ideogram-v3` | **비동기** | 최고의 텍스트 렌더링 |
+| `stable-diffusion-3` | 동기 | 오픈 소스, 커스터마이징 가능 |
+
+<Tip>
+**비동기 모델**은 `status: "pending"`을 반환하며 폴링이 필요합니다. 결과를 가져오는 방법은 [이미지 상태 조회](/ko/api-reference/images/get-image-status)를 참조하세요.
+</Tip>
+
+## 비동기 응답 처리
+
+비동기 모델의 경우 응답에 `status: "pending"`이 포함되어 있는지 확인하세요:
+
+```python
+import requests
+import time
+
+def generate_image(prompt, model="midjourney"):
+    # 이미지 생성 요청
+    response = requests.post(
+        "https://api.lemondata.cc/v1/images/generations",
+        headers={"Authorization": "Bearer sk-your-api-key"},
+        json={"model": model, "prompt": prompt}
+    )
+    data = response.json()
+
+    # 비동기 여부 확인
+    if data.get("status") == "pending":
+        task_id = data["task_id"]
+        print(f"Async task started: {task_id}")
+
+        # 결과 폴링
+        while True:
+            status_resp = requests.get(
+                f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                headers={"Authorization": "Bearer sk-your-api-key"}
+            )
+            status_data = status_resp.json()
+
+            if status_data["status"] == "completed":
+                return status_data["data"][0]["url"]
+            elif status_data["status"] == "failed":
+                raise Exception(status_data.get("error", "Generation failed"))
+
+            time.sleep(3)
+    else:
+        # 동기 응답
+        return data["data"][0]["url"]
+
+# 사용 예시
+url = generate_image("a beautiful sunset over mountains", model="midjourney")
+print(f"Generated image: {url}")
+```

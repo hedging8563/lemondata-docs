@@ -1,0 +1,151 @@
+---
+title: "الحصول على حالة الصورة"
+api: "GET /v1/images/generations/{task_id}"
+description: "الحصول على حالة ونتيجة مهمة إنشاء صورة غير متزامنة"
+---
+
+## معاملات المسار
+
+<ParamField path="task_id" type="string" required>
+  معرف المهمة المُرجع من طلب إنشاء الصورة الأولي.
+</ParamField>
+
+## الاستجابة
+
+<ResponseField name="created" type="integer">
+  الطابع الزمني Unix للإنشاء.
+</ResponseField>
+
+<ResponseField name="task_id" type="string">
+  معرف المهمة.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  حالة المهمة: `pending`، `processing`، `completed`، أو `failed`.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  مصفوفة الصور المُنشأة (تُملأ عندما تكون `status` هي `completed`).
+
+  كل عنصر يحتوي على:
+  - `url` (string): رابط الصورة المُنشأة
+  - `revised_prompt` (string): الوصف المستخدم للإنشاء
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  رسالة الخطأ (موجودة فقط عندما تكون `status` هي `failed`).
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl "https://api.lemondata.cc/v1/images/generations/img_abc123def456" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "https://api.lemondata.cc/v1/images/generations/img_abc123def456",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+
+data = response.json()
+print(f"Status: {data['status']}")
+
+if data["status"] == "completed":
+    print(f"Image URL: {data['data'][0]['url']}")
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.lemondata.cc/v1/images/generations/img_abc123def456',
+  {
+    headers: {
+      'Authorization': 'Bearer sk-your-api-key'
+    }
+  }
+);
+
+const data = await response.json();
+console.log(`Status: ${data.status}`);
+
+if (data.status === 'completed') {
+  console.log(`Image URL: ${data.data[0].url}`);
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json قيد الانتظار
+{
+  "created": 1706000000,
+  "task_id": "img_abc123def456",
+  "status": "pending",
+  "data": [
+    {
+      "url": "",
+      "revised_prompt": "a beautiful sunset over mountains"
+    }
+  ]
+}
+```
+
+```json مكتمل
+{
+  "created": 1706000000,
+  "task_id": "img_abc123def456",
+  "status": "completed",
+  "data": [
+    {
+      "url": "https://cdn.example.com/generated/image-abc123.png",
+      "revised_prompt": "a beautiful sunset over mountains with vibrant orange and purple colors"
+    }
+  ]
+}
+```
+
+```json فشل
+{
+  "created": 1706000000,
+  "task_id": "img_abc123def456",
+  "status": "failed",
+  "error": "Content policy violation",
+  "data": []
+}
+```
+</ResponseExample>
+
+## أفضل ممارسات الاستعلام
+
+<Tip>
+**فترة الاستعلام الموصى بها**: 3-5 ثوانٍ. معظم مهام إنشاء الصور تكتمل خلال 30-120 ثانية حسب النموذج.
+</Tip>
+
+```python
+import requests
+import time
+
+def poll_image_task(task_id, api_key, max_wait=300, interval=3):
+    """Poll for image generation result with timeout."""
+    url = f"https://api.lemondata.cc/v1/images/generations/{task_id}"
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    start_time = time.time()
+    while time.time() - start_time < max_wait:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+
+        if data["status"] == "completed":
+            return data["data"][0]["url"]
+        elif data["status"] == "failed":
+            raise Exception(data.get("error", "Generation failed"))
+
+        time.sleep(interval)
+
+    raise TimeoutError(f"Task {task_id} did not complete within {max_wait}s")
+
+# Usage
+image_url = poll_image_task("img_abc123def456", "sk-your-api-key")
+print(f"Generated image: {image_url}")
+```
