@@ -1,10 +1,29 @@
 #!/usr/bin/env node
 
+/**
+ * Generate Mintlify i18n configuration
+ *
+ * Converts tabs-based navigation to languages array with groups
+ * for multi-language support.
+ */
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 const DOCS_DIR = path.join(import.meta.dirname, '..');
-const docsJson = JSON.parse(fs.readFileSync(path.join(DOCS_DIR, 'docs.json'), 'utf-8'));
+
+// 读取原始配置（从 git 获取干净版本）
+function getOriginalConfig() {
+  // 首先尝试读取备份文件
+  const backupPath = path.join(DOCS_DIR, 'docs.original.json');
+  if (fs.existsSync(backupPath)) {
+    return JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
+  }
+  // 否则读取当前配置
+  return JSON.parse(fs.readFileSync(path.join(DOCS_DIR, 'docs.json'), 'utf-8'));
+}
+
+const docsJson = getOriginalConfig();
 
 // 定义语言配置
 const languages = [
@@ -28,35 +47,39 @@ const originalTabs = docsJson.navigation.tabs;
 const globalConfig = docsJson.navigation.global || {};
 
 // 为每个页面路径添加语言前缀
-function prefixPages(tabs, langCode) {
-  if (langCode === 'en') return tabs; // 英文不加前缀
+function prefixPages(pages, langCode) {
+  if (langCode === 'en') return pages;
+  return pages.map(page => `${langCode}/${page}`);
+}
 
-  return tabs.map(tab => ({
-    ...tab,
-    groups: tab.groups.map(group => ({
-      ...group,
-      pages: group.pages.map(page => `${langCode}/${page}`)
-    }))
-  }));
+// 将 tabs 转换为扁平的 groups（Mintlify 多语言格式）
+function tabsToGroups(tabs, langCode) {
+  const groups = [];
+  for (const tab of tabs) {
+    for (const group of tab.groups) {
+      groups.push({
+        group: group.group,
+        pages: prefixPages(group.pages, langCode)
+      });
+    }
+  }
+  return groups;
 }
 
 // 生成 languages 配置
 const languagesConfig = languages.map(lang => {
   const config = {
     language: lang.code,
-    tabs: prefixPages(originalTabs, lang.code)
+    groups: tabsToGroups(originalTabs, lang.code)
   };
-
-  if (lang.default) {
-    config.default = true;
-  }
-
   return config;
 });
 
 // 构建新的 navigation 配置
 docsJson.navigation = {
-  global: globalConfig,
+  global: {
+    anchors: globalConfig.anchors || []
+  },
   languages: languagesConfig
 };
 
