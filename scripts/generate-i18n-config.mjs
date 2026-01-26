@@ -3,8 +3,10 @@
 /**
  * Generate Mintlify i18n configuration
  *
- * Converts tabs-based navigation to languages array with groups
- * for multi-language support.
+ * Converts tabs-based navigation to languages array with tabs
+ * for multi-language support (correct Mintlify format).
+ *
+ * Format: navigation.languages[].tabs[].groups[].pages[]
  */
 
 import * as fs from 'node:fs';
@@ -14,22 +16,20 @@ const DOCS_DIR = path.join(import.meta.dirname, '..');
 
 // 读取原始配置（从 git 获取干净版本）
 function getOriginalConfig() {
-  // 首先尝试读取备份文件
   const backupPath = path.join(DOCS_DIR, 'docs.original.json');
   if (fs.existsSync(backupPath)) {
     return JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
   }
-  // 否则读取当前配置
   return JSON.parse(fs.readFileSync(path.join(DOCS_DIR, 'docs.json'), 'utf-8'));
 }
 
 const docsJson = getOriginalConfig();
 
-// 定义语言配置
+// 定义语言配置 (使用 Mintlify 支持的语言代码)
 const languages = [
   { code: 'en', default: true },
   { code: 'zh' },
-  { code: 'zh-TW' },
+  { code: 'zh-Hant' },  // Mintlify 使用 zh-Hant 而非 zh-TW
   { code: 'ja' },
   { code: 'ko' },
   { code: 'de' },
@@ -52,28 +52,22 @@ function prefixPages(pages, langCode) {
   return pages.map(page => `${langCode}/${page}`);
 }
 
-// 将 tabs 转换为扁平的 groups（Mintlify 多语言格式）
-function tabsToGroups(tabs, langCode) {
-  const groups = [];
-  for (const tab of tabs) {
-    for (const group of tab.groups) {
-      groups.push({
-        group: group.group,
-        pages: prefixPages(group.pages, langCode)
-      });
-    }
-  }
-  return groups;
+// 为每个语言生成完整的 tabs 配置
+function generateTabsForLanguage(tabs, langCode) {
+  return tabs.map(tab => ({
+    tab: tab.tab,
+    groups: tab.groups.map(group => ({
+      group: group.group,
+      pages: prefixPages(group.pages, langCode)
+    }))
+  }));
 }
 
-// 生成 languages 配置
-const languagesConfig = languages.map(lang => {
-  const config = {
-    language: lang.code,
-    groups: tabsToGroups(originalTabs, lang.code)
-  };
-  return config;
-});
+// 生成 languages 配置 (每个语言包含完整的 tabs)
+const languagesConfig = languages.map(lang => ({
+  language: lang.code,
+  tabs: generateTabsForLanguage(originalTabs, lang.code)
+}));
 
 // 构建新的 navigation 配置
 docsJson.navigation = {
@@ -83,9 +77,11 @@ docsJson.navigation = {
   languages: languagesConfig
 };
 
-// 删除旧的 i18n 配置（如果存在）
+// 删除旧的 i18n 配置和 banner（如果存在）
 delete docsJson.i18n;
+delete docsJson.banner;
 
 fs.writeFileSync(path.join(DOCS_DIR, 'docs.json'), JSON.stringify(docsJson, null, 2) + '\n', 'utf-8');
 console.log('✅ Multi-language navigation generated');
 console.log('   Languages:', languages.map(l => l.code).join(', '));
+console.log('   Format: navigation.languages[].tabs[].groups[].pages[]');
