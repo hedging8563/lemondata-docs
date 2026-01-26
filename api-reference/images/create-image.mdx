@@ -42,6 +42,8 @@ description: "Creates an image given a prompt"
 
 ## Response
 
+### Synchronous Response (DALL-E, Flux Schnell, etc.)
+
 <ResponseField name="created" type="integer">
   Unix timestamp of creation.
 </ResponseField>
@@ -54,6 +56,34 @@ description: "Creates an image given a prompt"
   - `b64_json` (string): Base64-encoded image (if requested)
   - `revised_prompt` (string): The prompt used (DALL-E 3)
 </ResponseField>
+
+### Asynchronous Response (Midjourney, Flux Pro, Ideogram, etc.)
+
+Some models require longer processing time and return an async response:
+
+<ResponseField name="created" type="integer">
+  Unix timestamp of creation.
+</ResponseField>
+
+<ResponseField name="task_id" type="string">
+  Unique task identifier for polling.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Initial status: `pending`.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  Relative URL to poll for results (e.g., `/v1/images/generations/{task_id}`).
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array with placeholder data. `url` will be empty until completed.
+</ResponseField>
+
+<Note>
+When you receive `status: "pending"`, use the [Get Image Status](/api-reference/images/get-image-status) endpoint to poll for the result.
+</Note>
 
 <RequestExample>
 ```bash cURL
@@ -167,7 +197,7 @@ echo $data['data'][0]['url'];
 </RequestExample>
 
 <ResponseExample>
-```json Response
+```json Synchronous Response
 {
   "created": 1706000000,
   "data": [
@@ -178,16 +208,81 @@ echo $data['data'][0]['url'];
   ]
 }
 ```
+
+```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+{
+  "created": 1706000000,
+  "task_id": "img_abc123def456",
+  "status": "pending",
+  "poll_url": "/v1/images/generations/img_abc123def456",
+  "data": [
+    {
+      "url": "",
+      "revised_prompt": "a red apple"
+    }
+  ]
+}
+```
 </ResponseExample>
 
 ## Available Models
 
-| Model | Features |
-|-------|----------|
-| `dall-e-3` | Best quality, prompt enhancement |
-| `dall-e-2` | Faster, more affordable |
-| `flux-pro` | Photorealistic |
-| `flux-schnell` | Very fast |
-| `midjourney` | Artistic style |
-| `ideogram-v3` | Best text rendering |
+| Model | Type | Features |
+|-------|------|----------|
+| `dall-e-3` | Sync | Best quality, prompt enhancement |
+| `dall-e-2` | Sync | Faster, more affordable |
+| `flux-pro` | **Async** | Photorealistic, high quality |
+| `flux-schnell` | Sync | Very fast |
+| `midjourney` | **Async** | Artistic style |
+| `ideogram-v3` | **Async** | Best text rendering |
+| `stable-diffusion-3` | Sync | Open source, customizable |
+
+<Tip>
+**Async models** return `status: "pending"` and require polling. See [Get Image Status](/api-reference/images/get-image-status) for how to retrieve results.
+</Tip>
+
+## Handling Async Responses
+
+For async models, check if the response contains `status: "pending"`:
+
+```python
+import requests
+import time
+
+def generate_image(prompt, model="midjourney"):
+    # Create image request
+    response = requests.post(
+        "https://api.lemondata.cc/v1/images/generations",
+        headers={"Authorization": "Bearer sk-your-api-key"},
+        json={"model": model, "prompt": prompt}
+    )
+    data = response.json()
+
+    # Check if async
+    if data.get("status") == "pending":
+        task_id = data["task_id"]
+        print(f"Async task started: {task_id}")
+
+        # Poll for result
+        while True:
+            status_resp = requests.get(
+                f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                headers={"Authorization": "Bearer sk-your-api-key"}
+            )
+            status_data = status_resp.json()
+
+            if status_data["status"] == "completed":
+                return status_data["data"][0]["url"]
+            elif status_data["status"] == "failed":
+                raise Exception(status_data.get("error", "Generation failed"))
+
+            time.sleep(3)
+    else:
+        # Sync response
+        return data["data"][0]["url"]
+
+# Usage
+url = generate_image("a beautiful sunset over mountains", model="midjourney")
+print(f"Generated image: {url}")
+```
 
