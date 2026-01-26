@@ -1,0 +1,129 @@
+---
+title: "编辑图像"
+api: "POST /v1/images/edits"
+description: "根据提示词和源图像编辑图像"
+---
+
+## 概述
+
+根据原始图像和提示词创建编辑或扩展的图像。需要 `multipart/form-data` 内容类型。
+
+## 请求体
+
+<ParamField body="image" type="file" required>
+  要编辑的图像。必须是有效的 PNG 文件，小于 4MB，且为正方形。图像应在需要编辑的位置具有透明度。
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  描述所需编辑的文本。
+</ParamField>
+
+<ParamField body="mask" type="file">
+  一个附加图像，其完全透明的区域指示应编辑图像的位置。必须是有效的 PNG 文件，小于 4MB，且与 `image` 具有相同的尺寸。
+</ParamField>
+
+<ParamField body="model" type="string" default="dall-e-2">
+  用于图像编辑的模型。目前仅支持 `dall-e-2`。
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  要生成的图像数量。必须在 1 到 10 之间。
+</ParamField>
+
+<ParamField body="size" type="string">
+  生成图像的尺寸。必须是 `256x256`、`512x512` 或 `1024x1024` 之一。
+</ParamField>
+
+<ParamField body="response_format" type="string" default="url">
+  返回生成图像的格式。必须是 `url` 或 `b64_json`。
+</ParamField>
+
+<ParamField body="user" type="string">
+  代表终端用户的唯一标识符，用于滥用监控。
+</ParamField>
+
+## 响应
+
+<ResponseField name="created" type="integer">
+  图像创建时间的 Unix 时间戳。
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  生成的图像数组。
+
+  每个对象包含：
+  - `url` (string): 编辑后图像的 URL（如果 response_format 是 `url`）
+  - `b64_json` (string): Base64 编码的图像（如果 response_format 是 `b64_json`）
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/images/edits" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "image=@sunlit_lounge.png" \
+  -F "mask=@mask.png" \
+  -F "prompt=阳光明媚的室内休息区，带有游泳池" \
+  -F "n=1" \
+  -F "size=1024x1024"
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.images.edit(
+    model="dall-e-2",
+    image=open("sunlit_lounge.png", "rb"),
+    mask=open("mask.png", "rb"),
+    prompt="阳光明媚的室内休息区，带有游泳池",
+    n=1,
+    size="1024x1024"
+)
+
+print(response.data[0].url)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+import fs from 'fs';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.images.edit({
+  model: 'dall-e-2',
+  image: fs.createReadStream('sunlit_lounge.png'),
+  mask: fs.createReadStream('mask.png'),
+  prompt: '阳光明媚的室内休息区，带有游泳池',
+  n: 1,
+  size: '1024x1024'
+});
+
+console.log(response.data[0].url);
+```
+</RequestExample>
+
+<ResponseExample>
+```json 响应
+{
+  "created": 1706000000,
+  "data": [
+    {
+      "url": "https://..."
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## 注意事项
+
+<Note>
+  图像编辑仅适用于 DALL-E 2。图像必须具有透明区域以指示应应用编辑的位置，或者您可以提供单独的蒙版图像。
+</Note>
