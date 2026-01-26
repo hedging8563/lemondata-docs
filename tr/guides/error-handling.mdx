@@ -1,0 +1,246 @@
+---
+title: "Hata Yönetimi"
+description: "API hatalarını sorunsuz bir şekilde yönetin"
+---
+
+## Hata Yanıt Formatı
+
+Tüm hatalar tutarlı bir JSON formatı döndürür:
+
+```json
+{
+  "error": {
+    "message": "Human-readable error description",
+    "type": "error_type",
+    "code": "error_code",
+    "param": "parameter_name"  // Optional, for validation errors
+  }
+}
+```
+
+## HTTP Durum Kodları
+
+| Kod | Açıklama |
+|------|-------------|
+| 400 | Bad Request - Geçersiz parametreler |
+| 401 | Unauthorized - Geçersiz veya eksik API anahtarı |
+| 402 | Payment Required - Yetersiz bakiye |
+| 403 | Forbidden - Erişim reddedildi veya modele izin verilmiyor |
+| 404 | Not Found - Model veya kaynak bulunamadı |
+| 413 | Payload Too Large - Girdi veya dosya boyutu aşıldı |
+| 429 | Too Many Requests - Hız sınırı aşıldı |
+| 500 | Internal Server Error |
+| 502 | Bad Gateway - Üst sağlayıcı hatası |
+| 503 | Service Unavailable - Tüm kanallar başarısız oldu |
+| 504 | Gateway Timeout - İstek zaman aşımına uğradı |
+
+## Hata Türleri
+
+### Kimlik Doğrulama Hataları (401)
+
+| Tür | Kod | Açıklama |
+|------|------|-------------|
+| `invalid_api_key` | `invalid_api_key` | API anahtarı eksik veya geçersiz |
+| `expired_api_key` | `expired_api_key` | API anahtarı iptal edilmiş |
+
+```python
+from openai import OpenAI, AuthenticationError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError as e:
+    print(f"Authentication failed: {e.message}")
+```
+
+### Ödeme Hataları (402)
+
+| Tür | Kod | Açıklama |
+|------|------|-------------|
+| `insufficient_quota` | `insufficient_quota` | Hesap bakiyesi çok düşük |
+| `quota_exceeded` | `quota_exceeded` | API anahtarı kullanım sınırına ulaşıldı |
+
+```python
+from openai import OpenAI, APIStatusError
+
+try:
+    response = client.chat.completions.create(...)
+except APIStatusError as e:
+    if e.status_code == 402:
+        print("Please top up your account balance")
+```
+
+### Erişim Hataları (403)
+
+| Tür | Kod | Açıklama |
+|------|------|-------------|
+| `access_denied` | `access_denied` | Kaynağa erişim reddedildi |
+| `access_denied` | `model_not_allowed` | Bu API anahtarı için modele izin verilmiyor |
+
+```json
+{
+  "error": {
+    "message": "You don't have permission to access this model",
+    "type": "access_denied",
+    "code": "model_not_allowed"
+  }
+}
+```
+
+### Doğrulama Hataları (400)
+
+| Tür | Açıklama |
+|------|-------------|
+| `invalid_request_error` | İstek parametreleri geçersiz |
+| `context_length_exceeded` | Girdi model için çok uzun |
+| `model_not_found` | İstenen model mevcut değil |
+
+```json
+{
+  "error": {
+    "message": "model: 'invalid-model' is not a valid model",
+    "type": "model_not_found",
+    "param": "model"
+  }
+}
+```
+
+### Hız Sınırı Hataları (429)
+
+Hız sınırlarını aştığınızda:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**Dahil edilen başlıklar:**
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1234567890
+Retry-After: 60
+```
+
+### Payload Çok Büyük (413)
+
+Girdi veya dosya boyutu sınırları aştığında:
+
+```json
+{
+  "error": {
+    "message": "Input size exceeds maximum allowed",
+    "type": "invalid_request_error",
+    "code": "payload_too_large"
+  }
+}
+```
+
+Yaygın nedenler:
+- Resim dosyası çok büyük (maks 20MB)
+- Ses dosyası çok büyük (maks 25MB)
+- Girdi metni model bağlam uzunluğunu aşıyor
+
+### Üst Sunucu Hataları (502, 503)
+
+| Tür | Açıklama |
+|------|-------------|
+| `upstream_error` | Sağlayıcı bir hata döndürdü |
+| `all_channels_failed` | Kullanılabilir sağlayıcı yok |
+| `timeout_error` | İstek zaman aşımına uğradı |
+
+## Python'da Hataları Yönetme
+
+```python
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            raise
+        except APIConnectionError as e:
+            print(f"Connection error: {e}")
+            raise
+        except APIError as e:
+            print(f"API error: {e.status_code} - {e.message}")
+            raise
+```
+
+## JavaScript'te Hataları Yönetme
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function chatWithRetry(messages, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages
+      });
+    } catch (error) {
+      if (error instanceof OpenAI.RateLimitError) {
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+```
+
+## En İyi Uygulamalar
+
+<AccordionGroup>
+  <Accordion title="Üstel geri çekilme uygulayın">
+    Hız sınırına takıldığınızda, denemeler arasında kademeli olarak daha uzun süre bekleyin:
+    ```python
+    wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+    ```
+  </Accordion>
+
+  <Accordion title="Zaman aşımlarını ayarlayın">
+    Asılı kalan istekleri önlemek için her zaman makul zaman aşımları belirleyin:
+    ```python
+    client = OpenAI(timeout=60.0)  # 60 saniyelik zaman aşımı
+    ```
+  </Accordion>
+
+  <Accordion title="Hata ayıklama için hataları günlüğe kaydedin">
+    Destek almak için istek kimliği (request ID) dahil olmak üzere tam hata yanıtını günlüğe kaydedin:
+    ```python
+    except APIError as e:
+        logger.error(f"API Error: {e.status_code} - {e.message}")
+    ```
+  </Accordion>
+
+  <Accordion title="Modele özgü hataları yönetin">
+    Bazı modellerin belirli gereksinimleri vardır (örneğin, maksimum token sayısı, resim formatları). İstek yapmadan önce girdileri doğrulayın.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,146 @@
+---
+title: "Autenticación"
+description: "Proteja sus solicitudes de API con claves de API"
+---
+
+## Claves de API
+
+Todas las solicitudes de API requieren autenticación mediante una clave de API. Incluya su clave en el encabezado `Authorization`:
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+## Cómo obtener su clave de API
+
+1. Inicie sesión en su [LemonData Dashboard](https://lemondata.cc/dashboard)
+2. Navegue a la sección **API Keys**
+3. Haga clic en **Create New Key**
+4. Asigne un nombre descriptivo a su clave
+5. Copie la clave de inmediato; solo se muestra una vez
+
+<Warning>
+  **Mejores prácticas de seguridad:**
+  - Nunca exponga las claves de API en el código del lado del cliente
+  - No suba las claves al control de versiones
+  - Utilice variables de entorno para almacenar las claves
+  - Rote las claves periódicamente
+  - Elimine las claves que no utilice
+</Warning>
+
+## Uso de claves de API
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer $LEMONDATA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+```python Python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ.get("LEMONDATA_API_KEY"),
+    base_url="https://api.lemondata.cc/v1"
+)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+```
+
+```go Go
+package main
+
+import "github.com/sashabaranov/go-openai"
+
+func main() {
+    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+}
+```
+
+```php PHP
+<?php
+$apiKey = getenv('LEMONDATA_API_KEY');
+
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+curl_setopt_array($ch, [
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer ' . $apiKey,
+        'Content-Type: application/json'
+    ]
+]);
+```
+
+</CodeGroup>
+
+## Características de las claves de API
+
+### Límites de uso
+
+Puede establecer un límite de uso en cada clave de API para controlar el gasto:
+
+| Configuración | Descripción |
+|---------|-------------|
+| **Sin límite** | La clave utiliza el saldo de su cuenta sin restricciones |
+| **Límite fijo** | La clave deja de funcionar tras alcanzar el importe especificado |
+
+### Prefijo de la clave
+
+Todas las claves de API de LemonData comienzan con el prefijo `sk-`. El formato de la clave es:
+
+```
+sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Compatibilidad con la API de Anthropic
+
+Para el endpoint `/v1/messages`, puede utilizar el encabezado `x-api-key` (compatible con el SDK de Anthropic):
+
+```bash
+curl https://api.lemondata.cc/v1/messages \
+  -H "x-api-key: sk-your-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+<Note>
+  El encabezado `x-api-key` solo es compatible con los endpoints `/v1/messages` y `/v1/messages/count_tokens`. Otros endpoints requieren el encabezado `Authorization: Bearer`.
+</Note>
+
+## Respuestas de error
+
+| Código de estado | Tipo | Código | Descripción |
+|-------------|------|------|-------------|
+| 401 | `invalid_request_error` | `invalid_api_key` | Clave de API faltante o no válida |
+| 401 | `invalid_request_error` | `expired_api_key` | La clave de API ha sido revocada |
+| 402 | `insufficient_quota` | `insufficient_quota` | El saldo de la cuenta es insuficiente |
+| 402 | `insufficient_quota` | `quota_exceeded` | Se ha alcanzado el límite de uso de la clave de API |
+
+Ejemplo de respuesta de error:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```

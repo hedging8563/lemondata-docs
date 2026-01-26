@@ -1,0 +1,308 @@
+---
+title: "最佳实践"
+description: "优化您的 LemonData API 使用，以提升成本效益、性能和可靠性"
+---
+
+## 模型选择
+
+选择合适的模型可以显著影响成本和质量。
+
+### 基于任务的建议
+
+| 任务 | 推荐模型 | 推荐理由 |
+|------|-------------------|-----------|
+| **简单问答** | `gpt-4o-mini`, `gemini-2.5-flash` | 快速、廉价、效果足够好 |
+| **复杂推理** | `o3`, `claude-opus-4-5`, `deepseek-r1` | 更强的逻辑和规划能力 |
+| **编程** | `claude-sonnet-4-5`, `gpt-4o`, `deepseek-v3.2` | 针对代码进行了优化 |
+| **创意写作** | `claude-sonnet-4-5`, `gpt-4o` | 更好的文本质量 |
+| **视觉/图像** | `gpt-4o`, `claude-sonnet-4-5`, `gemini-2.5-flash` | 原生视觉支持 |
+| **长上下文** | `gemini-2.5-pro`, `claude-sonnet-4-5` | 1M+ token 窗口 |
+| **成本敏感** | `gpt-4o-mini`, `gemini-2.5-flash`, `deepseek-v3.2` | 性价比最高 |
+
+### 成本层级
+
+```
+$$$$ Premium: o3, claude-opus-4-5, gpt-4o
+$$$  Standard: claude-sonnet-4-5, gpt-4o
+$$   Budget:   gpt-4o-mini, gemini-2.5-flash
+$    Economy:  deepseek-v3.2, deepseek-r1
+```
+
+## 成本优化
+
+### 1. 优先使用小型模型
+
+```python
+def smart_query(question: str, complexity: str = "auto"):
+    """Use cheaper models for simple tasks."""
+
+    if complexity == "simple":
+        model = "gpt-4o-mini"
+    elif complexity == "complex":
+        model = "gpt-4o"
+    else:
+        # Start cheap, escalate if needed
+        model = "gpt-4o-mini"
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": question}]
+    )
+    return response
+```
+
+### 2. 设置 max_tokens
+
+始终设置合理的 `max_tokens` 限制：
+
+```python
+# ❌ Bad: No limit, could generate thousands of tokens
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Summarize this article"}]
+)
+
+# ✅ Good: Limit response length
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Summarize this article"}],
+    max_tokens=500  # Reasonable limit for a summary
+)
+```
+
+### 3. 优化提示词 (Prompts)
+
+```python
+# ❌ Verbose prompt (more input tokens)
+prompt = """
+I would like you to please help me by analyzing the following text
+and providing a comprehensive summary of the main points. Please be
+thorough but also concise in your response. The text is as follows:
+{text}
+"""
+
+# ✅ Concise prompt (fewer tokens)
+prompt = "Summarize the key points:\n{text}"
+```
+
+### 4. 启用缓存
+
+利用 [语义缓存](/guides/caching)：
+
+```python
+# For repeated similar queries, caching provides major savings
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is machine learning?"}],
+    temperature=0  # Deterministic = better cache hits
+)
+```
+
+### 5. 批量处理相似请求
+
+```python
+# ❌ Many small requests
+for question in questions:
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": question}]
+    )
+
+# ✅ Fewer larger requests
+combined_prompt = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": f"Answer each question:\n{combined_prompt}"}]
+)
+```
+
+## 性能优化
+
+### 1. 使用流式传输 (Streaming) 提升用户体验
+
+流式传输可以提高感知性能：
+
+```python
+stream = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Write a long essay"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+### 2. 为交互式场景选择快速模型
+
+| 使用场景 | 推荐模型 | 延迟 |
+|----------|-------------|---------|
+| 聊天界面 | `gpt-4o-mini`, `gemini-2.5-flash` | 首个 token 约 200ms |
+| Tab 补全 | `claude-haiku-4-5` | 首个 token 约 150ms |
+| 后台处理 | `gpt-4o`, `claude-sonnet-4-5` | 首个 token 约 500ms |
+
+### 3. 设置超时时间
+
+```python
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+    timeout=60.0  # 60 second timeout
+)
+```
+
+## 可靠性
+
+### 1. 实现重试机制
+
+```python
+import time
+from openai import RateLimitError, APIError
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError:
+            wait = 2 ** attempt
+            print(f"Rate limited, waiting {wait}s...")
+            time.sleep(wait)
+        except APIError as e:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(1)
+    raise Exception("Max retries exceeded")
+```
+
+### 2. 优雅地处理错误
+
+```python
+from openai import APIError, AuthenticationError, RateLimitError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError:
+    # Check API key
+    notify_admin("Invalid API key")
+except RateLimitError:
+    # Queue for later or use backup
+    add_to_queue(request)
+except APIError as e:
+    if e.status_code == 402:
+        notify_admin("Balance low")
+    elif e.status_code >= 500:
+        # Server error, retry later
+        schedule_retry(request)
+```
+
+### 3. 使用备用模型 (Fallback Models)
+
+```python
+FALLBACK_CHAIN = ["gpt-4o", "claude-sonnet-4-5", "gemini-2.5-flash"]
+
+def chat_with_fallback(messages):
+    for model in FALLBACK_CHAIN:
+        try:
+            return client.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+        except APIError:
+            continue
+    raise Exception("All models failed")
+```
+
+## 安全性
+
+### 1. 保护 API Key
+
+```python
+# ❌ Never hardcode keys
+client = OpenAI(api_key="sk-abc123...")
+
+# ✅ Use environment variables
+import os
+client = OpenAI(api_key=os.environ["LEMONDATA_API_KEY"])
+```
+
+### 2. 验证用户输入
+
+```python
+def validate_message(content: str) -> bool:
+    """Validate user input before sending to API."""
+    if len(content) > 100000:
+        raise ValueError("Message too long")
+    # Add other validation as needed
+    return True
+```
+
+### 3. 设置 API Key 限制
+
+为以下场景创建具有支出限制的独立 API Key：
+- 开发/测试
+- 生产环境
+- 不同的应用程序
+
+## 监控
+
+### 1. 追踪使用情况
+
+定期检查您的仪表板以了解：
+- 各模型的 token 使用量
+- 费用明细
+- 缓存命中率
+- 错误率
+
+### 2. 记录重要指标
+
+```python
+import logging
+
+response = client.chat.completions.create(...)
+
+logging.info({
+    "model": response.model,
+    "prompt_tokens": response.usage.prompt_tokens,
+    "completion_tokens": response.usage.completion_tokens,
+    "total_tokens": response.usage.total_tokens,
+})
+```
+
+### 3. 设置警报
+
+在仪表板中配置余额不足警报，以避免服务中断。
+
+## 检查清单
+
+<AccordionGroup>
+  <Accordion title="成本优化">
+    - [ ] 为每个任务使用合适的模型
+    - [ ] 设置 max_tokens 限制
+    - [ ] 提示词简洁明了
+    - [ ] 在适当的情况下启用缓存
+    - [ ] 批量处理相似请求
+  </Accordion>
+
+  <Accordion title="性能">
+    - [ ] 为交互式体验使用流式传输
+    - [ ] 为实时场景使用快速模型
+    - [ ] 已配置超时时间
+  </Accordion>
+
+  <Accordion title="可靠性">
+    - [ ] 已实现重试逻辑
+    - [ ] 错误处理已就绪
+    - [ ] 已配置备用模型
+  </Accordion>
+
+  <Accordion title="安全性">
+    - [ ] API Key 存储在环境变量中
+    - [ ] 输入验证
+    - [ ] 开发/生产环境使用独立的 Key
+    - [ ] 已设置支出限制
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,159 @@
+---
+title: "حدود المعدل (Rate Limits)"
+description: "فهم والتعامل مع حدود المعدل"
+---
+
+## نظرة عامة
+
+تطبق LemonData حدوداً للمعدل (Rate Limits) لضمان الاستخدام العادل واستقرار المنصة. تختلف الحدود حسب فئة الحساب.
+
+## فئات حدود المعدل
+
+| الفئة | الطلبات/الدقيقة | الوصف |
+|------|-------------|-------------|
+| **User** | 60 | الفئة الافتراضية لجميع الحسابات |
+| **Partner** | 300 | لشركاء التكامل |
+| **VIP** | 1,000 | المستخدمون ذوو الأحجام العالية |
+
+<Note>
+  تخضع حدود المعدل للتغيير. تواصل مع support@lemondata.cc للحصول على حدود مخصصة.
+</Note>
+
+## ترويسات حدود المعدل (Rate Limit Headers)
+
+يتضمن كل استجابة API معلومات حول حدود المعدل:
+
+```
+X-RateLimit-Limit: 60          # Your limit per minute
+X-RateLimit-Remaining: 55      # Requests remaining
+X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
+```
+
+## تجاوز حد المعدل
+
+عند تجاوز الحد، ستتلقى استجابة `429`:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+مع ترويسة إضافية:
+```
+Retry-After: 60  # Seconds to wait before retrying
+```
+
+## التعامل مع حدود المعدل
+
+### التراجع الأسي (Exponential Backoff)
+
+قم بتنفيذ التراجع الأسي (Exponential Backoff) لإعادة المحاولة تلقائياً:
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### جدولة الطلبات (Request Queuing)
+
+للتطبيقات ذات الأحجام العالية، قم بتنفيذ زمام طلبات (Request Queue):
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_minute=60):
+        self.rpm = requests_per_minute
+        self.interval = 60 / requests_per_minute
+        self.last_request = 0
+
+    async def request(self, messages):
+        # Wait if needed to respect rate limit
+        now = asyncio.get_event_loop().time()
+        wait_time = max(0, self.last_request + self.interval - now)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        self.last_request = asyncio.get_event_loop().time()
+        return await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+```
+
+### المعالجة بالدفعة (Batch Processing)
+
+للعمليات الضخمة، قم بالمعالجة في دفعات مع فترات تأخير:
+
+```python
+def process_batch(items, batch_size=50, delay=1):
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        for item in batch:
+            result = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": item}]
+            )
+            results.append(result)
+        time.sleep(delay)  # Pause between batches
+    return results
+```
+
+## أفضل الممارسات
+
+<AccordionGroup>
+  <Accordion title="راقب استخدامك">
+    تتبع ترويسات حدود المعدل للبقاء ضمن الحدود بشكل استباقي.
+  </Accordion>
+
+  <Accordion title="قم بتنفيذ التخزين المؤقت (Caching)">
+    قم بتخزين الاستجابات للطلبات المتطابقة لتقليل استدعاءات API.
+  </Accordion>
+
+  <Accordion title="استخدم النماذج المناسبة">
+    تسمح النماذج الأسرع (مثل gpt-4o-mini) بإنتاجية أعلى.
+  </Accordion>
+
+  <Accordion title="تواصل معنا للحصول على حدود أعلى">
+    إذا كنت بحاجة إلى حدود أعلى، تواصل مع support@lemondata.cc.
+  </Accordion>
+</AccordionGroup>
+
+## ترقية فئتك
+
+لطلب ترقية الفئة:
+
+1. قم بتسجيل الدخول إلى [لوحة التحكم (Dashboard)](https://lemondata.cc/dashboard)
+2. انتقل إلى **Settings ← Account**
+3. تواصل مع الدعم مع توضيح حالة الاستخدام الخاصة بك
+
+أو أرسل بريداً إلكترونياً إلى support@lemondata.cc يتضمن:
+- بريد حسابك الإلكتروني
+- حجم الطلبات المتوقع
+- وصف حالة الاستخدام

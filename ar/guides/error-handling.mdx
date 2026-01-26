@@ -1,0 +1,247 @@
+---
+title: "معالجة الأخطاء"
+description: "معالجة أخطاء API بسلاسة"
+---
+
+## تنسيق استجابة الخطأ
+
+تعيد جميع الأخطاء تنسيق JSON ثابتاً:
+
+```json
+{
+  "error": {
+    "message": "Human-readable error description",
+    "type": "error_type",
+    "code": "error_code",
+    "param": "parameter_name"  // اختياري، لأخطاء التحقق من الصحة
+  }
+}
+```
+
+## رموز حالة HTTP
+
+| الرمز | الوصف |
+|------|-------------|
+| 400 | Bad Request - معلمات غير صالحة |
+| 401 | Unauthorized - مفتاح API غير صالح أو مفقود |
+| 402 | Payment Required - رصيد غير كافٍ |
+| 403 | Forbidden - تم رفض الوصول أو النموذج غير مسموح به |
+| 404 | Not Found - النموذج أو المورد غير موجود |
+| 413 | Payload Too Large - تم تجاوز حجم المدخلات أو الملف |
+| 429 | Too Many Requests - تم تجاوز حد المعدل (Rate limit) |
+| 500 | Internal Server Error |
+| 502 | Bad Gateway - خطأ من المزود الرئيسي (Upstream) |
+| 503 | Service Unavailable - فشلت جميع القنوات |
+| 504 | Gateway Timeout - انتهت مهلة الطلب |
+
+## أنواع الأخطاء
+
+### أخطاء المصادقة (401)
+
+| النوع | الرمز | الوصف |
+|------|------|-------------|
+| `invalid_api_key` | `invalid_api_key` | مفتاح API مفقود أو غير صالح |
+| `expired_api_key` | `expired_api_key` | تم إلغاء مفتاح API |
+
+```python
+from openai import OpenAI, AuthenticationError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError as e:
+    print(f"Authentication failed: {e.message}")
+```
+
+### أخطاء الدفع (402)
+
+| النوع | الرمز | الوصف |
+|------|------|-------------|
+| `insufficient_quota` | `insufficient_quota` | رصيد الحساب منخفض جداً |
+| `quota_exceeded` | `quota_exceeded` | تم الوصول إلى حد استخدام مفتاح API |
+
+```python
+from openai import OpenAI, APIStatusError
+
+try:
+    response = client.chat.completions.create(...)
+except APIStatusError as e:
+    if e.status_code == 402:
+        print("Please top up your account balance")
+```
+
+### أخطاء الوصول (403)
+
+| النوع | الرمز | الوصف |
+|------|------|-------------|
+| `access_denied` | `access_denied` | تم رفض الوصول إلى المورد |
+| `access_denied` | `model_not_allowed` | النموذج غير مسموح به لمفتاح API هذا |
+
+```json
+{
+  "error": {
+    "message": "You don't have permission to access this model",
+    "type": "access_denied",
+    "code": "model_not_allowed"
+  }
+}
+```
+
+### أخطاء التحقق من الصحة (400)
+
+| النوع | الوصف |
+|------|-------------|
+| `invalid_request_error` | معلمات الطلب غير صالحة |
+| `context_length_exceeded` | المدخلات طويلة جداً بالنسبة للنموذج |
+| `model_not_found` | النموذج المطلوب غير موجود |
+
+```json
+{
+  "error": {
+    "message": "model: 'invalid-model' is not a valid model",
+    "type": "model_not_found",
+    "param": "model"
+  }
+}
+```
+
+### أخطاء حد المعدل (429)
+
+عندما تتجاوز حدود المعدل (rate limits):
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**الرؤوس (Headers) المضمنة:**
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1234567890
+Retry-After: 60
+```
+
+### الحمولة كبيرة جداً (413)
+
+عندما يتجاوز حجم المدخلات أو الملف الحدود المسموح بها:
+
+```json
+{
+  "error": {
+    "message": "Input size exceeds maximum allowed",
+    "type": "invalid_request_error",
+    "code": "payload_too_large"
+  }
+}
+```
+
+الأسباب الشائعة:
+- ملف الصورة كبير جداً (بحد أقصى 20 ميجابايت)
+- ملف الصوت كبير جداً (بحد أقصى 25 ميجابايت)
+- نص المدخلات يتجاوز طول سياق (context length) النموذج
+
+### أخطاء المزود (502, 503)
+
+| النوع | الوصف |
+|------|-------------|
+| `upstream_error` | أعاد المزود خطأً |
+| `all_channels_failed` | لا يوجد مزودون متاحون |
+| `timeout_error` | انتهت مهلة الطلب |
+
+## معالجة الأخطاء في Python
+
+```python
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            raise
+        except APIConnectionError as e:
+            print(f"Connection error: {e}")
+            raise
+        except APIError as e:
+            print(f"API error: {e.status_code} - {e.message}")
+            raise
+```
+
+## معالجة الأخطاء في JavaScript
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function chatWithRetry(messages, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages
+      });
+    } catch (error) {
+      if (error instanceof OpenAI.RateLimitError) {
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+```
+
+## أفضل الممارسات
+
+<AccordionGroup>
+  <Accordion title="تنفيذ التراجع الأسي (Exponential backoff)">
+    عند تقييد المعدل، انتظر لفترات أطول تدريجياً بين محاولات إعادة المحاولة:
+    ```python
+    wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+    ```
+  </Accordion>
+
+  <Accordion title="تعيين مهلات زمنية (Timeouts)">
+    قم دائماً بتعيين مهلات زمنية معقولة لتجنب الطلبات المعلقة:
+    ```python
+    client = OpenAI(timeout=60.0)  # مهلة 60 ثانية
+    ```
+  </Accordion>
+
+  <Accordion title="تسجيل الأخطاء لتصحيح الأخطاء (Debugging)">
+    قم بتسجيل استجابة الخطأ الكاملة بما في ذلك معرف الطلب (request ID) للدعم الفني:
+    ```python
+    except APIError as e:
+        logger.error(f"API Error: {e.status_code} - {e.message}")
+    ```
+  </Accordion>
+
+  <Accordion title="معالجة الأخطاء الخاصة بالنموذج">
+    بعض النماذج لها متطلبات محددة (مثل الحد الأقصى للرموز المميزة "tokens"، تنسيقات الصور).
+    تحقق من صحة المدخلات قبل إجراء الطلبات.
+  </Accordion>
+</AccordionGroup>

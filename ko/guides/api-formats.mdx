@@ -1,0 +1,266 @@
+---
+title: "✨ 멀티 포맷 API"
+description: "단일 API 키로 OpenAI, Anthropic 또는 Gemini 포맷을 사용하세요"
+---
+
+## 개요
+
+LemonData는 단일 API 키로 **세 가지 네이티브 API 포맷**을 지원합니다. 설정 변경 없이 사용 사례에 가장 적합한 포맷을 선택하세요.
+
+<CardGroup cols={3}>
+  <Card title="OpenAI 포맷" icon="plug">
+    `/v1/chat/completions`
+    표준 포맷, 가장 넓은 호환성
+  </Card>
+  <Card title="Anthropic 포맷" icon="message">
+    `/v1/messages`
+    확장된 사고(Extended thinking), 네이티브 Claude 기능
+  </Card>
+  <Card title="Gemini 포맷" icon="sparkles">
+    `/v1beta/models/:model:generateContent`
+    Google 에코시스템 통합
+  </Card>
+</CardGroup>
+
+## 왜 멀티 포맷인가요?
+
+| 장점 | 설명 |
+|---------|-------------|
+| **SDK 전환 불필요** | 선호하는 SDK로 모든 모델 사용 가능 |
+| **네이티브 기능** | 포맷별 특화 기능 액세스 |
+| **쉬운 마이그레이션** | 베이스 URL 변경만으로 공식 API에서 전환 가능 |
+| **단일 결제** | 하나의 계정, 하나의 API 키로 모든 포맷 이용 |
+
+## 포맷 비교
+
+| 기능 | OpenAI | Anthropic | Gemini |
+|---------|--------|-----------|--------|
+| **엔드포인트** | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/:model:generateContent` |
+| **인증 헤더** | `Authorization: Bearer` | `x-api-key` | `Authorization: Bearer` |
+| **시스템 프롬프트** | `messages` 배열 내 | 별도 `system` 필드 | `systemInstruction` 내 |
+| **확장된 사고** | ❌ | ✅ | ❌ |
+| **스트리밍** | ✅ SSE | ✅ SSE | ✅ SSE |
+| **도구 호출** | ✅ | ✅ | ✅ |
+| **비전** | ✅ | ✅ | ✅ |
+
+## OpenAI 포맷
+
+가장 널리 호환되는 포맷입니다. 모든 LemonData 모델에서 작동합니다.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# 모든 모델과 작동합니다
+response = client.chat.completions.create(
+    model="claude-sonnet-4-5",  # OpenAI 포맷을 통한 Claude
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+**다음의 경우에 권장:**
+- 일반적인 용도
+- 기존 OpenAI SDK 통합 환경
+- 최대 호환성
+
+## Anthropic 포맷
+
+네이티브 Anthropic Messages API입니다. 확장된 사고와 같은 Claude 전용 기능에 필요합니다.
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc"  # /v1 접미사 없음!
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    system="You are a helpful assistant.",  # 별도 시스템 필드
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+### 확장된 사고 (Claude Opus 4.5)
+
+Anthropic 포맷에서만 사용 가능합니다:
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex problem..."}]
+)
+
+# 사고 과정 액세스
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Answer: {block.text}")
+```
+
+**다음의 경우에 권장:**
+- Claude 전용 기능
+- 확장된 사고 모드
+- 네이티브 Anthropic SDK 사용자
+
+## Gemini 포맷
+
+Google 에코시스템 통합을 위한 네이티브 Google Gemini API 포맷입니다.
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{
+      "parts": [{"text": "Hello!"}]
+    }],
+    "systemInstruction": {
+      "parts": [{"text": "You are a helpful assistant."}]
+    }
+  }'
+```
+
+### 스트리밍
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{"parts": [{"text": "Write a story"}]}]
+  }'
+```
+
+**다음의 경우에 권장:**
+- Google Cloud 통합
+- 기존 Gemini SDK 코드
+- 네이티브 Gemini 기능
+
+## 적절한 포맷 선택하기
+
+```mermaid
+graph TD
+    A[어떤 포맷을 사용할까요?] --> B{Claude의 확장된 사고 기능이 필요한가요?}
+    B -->|예| C[Anthropic 포맷 사용]
+    B -->|아니요| D{기존 코드베이스가 있나요?}
+    D -->|OpenAI SDK| E[OpenAI 포맷 사용]
+    D -->|Anthropic SDK| C
+    D -->|Gemini SDK| F[Gemini 포맷 사용]
+    D -->|새 프로젝트| E
+```
+
+## 마이그레이션 가이드
+
+### OpenAI 공식 API에서 전환
+
+```python
+# 전 (OpenAI)
+client = OpenAI(api_key="sk-openai-key")
+
+# 후 (LemonData)
+client = OpenAI(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"  # 이 라인 추가
+)
+# 이게 전부입니다! 동일한 코드가 작동합니다
+```
+
+### Anthropic 공식 API에서 전환
+
+```python
+# 전 (Anthropic)
+client = Anthropic(api_key="sk-ant-key")
+
+# 후 (LemonData)
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"  # 이 라인 추가 (/v1 없음!)
+)
+```
+
+### Google AI Studio에서 전환
+
+```python
+# 전 (Google)
+import google.generativeai as genai
+genai.configure(api_key="google-api-key")
+
+# 후 (LemonData) - REST API 사용
+import requests
+
+response = requests.post(
+    "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent",
+    headers={"Authorization": "Bearer sk-lemondata-key"},
+    json={"contents": [{"parts": [{"text": "Hello"}]}]}
+)
+```
+
+## 교차 모델 호환성
+
+LemonData의 마법: **어떤 SDK**로도 **어떤 모델**이든 사용하세요. 게이트웨이가 포맷 변환을 자동으로 처리합니다.
+
+### 모든 SDK → 모든 모델
+
+```python
+# GPT-4o와 함께 사용하는 Anthropic SDK (OpenAI 포맷으로 자동 변환)
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"
+)
+
+response = client.messages.create(
+    model="gpt-4o",  # ✅ 작동함! 자동 변환됨
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# 동일한 SDK, 다른 모델 - 코드 변경 없음
+response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ 작동함!
+response = client.messages.create(model="deepseek-r1", ...)       # ✅ 작동함!
+```
+
+### OpenAI SDK → 모든 모델
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
+
+# 이 모든 것이 동일한 SDK로 작동합니다:
+response = client.chat.completions.create(model="gpt-4o", ...)
+response = client.chat.completions.create(model="claude-sonnet-4-5", ...)
+response = client.chat.completions.create(model="gemini-2.5-flash", ...)
+```
+
+### 업계 비교
+
+| 플랫폼 | OpenAI 포맷 | Anthropic 포맷 | Gemini 포맷 | Responses API |
+|----------|:---:|:---:|:---:|:---:|
+| **LemonData** | ✅ 모든 모델 | ✅ 모든 모델 | ✅ 모든 모델 | ✅ 모든 모델 |
+| OpenRouter | ✅ 모든 모델 | ❌ | ❌ | ❌ |
+| Together AI | ✅ 모든 모델 | ❌ | ❌ | ❌ |
+| Fireworks | ✅ 모든 모델 | ❌ | ❌ | ❌ |
+
+<Note>
+대부분의 기능에서 교차 포맷이 작동하지만, 특정 포맷 전용 기능(예: Anthropic 확장된 사고)은 네이티브 포맷이 필요합니다.
+</Note>

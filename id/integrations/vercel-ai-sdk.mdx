@@ -1,0 +1,220 @@
+---
+title: "Vercel AI SDK"
+description: "Integrasikan LemonData dengan Vercel AI SDK untuk aplikasi React dan Next.js"
+---
+
+## Gambaran Umum
+
+Vercel AI SDK adalah toolkit TypeScript untuk membangun aplikasi streaming bertenaga AI dengan React, Next.js, Vue, Svelte, dan lainnya. LemonData bekerja secara mulus melalui penyedia yang kompatibel dengan OpenAI.
+
+## Instalasi
+
+```bash
+npm install ai @ai-sdk/openai
+```
+
+## Konfigurasi Dasar
+
+```typescript
+import { createOpenAI } from '@ai-sdk/openai';
+
+const lemondata = createOpenAI({
+  apiKey: 'sk-your-lemondata-key',
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+## Menghasilkan Teks
+
+```typescript
+import { generateText } from 'ai';
+
+const { text } = await generateText({
+  model: lemondata('gpt-4o'),
+  prompt: 'What is LemonData?',
+});
+
+console.log(text);
+```
+
+## Streaming Teks
+
+```typescript
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: lemondata('gpt-4o'),
+  prompt: 'Write a poem about AI.',
+});
+
+for await (const textPart of result.textStream) {
+  process.stdout.write(textPart);
+}
+```
+
+## Pesan Chat
+
+```typescript
+import { generateText } from 'ai';
+
+const { text } = await generateText({
+  model: lemondata('gpt-4o'),
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'What is the capital of France?' },
+  ],
+});
+```
+
+## Menggunakan Berbagai Model
+
+```typescript
+// OpenAI GPT-4o
+const gpt4Response = await generateText({
+  model: lemondata('gpt-4o'),
+  prompt: 'Hello!',
+});
+
+// Anthropic Claude
+const claudeResponse = await generateText({
+  model: lemondata('claude-sonnet-4-5'),
+  prompt: 'Hello!',
+});
+
+// Google Gemini
+const geminiResponse = await generateText({
+  model: lemondata('gemini-2.5-flash'),
+  prompt: 'Hello!',
+});
+
+// DeepSeek
+const deepseekResponse = await generateText({
+  model: lemondata('deepseek-r1'),
+  prompt: 'Hello!',
+});
+```
+
+## Rute API Next.js
+
+```typescript
+// app/api/chat/route.ts
+import { createOpenAI } from '@ai-sdk/openai';
+import { streamText } from 'ai';
+
+const lemondata = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  const result = streamText({
+    model: lemondata('gpt-4o'),
+    messages,
+  });
+
+  return result.toDataStreamResponse();
+}
+```
+
+## Komponen Chat React
+
+```tsx
+'use client';
+
+import { useChat } from 'ai/react';
+
+export default function Chat() {
+  const { messages, input, handleInputChange, handleSubmit } = useChat({
+    api: '/api/chat',
+  });
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id}>
+          {m.role}: {m.content}
+        </div>
+      ))}
+
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={handleInputChange} />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  );
+}
+```
+
+## Pemanggilan Tool
+
+```typescript
+import { generateText, tool } from 'ai';
+import { z } from 'zod';
+
+const { text, toolCalls } = await generateText({
+  model: lemondata('gpt-4o'),
+  tools: {
+    weather: tool({
+      description: 'Get the weather in a location',
+      parameters: z.object({
+        location: z.string().describe('The location to get weather for'),
+      }),
+      execute: async ({ location }) => {
+        return { temperature: 72, condition: 'sunny' };
+      },
+    }),
+  },
+  prompt: 'What is the weather in San Francisco?',
+});
+```
+
+## Output Terstruktur
+
+```typescript
+import { generateObject } from 'ai';
+import { z } from 'zod';
+
+const { object } = await generateObject({
+  model: lemondata('gpt-4o'),
+  schema: z.object({
+    name: z.string(),
+    age: z.number(),
+    email: z.string().email(),
+  }),
+  prompt: 'Generate a fake user profile.',
+});
+
+console.log(object);
+```
+
+## Variabel Lingkungan
+
+```bash
+# .env.local
+LEMONDATA_API_KEY=sk-your-lemondata-key
+```
+
+```typescript
+const lemondata = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+## Praktik Terbaik
+
+<AccordionGroup>
+  <Accordion title="Gunakan streaming untuk UX yang lebih baik">
+    Selalu gunakan streaming untuk aplikasi chat guna memberikan umpan balik secara real-time.
+  </Accordion>
+
+  <Accordion title="Tangani kesalahan dengan baik">
+    Terapkan error boundaries yang tepat dalam komponen React.
+  </Accordion>
+
+  <Accordion title="Amankan API key Anda">
+    Jangan pernah mengekspos API key Anda dalam kode sisi klien. Selalu gunakan rute API sisi server.
+  </Accordion>
+</AccordionGroup>

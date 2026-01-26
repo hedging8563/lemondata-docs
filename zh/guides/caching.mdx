@@ -1,0 +1,193 @@
+---
+title: "✨ 智能缓存"
+description: "通过上下文感知的语义缓存降低成本和延迟"
+---
+
+## 概览
+
+LemonData 提供了一个智能缓存系统，可以显著降低您的 API 成本和响应延迟。我们的缓存不仅限于简单的请求匹配——它还能理解 Prompt 的**语义含义**。
+
+<CardGroup cols={2}>
+  <Card title="节省成本" icon="piggy-bank">
+    缓存命中仅按正常成本的一小部分计费。
+  </Card>
+  <Card title="更快的响应" icon="bolt">
+    缓存的响应会立即返回，无需模型推理。
+  </Card>
+  <Card title="上下文感知" icon="brain">
+    语义匹配即使在措辞不同的情况下也能找到相似的请求。
+  </Card>
+  <Card title="隐私控制" icon="shield">
+    完全控制缓存和共享的内容。
+  </Card>
+</CardGroup>
+
+## 工作原理
+
+LemonData 使用两层缓存系统：
+
+### 第一层：响应缓存（精确匹配）
+
+对于确定性请求（`temperature=0`），我们缓存精确的响应：
+
+- **匹配**：相同的 `model`、`messages` 和参数
+- **速度**：瞬时（微秒级）
+- **最适用于**：重复的相同查询
+
+### 第二层：语义缓存（相似度匹配）
+
+对于所有请求，我们还使用两阶段匹配算法检查语义相似度：
+
+- **第一阶段（仅查询）**：用户查询相似度 ≥95%
+- **第二阶段（全上下文）**：包含对话上下文的相似度 ≥85%
+- **最适用于**：FAQ 风格的查询、常见问题
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (high semantic similarity)
+```
+
+## 缓存 Header
+
+### 请求 Header
+
+按请求控制缓存行为：
+
+```bash
+# Skip cache lookup, always call the model
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
+```
+
+| Header | 值 | 效果 |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | 跳过缓存，获取新鲜响应 |
+| `Cache-Control: no-store` | - | 不缓存此响应 |
+
+### 响应 Header
+
+每个响应都包含缓存状态：
+
+```
+X-Cache: HIT           # Response served from cache
+X-Cache: MISS          # Fresh response from model
+X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
+```
+
+## 检查缓存状态
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+```
+
+## 缓存计费
+
+缓存命中的价格显著低于新鲜请求：
+
+| 类型 | 成本 |
+|------|------|
+| 缓存 HIT | **2折 (80% off)** |
+| 缓存 MISS | 全价 |
+
+具体的折扣显示在您的仪表板使用日志中。
+
+## 隐私控制
+
+### API Key 级别
+
+在仪表板中为每个 API Key 配置缓存行为：
+
+| 模式 | 描述 |
+|------|-------------|
+| **Default** | 启用缓存，可能与相似请求共享 |
+| **No Share** | 启用缓存，但响应对您的账户私有 |
+| **Disabled** | 完全不缓存 |
+
+### 请求级别
+
+按请求覆盖：
+
+```bash
+# Disable caching for this request
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Cache-Control: no-store" \
+  -d '...'
+```
+
+## 缓存反馈
+
+如果您收到错误的缓存响应，可以进行报告：
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**反馈类型：**
+- `wrong_answer` - 事实错误
+- `outdated` - 信息陈旧
+- `irrelevant` - 与问题不匹配
+- `other` - 其他问题
+
+当一个缓存条目收到足够的负面反馈时，它会自动失效。
+
+## 最佳实践
+
+<AccordionGroup>
+  <Accordion title="对可缓存的查询使用 temperature=0">
+    确定性设置可最大化缓存命中率。
+  </Accordion>
+
+  <Accordion title="标准化 Prompt 格式">
+    一致的格式可以提高语义匹配效果。
+  </Accordion>
+
+  <Accordion title="对时间敏感的查询使用 no-cache">
+    时事、实时数据应跳过缓存。
+  </Accordion>
+
+  <Accordion title="监控缓存命中率">
+    在仪表板中查看缓存统计信息和节省情况。
+  </Accordion>
+</AccordionGroup>
+
+## 何时不应使用缓存
+
+为以下情况禁用缓存：
+
+- **实时信息**：股票价格、天气、新闻
+- **个性化内容**：针对特定用户的推荐
+- **创意任务**：当需要多样性时
+- **敏感数据**：机密信息
+
+```python
+# For time-sensitive queries
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_headers={"Cache-Control": "no-cache"}
+)
+```

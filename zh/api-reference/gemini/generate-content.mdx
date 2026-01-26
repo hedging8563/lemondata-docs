@@ -1,0 +1,210 @@
+---
+title: "生成内容"
+api: "POST /v1beta/models/{model}:generateContent"
+description: "使用 Google Gemini API 格式生成内容"
+---
+
+LemonData 支持 Gemini 模型的原生 Google Gemini API 格式。这使得它能直接兼容 Google AI SDK。
+
+## 路径参数
+
+<ParamField path="model" type="string" required>
+  模型名称（例如：`gemini-2.5-pro`，`gemini-2.5-flash`）。
+</ParamField>
+
+## 查询参数
+
+<ParamField query="key" type="string">
+  API 密钥（Header 身份验证的替代方案）。
+</ParamField>
+
+## 身份验证
+
+Gemini 端点支持多种身份验证方法：
+- `?key=YOUR_API_KEY` 查询参数
+- `x-goog-api-key: YOUR_API_KEY` Header
+- `Authorization: Bearer YOUR_API_KEY` Header
+
+## 请求体
+
+<ParamField body="contents" type="array" required>
+  对话内容。
+
+  每个内容对象包含：
+  - `role` (string): `user` 或 `model`
+  - `parts` (array): 内容部分（文本或内联数据）
+</ParamField>
+
+<ParamField body="systemInstruction" type="object">
+  模型的系统指令。
+</ParamField>
+
+<ParamField body="generationConfig" type="object">
+  生成配置：
+  - `temperature` (number): 采样温度
+  - `topP` (number): 核采样概率
+  - `topK` (integer): Top-K 采样
+  - `maxOutputTokens` (integer): 最大输出 token 数
+  - `stopSequences` (array): 停止序列
+</ParamField>
+
+<ParamField body="safetySettings" type="array">
+  安全过滤设置。
+</ParamField>
+
+## 响应
+
+<ResponseField name="candidates" type="array">
+  生成的候选内容。
+</ResponseField>
+
+<ResponseField name="usageMetadata" type="object">
+  Token 使用信息。
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:generateContent?key=sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [
+      {
+        "parts": [{"text": "Hello, Gemini!"}]
+      }
+    ],
+    "generationConfig": {
+      "temperature": 0.7,
+      "maxOutputTokens": 1024
+    }
+  }'
+```
+
+```python Python
+import google.generativeai as genai
+
+genai.configure(
+    api_key="sk-your-api-key",
+    transport="rest",
+    client_options={"api_endpoint": "api.lemondata.cc"}
+)
+
+model = genai.GenerativeModel("gemini-2.5-pro")
+response = model.generate_content("Hello, Gemini!")
+
+print(response.text)
+```
+
+```javascript JavaScript
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI("sk-your-api-key", {
+  baseUrl: "https://api.lemondata.cc"
+});
+
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+const result = await model.generateContent("Hello, Gemini!");
+
+console.log(result.response.text());
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io"
+    "net/http"
+)
+
+func main() {
+    payload := map[string]interface{}{
+        "contents": []map[string]interface{}{
+            {
+                "parts": []map[string]string{
+                    {"text": "Hello, Gemini!"},
+                },
+            },
+        },
+        "generationConfig": map[string]interface{}{
+            "temperature":    0.7,
+            "maxOutputTokens": 1024,
+        },
+    }
+
+    jsonData, _ := json.Marshal(payload)
+    req, _ := http.NewRequest("POST",
+        "https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:generateContent?key=sk-your-api-key",
+        bytes.NewBuffer(jsonData))
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(body))
+}
+```
+
+```php PHP
+<?php
+$payload = [
+    'contents' => [
+        [
+            'parts' => [
+                ['text' => 'Hello, Gemini!']
+            ]
+        ]
+    ],
+    'generationConfig' => [
+        'temperature' => 0.7,
+        'maxOutputTokens' => 1024
+    ]
+];
+
+$ch = curl_init('https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:generateContent?key=sk-your-api-key');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json'
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload)
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['candidates'][0]['content']['parts'][0]['text'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {"text": "Hello! How can I assist you today?"}
+        ]
+      },
+      "finishReason": "STOP",
+      "safetyRatings": [
+        {"category": "HARM_CATEGORY_HARASSMENT", "probability": "NEGLIGIBLE"}
+      ]
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 5,
+    "candidatesTokenCount": 10,
+    "totalTokenCount": 15
+  }
+}
+```
+</ResponseExample>

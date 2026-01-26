@@ -1,0 +1,266 @@
+---
+title: "✨ API Multi-Format"
+description: "Gunakan format OpenAI, Anthropic, atau Gemini dengan satu kunci API"
+---
+
+## Gambaran Umum
+
+LemonData mendukung **tiga format API asli** dengan satu kunci API. Pilih format yang paling sesuai dengan kebutuhan Anda - tidak perlu perubahan konfigurasi.
+
+<CardGroup cols={3}>
+  <Card title="Format OpenAI" icon="plug">
+    `/v1/chat/completions`
+    Format standar, kompatibilitas terluas
+  </Card>
+  <Card title="Format Anthropic" icon="message">
+    `/v1/messages`
+    Pemikiran mendalam (extended thinking), fitur asli Claude
+  </Card>
+  <Card title="Format Gemini" icon="sparkles">
+    `/v1beta/models/:model:generateContent`
+    Integrasi ekosistem Google
+  </Card>
+</CardGroup>
+
+## Mengapa Multi-Format?
+
+| Manfaat | Deskripsi |
+|---------|-------------|
+| **Tanpa pergantian SDK** | Gunakan model apa pun dengan SDK pilihan Anda |
+| **Fitur asli** | Akses kemampuan khusus format |
+| **Migrasi mudah** | Beralih dari API resmi hanya dengan perubahan base URL |
+| **Penagihan tunggal** | Satu akun, satu kunci API, semua format |
+
+## Perbandingan Format
+
+| Fitur | OpenAI | Anthropic | Gemini |
+|---------|--------|-----------|--------|
+| **Endpoint** | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/:model:generateContent` |
+| **Header Autentikasi** | `Authorization: Bearer` | `x-api-key` | `Authorization: Bearer` |
+| **Prompt Sistem** | Dalam array messages | Bidang `system` terpisah | Dalam `systemInstruction` |
+| **Pemikiran Mendalam** | ❌ | ✅ | ❌ |
+| **Streaming** | ✅ SSE | ✅ SSE | ✅ SSE |
+| **Tool Calling** | ✅ | ✅ | ✅ |
+| **Vision** | ✅ | ✅ | ✅ |
+
+## Format OpenAI
+
+Format yang paling kompatibel secara luas. Berfungsi dengan semua model LemonData.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# Berfungsi dengan model APA PUN
+response = client.chat.completions.create(
+    model="claude-sonnet-4-5",  # Claude via format OpenAI
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+**Terbaik untuk:**
+- Penggunaan umum
+- Integrasi SDK OpenAI yang sudah ada
+- Kompatibilitas maksimal
+
+## Format Anthropic
+
+API Pesan Anthropic asli. Diperlukan untuk fitur khusus Claude seperti pemikiran mendalam (extended thinking).
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc"  # Tanpa akhiran /v1!
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    system="You are a helpful assistant.",  # Bidang system terpisah
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+### Pemikiran Mendalam (Claude Opus 4.5)
+
+Hanya tersedia dalam format Anthropic:
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex problem..."}]
+)
+
+# Akses proses pemikiran
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Answer: {block.text}")
+```
+
+**Terbaik untuk:**
+- Fitur khusus Claude
+- Mode pemikiran mendalam
+- Pengguna SDK Anthropic asli
+
+## Format Gemini
+
+Format API Google Gemini asli untuk integrasi ekosistem Google.
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{
+      "parts": [{"text": "Hello!"}]
+    }],
+    "systemInstruction": {
+      "parts": [{"text": "You are a helpful assistant."}]
+    }
+  }'
+```
+
+### Streaming
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{"parts": [{"text": "Write a story"}]}]
+  }'
+```
+
+**Terbaik untuk:**
+- Integrasi Google Cloud
+- Kode SDK Gemini yang sudah ada
+- Fitur asli Gemini
+
+## Memilih Format yang Tepat
+
+```mermaid
+graph TD
+    A[Format mana?] --> B{Butuh pemikiran mendalam Claude?}
+    B -->|Ya| C[Gunakan Format Anthropic]
+    B -->|Tidak| D{Basis kode yang sudah ada?}
+    D -->|SDK OpenAI| E[Gunakan Format OpenAI]
+    D -->|SDK Anthropic| C
+    D -->|SDK Gemini| F[Gunakan Format Gemini]
+    D -->|Proyek baru| E
+```
+
+## Panduan Migrasi
+
+### Dari API Resmi OpenAI
+
+```python
+# Sebelum (OpenAI)
+client = OpenAI(api_key="sk-openai-key")
+
+# Sesudah (LemonData)
+client = OpenAI(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"  # Tambahkan baris ini
+)
+# Selesai! Kode yang sama tetap berfungsi
+```
+
+### Dari API Resmi Anthropic
+
+```python
+# Sebelum (Anthropic)
+client = Anthropic(api_key="sk-ant-key")
+
+# Sesudah (LemonData)
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"  # Tambahkan baris ini (tanpa /v1!)
+)
+```
+
+### Dari Google AI Studio
+
+```python
+# Sebelum (Google)
+import google.generativeai as genai
+genai.configure(api_key="google-api-key")
+
+# Sesudah (LemonData) - Gunakan REST API
+import requests
+
+response = requests.post(
+    "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent",
+    headers={"Authorization": "Bearer sk-lemondata-key"},
+    json={"contents": [{"parts": [{"text": "Hello"}]}]}
+)
+```
+
+## Kompatibilitas Lintas-Model
+
+Keajaiban LemonData: gunakan **SDK apa pun** dengan **model apa pun**. Gateway secara otomatis menangani konversi format.
+
+### SDK Apa Pun → Model Apa Pun
+
+```python
+# SDK Anthropic dengan GPT-4o (otomatis dikonversi ke format OpenAI)
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"
+)
+
+response = client.messages.create(
+    model="gpt-4o",  # ✅ Berhasil! Dikonversi otomatis
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# SDK yang sama, model berbeda - tanpa perubahan kode
+response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ Berhasil!
+response = client.messages.create(model="deepseek-r1", ...)       # ✅ Berhasil!
+```
+
+### SDK OpenAI → Semua Model
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
+
+# Semua ini berfungsi dengan SDK yang sama:
+response = client.chat.completions.create(model="gpt-4o", ...)
+response = client.chat.completions.create(model="claude-sonnet-4-5", ...)
+response = client.chat.completions.create(model="gemini-2.5-flash", ...)
+```
+
+### Perbandingan Industri
+
+| Platform | Format OpenAI | Format Anthropic | Format Gemini | API Respons |
+|----------|:---:|:---:|:---:|:---:|
+| **LemonData** | ✅ Semua model | ✅ Semua model | ✅ Semua model | ✅ Semua model |
+| OpenRouter | ✅ Semua model | ❌ | ❌ | ❌ |
+| Together AI | ✅ Semua model | ❌ | ❌ | ❌ |
+| Fireworks | ✅ Semua model | ❌ | ❌ | ❌ |
+
+<Note>
+Meskipun lintas format berfungsi untuk sebagian besar fitur, fitur khusus format (seperti pemikiran mendalam Anthropic) memerlukan format aslinya.
+</Note>

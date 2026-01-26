@@ -1,0 +1,193 @@
+---
+title: "✨ التخزين المؤقت الذكي"
+description: "خفض التكاليف وزمن الاستجابة باستخدام التخزين المؤقت الدلالي المدرك للسياق"
+---
+
+## نظرة عامة
+
+توفر LemonData نظام تخزين مؤقت ذكي يمكنه تقليل تكاليف API وزمن استجابة الطلبات بشكل كبير. يتجاوز نظام التخزين المؤقت لدينا مجرد مطابقة الطلبات البسيطة - فهو يفهم **المعنى الدلالي** للمطالبات الخاصة بك.
+
+<CardGroup cols={2}>
+  <Card title="توفير التكاليف" icon="piggy-bank">
+    يتم احتساب رسوم عمليات Cache hits بجزء بسيط من التكلفة العادية.
+  </Card>
+  <Card title="استجابات أسرع" icon="bolt">
+    يتم إرجاع الاستجابات المخزنة مؤقتاً فوراً، دون الحاجة إلى استنتاج النموذج.
+  </Card>
+  <Card title="مدرك للسياق" icon="brain">
+    تجد المطابقة الدلالية الطلبات المتشابهة حتى مع اختلاف الصياغة.
+  </Card>
+  <Card title="عناصر التحكم في الخصوصية" icon="shield">
+    تحكم كامل في ما يتم تخزينه مؤقتاً ومشاركته.
+  </Card>
+</CardGroup>
+
+## كيف يعمل
+
+تستخدم LemonData نظام تخزين مؤقت ثنائي الطبقات:
+
+### الطبقة 1: تخزين الاستجابة المؤقت (مطابقة تامة)
+
+بالنسبة للطلبات الحتمية (`temperature=0`)، نقوم بتخزين الاستجابة الدقيقة مؤقتاً:
+
+- **المطابقة**: نموذج ورسائل ومعلمات متطابقة
+- **السرعة**: فورية (ميكروثانية)
+- **الأفضل لـ**: الاستعلامات المتكررة المتطابقة
+
+### الطبقة 2: التخزين المؤقت الدلالي (مطابقة التشابه)
+
+بالنسبة لجميع الطلبات، نتحقق أيضاً من التشابه الدلالي باستخدام خوارزمية مطابقة ثنائية المراحل:
+
+- **المرحلة 1 (الاستعلام فقط)**: تشابه ≥95% في استعلام المستخدم
+- **المرحلة 2 (السياق الكامل)**: تشابه ≥85% بما في ذلك سياق المحادثة
+- **الأفضل لـ**: استعلامات نمط الأسئلة الشائعة، والأسئلة المتكررة
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (high semantic similarity)
+```
+
+## رؤوس التخزين المؤقت (Cache Headers)
+
+### رؤوس الطلب (Request Headers)
+
+التحكم في سلوك التخزين المؤقت لكل طلب:
+
+```bash
+# Skip cache lookup, always call the model
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
+```
+
+| الرأس | القيمة | التأثير |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | تخطي التخزين المؤقت، استجابة جديدة |
+| `Cache-Control: no-store` | - | لا تقم بتخزين هذه الاستجابة مؤقتاً |
+
+### رؤوس الاستجابة (Response Headers)
+
+تتضمن كل استجابة حالة التخزين المؤقت:
+
+```
+X-Cache: HIT           # Response served from cache
+X-Cache: MISS          # Fresh response from model
+X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
+```
+
+## التحقق من حالة التخزين المؤقت
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+```
+
+## فوترة التخزين المؤقت
+
+تعد عمليات Cache hits أرخص بكثير من الطلبات الجديدة:
+
+| النوع | التكلفة |
+|------|------|
+| Cache HIT | **خصم 80%** |
+| Cache MISS | السعر الكامل |
+
+يظهر الخصم الدقيق في سجلات الاستخدام بلوحة التحكم الخاصة بك.
+
+## عناصر التحكم في الخصوصية
+
+### مستوى مفتاح API
+
+تكوين سلوك التخزين المؤقت لكل مفتاح API في لوحة التحكم الخاصة بك:
+
+| الوضع | الوصف |
+|------|-------------|
+| **Default** | التخزين المؤقت مفعل، قد تتم المشاركة مع طلبات مماثلة |
+| **No Share** | التخزين المؤقت مفعل، لكن الاستجابات خاصة بحسابك فقط |
+| **Disabled** | لا يوجد تخزين مؤقت على الإطلاق |
+
+### مستوى الطلب
+
+التجاوز لكل طلب:
+
+```bash
+# Disable caching for this request
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Cache-Control: no-store" \
+  -d '...'
+```
+
+## ملاحظات التخزين المؤقت
+
+إذا تلقيت استجابة مخزنة مؤقتاً غير صحيحة، يمكنك الإبلاغ عنها:
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**أنواع الملاحظات:**
+- `wrong_answer` - غير صحيح واقعياً
+- `outdated` - المعلومات قديمة
+- `irrelevant` - لا يطابق السؤال
+- `other` - مشكلات أخرى
+
+عندما يتلقى إدخال التخزين المؤقت ما يكفي من الملاحظات السلبية، يتم إبطال مفعوله تلقائياً.
+
+## أفضل الممارسات
+
+<AccordionGroup>
+  <Accordion title="استخدم temperature=0 للاستعلامات القابلة للتخزين المؤقت">
+    تزيد الإعدادات الحتمية من معدلات نجاح التخزين المؤقت (cache hit rates).
+  </Accordion>
+
+  <Accordion title="توحيد تنسيقات المطالبات">
+    يؤدي التنسيق المتسق إلى تحسين المطابقة الدلالية.
+  </Accordion>
+
+  <Accordion title="استخدم no-cache للاستعلامات الحساسة للوقت">
+    يجب أن تتخطى الأحداث الجارية والبيانات في الوقت الفعلي التخزين المؤقت.
+  </Accordion>
+
+  <Accordion title="مراقبة معدلات نجاح التخزين المؤقت">
+    تحقق من لوحة التحكم الخاصة بك للحصول على إحصائيات التخزين المؤقت والتوفير.
+  </Accordion>
+</AccordionGroup>
+
+## متى لا يجب التخزين المؤقت
+
+قم بتعطيل التخزين المؤقت لـ:
+
+- **المعلومات في الوقت الفعلي**: أسعار الأسهم، الطقس، الأخبار
+- **المحتوى المخصص**: التوصيات الخاصة بالمستخدم
+- **المهام الإبداعية**: عندما يكون التنوع مطلوباً
+- **البيانات الحساسة**: المعلومات السرية
+
+```python
+# For time-sensitive queries
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_headers={"Cache-Control": "no-cache"}
+)
+```

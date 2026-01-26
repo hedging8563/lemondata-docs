@@ -1,0 +1,231 @@
+---
+title: "LangChain"
+description: "Intégrer LemonData avec LangChain"
+---
+
+## Aperçu
+
+LangChain est un framework populaire pour la création d'applications LLM. LemonData fonctionne parfaitement avec l'intégration OpenAI de LangChain.
+
+## Installation
+
+```bash
+pip install langchain langchain-openai
+```
+
+## Configuration de base
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    model="gpt-4o",
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = llm.invoke("Hello, how are you?")
+print(response.content)
+```
+
+## Utilisation de différents modèles
+
+Accédez à n'importe quel modèle LemonData :
+
+```python
+# OpenAI GPT-4o
+gpt4 = ChatOpenAI(
+    model="gpt-4o",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# Anthropic Claude
+claude = ChatOpenAI(
+    model="claude-sonnet-4-5",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# Google Gemini
+gemini = ChatOpenAI(
+    model="gemini-2.5-flash",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# DeepSeek
+deepseek = ChatOpenAI(
+    model="deepseek-r1",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+```
+
+## Chat avec historique des messages
+
+```python
+from langchain_core.messages import HumanMessage, SystemMessage
+
+messages = [
+    SystemMessage(content="You are a helpful assistant."),
+    HumanMessage(content="What is the capital of France?")
+]
+
+response = llm.invoke(messages)
+print(response.content)
+```
+
+## Streaming
+
+```python
+for chunk in llm.stream("Write a poem about coding"):
+    print(chunk.content, end="", flush=True)
+```
+
+## Utilisation asynchrone
+
+```python
+import asyncio
+
+async def main():
+    response = await llm.ainvoke("Hello!")
+    print(response.content)
+
+asyncio.run(main())
+```
+
+## Chaînes
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that translates {input_language} to {output_language}."),
+    ("human", "{text}")
+])
+
+chain = prompt | llm | StrOutputParser()
+
+result = chain.invoke({
+    "input_language": "English",
+    "output_language": "French",
+    "text": "Hello, how are you?"
+})
+print(result)
+```
+
+## RAG (Retrieval Augmented Generation)
+
+```python
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+
+# Embeddings
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# Create vector store
+texts = ["LemonData supports 300+ AI models", "API is OpenAI compatible"]
+vectorstore = FAISS.from_texts(texts, embeddings)
+retriever = vectorstore.as_retriever()
+
+# RAG chain
+template = """Answer based on context:
+{context}
+
+Question: {question}
+"""
+prompt = ChatPromptTemplate.from_template(template)
+
+rag_chain = (
+    {"context": retriever, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+)
+
+response = rag_chain.invoke("How many models does LemonData support?")
+print(response.content)
+```
+
+## Agents
+
+<Note>
+  Les API d'agent dans LangChain évoluent. Pour les nouveaux projets, envisagez d'utiliser [LangGraph](https://python.langchain.com/docs/langgraph) pour des architectures d'agent plus flexibles.
+</Note>
+
+```python
+from langchain.agents import create_openai_tools_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import tool
+
+@tool
+def search(query: str) -> str:
+    """Search for information."""
+    return f"Search results for: {query}"
+
+tools = [search]
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant with access to tools."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}")
+])
+
+agent = create_openai_tools_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools)
+
+result = executor.invoke({"input": "Search for LemonData pricing"})
+print(result["output"])
+```
+
+## Variables d'environnement
+
+Pour un code plus propre, utilisez des variables d'environnement :
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+```
+
+```python
+from langchain_openai import ChatOpenAI
+
+# Utilisera automatiquement les variables d'environnement
+llm = ChatOpenAI(model="gpt-4o")
+```
+
+## Callbacks et traçage
+
+```python
+from langchain_core.callbacks import StdOutCallbackHandler
+
+llm = ChatOpenAI(
+    model="gpt-4o",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+    callbacks=[StdOutCallbackHandler()]
+)
+```
+
+## Bonnes pratiques
+
+<AccordionGroup>
+  <Accordion title="Utiliser des modèles appropriés pour le coût">
+    Utilisez des modèles moins chers (GPT-4o-mini) pour les tâches simples dans les chaînes.
+  </Accordion>
+
+  <Accordion title="Implémenter des retries">
+    LangChain dispose d'une logique de retry intégrée pour les erreurs transitoires.
+  </Accordion>
+
+  <Accordion title="Surveiller l'utilisation des tokens">
+    Utilisez des callbacks pour suivre la consommation de tokens.
+  </Accordion>
+</AccordionGroup>

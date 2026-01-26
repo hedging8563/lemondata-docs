@@ -1,0 +1,276 @@
+---
+title: "إنشاء رسالة"
+api: "POST /v1/messages"
+description: "يقوم بإنشاء رسالة باستخدام تنسيق Anthropic Messages API"
+---
+
+## نظرة عامة
+
+يوفر هذا المسار توافقاً أصلياً مع Anthropic Messages API. استخدم هذا لموديلات Claude مع ميزات مثل التفكير الموسع (extended thinking).
+
+<Note>
+Base URL لـ Anthropic SDK: `https://api.lemondata.cc` (بدون لاحقة `/v1`)
+</Note>
+
+## ترويسات الطلب (Request Headers)
+
+<ParamField header="x-api-key" type="string" required>
+  مفتاح LemonData API الخاص بك. بديل لـ Bearer token.
+</ParamField>
+
+<ParamField header="anthropic-version" type="string" required>
+  إصدار Anthropic API. استخدم `2023-06-01`.
+</ParamField>
+
+## جسم الطلب (Request Body)
+
+<ParamField body="model" type="string" required>
+  معرف موديل Claude (على سبيل المثال، `claude-sonnet-4-5`).
+</ParamField>
+
+<ParamField body="messages" type="array" required>
+  مصفوفة من كائنات الرسائل تحتوي على `role` و `content`.
+</ParamField>
+
+<ParamField body="max_tokens" type="integer" required>
+  الحد الأقصى لـ tokens المراد إنشاؤها.
+</ParamField>
+
+<ParamField body="system" type="string">
+  موجه النظام (System prompt) (منفصل عن مصفوفة الرسائل).
+</ParamField>
+
+<ParamField body="temperature" type="number" default="1">
+  درجة حرارة العينات (0-1).
+</ParamField>
+
+<ParamField body="stream" type="boolean" default="false">
+  تفعيل استجابات البث (streaming).
+</ParamField>
+
+<ParamField body="thinking" type="object">
+  إعدادات التفكير الموسع (Claude Opus 4.5).
+
+  - `type` (string): `"enabled"` للتفعيل
+  - `budget_tokens` (integer): ميزانية الـ tokens للتفكير
+</ParamField>
+
+<ParamField body="tools" type="array">
+  الأدوات المتاحة للموديل.
+</ParamField>
+
+<ParamField body="tool_choice" type="object">
+  كيفية استخدام الموديل للأدوات. الخيارات: `auto` ، `any` ، `tool` (أداة محددة).
+</ParamField>
+
+<ParamField body="top_p" type="number">
+  معامل Nucleus sampling. استخدم إما temperature أو top_p، وليس كليهما.
+</ParamField>
+
+<ParamField body="top_k" type="integer">
+  أخذ عينات فقط من أفضل K خيارات لكل token.
+</ParamField>
+
+<ParamField body="stop_sequences" type="array">
+  تسلسلات إيقاف مخصصة ستؤدي إلى توقف الموديل عن الإنشاء.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  بيانات وصفية (Metadata) لإرفاقها بالطلب لأغراض التتبع.
+</ParamField>
+
+## الاستجابة
+
+<ResponseField name="id" type="string">
+  معرف فريد للرسالة.
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  دائماً `message`.
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  دائماً `assistant`.
+</ResponseField>
+
+<ResponseField name="content" type="array">
+  مصفوفة من كتل المحتوى (`text` ، `thinking` ، `tool_use`).
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  الموديل المستخدم.
+</ResponseField>
+
+<ResponseField name="stop_reason" type="string">
+  سبب توقف الإنشاء (`end_turn` ، `max_tokens` ، `tool_use`).
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  استخدام الـ tokens مع `input_tokens` و `output_tokens`.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/messages" \
+  -H "x-api-key: sk-your-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "system": "You are a helpful assistant.",
+    "messages": [
+      {"role": "user", "content": "Hello, Claude!"}
+    ]
+  }'
+```
+
+```python Python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc"
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    system="You are a helpful assistant.",
+    messages=[
+        {"role": "user", "content": "Hello, Claude!"}
+    ]
+)
+
+print(message.content[0].text)
+```
+
+```javascript JavaScript
+import Anthropic from '@anthropic-ai/sdk';
+
+const client = new Anthropic({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc'
+});
+
+const message = await client.messages.create({
+  model: 'claude-sonnet-4-5',
+  max_tokens: 1024,
+  system: 'You are a helpful assistant.',
+  messages: [
+    { role: 'user', content: 'Hello, Claude!' }
+  ]
+});
+
+console.log(message.content[0].text);
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io"
+    "net/http"
+)
+
+func main() {
+    payload := map[string]interface{}{
+        "model":      "claude-sonnet-4-5",
+        "max_tokens": 1024,
+        "system":     "You are a helpful assistant.",
+        "messages": []map[string]string{
+            {"role": "user", "content": "Hello, Claude!"},
+        },
+    }
+
+    jsonData, _ := json.Marshal(payload)
+    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/messages", bytes.NewBuffer(jsonData))
+    req.Header.Set("x-api-key", "sk-your-api-key")
+    req.Header.Set("anthropic-version", "2023-06-01")
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(body))
+}
+```
+
+```php PHP
+<?php
+$payload = [
+    'model' => 'claude-sonnet-4-5',
+    'max_tokens' => 1024,
+    'system' => 'You are a helpful assistant.',
+    'messages' => [
+        ['role' => 'user', 'content' => 'Hello, Claude!']
+    ]
+];
+
+$ch = curl_init('https://api.lemondata.cc/v1/messages');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'x-api-key: sk-your-api-key',
+        'anthropic-version: 2023-06-01',
+        'Content-Type: application/json'
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload)
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['content'][0]['text'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "id": "msg_abc123",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Hello! How can I help you today?"
+    }
+  ],
+  "model": "claude-sonnet-4-5",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 15,
+    "output_tokens": 10
+  }
+}
+```
+</ResponseExample>
+
+## مثال على التفكير الموسع (Extended Thinking)
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this math problem..."}]
+)
+
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Response: {block.text}")
+```

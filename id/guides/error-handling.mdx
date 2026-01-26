@@ -1,0 +1,247 @@
+---
+title: "Penanganan Kesalahan"
+description: "Menangani kesalahan API dengan baik"
+---
+
+## Format Respons Kesalahan
+
+Semua kesalahan mengembalikan format JSON yang konsisten:
+
+```json
+{
+  "error": {
+    "message": "Human-readable error description",
+    "type": "error_type",
+    "code": "error_code",
+    "param": "parameter_name"  // Opsional, untuk kesalahan validasi
+  }
+}
+```
+
+## Kode Status HTTP
+
+| Kode | Deskripsi |
+|------|-------------|
+| 400 | Bad Request - Parameter tidak valid |
+| 401 | Unauthorized - API key tidak valid atau hilang |
+| 402 | Payment Required - Saldo tidak mencukupi |
+| 403 | Forbidden - Akses ditolak atau model tidak diizinkan |
+| 404 | Not Found - Model atau sumber daya tidak ditemukan |
+| 413 | Payload Too Large - Ukuran input atau file terlampaui |
+| 429 | Too Many Requests - Batas laju (rate limit) terlampaui |
+| 500 | Internal Server Error |
+| 502 | Bad Gateway - Kesalahan penyedia upstream |
+| 503 | Service Unavailable - Semua saluran gagal |
+| 504 | Gateway Timeout - Permintaan waktu habis (timed out) |
+
+## Tipe Kesalahan
+
+### Kesalahan Autentikasi (401)
+
+| Tipe | Kode | Deskripsi |
+|------|------|-------------|
+| `invalid_api_key` | `invalid_api_key` | API key hilang atau tidak valid |
+| `expired_api_key` | `expired_api_key` | API key telah dicabut |
+
+```python
+from openai import OpenAI, AuthenticationError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError as e:
+    print(f"Authentication failed: {e.message}")
+```
+
+### Kesalahan Pembayaran (402)
+
+| Tipe | Kode | Deskripsi |
+|------|------|-------------|
+| `insufficient_quota` | `insufficient_quota` | Saldo akun terlalu rendah |
+| `quota_exceeded` | `quota_exceeded` | Batas penggunaan API key tercapai |
+
+```python
+from openai import OpenAI, APIStatusError
+
+try:
+    response = client.chat.completions.create(...)
+except APIStatusError as e:
+    if e.status_code == 402:
+        print("Please top up your account balance")
+```
+
+### Kesalahan Akses (403)
+
+| Tipe | Kode | Deskripsi |
+|------|------|-------------|
+| `access_denied` | `access_denied` | Akses ke sumber daya ditolak |
+| `access_denied` | `model_not_allowed` | Model tidak diizinkan untuk API key ini |
+
+```json
+{
+  "error": {
+    "message": "You don't have permission to access this model",
+    "type": "access_denied",
+    "code": "model_not_allowed"
+  }
+}
+```
+
+### Kesalahan Validasi (400)
+
+| Tipe | Deskripsi |
+|------|-------------|
+| `invalid_request_error` | Parameter permintaan tidak valid |
+| `context_length_exceeded` | Input terlalu panjang untuk model |
+| `model_not_found` | Model yang diminta tidak ada |
+
+```json
+{
+  "error": {
+    "message": "model: 'invalid-model' is not a valid model",
+    "type": "model_not_found",
+    "param": "model"
+  }
+}
+```
+
+### Kesalahan Batas Laju (429)
+
+Saat Anda melampaui batas laju (rate limits):
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**Header yang disertakan:**
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1234567890
+Retry-After: 60
+```
+
+### Payload Terlalu Besar (413)
+
+Saat ukuran input atau file melampaui batas:
+
+```json
+{
+  "error": {
+    "message": "Input size exceeds maximum allowed",
+    "type": "invalid_request_error",
+    "code": "payload_too_large"
+  }
+}
+```
+
+Penyebab umum:
+- File gambar terlalu besar (maks 20MB)
+- File audio terlalu besar (maks 25MB)
+- Teks input melampaui panjang konteks model
+
+### Kesalahan Upstream (502, 503)
+
+| Tipe | Deskripsi |
+|------|-------------|
+| `upstream_error` | Penyedia mengembalikan kesalahan |
+| `all_channels_failed` | Tidak ada penyedia yang tersedia |
+| `timeout_error` | Permintaan waktu habis (timed out) |
+
+## Menangani Kesalahan di Python
+
+```python
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            raise
+        except APIConnectionError as e:
+            print(f"Connection error: {e}")
+            raise
+        except APIError as e:
+            print(f"API error: {e.status_code} - {e.message}")
+            raise
+```
+
+## Menangani Kesalahan di JavaScript
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function chatWithRetry(messages, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages
+      });
+    } catch (error) {
+      if (error instanceof OpenAI.RateLimitError) {
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+```
+
+## Praktik Terbaik
+
+<AccordionGroup>
+  <Accordion title="Terapkan exponential backoff">
+    Saat terkena pembatasan laju (rate limited), tunggu lebih lama secara progresif di antara percobaan ulang:
+    ```python
+    wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+    ```
+  </Accordion>
+
+  <Accordion title="Atur timeout">
+    Selalu atur timeout yang wajar untuk menghindari permintaan yang menggantung:
+    ```python
+    client = OpenAI(timeout=60.0)  # Timeout 60 detik
+    ```
+  </Accordion>
+
+  <Accordion title="Catat log kesalahan untuk debugging">
+    Catat log respons kesalahan lengkap termasuk ID permintaan untuk dukungan:
+    ```python
+    except APIError as e:
+        logger.error(f"API Error: {e.status_code} - {e.message}")
+    ```
+  </Accordion>
+
+  <Accordion title="Tangani kesalahan spesifik model">
+    Beberapa model memiliki persyaratan khusus (misalnya, token maksimum, format gambar).
+    Validasi input sebelum membuat permintaan.
+  </Accordion>
+</AccordionGroup>

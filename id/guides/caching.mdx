@@ -1,0 +1,193 @@
+---
+title: "✨ Intelligent Caching"
+description: "Kurangi biaya dan latensi dengan semantic caching yang sadar konteks"
+---
+
+## Ringkasan
+
+LemonData menyediakan sistem caching cerdas yang dapat secara signifikan mengurangi biaya API dan latensi respons Anda. Caching kami melampaui pencocokan permintaan sederhana - sistem ini memahami **makna semantik** dari prompt Anda.
+
+<CardGroup cols={2}>
+  <Card title="Penghematan Biaya" icon="piggy-bank">
+    Cache hit ditagih dengan biaya yang jauh lebih rendah dari biaya normal.
+  </Card>
+  <Card title="Respons Lebih Cepat" icon="bolt">
+    Respons yang di-cache dikembalikan secara instan, tidak memerlukan inferensi model.
+  </Card>
+  <Card title="Sadar Konteks" icon="brain">
+    Pencocokan semantik menemukan permintaan serupa bahkan dengan kata-kata yang berbeda.
+  </Card>
+  <Card title="Kontrol Privasi" icon="shield">
+    Kontrol penuh atas apa yang di-cache dan dibagikan.
+  </Card>
+</CardGroup>
+
+## Cara Kerja
+
+LemonData menggunakan sistem caching dua lapis:
+
+### Lapisan 1: Response Cache (Pencocokan Persis)
+
+Untuk permintaan deterministik (`temperature=0`), kami men-cache respons yang persis:
+
+- **Pencocokan**: Model, pesan, dan parameter yang identik
+- **Kecepatan**: Instan (mikrodetik)
+- **Terbaik untuk**: Kueri identik yang berulang
+
+### Lapisan 2: Semantic Cache (Pencocokan Kemiripan)
+
+Untuk semua permintaan, kami juga memeriksa kemiripan semantik menggunakan algoritma pencocokan dua tahap:
+
+- **Tahap 1 (Hanya kueri)**: ≥95% kemiripan pada kueri pengguna
+- **Tahap 2 (Konteks penuh)**: ≥85% kemiripan termasuk konteks percakapan
+- **Terbaik untuk**: Kueri gaya FAQ, pertanyaan umum
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (high semantic similarity)
+```
+
+## Header Cache
+
+### Header Permintaan
+
+Kontrol perilaku caching per permintaan:
+
+```bash
+# Skip cache lookup, always call the model
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
+```
+
+| Header | Nilai | Efek |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | Lewati cache, respons baru |
+| `Cache-Control: no-store` | - | Jangan cache respons ini |
+
+### Header Respons
+
+Setiap respons menyertakan status cache:
+
+```
+X-Cache: HIT           # Respons dilayani dari cache
+X-Cache: MISS          # Respons baru dari model
+X-Cache-Entry-Id: abc  # ID entri cache (untuk umpan balik)
+```
+
+## Memeriksa Status Cache
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Periksa status cache dari header respons
+# (Tersedia dalam respons HTTP mentah)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+```
+
+## Penagihan Cache
+
+Cache hit secara signifikan lebih murah daripada permintaan baru:
+
+| Tipe | Biaya |
+|------|------|
+| Cache HIT | **Diskon 80%** |
+| Cache MISS | Harga penuh |
+
+Diskon tepatnya ditampilkan di log penggunaan dasbor Anda.
+
+## Kontrol Privasi
+
+### Tingkat API Key
+
+Konfigurasikan perilaku caching untuk setiap API key di dasbor Anda:
+
+| Mode | Deskripsi |
+|------|-------------|
+| **Default** | Cache diaktifkan, dapat dibagikan dengan permintaan serupa |
+| **No Share** | Cache diaktifkan, tetapi respons bersifat pribadi untuk akun Anda |
+| **Disabled** | Tidak ada caching sama sekali |
+
+### Tingkat Permintaan
+
+Timpa per permintaan:
+
+```bash
+# Nonaktifkan caching untuk permintaan ini
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Cache-Control: no-store" \
+  -d '...'
+```
+
+## Umpan Balik Cache
+
+Jika Anda menerima respons cache yang salah, Anda dapat melaporkannya:
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**Tipe umpan balik:**
+- `wrong_answer` - Secara faktual salah
+- `outdated` - Informasi sudah usang
+- `irrelevant` - Tidak cocok dengan pertanyaan
+- `other` - Masalah lainnya
+
+Ketika sebuah entri cache menerima cukup banyak umpan balik negatif, entri tersebut akan dibatalkan secara otomatis.
+
+## Praktik Terbaik
+
+<AccordionGroup>
+  <Accordion title="Gunakan temperature=0 untuk kueri yang dapat di-cache">
+    Pengaturan deterministik memaksimalkan tingkat cache hit.
+  </Accordion>
+
+  <Accordion title="Standarisasi format prompt">
+    Pemformatan yang konsisten meningkatkan pencocokan semantik.
+  </Accordion>
+
+  <Accordion title="Gunakan no-cache untuk kueri yang sensitif terhadap waktu">
+    Peristiwa terkini, data real-time harus melewati cache.
+  </Accordion>
+
+  <Accordion title="Pantau tingkat cache hit">
+    Periksa dasbor Anda untuk statistik cache dan penghematan.
+  </Accordion>
+</AccordionGroup>
+
+## Kapan TIDAK menggunakan Cache
+
+Nonaktifkan caching untuk:
+
+- **Informasi real-time**: Harga saham, cuaca, berita
+- **Konten yang dipersonalisasi**: Rekomendasi khusus pengguna
+- **Tugas kreatif**: Saat variasi diinginkan
+- **Data sensitif**: Informasi rahasia
+
+```python
+# Untuk kueri yang sensitif terhadap waktu
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_headers={"Cache-Control": "no-cache"}
+)
+```

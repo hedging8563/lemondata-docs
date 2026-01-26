@@ -1,0 +1,193 @@
+---
+title: "✨ Caching Thông Minh"
+description: "Giảm chi phí và độ trễ với bộ nhớ đệm ngữ nghĩa nhận diện ngữ cảnh"
+---
+
+## Tổng quan
+
+LemonData cung cấp một hệ thống caching thông minh có thể giảm đáng kể chi phí API và độ trễ phản hồi của bạn. Hệ thống caching của chúng tôi vượt xa việc khớp yêu cầu đơn thuần - nó hiểu được **ý nghĩa ngữ nghĩa** trong các prompt của bạn.
+
+<CardGroup cols={2}>
+  <Card title="Tiết kiệm chi phí" icon="piggy-bank">
+    Các lượt cache hit được tính phí chỉ bằng một phần nhỏ so với chi phí thông thường.
+  </Card>
+  <Card title="Phản hồi nhanh hơn" icon="bolt">
+    Các phản hồi đã lưu trong cache được trả về ngay lập tức, không cần suy luận mô hình.
+  </Card>
+  <Card title="Nhận diện ngữ cảnh" icon="brain">
+    Khớp ngữ nghĩa tìm thấy các yêu cầu tương tự ngay cả khi cách diễn đạt khác nhau.
+  </Card>
+  <Card title="Kiểm soát quyền riêng tư" icon="shield">
+    Toàn quyền kiểm soát những gì được lưu vào cache và chia sẻ.
+  </Card>
+</CardGroup>
+
+## Cách thức hoạt động
+
+LemonData sử dụng hệ thống caching hai lớp:
+
+### Lớp 1: Response Cache (Khớp chính xác)
+
+Đối với các yêu cầu mang tính xác định (`temperature=0`), chúng tôi lưu trữ phản hồi chính xác:
+
+- **Khớp**: Model, messages và các tham số giống hệt nhau
+- **Tốc độ**: Tức thì (micro giây)
+- **Tốt nhất cho**: Các truy vấn lặp lại giống hệt nhau
+
+### Lớp 2: Semantic Cache (Khớp tương đồng)
+
+Đối với tất cả các yêu cầu, chúng tôi cũng kiểm tra sự tương đồng về ngữ nghĩa bằng thuật toán khớp hai giai đoạn:
+
+- **Giai đoạn 1 (Chỉ truy vấn)**: Độ tương đồng ≥95% trên truy vấn của người dùng
+- **Giai đoạn 2 (Toàn bộ ngữ cảnh)**: Độ tương đồng ≥85% bao gồm cả ngữ cảnh hội thoại
+- **Tốt nhất cho**: Các truy vấn kiểu FAQ, các câu hỏi phổ biến
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (high semantic similarity)
+```
+
+## Cache Headers
+
+### Request Headers
+
+Kiểm soát hành vi caching trên mỗi yêu cầu:
+
+```bash
+# Skip cache lookup, always call the model
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
+```
+
+| Header | Giá trị | Hiệu quả |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | Bỏ qua cache, lấy phản hồi mới |
+| `Cache-Control: no-store` | - | Không lưu phản hồi này vào cache |
+
+### Response Headers
+
+Mỗi phản hồi đều bao gồm trạng thái cache:
+
+```
+X-Cache: HIT           # Phản hồi được cung cấp từ cache
+X-Cache: MISS          # Phản hồi mới từ model
+X-Cache-Entry-Id: abc  # ID mục nhập cache (để phản hồi)
+```
+
+## Kiểm tra trạng thái Cache
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+```
+
+## Thanh toán Cache
+
+Các lượt cache hit rẻ hơn đáng kể so với các yêu cầu mới:
+
+| Loại | Chi phí |
+|------|------|
+| Cache HIT | **Giảm 80%** |
+| Cache MISS | Giá gốc |
+
+Mức chiết khấu chính xác được hiển thị trong nhật ký sử dụng trên dashboard của bạn.
+
+## Kiểm soát quyền riêng tư
+
+### Cấp độ API Key
+
+Cấu hình hành vi caching cho từng API key trong dashboard của bạn:
+
+| Chế độ | Mô tả |
+|------|-------------|
+| **Default** | Đã bật cache, có thể chia sẻ với các yêu cầu tương tự |
+| **No Share** | Đã bật cache, nhưng các phản hồi là riêng tư đối với tài khoản của bạn |
+| **Disabled** | Hoàn toàn không sử dụng cache |
+
+### Cấp độ yêu cầu
+
+Ghi đè trên mỗi yêu cầu:
+
+```bash
+# Disable caching for this request
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Cache-Control: no-store" \
+  -d '...'
+```
+
+## Phản hồi Cache
+
+Nếu bạn nhận được phản hồi từ cache không chính xác, bạn có thể báo cáo nó:
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**Các loại phản hồi:**
+- `wrong_answer` - Sai lệch về sự thật
+- `outdated` - Thông tin đã cũ
+- `irrelevant` - Không khớp với câu hỏi
+- `other` - Các vấn đề khác
+
+Khi một mục nhập cache nhận đủ phản hồi tiêu cực, nó sẽ tự động bị vô hiệu hóa.
+
+## Thực hành tốt nhất
+
+<AccordionGroup>
+  <Accordion title="Sử dụng temperature=0 cho các truy vấn có thể lưu cache">
+    Các thiết lập mang tính xác định giúp tối đa hóa tỷ lệ cache hit.
+  </Accordion>
+
+  <Accordion title="Chuẩn hóa định dạng prompt">
+    Định dạng nhất quán giúp cải thiện việc khớp ngữ nghĩa.
+  </Accordion>
+
+  <Accordion title="Sử dụng no-cache cho các truy vấn nhạy cảm với thời gian">
+    Các sự kiện hiện tại, dữ liệu thời gian thực nên bỏ qua cache.
+  </Accordion>
+
+  <Accordion title="Theo dõi tỷ lệ cache hit">
+    Kiểm tra dashboard của bạn để biết số liệu thống kê cache và mức tiết kiệm.
+  </Accordion>
+</AccordionGroup>
+
+## Khi nào KHÔNG nên sử dụng Cache
+
+Tắt caching cho:
+
+- **Thông tin thời gian thực**: Giá cổ phiếu, thời tiết, tin tức
+- **Nội dung cá nhân hóa**: Các đề xuất dành riêng cho người dùng
+- **Các tác vụ sáng tạo**: Khi cần sự đa dạng
+- **Dữ liệu nhạy cảm**: Thông tin bảo mật
+
+```python
+# For time-sensitive queries
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_headers={"Cache-Control": "no-cache"}
+)
+```

@@ -1,0 +1,159 @@
+---
+title: "Rate Limits"
+description: "Memahami dan menangani rate limits"
+---
+
+## Gambaran Umum
+
+LemonData menerapkan rate limits untuk memastikan penggunaan yang adil dan stabilitas platform. Batasan bervariasi berdasarkan tingkatan akun.
+
+## Tingkatan Rate Limit
+
+| Tingkatan | Permintaan/menit | Deskripsi |
+|------|-------------|-------------|
+| **User** | 60 | Tingkatan default untuk semua akun |
+| **Partner** | 300 | Untuk mitra integrasi |
+| **VIP** | 1,000 | Pengguna bervolume tinggi |
+
+<Note>
+  Rate limits dapat berubah sewaktu-waktu. Hubungi support@lemondata.cc untuk batasan khusus.
+</Note>
+
+## Header Rate Limit
+
+Setiap respons API menyertakan informasi rate limit:
+
+```
+X-RateLimit-Limit: 60          # Your limit per minute
+X-RateLimit-Remaining: 55      # Requests remaining
+X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
+```
+
+## Rate Limit Terlampaui
+
+Saat Anda melampaui batas, Anda akan menerima respons `429`:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+Dengan header tambahan:
+```
+Retry-After: 60  # Seconds to wait before retrying
+```
+
+## Menangani Rate Limits
+
+### Exponential Backoff
+
+Terapkan exponential backoff untuk percobaan ulang otomatis:
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### Request Queuing
+
+Untuk aplikasi bervolume tinggi, terapkan antrean permintaan (request queue):
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_minute=60):
+        self.rpm = requests_per_minute
+        self.interval = 60 / requests_per_minute
+        self.last_request = 0
+
+    async def request(self, messages):
+        # Wait if needed to respect rate limit
+        now = asyncio.get_event_loop().time()
+        wait_time = max(0, self.last_request + self.interval - now)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        self.last_request = asyncio.get_event_loop().time()
+        return await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+```
+
+### Batch Processing
+
+Untuk operasi massal, proses dalam batch dengan jeda:
+
+```python
+def process_batch(items, batch_size=50, delay=1):
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        for item in batch:
+            result = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": item}]
+            )
+            results.append(result)
+        time.sleep(delay)  # Pause between batches
+    return results
+```
+
+## Praktik Terbaik
+
+<AccordionGroup>
+  <Accordion title="Pantau penggunaan Anda">
+    Lacak header rate limit untuk tetap berada di bawah batasan secara proaktif.
+  </Accordion>
+
+  <Accordion title="Terapkan caching">
+    Simpan respons dalam cache untuk permintaan yang identik guna mengurangi panggilan API.
+  </Accordion>
+
+  <Accordion title="Gunakan model yang sesuai">
+    Model yang lebih cepat (seperti gpt-4o-mini) memungkinkan throughput yang lebih tinggi.
+  </Accordion>
+
+  <Accordion title="Hubungi kami untuk batasan yang lebih tinggi">
+    Jika Anda membutuhkan batasan yang lebih tinggi, hubungi support@lemondata.cc.
+  </Accordion>
+</AccordionGroup>
+
+## Meningkatkan Tingkatan Anda
+
+Untuk meminta peningkatan tingkatan:
+
+1. Masuk ke [Dashboard](https://lemondata.cc/dashboard) Anda
+2. Buka **Settings → Account**
+3. Hubungi dukungan dengan kasus penggunaan (use case) Anda
+
+Atau kirim email ke support@lemondata.cc dengan:
+- Email akun Anda
+- Volume permintaan yang diharapkan
+- Deskripsi kasus penggunaan (use case)

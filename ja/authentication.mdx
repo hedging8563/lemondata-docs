@@ -1,0 +1,146 @@
+---
+title: "認証"
+description: "APIキーを使用してAPIリクエストを保護します"
+---
+
+## APIキー
+
+すべてのAPIリクエストには、APIキーを使用した認証が必要です。`Authorization`ヘッダーにキーを含めてください：
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+## APIキーの取得方法
+
+1. [LemonDataダッシュボード](https://lemondata.cc/dashboard)にログインします
+2. **API Keys**セクションに移動します
+3. **Create New Key**をクリックします
+4. キーに分かりやすい名前を付けます
+5. すぐにキーをコピーしてください。一度しか表示されません
+
+<Warning>
+  **セキュリティのベストプラクティス：**
+  - クライアント側のコードでAPIキーを公開しないでください
+  - バージョン管理システムにキーをコミットしないでください
+  - キーの保存には環境変数を使用してください
+  - 定期的にキーをローテーションしてください
+  - 未使用のキーは削除してください
+</Warning>
+
+## APIキーの使用方法
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer $LEMONDATA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+```python Python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ.get("LEMONDATA_API_KEY"),
+    base_url="https://api.lemondata.cc/v1"
+)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+```
+
+```go Go
+package main
+
+import "github.com/sashabaranov/go-openai"
+
+func main() {
+    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+}
+```
+
+```php PHP
+<?php
+$apiKey = getenv('LEMONDATA_API_KEY');
+
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+curl_setopt_array($ch, [
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer ' . $apiKey,
+        'Content-Type: application/json'
+    ]
+]);
+```
+
+</CodeGroup>
+
+## APIキーの機能
+
+### 使用制限
+
+支出を管理するために、各APIキーに使用制限を設定できます：
+
+| 設定 | 説明 |
+|---------|-------------|
+| **制限なし** | キーは制限なくアカウント残高を使用します |
+| **固定制限** | 指定された金額に達するとキーは機能しなくなります |
+
+### キーのプレフィックス
+
+すべてのLemonData APIキーは`sk-`プレフィックスで始まります。キーの形式は以下の通りです：
+
+```
+sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Anthropic APIの互換性
+
+`/v1/messages`エンドポイントでは、`x-api-key`ヘッダー（Anthropic SDK互換）を使用できます：
+
+```bash
+curl https://api.lemondata.cc/v1/messages \
+  -H "x-api-key: sk-your-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+<Note>
+  `x-api-key`ヘッダーは、`/v1/messages`および`/v1/messages/count_tokens`エンドポイントでのみサポートされています。その他のエンドポイントでは`Authorization: Bearer`ヘッダーが必要です。
+</Note>
+
+## エラーレスポンス
+
+| ステータスコード | タイプ | コード | 説明 |
+|-------------|------|------|-------------|
+| 401 | `invalid_request_error` | `invalid_api_key` | APIキーが不足しているか無効です |
+| 401 | `invalid_request_error` | `expired_api_key` | APIキーが失効しています |
+| 402 | `insufficient_quota` | `insufficient_quota` | アカウント残高が不足しています |
+| 402 | `insufficient_quota` | `quota_exceeded` | APIキーの使用制限に達しました |
+
+エラーレスポンスの例：
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```

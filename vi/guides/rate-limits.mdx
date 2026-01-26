@@ -1,0 +1,159 @@
+---
+title: "Giới hạn Tốc độ"
+description: "Tìm hiểu và xử lý các giới hạn tốc độ"
+---
+
+## Tổng quan
+
+LemonData áp dụng các giới hạn tốc độ để đảm bảo việc sử dụng công bằng và sự ổn định của nền tảng. Các giới hạn thay đổi tùy theo cấp độ tài khoản.
+
+## Các cấp độ Giới hạn Tốc độ
+
+| Cấp độ | Yêu cầu/phút | Mô tả |
+|------|-------------|-------------|
+| **User** | 60 | Cấp độ mặc định cho tất cả tài khoản |
+| **Partner** | 300 | Dành cho các đối tác tích hợp |
+| **VIP** | 1,000 | Người dùng có lưu lượng lớn |
+
+<Note>
+  Các giới hạn tốc độ có thể thay đổi. Liên hệ support@lemondata.cc để biết các giới hạn tùy chỉnh.
+</Note>
+
+## Các Header Giới hạn Tốc độ
+
+Mọi API phản hồi đều bao gồm thông tin về giới hạn tốc độ:
+
+```
+X-RateLimit-Limit: 60          # Your limit per minute
+X-RateLimit-Remaining: 55      # Requests remaining
+X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
+```
+
+## Vượt quá Giới hạn Tốc độ
+
+Khi bạn vượt quá giới hạn, bạn sẽ nhận được phản hồi `429`:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+Với header bổ sung:
+```
+Retry-After: 60  # Seconds to wait before retrying
+```
+
+## Xử lý Giới hạn Tốc độ
+
+### Exponential Backoff
+
+Triển khai exponential backoff để tự động thử lại:
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### Hàng đợi Yêu cầu
+
+Đối với các ứng dụng có lưu lượng lớn, hãy triển khai một hàng đợi yêu cầu:
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_minute=60):
+        self.rpm = requests_per_minute
+        self.interval = 60 / requests_per_minute
+        self.last_request = 0
+
+    async def request(self, messages):
+        # Wait if needed to respect rate limit
+        now = asyncio.get_event_loop().time()
+        wait_time = max(0, self.last_request + self.interval - now)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        self.last_request = asyncio.get_event_loop().time()
+        return await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+```
+
+### Xử lý theo lô
+
+Đối với các hoạt động hàng loạt, hãy xử lý theo lô với các khoảng trễ:
+
+```python
+def process_batch(items, batch_size=50, delay=1):
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        for item in batch:
+            result = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": item}]
+            )
+            results.append(result)
+        time.sleep(delay)  # Pause between batches
+    return results
+```
+
+## Các phương pháp hay nhất
+
+<AccordionGroup>
+  <Accordion title="Theo dõi mức độ sử dụng của bạn">
+    Theo dõi các header giới hạn tốc độ để chủ động duy trì dưới mức giới hạn.
+  </Accordion>
+
+  <Accordion title="Triển khai bộ nhớ đệm (caching)">
+    Lưu phản hồi vào bộ nhớ đệm cho các yêu cầu giống hệt nhau để giảm số lượng lệnh gọi API.
+  </Accordion>
+
+  <Accordion title="Sử dụng các mô hình phù hợp">
+    Các mô hình nhanh hơn (như gpt-4o-mini) cho phép thông lượng cao hơn.
+  </Accordion>
+
+  <Accordion title="Liên hệ với chúng tôi để có giới hạn cao hơn">
+    Nếu bạn cần giới hạn cao hơn, hãy liên hệ support@lemondata.cc.
+  </Accordion>
+</AccordionGroup>
+
+## Nâng cấp Cấp độ của bạn
+
+Để yêu cầu nâng cấp cấp độ:
+
+1. Đăng nhập vào [Dashboard](https://lemondata.cc/dashboard) của bạn
+2. Đi tới **Settings → Account**
+3. Liên hệ bộ phận hỗ trợ với trường hợp sử dụng của bạn
+
+Hoặc gửi email đến support@lemondata.cc với:
+- Email tài khoản của bạn
+- Lưu lượng yêu cầu dự kiến
+- Mô tả trường hợp sử dụng

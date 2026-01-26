@@ -1,0 +1,193 @@
+---
+title: "✨ Intelligentes Caching"
+description: "Reduzieren Sie Kosten und Latenz mit kontextbewusstem semantischem Caching"
+---
+
+## Übersicht
+
+LemonData bietet ein intelligentes Caching-System, das Ihre API-Kosten und Antwortlatenz erheblich reduzieren kann. Unser Caching geht über einfaches Request-Matching hinaus – es versteht die **semantische Bedeutung** Ihrer Prompts.
+
+<CardGroup cols={2}>
+  <Card title="Kostenersparnis" icon="piggy-bank">
+    Cache-Hits werden zu einem Bruchteil der normalen Kosten abgerechnet.
+  </Card>
+  <Card title="Schnellere Antworten" icon="bolt">
+    Gecachte Antworten werden sofort zurückgegeben, es ist keine Modell-Inferenz erforderlich.
+  </Card>
+  <Card title="Kontextbewusst" icon="brain">
+    Semantisches Matching findet ähnliche Anfragen, selbst bei unterschiedlicher Formulierung.
+  </Card>
+  <Card title="Datenschutzkontrollen" icon="shield">
+    Volle Kontrolle darüber, was gecacht und geteilt wird.
+  </Card>
+</CardGroup>
+
+## Funktionsweise
+
+LemonData verwendet ein zweistufiges Caching-System:
+
+### Ebene 1: Response-Cache (Exakte Übereinstimmung)
+
+Für deterministische Anfragen (`temperature=0`) cachen wir die exakte Antwort:
+
+- **Übereinstimmung**: Identisches Modell, Nachrichten und Parameter
+- **Geschwindigkeit**: Sofort (Mikrosekunden)
+- **Ideal für**: Wiederholte identische Abfragen
+
+### Ebene 2: Semantischer Cache (Ähnlichkeitsabgleich)
+
+Für alle Anfragen prüfen wir zusätzlich die semantische Ähnlichkeit mithilfe eines zweistufigen Matching-Algorithmus:
+
+- **Stufe 1 (Nur Query)**: ≥95% Ähnlichkeit bei der Benutzeranfrage
+- **Stufe 2 (Vollständiger Kontext)**: ≥85% Ähnlichkeit einschließlich des Konversationskontexts
+- **Ideal für**: FAQ-ähnliche Abfragen, häufige Fragen
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (high semantic similarity)
+```
+
+## Cache-Header
+
+### Request-Header
+
+Steuern Sie das Caching-Verhalten pro Anfrage:
+
+```bash
+# Skip cache lookup, always call the model
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
+```
+
+| Header | Wert | Effekt |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | Cache überspringen, frische Antwort |
+| `Cache-Control: no-store` | - | Diese Antwort nicht cachen |
+
+### Response-Header
+
+Jede Antwort enthält einen Cache-Status:
+
+```
+X-Cache: HIT           # Response served from cache
+X-Cache: MISS          # Fresh response from model
+X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
+```
+
+## Cache-Status überprüfen
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+```
+
+## Cache-Abrechnung
+
+Cache-Hits sind deutlich günstiger als frische Anfragen:
+
+| Typ | Kosten |
+|------|------|
+| Cache HIT | **80% Rabatt** |
+| Cache MISS | Voller Preis |
+
+Der genaue Rabatt wird in den Nutzungsprotokollen Ihres Dashboards angezeigt.
+
+## Datenschutzkontrollen
+
+### API-Key-Ebene
+
+Konfigurieren Sie das Caching-Verhalten für jeden API-Key in Ihrem Dashboard:
+
+| Modus | Beschreibung |
+|------|-------------|
+| **Default** | Cache aktiviert, kann mit ähnlichen Anfragen geteilt werden |
+| **No Share** | Cache aktiviert, aber Antworten sind privat für Ihr Konto |
+| **Disabled** | Keinerlei Caching |
+
+### Request-Ebene
+
+Pro Anfrage überschreiben:
+
+```bash
+# Disable caching for this request
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Cache-Control: no-store" \
+  -d '...'
+```
+
+## Cache-Feedback
+
+Wenn Sie eine fehlerhafte gecachte Antwort erhalten, können Sie dies melden:
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**Feedback-Typen:**
+- `wrong_answer` - Sachlich falsch
+- `outdated` - Informationen sind veraltet
+- `irrelevant` - Passt nicht zur Frage
+- `other` - Andere Probleme
+
+Wenn ein Cache-Eintrag genügend negatives Feedback erhält, wird er automatisch ungültig gemacht.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Verwenden Sie temperature=0 für cachbare Abfragen">
+    Deterministische Einstellungen maximieren die Cache-Hit-Raten.
+  </Accordion>
+
+  <Accordion title="Prompt-Formate standardisieren">
+    Einheitliche Formatierung verbessert das semantische Matching.
+  </Accordion>
+
+  <Accordion title="Verwenden Sie no-cache für zeitkritische Abfragen">
+    Aktuelle Ereignisse und Echtzeitdaten sollten den Cache überspringen.
+  </Accordion>
+
+  <Accordion title="Cache-Hit-Raten überwachen">
+    Überprüfen Sie Ihr Dashboard auf Cache-Statistiken und Einsparungen.
+  </Accordion>
+</AccordionGroup>
+
+## Wann Sie NICHT cachen sollten
+
+Deaktivieren Sie das Caching für:
+
+- **Echtzeit-Informationen**: Aktienkurse, Wetter, Nachrichten
+- **Personalisierte Inhalte**: Benutzerspezifische Empfehlungen
+- **Kreative Aufgaben**: Wenn Abwechslung erwünscht ist
+- **Sensible Daten**: Vertrauliche Informationen
+
+```python
+# For time-sensitive queries
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_headers={"Cache-Control": "no-cache"}
+)
+```

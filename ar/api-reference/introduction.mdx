@@ -1,0 +1,178 @@
+---
+title: 'مرجع API'
+description: 'مرجع كامل لـ LemonData API'
+---
+
+## نظرة عامة
+
+إن LemonData API **متوافق مع OpenAI**، مما يعني أنه يمكنك استخدام OpenAI SDK الرسمي بمجرد تغيير URL الأساسي. كما ندعم أيضاً تنسيقات طلبات **Anthropic** و **Gemini** الأصلية.
+
+## URL الأساسي
+
+```
+https://api.lemondata.cc
+```
+
+## المصادقة
+
+تتطلب جميع نقاط نهاية API المصادقة باستخدام Bearer token:
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+احصل على مفتاح API الخاص بك من [لوحة التحكم](https://lemondata.cc/dashboard).
+
+## نقاط النهاية المدعومة
+
+### الدردشة وتوليد النصوص
+
+| نقطة النهاية | الطريقة | الوصف |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | إكمال الدردشة المتوافق مع OpenAI |
+| `/v1/messages` | POST | API الرسائل المتوافق مع Anthropic |
+| `/v1/responses` | POST | OpenAI Responses API |
+
+### التضمينات (Embeddings) وإعادة التصنيف (Rerank)
+
+| نقطة النهاية | الطريقة | الوصف |
+|----------|--------|-------------|
+| `/v1/embeddings` | POST | إنشاء تضمينات النصوص |
+| `/v1/rerank` | POST | إعادة تصنيف المستندات |
+
+### الصور
+
+| نقطة النهاية | الطريقة | الوصف |
+|----------|--------|-------------|
+| `/v1/images/generations` | POST | توليد الصور من النصوص |
+| `/v1/images/edits` | POST | تعديل الصور |
+
+### الصوت
+
+| نقطة النهاية | الطريقة | الوصف |
+|----------|--------|-------------|
+| `/v1/audio/speech` | POST | تحويل النص إلى كلام (TTS) |
+| `/v1/audio/transcriptions` | POST | تحويل الكلام إلى نص (STT) |
+
+### الفيديو
+
+| نقطة النهاية | الطريقة | الوصف |
+|----------|--------|-------------|
+| `/v1/videos/generations` | POST | إنشاء مهمة توليد فيديو |
+| `/v1/videos/generations/{id}` | GET | الحصول على حالة مهمة الفيديو |
+
+### الموسيقى
+
+| نقطة النهاية | الطريقة | الوصف |
+|----------|--------|-------------|
+| `/v1/music/generations` | POST | إنشاء مهمة توليد موسيقى |
+| `/v1/music/generations/{id}` | GET | الحصول على حالة مهمة الموسيقى |
+
+### توليد ثلاثي الأبعاد (3D)
+
+| نقطة النهاية | الطريقة | الوصف |
+|----------|--------|-------------|
+| `/v1/3d/generations` | POST | إنشاء مهمة توليد نموذج ثلاثي الأبعاد |
+| `/v1/3d/generations/{id}` | GET | الحصول على حالة مهمة 3D |
+
+### النماذج
+
+| نقطة النهاية | الطريقة | الوصف |
+|----------|--------|-------------|
+| `/v1/models` | GET | قائمة بجميع النماذج المتاحة |
+| `/v1/models/{model}` | GET | الحصول على معلومات نموذج محدد |
+
+## تنسيق الاستجابة
+
+تتبع جميع الاستجابات تنسيقاً ثابتاً:
+
+### استجابة النجاح
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4o",
+  "choices": [...],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30
+  }
+}
+```
+
+### شفافية التوجيه (Routing)
+
+تتضمن جميع الاستجابات حقل `_routing` مع معلومات القناة:
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  ...,
+  "_routing": {
+    "channel": {
+      "id": "ch_xxx",
+      "name": "channel-name",
+      "provider": "openai",
+      "channelType": "PLATFORM"
+    },
+    "cached": false,
+    "retryCount": 0
+  }
+}
+```
+
+| الحقل | الوصف |
+|-------|-------------|
+| `channel.id` | معرف القناة المستخدم |
+| `channel.provider` | المزود الرئيسي (openai، anthropic، إلخ.) |
+| `channel.channelType` | `PLATFORM` (LemonData) أو `PRIVATE` (BYOK) |
+| `cached` | ما إذا كانت الاستجابة قد تمت خدمتها من التخزين المؤقت (cache) |
+| `retryCount` | عدد محاولات إعادة المحاولة (إن وجدت) |
+
+### استجابة الخطأ
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+## حدود المعدل (Rate Limits)
+
+تعتمد حدود المعدل على الأدوار وهي قابلة للتكوين من قبل المسؤولين. القيم الافتراضية:
+
+| الدور | الطلبات/الدقيقة |
+|------|-------------|
+| مستخدم | 60 |
+| شريك | 300 |
+| VIP | 1,000 |
+| مسؤول | غير محدود |
+
+<Note>
+اتصل بالدعم للحصول على حدود معدل مخصصة. قد تختلف القيم الدقيقة حسب تكوين الحساب.
+</Note>
+
+يتم تضمين رؤوس (headers) حدود المعدل في جميع الاستجابات:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 55
+X-RateLimit-Reset: 1234567890
+```
+
+## مواصفات OpenAPI
+
+<Card
+  title="مواصفات OpenAPI"
+  icon="file-code"
+  href="/openapi.json"
+>
+  قم بتنزيل مواصفات OpenAPI 3.0 الكاملة
+</Card>

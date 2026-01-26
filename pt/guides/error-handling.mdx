@@ -1,0 +1,247 @@
+---
+title: "Tratamento de Erros"
+description: "Trate erros de API de forma elegante"
+---
+
+## Formato de Resposta de Erro
+
+Todos os erros retornam um formato JSON consistente:
+
+```json
+{
+  "error": {
+    "message": "Human-readable error description",
+    "type": "error_type",
+    "code": "error_code",
+    "param": "parameter_name"  // Opcional, para erros de validação
+  }
+}
+```
+
+## Códigos de Status HTTP
+
+| Código | Descrição |
+|------|-------------|
+| 400 | Bad Request - Parâmetros inválidos |
+| 401 | Unauthorized - Chave de API inválida ou ausente |
+| 402 | Payment Required - Saldo insuficiente |
+| 403 | Forbidden - Acesso negado ou modelo não permitido |
+| 404 | Not Found - Modelo ou recurso não encontrado |
+| 413 | Payload Too Large - Tamanho de entrada ou arquivo excedido |
+| 429 | Too Many Requests - Limite de taxa excedido |
+| 500 | Internal Server Error |
+| 502 | Bad Gateway - Erro do provedor upstream |
+| 503 | Service Unavailable - Todos os canais falharam |
+| 504 | Gateway Timeout - A requisição expirou |
+
+## Tipos de Erro
+
+### Erros de Autenticação (401)
+
+| Tipo | Código | Descrição |
+|------|------|-------------|
+| `invalid_api_key` | `invalid_api_key` | Chave de API ausente ou inválida |
+| `expired_api_key` | `expired_api_key` | Chave de API foi revogada |
+
+```python
+from openai import OpenAI, AuthenticationError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError as e:
+    print(f"Authentication failed: {e.message}")
+```
+
+### Erros de Pagamento (402)
+
+| Tipo | Código | Descrição |
+|------|------|-------------|
+| `insufficient_quota` | `insufficient_quota` | Saldo da conta está muito baixo |
+| `quota_exceeded` | `quota_exceeded` | Limite de uso da chave de API atingido |
+
+```python
+from openai import OpenAI, APIStatusError
+
+try:
+    response = client.chat.completions.create(...)
+except APIStatusError as e:
+    if e.status_code == 402:
+        print("Please top up your account balance")
+```
+
+### Erros de Acesso (403)
+
+| Tipo | Código | Descrição |
+|------|------|-------------|
+| `access_denied` | `access_denied` | Acesso ao recurso negado |
+| `access_denied` | `model_not_allowed` | Modelo não permitido para esta chave de API |
+
+```json
+{
+  "error": {
+    "message": "You don't have permission to access this model",
+    "type": "access_denied",
+    "code": "model_not_allowed"
+  }
+}
+```
+
+### Erros de Validação (400)
+
+| Tipo | Descrição |
+|------|-------------|
+| `invalid_request_error` | Parâmetros da requisição são inválidos |
+| `context_length_exceeded` | Entrada muito longa para o modelo |
+| `model_not_found` | O modelo solicitado não existe |
+
+```json
+{
+  "error": {
+    "message": "model: 'invalid-model' is not a valid model",
+    "type": "model_not_found",
+    "param": "model"
+  }
+}
+```
+
+### Erros de Limite de Taxa (429)
+
+Quando você excede os limites de taxa:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**Headers incluídos:**
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1234567890
+Retry-After: 60
+```
+
+### Payload Muito Grande (413)
+
+Quando o tamanho da entrada ou do arquivo excede os limites:
+
+```json
+{
+  "error": {
+    "message": "Input size exceeds maximum allowed",
+    "type": "invalid_request_error",
+    "code": "payload_too_large"
+  }
+}
+```
+
+Causas comuns:
+- Arquivo de imagem muito grande (máx. 20MB)
+- Arquivo de áudio muito grande (máx. 25MB)
+- Texto de entrada excede o comprimento de contexto do modelo
+
+### Erros de Upstream (502, 503)
+
+| Tipo | Descrição |
+|------|-------------|
+| `upstream_error` | O provedor retornou um erro |
+| `all_channels_failed` | Nenhum provedor disponível |
+| `timeout_error` | A requisição expirou |
+
+## Tratamento de Erros em Python
+
+```python
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            raise
+        except APIConnectionError as e:
+            print(f"Connection error: {e}")
+            raise
+        except APIError as e:
+            print(f"API error: {e.status_code} - {e.message}")
+            raise
+```
+
+## Tratamento de Erros em JavaScript
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function chatWithRetry(messages, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages
+      });
+    } catch (error) {
+      if (error instanceof OpenAI.RateLimitError) {
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+```
+
+## Melhores Práticas
+
+<AccordionGroup>
+  <Accordion title="Implemente exponential backoff">
+    Quando houver limite de taxa, aguarde progressivamente mais tempo entre as tentativas:
+    ```python
+    wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+    ```
+  </Accordion>
+
+  <Accordion title="Defina timeouts">
+    Sempre defina timeouts razoáveis para evitar requisições travadas:
+    ```python
+    client = OpenAI(timeout=60.0)  # Timeout de 60 segundos
+    ```
+  </Accordion>
+
+  <Accordion title="Registre logs de erros para depuração">
+    Registre a resposta de erro completa, incluindo o ID da requisição para suporte:
+    ```python
+    except APIError as e:
+        logger.error(f"API Error: {e.status_code} - {e.message}")
+    ```
+  </Accordion>
+
+  <Accordion title="Trate erros específicos do modelo">
+    Alguns modelos possuem requisitos específicos (ex: tokens máximos, formatos de imagem).
+    Valide as entradas antes de fazer as requisições.
+  </Accordion>
+</AccordionGroup>

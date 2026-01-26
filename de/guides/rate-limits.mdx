@@ -1,0 +1,92 @@
+
+---
+title: "Rate-Limits"
+description: "Verständnis und Handhabung von Rate-Limits"
+---
+
+## Übersicht
+
+LemonData implementiert Rate-Limits, um eine faire Nutzung und Plattformstabilität zu gewährleisten. Die Limits variieren je nach Account-Stufe.
+
+## Rate-Limit-Stufen
+
+| Stufe | Anfragen/Min. | Beschreibung |
+|------|-------------|-------------|
+| **User** | 60 | Standard-Stufe für alle Accounts |
+| **Partner** | 300 | Für Integrationspartner |
+| **VIP** | 1.000 | Nutzer mit hohem Volumen |
+
+<Note>
+  Rate-Limits können sich ändern. Kontaktieren Sie support@lemondata.cc für individuelle Limits.
+</Note>
+
+## Rate-Limit-Header
+
+Jede API-Antwort enthält Informationen zum Rate-Limit:
+
+```
+X-RateLimit-Limit: 60          # Your limit per minute
+X-RateLimit-Remaining: 55      # Requests remaining
+X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
+```
+
+## Rate-Limit überschritten
+
+Wenn Sie das Limit überschreiten, erhalten Sie eine `429`-Antwort:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+Mit zusätzlichem Header:
+```
+Retry-After: 60  # Seconds to wait before retrying
+```
+
+## Handhabung von Rate-Limits
+
+### Exponential Backoff
+
+Implementieren Sie Exponential Backoff für automatische Wiederholungsversuche:
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### Request-Queuing
+
+Implementieren Sie für Anwendungen mit hohem Volumen eine Anfrage-Warteschlange (Request Queue):
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_minute=60):
+        self.rpm

@@ -1,0 +1,159 @@
+---
+title: "速率限制"
+description: "了解并处理速率限制"
+---
+
+## 概览
+
+LemonData 实施速率限制以确保公平使用和平台稳定性。限制因账户层级而异。
+
+## 速率限制层级
+
+| 层级 | 请求数/分钟 | 描述 |
+|------|-------------|-------------|
+| **User** | 60 | 所有账户的默认层级 |
+| **Partner** | 300 | 适用于集成合作伙伴 |
+| **VIP** | 1,000 | 高用量用户 |
+
+<Note>
+  速率限制可能会发生变化。如需自定义限制，请联系 support@lemondata.cc。
+</Note>
+
+## 速率限制响应头
+
+每个 API 响应都包含速率限制信息：
+
+```
+X-RateLimit-Limit: 60          # 您每分钟的限制
+X-RateLimit-Remaining: 55      # 剩余请求数
+X-RateLimit-Reset: 1234567890  # 限制重置的 Unix 时间戳
+```
+
+## 超过速率限制
+
+当您超过限制时，将收到 `429` 响应：
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+附带额外的响应头：
+```
+Retry-After: 60  # 重试前需要等待的秒数
+```
+
+## 处理速率限制
+
+### 指数退避
+
+为自动重试实现指数退避：
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 秒
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### 请求队列
+
+对于高并发应用，请实现请求队列：
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_minute=60):
+        self.rpm = requests_per_minute
+        self.interval = 60 / requests_per_minute
+        self.last_request = 0
+
+    async def request(self, messages):
+        # 如果需要，等待以遵守速率限制
+        now = asyncio.get_event_loop().time()
+        wait_time = max(0, self.last_request + self.interval - now)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        self.last_request = asyncio.get_event_loop().time()
+        return await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+```
+
+### 批量处理
+
+对于批量操作，请进行带延迟的分批处理：
+
+```python
+def process_batch(items, batch_size=50, delay=1):
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        for item in batch:
+            result = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": item}]
+            )
+            results.append(result)
+        time.sleep(delay)  # 批次之间的停顿
+    return results
+```
+
+## 最佳实践
+
+<AccordionGroup>
+  <Accordion title="监控您的用量">
+    跟踪速率限制响应头，主动保持在限制范围内。
+  </Accordion>
+
+  <Accordion title="实现缓存">
+    对相同请求的响应进行缓存，以减少 API 调用。
+  </Accordion>
+
+  <Accordion title="使用合适的模型">
+    更快的模型（如 gpt-4o-mini）允许更高的吞吐量。
+  </Accordion>
+
+  <Accordion title="联系我们获取更高限制">
+    如果您需要更高的限制，请联系 support@lemondata.cc。
+  </Accordion>
+</AccordionGroup>
+
+## 升级您的层级
+
+如需申请层级升级：
+
+1. 登录您的 [控制面板](https://lemondata.cc/dashboard)
+2. 前往 **Settings → Account**
+3. 联系支持团队并说明您的使用场景
+
+或者发送邮件至 support@lemondata.cc，并提供以下信息：
+- 您的账户邮箱
+- 预期的请求量
+- 使用场景描述

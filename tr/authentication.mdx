@@ -1,0 +1,146 @@
+---
+title: "Kimlik Doğrulama"
+description: "API anahtarları ile API isteklerinizi güvence altına alın"
+---
+
+## API Anahtarları
+
+Tüm API istekleri, bir API anahtarı kullanılarak kimlik doğrulaması gerektirir. Anahtarınızı `Authorization` başlığına (header) ekleyin:
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+## API Anahtarınızı Alma
+
+1. [LemonData Dashboard](https://lemondata.cc/dashboard) panelinizde oturum açın
+2. **API Keys** bölümüne gidin
+3. **Create New Key** düğmesine tıklayın
+4. Anahtarınıza açıklayıcı bir ad verin
+5. Anahtarı hemen kopyalayın - yalnızca bir kez gösterilir
+
+<Warning>
+  **Güvenlik En İyi Uygulamaları:**
+  - API anahtarlarını asla istemci tarafı (client-side) kodunda açıkta bırakmayın
+  - Anahtarları sürüm kontrol sistemlerine göndermeyin
+  - Anahtarları saklamak için ortam değişkenlerini (environment variables) kullanın
+  - Anahtarları periyodik olarak yenileyin
+  - Kullanılmayan anahtarları silin
+</Warning>
+
+## API Anahtarlarını Kullanma
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer $LEMONDATA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+```python Python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ.get("LEMONDATA_API_KEY"),
+    base_url="https://api.lemondata.cc/v1"
+)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+```
+
+```go Go
+package main
+
+import "github.com/sashabaranov/go-openai"
+
+func main() {
+    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+}
+```
+
+```php PHP
+<?php
+$apiKey = getenv('LEMONDATA_API_KEY');
+
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+curl_setopt_array($ch, [
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer ' . $apiKey,
+        'Content-Type: application/json'
+    ]
+]);
+```
+
+</CodeGroup>
+
+## API Anahtarı Özellikleri
+
+### Kullanım Limitleri
+
+Harcamaları kontrol etmek için her API anahtarı üzerinde bir kullanım limiti belirleyebilirsiniz:
+
+| Ayar | Açıklama |
+|---------|-------------|
+| **Limit Yok** | Anahtar, hesap bakiyenizi kısıtlama olmaksızın kullanır |
+| **Sabit Limit** | Anahtar, belirtilen tutara ulaştıktan sonra çalışmayı durdurur |
+
+### Anahtar Öneki
+
+Tüm LemonData API anahtarları `sk-` öneki ile başlar. Anahtar formatı şöyledir:
+
+```
+sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Anthropic API Uyumluluğu
+
+`/v1/messages` uç noktası (endpoint) için `x-api-key` başlığını (Anthropic SDK uyumlu) kullanabilirsiniz:
+
+```bash
+curl https://api.lemondata.cc/v1/messages \
+  -H "x-api-key: sk-your-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+<Note>
+  `x-api-key` başlığı yalnızca `/v1/messages` ve `/v1/messages/count_tokens` uç noktalarında desteklenir. Diğer uç noktalar `Authorization: Bearer` başlığını gerektirir.
+</Note>
+
+## Hata Yanıtları
+
+| Durum Kodu | Tür | Kod | Açıklama |
+|-------------|------|------|-------------|
+| 401 | `invalid_request_error` | `invalid_api_key` | Eksik veya geçersiz API anahtarı |
+| 401 | `invalid_request_error` | `expired_api_key` | API anahtarı iptal edilmiş |
+| 402 | `insufficient_quota` | `insufficient_quota` | Hesap bakiyesi yetersiz |
+| 402 | `insufficient_quota` | `quota_exceeded` | API anahtarı kullanım limitine ulaşıldı |
+
+Örnek hata yanıtı:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```

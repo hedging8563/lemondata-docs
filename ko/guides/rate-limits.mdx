@@ -1,0 +1,159 @@
+---
+title: "속도 제한"
+description: "속도 제한의 이해 및 처리 방법"
+---
+
+## 개요
+
+LemonData는 공정한 사용과 플랫폼 안정성을 보장하기 위해 속도 제한(rate limits)을 적용합니다. 제한 사항은 계정 등급에 따라 다릅니다.
+
+## 속도 제한 등급
+
+| 등급 | 분당 요청 수 (Requests/min) | 설명 |
+|------|-------------|-------------|
+| **User** | 60 | 모든 계정의 기본 등급 |
+| **Partner** | 300 | 통합 파트너용 |
+| **VIP** | 1,000 | 대량 사용 유저 |
+
+<Note>
+  속도 제한은 변경될 수 있습니다. 맞춤형 제한이 필요한 경우 support@lemondata.cc로 문의해 주세요.
+</Note>
+
+## 속도 제한 헤더
+
+모든 API 응답에는 속도 제한 정보가 포함됩니다:
+
+```
+X-RateLimit-Limit: 60          # Your limit per minute
+X-RateLimit-Remaining: 55      # Requests remaining
+X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
+```
+
+## 속도 제한 초과
+
+제한을 초과하면 `429` 응답을 받게 됩니다:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+추가 헤더 포함:
+```
+Retry-After: 60  # Seconds to wait before retrying
+```
+
+## 속도 제한 처리
+
+### 지수 백오프 (Exponential Backoff)
+
+자동 재시도를 위해 지수 백오프를 구현하세요:
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### 요청 큐잉 (Request Queuing)
+
+대량의 요청이 발생하는 애플리케이션의 경우, 요청 큐를 구현하세요:
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_minute=60):
+        self.rpm = requests_per_minute
+        self.interval = 60 / requests_per_minute
+        self.last_request = 0
+
+    async def request(self, messages):
+        # Wait if needed to respect rate limit
+        now = asyncio.get_event_loop().time()
+        wait_time = max(0, self.last_request + self.interval - now)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        self.last_request = asyncio.get_event_loop().time()
+        return await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+```
+
+### 배치 처리 (Batch Processing)
+
+대량 작업의 경우, 지연 시간을 두고 배치 단위로 처리하세요:
+
+```python
+def process_batch(items, batch_size=50, delay=1):
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        for item in batch:
+            result = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": item}]
+            )
+            results.append(result)
+        time.sleep(delay)  # Pause between batches
+    return results
+```
+
+## 권장 사항
+
+<AccordionGroup>
+  <Accordion title="사용량 모니터링">
+    속도 제한 헤더를 추적하여 선제적으로 제한 범위 내를 유지하세요.
+  </Accordion>
+
+  <Accordion title="캐싱 구현">
+    동일한 요청에 대한 응답을 캐싱하여 API 호출 횟수를 줄이세요.
+  </Accordion>
+
+  <Accordion title="적절한 모델 사용">
+    더 빠른 모델(예: gpt-4o-mini)은 더 높은 처리량을 제공합니다.
+  </Accordion>
+
+  <Accordion title="높은 제한이 필요한 경우 문의">
+    더 높은 제한이 필요한 경우 support@lemondata.cc로 문의하세요.
+  </Accordion>
+</AccordionGroup>
+
+## 등급 업그레이드
+
+등급 업그레이드를 요청하려면:
+
+1. [대시보드](https://lemondata.cc/dashboard)에 로그인합니다.
+2. **Settings → Account**로 이동합니다.
+3. 사용 사례와 함께 고객 지원팀에 문의하세요.
+
+또는 다음 내용을 포함하여 support@lemondata.cc로 이메일을 보내주세요:
+- 계정 이메일
+- 예상 요청량
+- 사용 사례 설명

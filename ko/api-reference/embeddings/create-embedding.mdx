@@ -1,0 +1,193 @@
+---
+title: "임베딩 생성"
+api: "POST /v1/embeddings"
+description: "입력 텍스트를 나타내는 임베딩 벡터를 생성합니다."
+---
+
+## 요청 본문
+
+<ParamField body="model" type="string" required>
+  사용할 임베딩 모델의 ID (예: `text-embedding-3-small`).
+</ParamField>
+
+<ParamField body="input" type="string | array" required>
+  임베딩할 입력 텍스트입니다. 문자열 또는 문자열 배열일 수 있습니다.
+</ParamField>
+
+<ParamField body="encoding_format" type="string" default="float">
+  임베딩 형식: `float` 또는 `base64`.
+</ParamField>
+
+<ParamField body="dimensions" type="integer">
+  출력 차원 수 (모델별로 다름).
+</ParamField>
+
+<ParamField body="user" type="string">
+  오남용 모니터링을 위해 최종 사용자를 나타내는 고유 식별자.
+</ParamField>
+
+## 사용 가능한 모델
+
+| 모델 | 차원 | 설명 |
+|-------|------------|-------------|
+| `text-embedding-3-large` | 3072 | 최고 품질 |
+| `text-embedding-3-small` | 1536 | 균형 잡힌 성능 |
+| `text-embedding-ada-002` | 1536 | 레거시 |
+
+## 응답
+
+<ResponseField name="object" type="string">
+  항상 `list`입니다.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  임베딩 객체의 배열.
+
+  각 객체는 다음을 포함합니다:
+  - `object` (string): `embedding`
+  - `index` (integer): 입력 배열에서의 인덱스
+  - `embedding` (array): 임베딩 벡터
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  사용된 모델.
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  `prompt_tokens` 및 `total_tokens`를 포함한 토큰 사용량.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/embeddings" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "text-embedding-3-small",
+    "input": "The quick brown fox jumps over the lazy dog"
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.embeddings.create(
+    model="text-embedding-3-small",
+    input="The quick brown fox jumps over the lazy dog"
+)
+
+embedding = response.data[0].embedding
+print(f"Embedding dimension: {len(embedding)}")
+print(f"First 5 values: {embedding[:5]}")
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.embeddings.create({
+  model: 'text-embedding-3-small',
+  input: 'The quick brown fox jumps over the lazy dog'
+});
+
+console.log(response.data[0].embedding.slice(0, 5));
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateEmbeddings(
+        context.Background(),
+        openai.EmbeddingRequest{
+            Model: openai.SmallEmbedding3,
+            Input: []string{"The quick brown fox jumps over the lazy dog"},
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Embedding dimension: %d\n", len(resp.Data[0].Embedding))
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/embeddings');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'text-embedding-3-small',
+        'input' => 'The quick brown fox jumps over the lazy dog'
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+print_r(array_slice($data['data'][0]['embedding'], 0, 5));
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "index": 0,
+      "embedding": [0.0023, -0.0194, 0.0081, ...]
+    }
+  ],
+  "model": "text-embedding-3-small",
+  "usage": {
+    "prompt_tokens": 9,
+    "total_tokens": 9
+  }
+}
+```
+</ResponseExample>
+
+## 배치 임베딩
+
+```python
+# 여러 텍스트를 한 번에 임베딩
+response = client.embeddings.create(
+    model="text-embedding-3-small",
+    input=[
+        "First document text",
+        "Second document text",
+        "Third document text"
+    ]
+)
+
+for i, data in enumerate(response.data):
+    print(f"Document {i}: {len(data.embedding)} dimensions")
+```

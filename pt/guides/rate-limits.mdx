@@ -1,0 +1,90 @@
+---
+title: "Limites de Taxa"
+description: "Entendendo e gerenciando limites de taxa"
+---
+
+## Visão Geral
+
+A LemonData implementa limites de taxa para garantir o uso justo e a estabilidade da plataforma. Os limites variam de acordo com o nível da conta.
+
+## Níveis de Limite de Taxa
+
+| Nível | Requisições/min | Descrição |
+|------|-------------|-------------|
+| **Usuário** | 60 | Nível padrão para todas as contas |
+| **Parceiro** | 300 | Para parceiros de integração |
+| **VIP** | 1.000 | Usuários de alto volume |
+
+<Note>
+  Os limites de taxa estão sujeitos a alterações. Entre em contato com support@lemondata.cc para limites personalizados.
+</Note>
+
+## Cabeçalhos de Limite de Taxa
+
+Cada resposta da API inclui informações sobre o limite de taxa:
+
+```
+X-RateLimit-Limit: 60          # Your limit per minute
+X-RateLimit-Remaining: 55      # Requests remaining
+X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
+```
+
+## Limite de Taxa Excedido
+
+Quando você exceder o limite, receberá uma resposta `429`:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+Com cabeçalho adicional:
+```
+Retry-After: 60  # Seconds to wait before retrying
+```
+
+## Gerenciando Limites de Taxa
+
+### Backoff Exponencial
+
+Implemente backoff exponencial para tentativas automáticas:
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### Fila de Requisições
+
+Para aplicações de alto volume, implemente uma fila de requisições:
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_

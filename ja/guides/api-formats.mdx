@@ -1,0 +1,266 @@
+---
+title: "✨ マルチフォーマット API"
+description: "単一の API key で OpenAI、Anthropic、または Gemini フォーマットを使用"
+---
+
+## 概要
+
+LemonData は、単一の API key で **3 つのネイティブ API フォーマット**をサポートしています。設定を変更することなく、ユースケースに最適なフォーマットを選択できます。
+
+<CardGroup cols={3}>
+  <Card title="OpenAI フォーマット" icon="plug">
+    `/v1/chat/completions`
+    標準的なフォーマット、最高の互換性
+  </Card>
+  <Card title="Anthropic フォーマット" icon="message">
+    `/v1/messages`
+    Extended thinking、ネイティブな Claude 機能
+  </Card>
+  <Card title="Gemini フォーマット" icon="sparkles">
+    `/v1beta/models/:model:generateContent`
+    Google エコシステムとの統合
+  </Card>
+</CardGroup>
+
+## なぜマルチフォーマットなのか？
+
+| メリット | 説明 |
+|---------|-------------|
+| **SDK の切り替えが不要** | 好みの SDK であらゆるモデルを使用可能 |
+| **ネイティブ機能** | フォーマット固有の機能にアクセス |
+| **簡単な移行** | base URL を変更するだけで公式 API から切り替え可能 |
+| **一括請求** | 1 つのアカウント、1 つの API key で全フォーマットに対応 |
+
+## フォーマットの比較
+
+| 機能 | OpenAI | Anthropic | Gemini |
+|---------|--------|-----------|--------|
+| **Endpoint** | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/:model:generateContent` |
+| **認証ヘッダー** | `Authorization: Bearer` | `x-api-key` | `Authorization: Bearer` |
+| **システムプロンプト** | messages 配列内 | 独立した `system` フィールド | `systemInstruction` 内 |
+| **Extended Thinking** | ❌ | ✅ | ❌ |
+| **ストリーミング** | ✅ SSE | ✅ SSE | ✅ SSE |
+| **ツール呼び出し** | ✅ | ✅ | ✅ |
+| **ビジョン** | ✅ | ✅ | ✅ |
+
+## OpenAI フォーマット
+
+最も広く互換性のあるフォーマットです。すべての LemonData モデルで動作します。
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# あらゆるモデルで動作
+response = client.chat.completions.create(
+    model="claude-sonnet-4-5",  # OpenAI フォーマット経由の Claude
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+**最適なケース:**
+- 一般的な利用
+- 既存の OpenAI SDK 統合
+- 最大限の互換性
+
+## Anthropic フォーマット
+
+ネイティブな Anthropic Messages API です。extended thinking などの Claude 固有の機能に必要です。
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc"  # /v1 サフィックスは不要！
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    system="You are a helpful assistant.",  # 独立した system フィールド
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+### Extended Thinking (Claude Opus 4.5)
+
+Anthropic フォーマットでのみ利用可能:
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex problem..."}]
+)
+
+# 思考プロセスへのアクセス
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Answer: {block.text}")
+```
+
+**最適なケース:**
+- Claude 固有の機能
+- Extended thinking モード
+- ネイティブな Anthropic SDK ユーザー
+
+## Gemini フォーマット
+
+Google エコシステム統合のためのネイティブな Google Gemini API フォーマットです。
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{
+      "parts": [{"text": "Hello!"}]
+    }],
+    "systemInstruction": {
+      "parts": [{"text": "You are a helpful assistant."}]
+    }
+  }'
+```
+
+### ストリーミング
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{"parts": [{"text": "Write a story"}]}]
+  }'
+```
+
+**最適なケース:**
+- Google Cloud 統合
+- 既存の Gemini SDK コード
+- ネイティブな Gemini 機能
+
+## 適切なフォーマットの選択
+
+```mermaid
+graph TD
+    A[どのフォーマット？] --> B{Claude の extended thinking が必要？}
+    B -->|はい| C[Anthropic フォーマットを使用]
+    B -->|いいえ| D{既存のコードベースは？}
+    D -->|OpenAI SDK| E[OpenAI フォーマットを使用]
+    D -->|Anthropic SDK| C
+    D -->|Gemini SDK| F[Gemini フォーマットを使用]
+    D -->|新規プロジェクト| E
+```
+
+## 移行ガイド
+
+### OpenAI 公式 API からの移行
+
+```python
+# 移行前 (OpenAI)
+client = OpenAI(api_key="sk-openai-key")
+
+# 移行後 (LemonData)
+client = OpenAI(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"  # この行を追加
+)
+# これだけです！同じコードが動作します
+```
+
+### Anthropic 公式 API からの移行
+
+```python
+# 移行前 (Anthropic)
+client = Anthropic(api_key="sk-ant-key")
+
+# 移行後 (LemonData)
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"  # この行を追加 (/v1 は不要！)
+)
+```
+
+### Google AI Studio からの移行
+
+```python
+# 移行前 (Google)
+import google.generativeai as genai
+genai.configure(api_key="google-api-key")
+
+# 移行後 (LemonData) - REST API を使用
+import requests
+
+response = requests.post(
+    "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent",
+    headers={"Authorization": "Bearer sk-lemondata-key"},
+    json={"contents": [{"parts": [{"text": "Hello"}]}]}
+)
+```
+
+## モデル間の互換性
+
+LemonData の魔法：**あらゆる SDK** を **あらゆるモデル** で使用できます。ゲートウェイがフォーマット変換を自動的に処理します。
+
+### あらゆる SDK → あらゆるモデル
+
+```python
+# GPT-4o を使用した Anthropic SDK (OpenAI フォーマットに自動変換)
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"
+)
+
+response = client.messages.create(
+    model="gpt-4o",  # ✅ 動作します！自動変換済み
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# 同じ SDK、異なるモデル - コードの変更なし
+response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ 動作します！
+response = client.messages.create(model="deepseek-r1", ...)       # ✅ 動作します！
+```
+
+### OpenAI SDK → すべてのモデル
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
+
+# これらはすべて同じ SDK で動作します:
+response = client.chat.completions.create(model="gpt-4o", ...)
+response = client.chat.completions.create(model="claude-sonnet-4-5", ...)
+response = client.chat.completions.create(model="gemini-2.5-flash", ...)
+```
+
+### 業界比較
+
+| プラットフォーム | OpenAI フォーマット | Anthropic フォーマット | Gemini フォーマット | Responses API |
+|----------|:---:|:---:|:---:|:---:|
+| **LemonData** | ✅ 全モデル | ✅ 全モデル | ✅ 全モデル | ✅ 全モデル |
+| OpenRouter | ✅ 全モデル | ❌ | ❌ | ❌ |
+| Together AI | ✅ 全モデル | ❌ | ❌ | ❌ |
+| Fireworks | ✅ 全モデル | ❌ | ❌ | ❌ |
+
+<Note>
+クロスフォーマットはほとんどの機能で動作しますが、フォーマット固有の機能（Anthropic の extended thinking など）にはネイティブフォーマットが必要です。
+</Note>

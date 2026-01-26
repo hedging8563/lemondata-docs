@@ -1,0 +1,193 @@
+---
+title: "✨ Mise en cache intelligente"
+description: "Réduisez les coûts et la latence grâce à une mise en cache sémantique sensible au contexte"
+---
+
+## Aperçu
+
+LemonData propose un système de mise en cache intelligente qui peut réduire considérablement vos coûts d'API et la latence des réponses. Notre mise en cache va au-delà de la simple correspondance de requêtes - elle comprend la **signification sémantique** de vos prompts.
+
+<CardGroup cols={2}>
+  <Card title="Économies de coûts" icon="piggy-bank">
+    Les hits de cache sont facturés à une fraction du coût normal.
+  </Card>
+  <Card title="Réponses plus rapides" icon="bolt">
+    Les réponses mises en cache sont renvoyées instantanément, aucune inférence de modèle n'est nécessaire.
+  </Card>
+  <Card title="Sensible au contexte" icon="brain">
+    La correspondance sémantique trouve des requêtes similaires même avec une formulation différente.
+  </Card>
+  <Card title="Contrôles de confidentialité" icon="shield">
+    Contrôle total sur ce qui est mis en cache et partagé.
+  </Card>
+</CardGroup>
+
+## Fonctionnement
+
+LemonData utilise un système de mise en cache à deux couches :
+
+### Couche 1 : Cache de réponse (Correspondance exacte)
+
+Pour les requêtes déterministes (`temperature=0`), nous mettons en cache la réponse exacte :
+
+- **Correspondance** : Modèle, messages et paramètres identiques
+- **Vitesse** : Instantanée (microsecondes)
+- **Idéal pour** : Les requêtes identiques répétées
+
+### Couche 2 : Cache sémantique (Correspondance par similitude)
+
+Pour toutes les requêtes, nous vérifions également la similitude sémantique à l'aide d'un algorithme de correspondance en deux étapes :
+
+- **Étape 1 (Requête uniquement)** : ≥95 % de similitude sur la requête utilisateur
+- **Étape 2 (Contexte complet)** : ≥85 % de similitude incluant le contexte de la conversation
+- **Idéal pour** : Les requêtes de type FAQ, les questions courantes
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (high semantic similarity)
+```
+
+## En-têtes de cache
+
+### En-têtes de requête
+
+Contrôlez le comportement de mise en cache par requête :
+
+```bash
+# Skip cache lookup, always call the model
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
+```
+
+| En-tête | Valeur | Effet |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | Ignorer le cache, réponse fraîche |
+| `Cache-Control: no-store` | - | Ne pas mettre cette réponse en cache |
+
+### En-têtes de réponse
+
+Chaque réponse inclut un statut de cache :
+
+```
+X-Cache: HIT           # Response served from cache
+X-Cache: MISS          # Fresh response from model
+X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
+```
+
+## Vérification du statut du cache
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+```
+
+## Facturation du cache
+
+Les hits de cache sont nettement moins chers que les requêtes fraîches :
+
+| Type | Coût |
+|------|------|
+| Cache HIT | **-80 %** |
+| Cache MISS | Plein tarif |
+
+La remise exacte est affichée dans les journaux d'utilisation de votre tableau de bord.
+
+## Contrôles de confidentialité
+
+### Niveau Clé API
+
+Configurez le comportement de mise en cache pour chaque clé API dans votre tableau de bord :
+
+| Mode | Description |
+|------|-------------|
+| **Par défaut** | Cache activé, peut être partagé avec des requêtes similaires |
+| **Pas de partage** | Cache activé, mais les réponses sont privées pour votre compte |
+| **Désactivé** | Aucune mise en cache |
+
+### Niveau Requête
+
+Surcharger par requête :
+
+```bash
+# Disable caching for this request
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Cache-Control: no-store" \
+  -d '...'
+```
+
+## Feedback du cache
+
+Si vous recevez une réponse mise en cache incorrecte, vous pouvez la signaler :
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**Types de feedback :**
+- `wrong_answer` - Factuellement incorrect
+- `outdated` - L'information est périmée
+- `irrelevant` - Ne correspond pas à la question
+- `other` - Autres problèmes
+
+Lorsqu'une entrée de cache reçoit suffisamment de retours négatifs, elle est automatiquement invalidée.
+
+## Bonnes pratiques
+
+<AccordionGroup>
+  <Accordion title="Utilisez temperature=0 pour les requêtes pouvant être mises en cache">
+    Les paramètres déterministes maximisent les taux de hit de cache.
+  </Accordion>
+
+  <Accordion title="Standardisez les formats de prompt">
+    Un formatage cohérent améliore la correspondance sémantique.
+  </Accordion>
+
+  <Accordion title="Utilisez no-cache pour les requêtes sensibles au facteur temps">
+    Les événements actuels et les données en temps réel devraient ignorer le cache.
+  </Accordion>
+
+  <Accordion title="Surveillez les taux de hit de cache">
+    Consultez votre tableau de bord pour les statistiques de cache et les économies réalisées.
+  </Accordion>
+</AccordionGroup>
+
+## Quand NE PAS mettre en cache
+
+Désactivez la mise en cache pour :
+
+- **Informations en temps réel** : Cours de la bourse, météo, actualités
+- **Contenu personnalisé** : Recommandations spécifiques à l'utilisateur
+- **Tâches créatives** : Lorsque la variété est souhaitée
+- **Données sensibles** : Informations confidentielles
+
+```python
+# For time-sensitive queries
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_headers={"Cache-Control": "no-cache"}
+)
+```

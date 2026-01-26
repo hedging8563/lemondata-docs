@@ -1,0 +1,146 @@
+---
+title: "Autentikasi"
+description: "Amankan permintaan API Anda dengan API key"
+---
+
+## API Key
+
+Semua permintaan API memerlukan autentikasi menggunakan API key. Sertakan key Anda dalam header `Authorization`:
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+## Mendapatkan API Key Anda
+
+1. Masuk ke [LemonData Dashboard](https://lemondata.cc/dashboard) Anda
+2. Buka bagian **API Keys**
+3. Klik **Create New Key**
+4. Berikan nama deskriptif untuk key Anda
+5. Salin key tersebut segera - key hanya akan ditampilkan sekali
+
+<Warning>
+  **Praktik Keamanan Terbaik:**
+  - Jangan pernah mengekspos API key dalam kode sisi klien (client-side)
+  - Jangan melakukan commit key ke version control
+  - Gunakan environment variables untuk menyimpan key
+  - Rotasi key secara berkala
+  - Hapus key yang tidak digunakan
+</Warning>
+
+## Menggunakan API Key
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer $LEMONDATA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+```python Python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ.get("LEMONDATA_API_KEY"),
+    base_url="https://api.lemondata.cc/v1"
+)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+```
+
+```go Go
+package main
+
+import "github.com/sashabaranov/go-openai"
+
+func main() {
+    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+}
+```
+
+```php PHP
+<?php
+$apiKey = getenv('LEMONDATA_API_KEY');
+
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+curl_setopt_array($ch, [
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer ' . $apiKey,
+        'Content-Type: application/json'
+    ]
+]);
+```
+
+</CodeGroup>
+
+## Fitur API Key
+
+### Batas Penggunaan
+
+Anda dapat menetapkan batas penggunaan pada setiap API key untuk mengontrol pengeluaran:
+
+| Pengaturan | Deskripsi |
+|---------|-------------|
+| **Tanpa Batas** | Key menggunakan saldo akun Anda tanpa batasan |
+| **Batas Tetap** | Key berhenti berfungsi setelah mencapai jumlah yang ditentukan |
+
+### Prefiks Key
+
+Semua API key LemonData dimulai dengan prefiks `sk-`. Format key adalah:
+
+```
+sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Kompatibilitas API Anthropic
+
+Untuk endpoint `/v1/messages`, Anda dapat menggunakan header `x-api-key` (kompatibel dengan Anthropic SDK):
+
+```bash
+curl https://api.lemondata.cc/v1/messages \
+  -H "x-api-key: sk-your-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+<Note>
+  Header `x-api-key` hanya didukung pada endpoint `/v1/messages` dan `/v1/messages/count_tokens`. Endpoint lainnya memerlukan header `Authorization: Bearer`.
+</Note>
+
+## Respons Error
+
+| Kode Status | Tipe | Kode | Deskripsi |
+|-------------|------|------|-------------|
+| 401 | `invalid_request_error` | `invalid_api_key` | API key hilang atau tidak valid |
+| 401 | `invalid_request_error` | `expired_api_key` | API key telah dicabut |
+| 402 | `insufficient_quota` | `insufficient_quota` | Saldo akun tidak mencukupi |
+| 402 | `insufficient_quota` | `quota_exceeded` | Batas penggunaan API key tercapai |
+
+Contoh respons error:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```

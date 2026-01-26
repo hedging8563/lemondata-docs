@@ -1,0 +1,308 @@
+---
+title: "En İyi Uygulamalar"
+description: "Maliyet, performans ve güvenilirlik için LemonData API kullanımınızı optimize edin"
+---
+
+## Model Seçimi
+
+Doğru modeli seçmek, maliyet ve kaliteyi önemli ölçüde etkileyebilir.
+
+### Görev Bazlı Öneriler
+
+| Görev | Önerilen Modeller | Gerekçe |
+|------|-------------------|-----------|
+| **Basit Soru-Cevap** | `gpt-4o-mini`, `gemini-2.5-flash` | Hızlı, ucuz, yeterince iyi |
+| **Karmaşık akıl yürütme** | `o3`, `claude-opus-4-5`, `deepseek-r1` | Daha iyi mantık ve planlama |
+| **Kodlama** | `claude-sonnet-4-5`, `gpt-4o`, `deepseek-v3.2` | Kod için optimize edilmiş |
+| **Yaratıcı yazım** | `claude-sonnet-4-5`, `gpt-4o` | Daha iyi düzyazı kalitesi |
+| **Görüntü/Resim** | `gpt-4o`, `claude-sonnet-4-5`, `gemini-2.5-flash` | Yerel görüntü desteği |
+| **Uzun bağlam** | `gemini-2.5-pro`, `claude-sonnet-4-5` | 1M+ token penceresi |
+| **Maliyet duyarlı** | `gpt-4o-mini`, `gemini-2.5-flash`, `deepseek-v3.2` | En iyi değer |
+
+### Maliyet Kademeleri
+
+```
+$$$$ Premium: o3, claude-opus-4-5, gpt-4o
+$$$  Standart: claude-sonnet-4-5, gpt-4o
+$$   Bütçe:   gpt-4o-mini, gemini-2.5-flash
+$    Ekonomi:  deepseek-v3.2, deepseek-r1
+```
+
+## Maliyet Optimizasyonu
+
+### 1. Önce Daha Küçük Modelleri Kullanın
+
+```python
+def smart_query(question: str, complexity: str = "auto"):
+    """Basit görevler için daha ucuz modeller kullanın."""
+
+    if complexity == "simple":
+        model = "gpt-4o-mini"
+    elif complexity == "complex":
+        model = "gpt-4o"
+    else:
+        # Ucuz başlayın, gerekirse yükseltin
+        model = "gpt-4o-mini"
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": question}]
+    )
+    return response
+```
+
+### 2. max_tokens Değerini Ayarlayın
+
+Her zaman makul bir `max_tokens` sınırı belirleyin:
+
+```python
+# ❌ Kötü: Sınır yok, binlerce token oluşturabilir
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Summarize this article"}]
+)
+
+# ✅ İyi: Yanıt uzunluğunu sınırla
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Summarize this article"}],
+    max_tokens=500  # Bir özet için makul sınır
+)
+```
+
+### 3. Prompt'ları Optimize Edin
+
+```python
+# ❌ Ayrıntılı prompt (daha fazla giriş token'ı)
+prompt = """
+I would like you to please help me by analyzing the following text
+and providing a comprehensive summary of the main points. Please be
+thorough but also concise in your response. The text is as follows:
+{text}
+"""
+
+# ✅ Kısa ve öz prompt (daha az token)
+prompt = "Summarize the key points:\n{text}"
+```
+
+### 4. Önbelleğe Almayı Etkinleştirin
+
+[Anlamsal önbelleğe alma](/guides/caching) özelliğinden yararlanın:
+
+```python
+# Tekrarlanan benzer sorgular için önbelleğe alma büyük tasarruf sağlar
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is machine learning?"}],
+    temperature=0  # Deterministik = daha iyi önbellek isabeti
+)
+```
+
+### 5. Benzer İstekleri Gruplandırın (Batch)
+
+```python
+# ❌ Çok sayıda küçük istek
+for question in questions:
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": question}]
+    )
+
+# ✅ Daha az sayıda büyük istek
+combined_prompt = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": f"Answer each question:\n{combined_prompt}"}]
+)
+```
+
+## Performans Optimizasyonu
+
+### 1. Kullanıcı Deneyimi (UX) için Streaming Kullanın
+
+Streaming (akış), algılanan performansı artırır:
+
+```python
+stream = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Write a long essay"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+### 2. Etkileşimli Kullanım için Hızlı Modeller Seçin
+
+| Kullanım Durumu | Önerilen | Gecikme |
+|----------|-------------|---------|
+| Sohbet Arayüzü | `gpt-4o-mini`, `gemini-2.5-flash` | ~200ms ilk token |
+| Sekme tamamlama | `claude-haiku-4-5` | ~150ms ilk token |
+| Arka plan işleme | `gpt-4o`, `claude-sonnet-4-5` | ~500ms ilk token |
+
+### 3. Zaman Aşımlarını (Timeout) Ayarlayın
+
+```python
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+    timeout=60.0  # 60 saniyelik zaman aşımı
+)
+```
+
+## Güvenilirlik
+
+### 1. Yeniden Denemeleri (Retry) Uygulayın
+
+```python
+import time
+from openai import RateLimitError, APIError
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError:
+            wait = 2 ** attempt
+            print(f"Rate limited, waiting {wait}s...")
+            time.sleep(wait)
+        except APIError as e:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(1)
+    raise Exception("Max retries exceeded")
+```
+
+### 2. Hataları Düzgün Bir Şekilde Yönetin
+
+```python
+from openai import APIError, AuthenticationError, RateLimitError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError:
+    # API anahtarını kontrol et
+    notify_admin("Invalid API key")
+except RateLimitError:
+    # Daha sonrası için sıraya al veya yedek kullan
+    add_to_queue(request)
+except APIError as e:
+    if e.status_code == 402:
+        notify_admin("Balance low")
+    elif e.status_code >= 500:
+        # Sunucu hatası, daha sonra tekrar dene
+        schedule_retry(request)
+```
+
+### 3. Yedek (Fallback) Modeller Kullanın
+
+```python
+FALLBACK_CHAIN = ["gpt-4o", "claude-sonnet-4-5", "gemini-2.5-flash"]
+
+def chat_with_fallback(messages):
+    for model in FALLBACK_CHAIN:
+        try:
+            return client.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+        except APIError:
+            continue
+    raise Exception("All models failed")
+```
+
+## Güvenlik
+
+### 1. API Anahtarlarını Koruyun
+
+```python
+# ❌ Anahtarları asla kodun içine gömmeyin
+client = OpenAI(api_key="sk-abc123...")
+
+# ✅ Ortam değişkenlerini kullanın
+import os
+client = OpenAI(api_key=os.environ["LEMONDATA_API_KEY"])
+```
+
+### 2. Kullanıcı Girişini Doğrulayın
+
+```python
+def validate_message(content: str) -> bool:
+    """API'ye göndermeden önce kullanıcı girişini doğrulayın."""
+    if len(content) > 100000:
+        raise ValueError("Message too long")
+    # Gerektiğinde diğer doğrulamaları ekleyin
+    return True
+```
+
+### 3. API Anahtarı Sınırlarını Belirleyin
+
+Aşağıdakiler için harcama limitli ayrı API anahtarları oluşturun:
+- Geliştirme/test
+- Üretim (Production)
+- Farklı uygulamalar
+
+## İzleme
+
+### 1. Kullanımı Takip Edin
+
+Panelinizi aşağıdakiler için düzenli olarak kontrol edin:
+- Modele göre token kullanımı
+- Maliyet dökümü
+- Önbellek isabet oranları
+- Hata oranları
+
+### 2. Önemli Metrikleri Günlüğe Kaydedin (Log)
+
+```python
+import logging
+
+response = client.chat.completions.create(...)
+
+logging.info({
+    "model": response.model,
+    "prompt_tokens": response.usage.prompt_tokens,
+    "completion_tokens": response.usage.completion_tokens,
+    "total_tokens": response.usage.total_tokens,
+})
+```
+
+### 3. Uyarılar Oluşturun
+
+Hizmet kesintisini önlemek için panelinizde düşük bakiye uyarıları yapılandırın.
+
+## Kontrol Listesi
+
+<AccordionGroup>
+  <Accordion title="Maliyet optimizasyonu">
+    - [ ] Her görev için uygun modelin kullanılması
+    - [ ] max_tokens sınırlarının belirlenmesi
+    - [ ] Prompt'ların kısa ve öz olması
+    - [ ] Uygun yerlerde önbelleğe almanın etkinleştirilmesi
+    - [ ] Benzer isteklerin gruplandırılması
+  </Accordion>
+
+  <Accordion title="Performans">
+    - [ ] Etkileşimli UX için streaming kullanımı
+    - [ ] Gerçek zamanlı kullanım için hızlı modeller
+    - [ ] Zaman aşımlarının yapılandırılması
+  </Accordion>
+
+  <Accordion title="Güvenilirlik">
+    - [ ] Yeniden deneme mantığının uygulanması
+    - [ ] Hata yönetiminin hazır olması
+    - [ ] Yedek modellerin yapılandırılması
+  </Accordion>
+
+  <Accordion title="Güvenlik">
+    - [ ] API anahtarlarının ortam değişkenlerinde tutulması
+    - [ ] Giriş doğrulaması
+    - [ ] Geliştirme/üretim için ayrı anahtarlar
+    - [ ] Harcama limitlerinin belirlenmesi
+  </Accordion>
+</AccordionGroup>

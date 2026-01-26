@@ -1,0 +1,292 @@
+---
+title: "チャット補完の作成"
+api: "POST /v1/chat/completions"
+description: "チャットメッセージに対する補完を作成します"
+---
+
+## リクエストボディ
+
+<ParamField body="model" type="string" required>
+  使用するモデルの ID。利用可能なオプションについては [Models](https://lemondata.cc/ja/models) を参照してください。
+</ParamField>
+
+<ParamField body="messages" type="array" required>
+  会話を構成するメッセージのリスト。
+
+  各メッセージオブジェクトには以下が含まれます：
+  - `role` (string): `system`、`user`、または `assistant`
+  - `content` (string | array): メッセージの内容
+</ParamField>
+
+<ParamField body="temperature" type="number" default="1">
+  0 から 2 の間のサンプリング温度。値が高いほど出力がランダムになります。
+</ParamField>
+
+<ParamField body="max_tokens" type="integer">
+  生成するトークンの最大数。
+</ParamField>
+
+<ParamField body="stream" type="boolean" default="false">
+  true の場合、メッセージの部分的な差分が SSE イベントとして送信されます。
+</ParamField>
+
+<ParamField body="stream_options" type="object">
+  ストリーミングのオプション。ストリームチャンクでトークン使用量を受け取るには `include_usage: true` を設定します。
+</ParamField>
+
+<ParamField body="top_p" type="number" default="1">
+  核サンプリング（Nucleus sampling）パラメータ。これまたは temperature のいずれか一方のみを変更することをお勧めします。
+</ParamField>
+
+<ParamField body="frequency_penalty" type="number" default="0">
+  -2.0 から 2.0 の間の数値。正の値は、繰り返されるトークンにペナルティを課します。
+</ParamField>
+
+<ParamField body="presence_penalty" type="number" default="0">
+  -2.0 から 2.0 の間の数値。正の値は、既にテキスト内に存在するトークンにペナルティを課します。
+</ParamField>
+
+<ParamField body="stop" type="string | array">
+  API がトークンの生成を停止する最大 4 つのシーケンス。
+</ParamField>
+
+<ParamField body="tools" type="array">
+  モデルが呼び出す可能性のあるツールのリスト（function calling）。
+</ParamField>
+
+<ParamField body="tool_choice" type="string | object">
+  モデルがツールをどのように使用するかを制御します。オプション：`auto`、`none`、`required`、または特定のツールオブジェクト。
+</ParamField>
+
+<ParamField body="parallel_tool_calls" type="boolean" default="true">
+  並列関数呼び出しを有効にするかどうか。関数を順次呼び出す場合は false に設定します。
+</ParamField>
+
+<ParamField body="max_completion_tokens" type="integer">
+  補完の最大トークン数。max_tokens の代替であり、o1/o3 などの新しいモデルで推奨されます。
+</ParamField>
+
+<ParamField body="reasoning_effort" type="string">
+  o1/o3 モデルの推論の取り組み（Reasoning effort）。オプション：`low`、`medium`、`high`。
+</ParamField>
+
+<ParamField body="seed" type="integer">
+  決定論的なサンプリングのためのランダムシード。
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  生成する補完の数（1-128）。
+</ParamField>
+
+<ParamField body="logprobs" type="boolean">
+  対数確率を返すかどうか。
+</ParamField>
+
+<ParamField body="top_logprobs" type="integer">
+  返される上位の対数確率の数（0-20）。`logprobs: true` が必要です。
+</ParamField>
+
+<ParamField body="top_k" type="integer">
+  Top-K サンプリングパラメータ（Anthropic/Gemini モデル用）。
+</ParamField>
+
+<ParamField body="response_format" type="object">
+  レスポンス形式の指定。JSON モードの場合は `{"type": "json_object"}` を、構造化出力の場合は `{"type": "json_schema", "json_schema": {...}}` を使用します。
+</ParamField>
+
+<ParamField body="logit_bias" type="object">
+  特定のトークンが出現する可能性を変更します。トークン ID（文字列として）を -100 から 100 のバイアス値にマッピングします。
+</ParamField>
+
+<ParamField body="user" type="string">
+  不正利用監視のためにエンドユーザーを表す一意の識別子。
+</ParamField>
+
+<ParamField body="cache_control" type="object">
+  LemonData のキャッシュ制御オプション。
+
+  - `type` (string): キャッシュ戦略 - `default`、`no_cache`、`no_store`、`response_only`、`semantic_only`
+  - `max_age` (integer): 秒単位のキャッシュ TTL（最大 86400）
+</ParamField>
+
+## レスポンス
+
+<ResponseField name="id" type="string">
+  補完の一意の識別子。
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  常に `chat.completion`。
+</ResponseField>
+
+<ResponseField name="created" type="integer">
+  補完が作成された時の Unix タイムスタンプ。
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  補完に使用されたモデル。
+</ResponseField>
+
+<ResponseField name="choices" type="array">
+  補完の選択肢のリスト。
+
+  各選択肢には以下が含まれます：
+  - `index` (integer): 選択肢のインデックス
+  - `message` (object): 生成されたメッセージ
+  - `finish_reason` (string): モデルが停止した理由（`stop`、`length`、`tool_calls`）
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  トークン使用統計。
+
+  - `prompt_tokens` (integer): プロンプト内のトークン数
+  - `completion_tokens` (integer): 補完内のトークン数
+  - `total_tokens` (integer): 使用された合計トークン数
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/chat/completions" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Hello!"}
+    ],
+    "temperature": 0.7,
+    "max_tokens": 1000
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ],
+    temperature=0.7,
+    max_tokens=1000
+)
+
+print(response.choices[0].message.content)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Hello!' }
+  ],
+  temperature: 0.7,
+  max_tokens: 1000
+});
+
+console.log(response.choices[0].message.content);
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateChatCompletion(
+        context.Background(),
+        openai.ChatCompletionRequest{
+            Model: "gpt-4o",
+            Messages: []openai.ChatCompletionMessage{
+                {Role: openai.ChatMessageRoleSystem, Content: "You are a helpful assistant."},
+                {Role: openai.ChatMessageRoleUser, Content: "Hello!"},
+            },
+            Temperature: 0.7,
+            MaxTokens:   1000,
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'gpt-4o',
+        'messages' => [
+            ['role' => 'system', 'content' => 'You are a helpful assistant.'],
+            ['role' => 'user', 'content' => 'Hello!']
+        ],
+        'temperature' => 0.7,
+        'max_tokens' => 1000
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['choices'][0]['message']['content'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1706000000,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello! How can I help you today?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 9,
+    "total_tokens": 29
+  }
+}
+```
+</ResponseExample>

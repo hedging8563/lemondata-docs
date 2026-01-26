@@ -1,0 +1,245 @@
+---
+title: "Obtenir le statut de la vidéo"
+api: "GET /v1/videos/generations/{id}"
+description: "Récupère le statut et le résultat d'une tâche de génération de vidéo"
+---
+
+## Paramètres de chemin
+
+<ParamField path="task_id" type="string" required>
+  L'ID de tâche retourné par la requête de création de vidéo.
+</ParamField>
+
+## Réponse
+
+<ResponseField name="task_id" type="string">
+  Identifiant de la tâche.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Statut de la tâche : `pending`, `processing`, `completed`, `failed`.
+</ResponseField>
+
+<ResponseField name="progress" type="number">
+  Pourcentage de progression (0-100).
+</ResponseField>
+
+<ResponseField name="video_url" type="string">
+  URL de la vidéo générée (une fois terminée).
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Message d'erreur (en cas d'échec).
+</ResponseField>
+
+<ResponseField name="created_at" type="integer">
+  Horodatage de création.
+</ResponseField>
+
+<ResponseField name="completed_at" type="integer">
+  Horodatage de fin (une fois terminée).
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl "https://api.lemondata.cc/v1/videos/generations/video_abc123" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+import time
+
+task_id = "video_abc123"
+
+while True:
+    response = requests.get(
+        f"https://api.lemondata.cc/v1/videos/generations/{task_id}",
+        headers={"Authorization": "Bearer sk-your-api-key"}
+    )
+
+    data = response.json()
+    print(f"Status: {data['status']}, Progress: {data.get('progress', 0)}%")
+
+    if data["status"] == "completed":
+        print(f"Video URL: {data['video_url']}")
+        break
+    elif data["status"] == "failed":
+        print(f"Error: {data['error']}")
+        break
+
+    time.sleep(5)  # Poll every 5 seconds
+```
+
+```javascript JavaScript
+const taskId = 'video_abc123';
+
+async function pollForVideo() {
+  while (true) {
+    const response = await fetch(
+      `https://api.lemondata.cc/v1/videos/generations/${taskId}`,
+      { headers: { 'Authorization': 'Bearer sk-your-api-key' } }
+    );
+
+    const data = await response.json();
+    console.log(`Status: ${data.status}, Progress: ${data.progress || 0}%`);
+
+    if (data.status === 'completed') {
+      console.log(`Video URL: ${data.video_url}`);
+      return data.video_url;
+    } else if (data.status === 'failed') {
+      throw new Error(data.error);
+    }
+
+    await new Promise(r => setTimeout(r, 5000));
+  }
+}
+```
+
+```go Go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "time"
+)
+
+func main() {
+    taskID := "video_abc123"
+
+    for {
+        req, _ := http.NewRequest("GET",
+            fmt.Sprintf("https://api.lemondata.cc/v1/videos/generations/%s", taskID), nil)
+        req.Header.Set("Authorization", "Bearer sk-your-api-key")
+
+        client := &http.Client{}
+        resp, _ := client.Do(req)
+
+        var result map[string]interface{}
+        json.NewDecoder(resp.Body).Decode(&result)
+        resp.Body.Close()
+
+        fmt.Printf("Status: %s, Progress: %.0f%%\n", result["status"], result["progress"])
+
+        if result["status"] == "completed" {
+            fmt.Printf("Video URL: %s\n", result["video_url"])
+            break
+        } else if result["status"] == "failed" {
+            fmt.Printf("Error: %s\n", result["error"])
+            break
+        }
+
+        time.Sleep(5 * time.Second)
+    }
+}
+```
+
+```php PHP
+<?php
+$taskId = 'video_abc123';
+
+while (true) {
+    $ch = curl_init("https://api.lemondata.cc/v1/videos/generations/{$taskId}");
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer sk-your-api-key'
+        ]
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    $data = json_decode($response, true);
+    echo "Status: {$data['status']}, Progress: " . ($data['progress'] ?? 0) . "%\n";
+
+    if ($data['status'] === 'completed') {
+        echo "Video URL: {$data['video_url']}\n";
+        break;
+    } elseif ($data['status'] === 'failed') {
+        echo "Error: {$data['error']}\n";
+        break;
+    }
+
+    sleep(5);
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response (pending)
+{
+  "task_id": "video_abc123",
+  "status": "pending",
+  "progress": 0,
+  "model": "kling-v2.6-pro",
+  "created_at": 1706000000
+}
+```
+
+```json Response (processing)
+{
+  "task_id": "video_abc123",
+  "status": "processing",
+  "progress": 45,
+  "model": "kling-v2.6-pro",
+  "created_at": 1706000000
+}
+```
+
+```json Response (completed)
+{
+  "task_id": "video_abc123",
+  "status": "completed",
+  "progress": 100,
+  "video_url": "https://cdn.lemondata.cc/videos/abc123.mp4",
+  "model": "kling-v2.6-pro",
+  "created_at": 1706000000,
+  "completed_at": 1706000060
+}
+```
+
+```json Response (failed)
+{
+  "task_id": "video_abc123",
+  "status": "failed",
+  "error": "Content policy violation",
+  "model": "kling-v2.6-pro",
+  "created_at": 1706000000
+}
+```
+</ResponseExample>
+
+## Bonnes pratiques de polling
+
+- Effectuez un polling toutes les 5 à 10 secondes
+- Implémentez un backoff exponentiel pour les tâches longues
+- Définissez un délai d'attente maximum (ex : 10 minutes)
+- Gérez le statut `failed` de manière appropriée
+
+```python
+import time
+
+def wait_for_video(task_id, max_wait=600, interval=5):
+    """Wait for video with timeout."""
+    start = time.time()
+
+    while time.time() - start < max_wait:
+        response = requests.get(
+            f"https://api.lemondata.cc/v1/videos/generations/{task_id}",
+            headers={"Authorization": "Bearer sk-your-api-key"}
+        )
+        data = response.json()
+
+        if data["status"] == "completed":
+            return data["video_url"]
+        elif data["status"] == "failed":
+            raise Exception(data.get("error", "Video generation failed"))
+
+        time.sleep(interval)
+
+    raise TimeoutError("Video generation timed out")
+```

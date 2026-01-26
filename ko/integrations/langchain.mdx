@@ -1,0 +1,231 @@
+---
+title: "LangChain"
+description: "LemonData를 LangChain과 통합하기"
+---
+
+## 개요
+
+LangChain은 LLM 애플리케이션 구축을 위한 인기 있는 프레임워크입니다. LemonData는 LangChain의 OpenAI 통합과 원활하게 작동합니다.
+
+## 설치
+
+```bash
+pip install langchain langchain-openai
+```
+
+## 기본 설정
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    model="gpt-4o",
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = llm.invoke("Hello, how are you?")
+print(response.content)
+```
+
+## 다양한 모델 사용하기
+
+모든 LemonData 모델에 액세스할 수 있습니다:
+
+```python
+# OpenAI GPT-4o
+gpt4 = ChatOpenAI(
+    model="gpt-4o",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# Anthropic Claude
+claude = ChatOpenAI(
+    model="claude-sonnet-4-5",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# Google Gemini
+gemini = ChatOpenAI(
+    model="gemini-2.5-flash",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# DeepSeek
+deepseek = ChatOpenAI(
+    model="deepseek-r1",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+```
+
+## 메시지 기록을 포함한 채팅
+
+```python
+from langchain_core.messages import HumanMessage, SystemMessage
+
+messages = [
+    SystemMessage(content="You are a helpful assistant."),
+    HumanMessage(content="What is the capital of France?")
+]
+
+response = llm.invoke(messages)
+print(response.content)
+```
+
+## 스트리밍
+
+```python
+for chunk in llm.stream("Write a poem about coding"):
+    print(chunk.content, end="", flush=True)
+```
+
+## 비동기 사용
+
+```python
+import asyncio
+
+async def main():
+    response = await llm.ainvoke("Hello!")
+    print(response.content)
+
+asyncio.run(main())
+```
+
+## 체인(Chains)
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that translates {input_language} to {output_language}."),
+    ("human", "{text}")
+])
+
+chain = prompt | llm | StrOutputParser()
+
+result = chain.invoke({
+    "input_language": "English",
+    "output_language": "French",
+    "text": "Hello, how are you?"
+})
+print(result)
+```
+
+## RAG (검색 증강 생성)
+
+```python
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+
+# Embeddings
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# Create vector store
+texts = ["LemonData supports 300+ AI models", "API is OpenAI compatible"]
+vectorstore = FAISS.from_texts(texts, embeddings)
+retriever = vectorstore.as_retriever()
+
+# RAG chain
+template = """Answer based on context:
+{context}
+
+Question: {question}
+"""
+prompt = ChatPromptTemplate.from_template(template)
+
+rag_chain = (
+    {"context": retriever, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+)
+
+response = rag_chain.invoke("How many models does LemonData support?")
+print(response.content)
+```
+
+## 에이전트(Agents)
+
+<Note>
+  LangChain의 에이전트 API는 계속 발전하고 있습니다. 새로운 프로젝트의 경우, 더 유연한 에이전트 아키텍처를 위해 [LangGraph](https://python.langchain.com/docs/langgraph) 사용을 고려해 보세요.
+</Note>
+
+```python
+from langchain.agents import create_openai_tools_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import tool
+
+@tool
+def search(query: str) -> str:
+    """Search for information."""
+    return f"Search results for: {query}"
+
+tools = [search]
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant with access to tools."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}")
+])
+
+agent = create_openai_tools_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools)
+
+result = executor.invoke({"input": "Search for LemonData pricing"})
+print(result["output"])
+```
+
+## 환경 변수
+
+더 깔끔한 코드를 위해 환경 변수를 사용하세요:
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+```
+
+```python
+from langchain_openai import ChatOpenAI
+
+# 환경 변수를 자동으로 사용합니다
+llm = ChatOpenAI(model="gpt-4o")
+```
+
+## 콜백 및 트레이싱
+
+```python
+from langchain_core.callbacks import StdOutCallbackHandler
+
+llm = ChatOpenAI(
+    model="gpt-4o",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+    callbacks=[StdOutCallbackHandler()]
+)
+```
+
+## 모범 사례
+
+<AccordionGroup>
+  <Accordion title="비용에 적합한 모델 사용">
+    체인의 단순한 작업에는 더 저렴한 모델(GPT-4o-mini)을 사용하세요.
+  </Accordion>
+
+  <Accordion title="재시도 구현">
+    LangChain에는 일시적인 오류에 대한 재시도 로직이 내장되어 있습니다.
+  </Accordion>
+
+  <Accordion title="토큰 사용량 모니터링">
+    콜백을 사용하여 토큰 소비를 추적하세요.
+  </Accordion>
+</AccordionGroup>

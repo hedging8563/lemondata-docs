@@ -1,0 +1,266 @@
+---
+title: "✨ 多格式 API"
+description: "只需一个 API 密钥，即可使用 OpenAI、Anthropic 或 Gemini 格式"
+---
+
+## 概览
+
+LemonData 支持通过单个 API 密钥使用 **三种原生 API 格式**。选择最适合您用例的格式——无需更改配置。
+
+<CardGroup cols={3}>
+  <Card title="OpenAI 格式" icon="plug">
+    `/v1/chat/completions`
+    标准格式，兼容性最广
+  </Card>
+  <Card title="Anthropic 格式" icon="message">
+    `/v1/messages`
+    深度思考，原生 Claude 功能
+  </Card>
+  <Card title="Gemini 格式" icon="sparkles">
+    `/v1beta/models/:model:generateContent`
+    Google 生态系统集成
+  </Card>
+</CardGroup>
+
+## 为什么选择多格式？
+
+| 优势 | 描述 |
+|---------|-------------|
+| **无需切换 SDK** | 使用您偏好的 SDK 即可调用任何模型 |
+| **原生功能** | 访问特定格式的功能 |
+| **轻松迁移** | 只需更改 base URL 即可从官方 API 切换 |
+| **统一计费** | 一个账号，一个 API 密钥，支持所有格式 |
+
+## 格式对比
+
+| 功能 | OpenAI | Anthropic | Gemini |
+|---------|--------|-----------|--------|
+| **Endpoint** | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/:model:generateContent` |
+| **认证请求头** | `Authorization: Bearer` | `x-api-key` | `Authorization: Bearer` |
+| **系统提示词** | 在 messages 数组中 | 独立的 `system` 字段 | 在 `systemInstruction` 中 |
+| **深度思考 (Extended Thinking)** | ❌ | ✅ | ❌ |
+| **流式传输** | ✅ SSE | ✅ SSE | ✅ SSE |
+| **工具调用** | ✅ | ✅ | ✅ |
+| **视觉能力** | ✅ | ✅ | ✅ |
+
+## OpenAI 格式
+
+兼容性最广泛的格式。适用于所有 LemonData 模型。
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# 适用于任何模型
+response = client.chat.completions.create(
+    model="claude-sonnet-4-5",  # 通过 OpenAI 格式调用 Claude
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+**最适用于：**
+- 通用场景
+- 现有的 OpenAI SDK 集成
+- 最大化兼容性
+
+## Anthropic 格式
+
+原生 Anthropic Messages API。使用 Claude 特定功能（如深度思考）时必选。
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc"  # 无需 /v1 后缀！
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    system="You are a helpful assistant.",  # 独立的 system 字段
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+### 深度思考 (Claude Opus 4.5)
+
+仅在 Anthropic 格式中可用：
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex problem..."}]
+)
+
+# 访问思考过程
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Answer: {block.text}")
+```
+
+**最适用于：**
+- Claude 特定功能
+- 深度思考模式
+- 原生 Anthropic SDK 用户
+
+## Gemini 格式
+
+原生 Google Gemini API 格式，用于 Google 生态系统集成。
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{
+      "parts": [{"text": "Hello!"}]
+    }],
+    "systemInstruction": {
+      "parts": [{"text": "You are a helpful assistant."}]
+    }
+  }'
+```
+
+### 流式传输
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{"parts": [{"text": "Write a story"}]}]
+  }'
+```
+
+**最适用于：**
+- Google Cloud 集成
+- 现有的 Gemini SDK 代码
+- 原生 Gemini 功能
+
+## 选择合适的格式
+
+```mermaid
+graph TD
+    A[哪种格式？] --> B{需要 Claude 深度思考？}
+    B -->|是| C[使用 Anthropic 格式]
+    B -->|否| D{现有代码库？}
+    D -->|OpenAI SDK| E[使用 OpenAI 格式]
+    D -->|Anthropic SDK| C
+    D -->|Gemini SDK| F[使用 Gemini 格式]
+    D -->|新项目| E
+```
+
+## 迁移指南
+
+### 从 OpenAI 官方 API 迁移
+
+```python
+# 迁移前 (OpenAI)
+client = OpenAI(api_key="sk-openai-key")
+
+# 迁移后 (LemonData)
+client = OpenAI(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"  # 添加此行
+)
+# 大功告成！同样的代码即可运行
+```
+
+### 从 Anthropic 官方 API 迁移
+
+```python
+# 迁移前 (Anthropic)
+client = Anthropic(api_key="sk-ant-key")
+
+# 迁移后 (LemonData)
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"  # 添加此行（无需 /v1！）
+)
+```
+
+### 从 Google AI Studio 迁移
+
+```python
+# 迁移前 (Google)
+import google.generativeai as genai
+genai.configure(api_key="google-api-key")
+
+# 迁移后 (LemonData) - 使用 REST API
+import requests
+
+response = requests.post(
+    "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent",
+    headers={"Authorization": "Bearer sk-lemondata-key"},
+    json={"contents": [{"parts": [{"text": "Hello"}]}]}
+)
+```
+
+## 跨模型兼容性
+
+LemonData 的魅力在于：可以使用 **任何 SDK** 调用 **任何模型**。网关会自动处理格式转换。
+
+### 任意 SDK → 任意模型
+
+```python
+# 使用 Anthropic SDK 调用 GPT-4o（自动转换为 OpenAI 格式）
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"
+)
+
+response = client.messages.create(
+    model="gpt-4o",  # ✅ 可用！已自动转换
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# 同一个 SDK，不同的模型 - 无需更改代码
+response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ 可用！
+response = client.messages.create(model="deepseek-r1", ...)       # ✅ 可用！
+```
+
+### OpenAI SDK → 所有模型
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
+
+# 以下模型均可使用同一个 SDK 调用：
+response = client.chat.completions.create(model="gpt-4o", ...)
+response = client.chat.completions.create(model="claude-sonnet-4-5", ...)
+response = client.chat.completions.create(model="gemini-2.5-flash", ...)
+```
+
+## 行业对比
+
+| 平台 | OpenAI 格式 | Anthropic 格式 | Gemini 格式 | Responses API |
+|----------|:---:|:---:|:---:|:---:|
+| **LemonData** | ✅ 所有模型 | ✅ 所有模型 | ✅ 所有模型 | ✅ 所有模型 |
+| OpenRouter | ✅ 所有模型 | ❌ | ❌ | ❌ |
+| Together AI | ✅ 所有模型 | ❌ | ❌ | ❌ |
+| Fireworks | ✅ 所有模型 | ❌ | ❌ | ❌ |
+
+<Note>
+虽然跨格式支持大多数功能，但特定格式的功能（如 Anthropic 深度思考）仍需要使用原生格式。
+</Note>

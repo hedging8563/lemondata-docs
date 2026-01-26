@@ -1,0 +1,308 @@
+---
+title: "Praktik Terbaik"
+description: "Optimalkan penggunaan LemonData API Anda untuk biaya, performa, dan keandalan"
+---
+
+## Pemilihan Model
+
+Memilih model yang tepat dapat berdampak signifikan pada biaya dan kualitas.
+
+### Rekomendasi Berdasarkan Tugas
+
+| Tugas | Model yang Direkomendasikan | Alasan |
+|------|-------------------|-----------|
+| **Tanya Jawab Sederhana** | `gpt-4o-mini`, `gemini-2.5-flash` | Cepat, murah, cukup baik |
+| **Penalaran kompleks** | `o3`, `claude-opus-4-5`, `deepseek-r1` | Logika dan perencanaan yang lebih baik |
+| **Pemrograman** | `claude-sonnet-4-5`, `gpt-4o`, `deepseek-v3.2` | Dioptimalkan untuk kode |
+| **Penulisan kreatif** | `claude-sonnet-4-5`, `gpt-4o` | Kualitas prosa yang lebih baik |
+| **Visi/Gambar** | `gpt-4o`, `claude-sonnet-4-5`, `gemini-2.5-flash` | Dukungan visi bawaan |
+| **Konteks panjang** | `gemini-2.5-pro`, `claude-sonnet-4-5` | Jendela token 1M+ |
+| **Sensitif terhadap biaya** | `gpt-4o-mini`, `gemini-2.5-flash`, `deepseek-v3.2` | Nilai terbaik |
+
+### Tingkatan Biaya
+
+```
+$$$$ Premium: o3, claude-opus-4-5, gpt-4o
+$$$  Standard: claude-sonnet-4-5, gpt-4o
+$$   Budget:   gpt-4o-mini, gemini-2.5-flash
+$    Economy:  deepseek-v3.2, deepseek-r1
+```
+
+## Optimasi Biaya
+
+### 1. Gunakan Model yang Lebih Kecil Terlebih Dahulu
+
+```python
+def smart_query(question: str, complexity: str = "auto"):
+    """Gunakan model yang lebih murah untuk tugas-tugas sederhana."""
+
+    if complexity == "simple":
+        model = "gpt-4o-mini"
+    elif complexity == "complex":
+        model = "gpt-4o"
+    else:
+        # Mulai dengan yang murah, tingkatkan jika diperlukan
+        model = "gpt-4o-mini"
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": question}]
+    )
+    return response
+```
+
+### 2. Atur max_tokens
+
+Selalu atur batas `max_tokens` yang wajar:
+
+```python
+# ❌ Buruk: Tanpa batas, dapat menghasilkan ribuan token
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Summarize this article"}]
+)
+
+# ✅ Baik: Batasi panjang respons
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Summarize this article"}],
+    max_tokens=500  # Batas yang wajar untuk sebuah ringkasan
+)
+```
+
+### 3. Optimalkan Prompt
+
+```python
+# ❌ Prompt bertele-tele (lebih banyak token input)
+prompt = """
+I would like you to please help me by analyzing the following text
+and providing a comprehensive summary of the main points. Please be
+thorough but also concise in your response. The text is as follows:
+{text}
+"""
+
+# ✅ Prompt ringkas (lebih sedikit token)
+prompt = "Summarize the key points:\n{text}"
+```
+
+### 4. Aktifkan Caching
+
+Manfaatkan [semantic caching](/guides/caching):
+
+```python
+# Untuk kueri serupa yang berulang, caching memberikan penghematan besar
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is machine learning?"}],
+    temperature=0  # Deterministik = hit cache yang lebih baik
+)
+```
+
+### 5. Batch Permintaan Serupa
+
+```python
+# ❌ Banyak permintaan kecil
+for question in questions:
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": question}]
+    )
+
+# ✅ Lebih sedikit permintaan yang lebih besar
+combined_prompt = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": f"Answer each question:\n{combined_prompt}"}]
+)
+```
+
+## Optimasi Performa
+
+### 1. Gunakan Streaming untuk UX
+
+Streaming meningkatkan persepsi performa:
+
+```python
+stream = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Write a long essay"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+### 2. Pilih Model Cepat untuk Penggunaan Interaktif
+
+| Kasus Penggunaan | Direkomendasikan | Latensi |
+|----------|-------------|---------|
+| UI Chat | `gpt-4o-mini`, `gemini-2.5-flash` | ~200ms token pertama |
+| Penyelesaian tab | `claude-haiku-4-5` | ~150ms token pertama |
+| Pemrosesan latar belakang | `gpt-4o`, `claude-sonnet-4-5` | ~500ms token pertama |
+
+### 3. Atur Timeout
+
+```python
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+    timeout=60.0  # Timeout 60 detik
+)
+```
+
+## Keandalan
+
+### 1. Implementasikan Retry
+
+```python
+import time
+from openai import RateLimitError, APIError
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError:
+            wait = 2 ** attempt
+            print(f"Terkena rate limit, menunggu {wait} detik...")
+            time.sleep(wait)
+        except APIError as e:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(1)
+    raise Exception("Batas maksimal percobaan terlampaui")
+```
+
+### 2. Tangani Error dengan Baik
+
+```python
+from openai import APIError, AuthenticationError, RateLimitError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError:
+    # Periksa API key
+    notify_admin("API key tidak valid")
+except RateLimitError:
+    # Antrekan untuk nanti atau gunakan cadangan
+    add_to_queue(request)
+except APIError as e:
+    if e.status_code == 402:
+        notify_admin("Saldo rendah")
+    elif e.status_code >= 500:
+        # Error server, coba lagi nanti
+        schedule_retry(request)
+```
+
+### 3. Gunakan Model Fallback
+
+```python
+FALLBACK_CHAIN = ["gpt-4o", "claude-sonnet-4-5", "gemini-2.5-flash"]
+
+def chat_with_fallback(messages):
+    for model in FALLBACK_CHAIN:
+        try:
+            return client.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+        except APIError:
+            continue
+    raise Exception("Semua model gagal")
+```
+
+## Keamanan
+
+### 1. Lindungi API Key
+
+```python
+# ❌ Jangan pernah melakukan hardcode pada key
+client = OpenAI(api_key="sk-abc123...")
+
+# ✅ Gunakan variabel lingkungan
+import os
+client = OpenAI(api_key=os.environ["LEMONDATA_API_KEY"])
+```
+
+### 2. Validasi Input Pengguna
+
+```python
+def validate_message(content: str) -> bool:
+    """Validasi input pengguna sebelum mengirim ke API."""
+    if len(content) > 100000:
+        raise ValueError("Pesan terlalu panjang")
+    # Tambahkan validasi lain sesuai kebutuhan
+    return True
+```
+
+### 3. Atur Batas API Key
+
+Buat API key terpisah dengan batas pengeluaran untuk:
+- Pengembangan/pengujian
+- Produksi
+- Aplikasi yang berbeda
+
+## Pemantauan
+
+### 1. Lacak Penggunaan
+
+Periksa dasbor Anda secara berkala untuk:
+- Penggunaan token berdasarkan model
+- Rincian biaya
+- Tingkat hit cache
+- Tingkat error
+
+### 2. Catat Metrik Penting
+
+```python
+import logging
+
+response = client.chat.completions.create(...)
+
+logging.info({
+    "model": response.model,
+    "prompt_tokens": response.usage.prompt_tokens,
+    "completion_tokens": response.usage.completion_tokens,
+    "total_tokens": response.usage.total_tokens,
+})
+```
+
+### 3. Siapkan Peringatan
+
+Konfigurasikan peringatan saldo rendah di dasbor Anda untuk menghindari gangguan layanan.
+
+## Daftar Periksa
+
+<AccordionGroup>
+  <Accordion title="Optimasi biaya">
+    - [ ] Menggunakan model yang sesuai untuk setiap tugas
+    - [ ] Mengatur batas max_tokens
+    - [ ] Prompt ringkas
+    - [ ] Caching diaktifkan jika sesuai
+    - [ ] Melakukan batching pada permintaan serupa
+  </Accordion>
+
+  <Accordion title="Performa">
+    - [ ] Streaming untuk UX interaktif
+    - [ ] Model cepat untuk penggunaan real-time
+    - [ ] Timeout dikonfigurasi
+  </Accordion>
+
+  <Accordion title="Keandalan">
+    - [ ] Logika retry diimplementasikan
+    - [ ] Penanganan error tersedia
+    - [ ] Model fallback dikonfigurasi
+  </Accordion>
+
+  <Accordion title="Keamanan">
+    - [ ] API key dalam variabel lingkungan
+    - [ ] Validasi input
+    - [ ] Key terpisah untuk dev/prod
+    - [ ] Batas pengeluaran diatur
+  </Accordion>
+</AccordionGroup>

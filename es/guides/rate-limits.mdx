@@ -1,0 +1,159 @@
+---
+title: "Límites de Tasa"
+description: "Comprender y gestionar los límites de tasa"
+---
+
+## Resumen
+
+LemonData implementa límites de tasa para garantizar un uso justo y la estabilidad de la plataforma. Los límites varían según el nivel de la cuenta.
+
+## Niveles de Límites de Tasa
+
+| Nivel | Solicitudes/min | Descripción |
+|------|-------------|-------------|
+| **User** | 60 | Nivel predeterminado para todas las cuentas |
+| **Partner** | 300 | Para socios de integración |
+| **VIP** | 1,000 | Usuarios de alto volumen |
+
+<Note>
+  Los límites de tasa están sujetos a cambios. Contacte a support@lemondata.cc para límites personalizados.
+</Note>
+
+## Encabezados de Límites de Tasa
+
+Cada respuesta de la API incluye información sobre los límites de tasa:
+
+```
+X-RateLimit-Limit: 60          # Your limit per minute
+X-RateLimit-Remaining: 55      # Requests remaining
+X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
+```
+
+## Límite de Tasa Excedido
+
+Cuando exceda el límite, recibirá una respuesta `429`:
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+Con un encabezado adicional:
+```
+Retry-After: 60  # Seconds to wait before retrying
+```
+
+## Gestión de Límites de Tasa
+
+### Backoff Exponencial
+
+Implemente un backoff exponencial para reintentos automáticos:
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### Cola de Solicitudes
+
+Para aplicaciones de alto volumen, implemente una cola de solicitudes:
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_minute=60):
+        self.rpm = requests_per_minute
+        self.interval = 60 / requests_per_minute
+        self.last_request = 0
+
+    async def request(self, messages):
+        # Wait if needed to respect rate limit
+        now = asyncio.get_event_loop().time()
+        wait_time = max(0, self.last_request + self.interval - now)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        self.last_request = asyncio.get_event_loop().time()
+        return await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+```
+
+### Procesamiento por Lotes
+
+Para operaciones masivas, procese en lotes con retrasos:
+
+```python
+def process_batch(items, batch_size=50, delay=1):
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        for item in batch:
+            result = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": item}]
+            )
+            results.append(result)
+        time.sleep(delay)  # Pause between batches
+    return results
+```
+
+## Mejores Prácticas
+
+<AccordionGroup>
+  <Accordion title="Monitoree su uso">
+    Rastree los encabezados de límites de tasa para mantenerse por debajo de los límites de manera proactiva.
+  </Accordion>
+
+  <Accordion title="Implemente el almacenamiento en caché">
+    Almacene en caché las respuestas para solicitudes idénticas para reducir las llamadas a la API.
+  </Accordion>
+
+  <Accordion title="Utilice modelos apropiados">
+    Los modelos más rápidos (como gpt-4o-mini) permiten un mayor rendimiento.
+  </Accordion>
+
+  <Accordion title="Contáctenos para límites más altos">
+    Si necesita límites más altos, contacte a support@lemondata.cc.
+  </Accordion>
+</AccordionGroup>
+
+## Actualización de su Nivel
+
+Para solicitar una actualización de nivel:
+
+1. Inicie sesión en su [Dashboard](https://lemondata.cc/dashboard)
+2. Vaya a **Settings → Account**
+3. Contacte a soporte con su caso de uso
+
+O envíe un correo electrónico a support@lemondata.cc con:
+- El correo electrónico de su cuenta
+- Volumen de solicitudes esperado
+- Descripción del caso de uso

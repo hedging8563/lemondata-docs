@@ -1,0 +1,220 @@
+---
+title: "Vercel AI SDK"
+description: "React 및 Next.js 애플리케이션을 위해 LemonData를 Vercel AI SDK와 통합하세요"
+---
+
+## 개요
+
+Vercel AI SDK는 React, Next.js, Vue, Svelte 등을 사용하여 AI 기반 스트리밍 애플리케이션을 구축하기 위한 TypeScript 툴킷입니다. LemonData는 OpenAI 호환 제공업체를 통해 원활하게 작동합니다.
+
+## 설치
+
+```bash
+npm install ai @ai-sdk/openai
+```
+
+## 기본 설정
+
+```typescript
+import { createOpenAI } from '@ai-sdk/openai';
+
+const lemondata = createOpenAI({
+  apiKey: 'sk-your-lemondata-key',
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+## 텍스트 생성
+
+```typescript
+import { generateText } from 'ai';
+
+const { text } = await generateText({
+  model: lemondata('gpt-4o'),
+  prompt: 'What is LemonData?',
+});
+
+console.log(text);
+```
+
+## 스트리밍 텍스트
+
+```typescript
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: lemondata('gpt-4o'),
+  prompt: 'Write a poem about AI.',
+});
+
+for await (const textPart of result.textStream) {
+  process.stdout.write(textPart);
+}
+```
+
+## 채팅 메시지
+
+```typescript
+import { generateText } from 'ai';
+
+const { text } = await generateText({
+  model: lemondata('gpt-4o'),
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'What is the capital of France?' },
+  ],
+});
+```
+
+## 다양한 모델 사용하기
+
+```typescript
+// OpenAI GPT-4o
+const gpt4Response = await generateText({
+  model: lemondata('gpt-4o'),
+  prompt: 'Hello!',
+});
+
+// Anthropic Claude
+const claudeResponse = await generateText({
+  model: lemondata('claude-sonnet-4-5'),
+  prompt: 'Hello!',
+});
+
+// Google Gemini
+const geminiResponse = await generateText({
+  model: lemondata('gemini-2.5-flash'),
+  prompt: 'Hello!',
+});
+
+// DeepSeek
+const deepseekResponse = await generateText({
+  model: lemondata('deepseek-r1'),
+  prompt: 'Hello!',
+});
+```
+
+## Next.js API 라우트
+
+```typescript
+// app/api/chat/route.ts
+import { createOpenAI } from '@ai-sdk/openai';
+import { streamText } from 'ai';
+
+const lemondata = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  const result = streamText({
+    model: lemondata('gpt-4o'),
+    messages,
+  });
+
+  return result.toDataStreamResponse();
+}
+```
+
+## React 채팅 컴포넌트
+
+```tsx
+'use client';
+
+import { useChat } from 'ai/react';
+
+export default function Chat() {
+  const { messages, input, handleInputChange, handleSubmit } = useChat({
+    api: '/api/chat',
+  });
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id}>
+          {m.role}: {m.content}
+        </div>
+      ))}
+
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={handleInputChange} />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  );
+}
+```
+
+## 도구 호출 (Tool Calling)
+
+```typescript
+import { generateText, tool } from 'ai';
+import { z } from 'zod';
+
+const { text, toolCalls } = await generateText({
+  model: lemondata('gpt-4o'),
+  tools: {
+    weather: tool({
+      description: 'Get the weather in a location',
+      parameters: z.object({
+        location: z.string().describe('The location to get weather for'),
+      }),
+      execute: async ({ location }) => {
+        return { temperature: 72, condition: 'sunny' };
+      },
+    }),
+  },
+  prompt: 'What is the weather in San Francisco?',
+});
+```
+
+## 구조화된 출력
+
+```typescript
+import { generateObject } from 'ai';
+import { z } from 'zod';
+
+const { object } = await generateObject({
+  model: lemondata('gpt-4o'),
+  schema: z.object({
+    name: z.string(),
+    age: z.number(),
+    email: z.string().email(),
+  }),
+  prompt: 'Generate a fake user profile.',
+});
+
+console.log(object);
+```
+
+## 환경 변수
+
+```bash
+# .env.local
+LEMONDATA_API_KEY=sk-your-lemondata-key
+```
+
+```typescript
+const lemondata = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+## 권장 사항
+
+<AccordionGroup>
+  <Accordion title="더 나은 UX를 위해 스트리밍 사용">
+    실시간 피드백을 제공하기 위해 채팅 애플리케이션에는 항상 스트리밍을 사용하세요.
+  </Accordion>
+
+  <Accordion title="정교한 에러 처리">
+    React 컴포넌트에서 적절한 에러 경계(error boundaries)를 구현하세요.
+  </Accordion>
+
+  <Accordion title="API 키 보안">
+    클라이언트 측 코드에 API 키를 노출하지 마세요. 항상 서버 측 API 라우트를 사용하세요.
+  </Accordion>
+</AccordionGroup>
