@@ -226,8 +226,9 @@ const languagesConfig = languages.map(lang => ({
 }));
 
 // 构建新的 navigation 配置
-// 不保留 global anchors，让每个语言使用自己的翻译版本
+// 保留 global anchors 作为默认值，同时每个语言有自己的翻译版本
 docsJson.navigation = {
+  global: globalConfig,
   languages: languagesConfig
 };
 
