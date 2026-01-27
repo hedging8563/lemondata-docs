@@ -48,33 +48,38 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## 缓存 Header
+## 缓存控制
 
-### 请求 Header
+### 请求级别控制
 
-按请求控制缓存行为：
+使用请求体中的 `cache_control` 参数控制每个请求的缓存行为：
 
 ```bash
-# Skip cache lookup, always call the model
+# 跳过缓存查询，始终调用模型
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Cache-Control: no-cache" \
-  -d '{"model": "gpt-4o", "messages": [...]}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
 ```
 
-| Header | 值 | 效果 |
-|--------|-------|--------|
-| `Cache-Control: no-cache` | - | 跳过缓存，获取新鲜响应 |
-| `Cache-Control: no-store` | - | 不缓存此响应 |
+| 类型 | 效果 |
+|------|------|
+| `no_cache` | 跳过缓存查询，始终获取新鲜响应 |
+| `no_store` | 不将此响应存入缓存 |
+| `response_only` | 仅使用精确匹配缓存（跳过语义缓存） |
+| `semantic_only` | 仅使用语义缓存（跳过精确匹配） |
 
 ### 响应 Header
 
 每个响应都包含缓存状态：
 
 ```
-X-Cache: HIT           # Response served from cache
-X-Cache: MISS          # Fresh response from model
-X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
+X-Cache-Status: HIT    # 响应来自缓存
+X-Cache-Status: MISS   # 来自模型的新鲜响应
 ```
 
 ## 检查缓存状态
@@ -92,9 +97,9 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is 2+2?"}]
 )
 
-# Check cache status from response headers
-# (Available in raw HTTP response)
-print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+# 从响应头检查缓存状态
+# (在原始 HTTP 响应中可用)
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
 ```
 
 ## 缓存计费
@@ -110,25 +115,35 @@ print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
 
 ## 隐私控制
 
-### API Key 级别
+### 组织 / 用户级别
 
-在仪表板中为每个 API Key 配置缓存行为：
+在仪表板设置中配置缓存行为：
 
 | 模式 | 描述 |
 |------|-------------|
-| **Default** | 启用缓存，可能与相似请求共享 |
-| **No Share** | 启用缓存，但响应对您的账户私有 |
-| **Disabled** | 完全不缓存 |
+| **共享 (Shared)** | 启用缓存，响应可能跨用户共享（个人账户默认） |
+| **隔离 (Isolated)** | 启用缓存，但响应仅限您的组织私有（组织账户默认） |
+| **禁用 (Disabled)** | 完全不缓存 |
+
+其他可配置项：
+- **相似度阈值**：调整语义匹配灵敏度（默认：92%）
+- **自定义 TTL**：覆盖缓存过期时间
+- **排除模型**：为特定模型禁用缓存
 
 ### 请求级别
 
-按请求覆盖：
+使用 `cache_control` 参数按请求覆盖：
 
 ```bash
-# Disable caching for this request
+# 为此请求禁用缓存
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Cache-Control: no-store" \
-  -d '...'
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
 ```
 
 ## 缓存反馈
@@ -184,10 +199,10 @@ curl -X POST https://api.lemondata.cc/v1/cache/feedback \
 - **敏感数据**：机密信息
 
 ```python
-# For time-sensitive queries
+# 对于时间敏感的查询
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_headers={"Cache-Control": "no-cache"}
+    extra_body={"cache_control": {"type": "no_cache"}}
 )
 ```

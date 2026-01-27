@@ -48,33 +48,38 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## Header Cache
+## Kontrol Cache
 
-### Header Permintaan
+### Kontrol Tingkat Permintaan
 
-Kontrol perilaku caching per permintaan:
+Kontrol perilaku caching per permintaan menggunakan parameter `cache_control` di body permintaan:
 
 ```bash
-# Skip cache lookup, always call the model
+# Lewati pencarian cache, selalu panggil model
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Cache-Control: no-cache" \
-  -d '{"model": "gpt-4o", "messages": [...]}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
 ```
 
-| Header | Nilai | Efek |
-|--------|-------|--------|
-| `Cache-Control: no-cache` | - | Lewati cache, respons baru |
-| `Cache-Control: no-store` | - | Jangan cache respons ini |
+| Tipe | Efek |
+|------|------|
+| `no_cache` | Lewati pencarian cache, selalu dapatkan respons baru |
+| `no_store` | Jangan simpan respons ini di cache |
+| `response_only` | Hanya gunakan cache pencocokan persis (lewati semantik) |
+| `semantic_only` | Hanya gunakan cache semantik (lewati pencocokan persis) |
 
 ### Header Respons
 
 Setiap respons menyertakan status cache:
 
 ```
-X-Cache: HIT           # Respons dilayani dari cache
-X-Cache: MISS          # Respons baru dari model
-X-Cache-Entry-Id: abc  # ID entri cache (untuk umpan balik)
+X-Cache-Status: HIT    # Respons dilayani dari cache
+X-Cache-Status: MISS   # Respons baru dari model
 ```
 
 ## Memeriksa Status Cache
@@ -94,7 +99,7 @@ response = client.chat.completions.create(
 
 # Periksa status cache dari header respons
 # (Tersedia dalam respons HTTP mentah)
-print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
 ```
 
 ## Penagihan Cache
@@ -110,25 +115,35 @@ Diskon tepatnya ditampilkan di log penggunaan dasbor Anda.
 
 ## Kontrol Privasi
 
-### Tingkat API Key
+### Tingkat Organisasi / Pengguna
 
-Konfigurasikan perilaku caching untuk setiap API key di dasbor Anda:
+Konfigurasikan perilaku caching di pengaturan dasbor Anda:
 
 | Mode | Deskripsi |
 |------|-------------|
-| **Default** | Cache diaktifkan, dapat dibagikan dengan permintaan serupa |
-| **No Share** | Cache diaktifkan, tetapi respons bersifat pribadi untuk akun Anda |
-| **Disabled** | Tidak ada caching sama sekali |
+| **Berbagi (Shared)** | Cache diaktifkan, respons dapat dibagikan antar pengguna (default untuk akun pribadi) |
+| **Terisolasi (Isolated)** | Cache diaktifkan, tetapi respons bersifat pribadi untuk organisasi Anda (default untuk organisasi) |
+| **Dinonaktifkan (Disabled)** | Tidak ada caching sama sekali |
+
+Pengaturan tambahan yang tersedia:
+- **Ambang Kemiripan**: Sesuaikan sensitivitas pencocokan semantik (default: 92%)
+- **TTL Kustom**: Timpa waktu kedaluwarsa cache
+- **Model yang Dikecualikan**: Nonaktifkan caching untuk model tertentu
 
 ### Tingkat Permintaan
 
-Timpa per permintaan:
+Timpa per permintaan menggunakan parameter `cache_control`:
 
 ```bash
 # Nonaktifkan caching untuk permintaan ini
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Cache-Control: no-store" \
-  -d '...'
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
 ```
 
 ## Umpan Balik Cache
@@ -188,6 +203,6 @@ Nonaktifkan caching untuk:
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_headers={"Cache-Control": "no-cache"}
+    extra_body={"cache_control": {"type": "no_cache"}}
 )
 ```

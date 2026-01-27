@@ -48,33 +48,38 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## 快取標頭
+## 快取控制
 
-### 請求標頭
+### 請求級別控制
 
-控制每個請求的快取行為：
+使用請求體中的 `cache_control` 參數控制每個請求的快取行為：
 
 ```bash
-# Skip cache lookup, always call the model
+# 跳過快取查詢，始終呼叫模型
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Cache-Control: no-cache" \
-  -d '{"model": "gpt-4o", "messages": [...]}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
 ```
 
-| 標頭 | 數值 | 效果 |
-|--------|-------|--------|
-| `Cache-Control: no-cache` | - | 跳過快取，獲取全新回應 |
-| `Cache-Control: no-store` | - | 不要快取此回應 |
+| 類型 | 效果 |
+|------|------|
+| `no_cache` | 跳過快取查詢，始終獲取全新回應 |
+| `no_store` | 不將此回應存入快取 |
+| `response_only` | 僅使用精確匹配快取（跳過語義快取） |
+| `semantic_only` | 僅使用語義快取（跳過精確匹配） |
 
 ### 回應標頭
 
 每個回應都包含快取狀態：
 
 ```
-X-Cache: HIT           # 回應來自快取
-X-Cache: MISS          # 來自模型的全新回應
-X-Cache-Entry-Id: abc  # 快取項目 ID（用於回饋）
+X-Cache-Status: HIT    # 回應來自快取
+X-Cache-Status: MISS   # 來自模型的全新回應
 ```
 
 ## 檢查快取狀態
@@ -92,9 +97,9 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is 2+2?"}]
 )
 
-# Check cache status from response headers
-# (Available in raw HTTP response)
-print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+# 從回應標頭檢查快取狀態
+# (在原始 HTTP 回應中可用)
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
 ```
 
 ## 快取計費
@@ -110,25 +115,35 @@ print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
 
 ## 隱私控制
 
-### API Key 層級
+### 組織 / 使用者層級
 
-在儀表板中為每個 API Key 設定快取行為：
+在儀表板設定中配置快取行為：
 
 | 模式 | 描述 |
 |------|-------------|
-| **預設** | 啟用快取，可能與相似請求共享 |
-| **不共享** | 啟用快取，但回應僅限您的帳戶私有 |
-| **已停用** | 完全不使用快取 |
+| **共享 (Shared)** | 啟用快取，回應可能跨使用者共享（個人帳戶預設） |
+| **隔離 (Isolated)** | 啟用快取，但回應僅限您的組織私有（組織帳戶預設） |
+| **停用 (Disabled)** | 完全不使用快取 |
+
+其他可配置項：
+- **相似度閾值**：調整語義匹配靈敏度（預設：92%）
+- **自訂 TTL**：覆蓋快取過期時間
+- **排除模型**：為特定模型停用快取
 
 ### 請求層級
 
-覆蓋單個請求的設定：
+使用 `cache_control` 參數覆蓋單個請求的設定：
 
 ```bash
-# Disable caching for this request
+# 為此請求停用快取
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Cache-Control: no-store" \
-  -d '...'
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
 ```
 
 ## 快取回饋
@@ -184,10 +199,10 @@ curl -X POST https://api.lemondata.cc/v1/cache/feedback \
 - **敏感數據**：機密資訊
 
 ```python
-# For time-sensitive queries
+# 對於時間敏感的查詢
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_headers={"Cache-Control": "no-cache"}
+    extra_body={"cache_control": {"type": "no_cache"}}
 )
 ```

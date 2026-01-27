@@ -48,33 +48,38 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## Cache Headers
+## Cache Control
 
-### Request Headers
+### Request-Level Control
 
-Control caching behavior per-request:
+Control caching behavior per-request using the `cache_control` parameter in the request body:
 
 ```bash
 # Skip cache lookup, always call the model
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Cache-Control: no-cache" \
-  -d '{"model": "gpt-4o", "messages": [...]}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
 ```
 
-| Header | Value | Effect |
-|--------|-------|--------|
-| `Cache-Control: no-cache` | - | Skip cache, fresh response |
-| `Cache-Control: no-store` | - | Don't cache this response |
+| Type | Effect |
+|------|--------|
+| `no_cache` | Skip cache lookup, always get fresh response |
+| `no_store` | Don't store this response in cache |
+| `response_only` | Only use exact match cache (skip semantic) |
+| `semantic_only` | Only use semantic cache (skip exact match) |
 
 ### Response Headers
 
 Every response includes cache status:
 
 ```
-X-Cache: HIT           # Response served from cache
-X-Cache: MISS          # Fresh response from model
-X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
+X-Cache-Status: HIT    # Response served from cache
+X-Cache-Status: MISS   # Fresh response from model
 ```
 
 ## Checking Cache Status
@@ -94,7 +99,7 @@ response = client.chat.completions.create(
 
 # Check cache status from response headers
 # (Available in raw HTTP response)
-print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
 ```
 
 ## Cache Billing
@@ -110,25 +115,35 @@ The exact discount is shown in your dashboard usage logs.
 
 ## Privacy Controls
 
-### API Key Level
+### Organization / User Level
 
-Configure caching behavior for each API key in your dashboard:
+Configure caching behavior in your dashboard settings:
 
 | Mode | Description |
 |------|-------------|
-| **Default** | Cache enabled, may share with similar requests |
-| **No Share** | Cache enabled, but responses are private to your account |
+| **Shared** | Cache enabled, responses may be shared across users (default for personal accounts) |
+| **Isolated** | Cache enabled, but responses are private to your organization (default for organizations) |
 | **Disabled** | No caching at all |
+
+Additional settings available:
+- **Similarity Threshold**: Adjust semantic matching sensitivity (default: 92%)
+- **Custom TTL**: Override cache expiration time
+- **Excluded Models**: Disable caching for specific models
 
 ### Request Level
 
-Override per-request:
+Override per-request using the `cache_control` parameter:
 
 ```bash
 # Disable caching for this request
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Cache-Control: no-store" \
-  -d '...'
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
 ```
 
 ## Cache Feedback
@@ -188,6 +203,6 @@ Disable caching for:
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_headers={"Cache-Control": "no-cache"}
+    extra_body={"cache_control": {"type": "no_cache"}}
 )
 ```

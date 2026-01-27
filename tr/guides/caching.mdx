@@ -48,13 +48,161 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## Önbellek Başlıkları
+## Önbellek Kontrolü
 
-### İstek Başlıkları
+### İstek Seviyesi Kontrolü
 
-İstek başına önbellekleme davranışını kontrol edin:
+İstek gövdesindeki `cache_control` parametresini kullanarak istek başına önbellekleme davranışını kontrol edin:
 
 ```bash
-# Skip cache lookup, always call the model
+# Önbellek aramasını atla, her zaman modeli çağır
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
+```
+
+| Tür | Etki |
+|-----|------|
+| `no_cache` | Önbellek aramasını atla, her zaman yeni yanıt al |
+| `no_store` | Bu yanıtı önbelleğe kaydetme |
+| `response_only` | Yalnızca tam eşleşme önbelleğini kullan (semantiği atla) |
+| `semantic_only` | Yalnızca semantik önbelleği kullan (tam eşleşmeyi atla) |
+
+### Yanıt Başlıkları
+
+Her yanıt önbellek durumunu içerir:
+
+```
+X-Cache-Status: HIT    # Önbellekten sunulan yanıt
+X-Cache-Status: MISS   # Modelden yeni yanıt
+```
+
+## Önbellek Durumunu Kontrol Etme
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Yanıt başlıklarından önbellek durumunu kontrol edin
+# (Ham HTTP yanıtında mevcuttur)
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
+```
+
+## Önbellek Faturalandırması
+
+Önbellek isabetleri, yeni isteklerden önemli ölçüde daha ucuzdur:
+
+| Tür | Maliyet |
+|------|------|
+| Cache HIT | **%80 indirim** |
+| Cache MISS | Tam fiyat |
+
+Tam indirim, kontrol panelinizin kullanım günlüklerinde gösterilir.
+
+## Gizlilik Kontrolleri
+
+### Organizasyon / Kullanıcı Seviyesi
+
+Kontrol paneli ayarlarınızda önbellekleme davranışını yapılandırın:
+
+| Mod | Açıklama |
+|------|-------------|
+| **Paylaşımlı (Shared)** | Önbellek etkin, yanıtlar kullanıcılar arasında paylaşılabilir (kişisel hesaplar için varsayılan) |
+| **İzole (Isolated)** | Önbellek etkin, ancak yanıtlar organizasyonunuza özeldir (organizasyonlar için varsayılan) |
+| **Devre Dışı (Disabled)** | Hiç önbellekleme yok |
+
+Ek ayarlar mevcut:
+- **Benzerlik Eşiği**: Semantik eşleştirme hassasiyetini ayarlayın (varsayılan: %92)
+- **Özel TTL**: Önbellek sona erme süresini geçersiz kılın
+- **Hariç Tutulan Modeller**: Belirli modeller için önbelleklemeyi devre dışı bırakın
+
+### İstek Seviyesi
+
+`cache_control` parametresini kullanarak istek başına geçersiz kılma:
+
+```bash
+# Bu istek için önbelleklemeyi devre dışı bırak
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
+```
+
+## Önbellek Geri Bildirimi
+
+Yanlış bir önbelleğe alınmış yanıt alırsanız, bunu bildirebilirsiniz:
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**Geri bildirim türleri:**
+- `wrong_answer` - Olgusal olarak yanlış
+- `outdated` - Bilgi eski
+- `irrelevant` - Soruyla eşleşmiyor
+- `other` - Diğer sorunlar
+
+Bir önbellek girişi yeterli olumsuz geri bildirim aldığında, otomatik olarak geçersiz kılınır.
+
+## En İyi Uygulamalar
+
+<AccordionGroup>
+  <Accordion title="Önbelleğe alınabilir sorgular için temperature=0 kullanın">
+    Deterministik ayarlar önbellek isabet oranlarını maksimize eder.
+  </Accordion>
+
+  <Accordion title="İstem formatlarını standartlaştırın">
+    Tutarlı biçimlendirme semantik eşleştirmeyi iyileştirir.
+  </Accordion>
+
+  <Accordion title="Zamana duyarlı sorgular için no-cache kullanın">
+    Güncel olaylar, gerçek zamanlı veriler önbelleği atlamalıdır.
+  </Accordion>
+
+  <Accordion title="Önbellek isabet oranlarını izleyin">
+    Önbellek istatistikleri ve tasarruflar için kontrol panelinizi kontrol edin.
+  </Accordion>
+</AccordionGroup>
+
+## Ne Zaman Önbellek KULLANILMAMALI
+
+Şunlar için önbelleklemeyi devre dışı bırakın:
+
+- **Gerçek zamanlı bilgiler**: Hisse senedi fiyatları, hava durumu, haberler
+- **Kişiselleştirilmiş içerik**: Kullanıcıya özel öneriler
+- **Yaratıcı görevler**: Çeşitlilik istendiğinde
+- **Hassas veriler**: Gizli bilgiler
+
+```python
+# Zamana duyarlı sorgular için
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_body={"cache_control": {"type": "no_cache"}}
+)
+```

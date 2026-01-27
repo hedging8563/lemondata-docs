@@ -48,33 +48,38 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## Cache Headers
+## Kiểm soát Cache
 
-### Request Headers
+### Kiểm soát cấp độ yêu cầu
 
-Kiểm soát hành vi caching trên mỗi yêu cầu:
+Kiểm soát hành vi caching trên mỗi yêu cầu bằng tham số `cache_control` trong body yêu cầu:
 
 ```bash
-# Skip cache lookup, always call the model
+# Bỏ qua tra cứu cache, luôn gọi model
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Cache-Control: no-cache" \
-  -d '{"model": "gpt-4o", "messages": [...]}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
 ```
 
-| Header | Giá trị | Hiệu quả |
-|--------|-------|--------|
-| `Cache-Control: no-cache` | - | Bỏ qua cache, lấy phản hồi mới |
-| `Cache-Control: no-store` | - | Không lưu phản hồi này vào cache |
+| Loại | Hiệu quả |
+|------|----------|
+| `no_cache` | Bỏ qua tra cứu cache, luôn lấy phản hồi mới |
+| `no_store` | Không lưu phản hồi này vào cache |
+| `response_only` | Chỉ sử dụng cache khớp chính xác (bỏ qua ngữ nghĩa) |
+| `semantic_only` | Chỉ sử dụng cache ngữ nghĩa (bỏ qua khớp chính xác) |
 
 ### Response Headers
 
 Mỗi phản hồi đều bao gồm trạng thái cache:
 
 ```
-X-Cache: HIT           # Phản hồi được cung cấp từ cache
-X-Cache: MISS          # Phản hồi mới từ model
-X-Cache-Entry-Id: abc  # ID mục nhập cache (để phản hồi)
+X-Cache-Status: HIT    # Phản hồi được cung cấp từ cache
+X-Cache-Status: MISS   # Phản hồi mới từ model
 ```
 
 ## Kiểm tra trạng thái Cache
@@ -92,9 +97,9 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is 2+2?"}]
 )
 
-# Check cache status from response headers
-# (Available in raw HTTP response)
-print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
+# Kiểm tra trạng thái cache từ response headers
+# (Có sẵn trong phản hồi HTTP thô)
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
 ```
 
 ## Thanh toán Cache
@@ -110,25 +115,35 @@ Mức chiết khấu chính xác được hiển thị trong nhật ký sử d�
 
 ## Kiểm soát quyền riêng tư
 
-### Cấp độ API Key
+### Cấp độ Tổ chức / Người dùng
 
-Cấu hình hành vi caching cho từng API key trong dashboard của bạn:
+Cấu hình hành vi caching trong cài đặt dashboard của bạn:
 
 | Chế độ | Mô tả |
 |------|-------------|
-| **Default** | Đã bật cache, có thể chia sẻ với các yêu cầu tương tự |
-| **No Share** | Đã bật cache, nhưng các phản hồi là riêng tư đối với tài khoản của bạn |
-| **Disabled** | Hoàn toàn không sử dụng cache |
+| **Chia sẻ (Shared)** | Đã bật cache, các phản hồi có thể được chia sẻ giữa người dùng (mặc định cho tài khoản cá nhân) |
+| **Cô lập (Isolated)** | Đã bật cache, nhưng các phản hồi là riêng tư đối với tổ chức của bạn (mặc định cho tổ chức) |
+| **Tắt (Disabled)** | Hoàn toàn không sử dụng cache |
+
+Các cài đặt bổ sung có sẵn:
+- **Ngưỡng tương đồng**: Điều chỉnh độ nhạy của khớp ngữ nghĩa (mặc định: 92%)
+- **TTL tùy chỉnh**: Ghi đè thời gian hết hạn cache
+- **Mô hình bị loại trừ**: Tắt caching cho các mô hình cụ thể
 
 ### Cấp độ yêu cầu
 
-Ghi đè trên mỗi yêu cầu:
+Ghi đè trên mỗi yêu cầu bằng tham số `cache_control`:
 
 ```bash
-# Disable caching for this request
+# Tắt caching cho yêu cầu này
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Cache-Control: no-store" \
-  -d '...'
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
 ```
 
 ## Phản hồi Cache
@@ -184,10 +199,10 @@ Tắt caching cho:
 - **Dữ liệu nhạy cảm**: Thông tin bảo mật
 
 ```python
-# For time-sensitive queries
+# Đối với các truy vấn nhạy cảm về thời gian
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_headers={"Cache-Control": "no-cache"}
+    extra_body={"cache_control": {"type": "no_cache"}}
 )
 ```
