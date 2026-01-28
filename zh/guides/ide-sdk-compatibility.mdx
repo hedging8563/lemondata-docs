@@ -1,0 +1,354 @@
+---
+title: "IDE 与 SDK 兼容性"
+description: "AI 编程工具、SDK 和框架的完整兼容性参考"
+---
+
+## 概述
+
+LemonData API 设计为与所有主流 AI 开发工具**即插即用兼容**。本指南记录了支持的参数和已验证的集成。
+
+<Note>
+  所有参数都经过验证并透传给上游提供商。特定模型不支持的参数会被静默忽略，确保最大兼容性。
+</Note>
+
+## 支持的 API 格式
+
+| 端点 | 格式 | 用途 |
+|------|------|------|
+| `/v1/chat/completions` | OpenAI Chat | 通用兼容 |
+| `/v1/responses` | OpenAI Responses | 有状态对话 |
+| `/v1/messages` | Anthropic Messages | Claude 原生功能 |
+| `/v1beta/models/:model:generateContent` | Google Gemini | Gemini 原生功能 |
+
+## IDE 与 CLI 兼容性
+
+### 已验证工具
+
+| 工具 | 状态 | 格式 | 备注 |
+|------|------|------|------|
+| **Cursor** | ✅ 完全支持 | OpenAI | 支持 Anthropic 工具格式 |
+| **Claude Code CLI** | ✅ 完全支持 | Anthropic | 扩展思考、tool_choice |
+| **Windsurf** | ✅ 完全支持 | OpenAI | 标准 OpenAI 格式 |
+| **Aider** | ✅ 完全支持 | OpenAI | 支持所有模型 |
+| **Continue.dev** | ✅ 完全支持 | OpenAI/Anthropic | 双格式支持 |
+| **OpenCode** | ✅ 完全支持 | OpenAI | 多提供商支持 |
+| **Cline/Roo Code** | ✅ 完全支持 | OpenAI | 通过 OpenRouter 格式 |
+| **GitHub Copilot** | ✅ 完全支持 | OpenAI | 标准格式 |
+| **Codex CLI** | ✅ 完全支持 | OpenAI | OpenAI Responses API |
+| **Gemini CLI** | ✅ 完全支持 | Gemini | 原生 Gemini 格式 |
+
+### 配置示例
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    Cursor 内部使用 Anthropic 风格的工具格式。LemonData 同时支持：
+    - OpenAI 格式：`{ type: "function", function: { name, parameters } }`
+    - Anthropic 格式：`{ name, input_schema }`（无 type 字段）
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## SDK 兼容性
+
+### 已验证 SDK
+
+| SDK | 语言 | 状态 | 备注 |
+|-----|------|------|------|
+| **OpenAI SDK** | Python/JS/Go | ✅ 完全支持 | 支持所有参数 |
+| **Anthropic SDK** | Python/JS | ✅ 完全支持 | 扩展思考、工具 |
+| **Vercel AI SDK** | TypeScript | ✅ 完全支持 | streamText, generateObject |
+| **LangChain** | Python/JS | ✅ 完全支持 | ChatOpenAI, bind_tools |
+| **LlamaIndex** | Python | ✅ 完全支持 | OpenAI 兼容 |
+| **Dify** | - | ✅ 完全支持 | OpenAI 格式 |
+
+## Chat Completions 参数
+
+### 核心参数
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `model` | string | 模型标识符（必需） |
+| `messages` | array | 对话消息（必需） |
+| `max_tokens` | integer | 最大输出 token 数 |
+| `temperature` | number | 采样温度 (0-2) |
+| `top_p` | number | 核采样 (0-1) |
+| `stream` | boolean | 启用流式输出 |
+
+### 工具调用
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "获取某地天气",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### Tool Choice 选项
+
+| 格式 | 示例 | 描述 |
+|------|------|------|
+| 字符串 | `"auto"`, `"none"`, `"required"` | 简单选择 |
+| OpenAI 对象 | `{ "type": "function", "function": { "name": "fn" } }` | 强制特定函数 |
+| Anthropic 对象 | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Anthropic 原生格式 |
+
+### 高级参数
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `stream_options` | object | `{ include_usage: true }` 获取 token 计数 |
+| `reasoning_effort` | string | o1/o3 模型的 `"low"`, `"medium"`, `"high"` |
+| `service_tier` | string | `"auto"` 或 `"default"` |
+| `seed` | integer | 确定性输出 |
+| `logprobs` | boolean | 返回对数概率 |
+| `top_logprobs` | integer | 返回的 top logprobs 数量 (0-20) |
+| `logit_bias` | object | Token 偏置映射 (-100 到 100) |
+| `frequency_penalty` | number | 重复惩罚 (-2 到 2) |
+| `presence_penalty` | number | 主题惩罚 (-2 到 2) |
+| `stop` | string/array | 停止序列 |
+| `n` | integer | 生成数量 (1-128) |
+| `user` | string | 用户标识符 |
+
+### OpenAI 高级功能
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `modalities` | array | `["text", "audio"]` 多模态 |
+| `audio` | object | 音频输出配置 (voice, format) |
+| `prediction` | object | 预测输出加速补全 |
+| `metadata` | object | 键值对追踪 |
+| `store` | boolean | 存储以供后续检索 |
+
+### 提供商特定选项
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## Anthropic Messages 参数
+
+### 核心参数
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `model` | string | 模型标识符 |
+| `messages` | array | 对话消息 |
+| `max_tokens` | integer | 最大输出（最高 128000） |
+| `system` | string/array | 系统提示 |
+| `stream` | boolean | 启用流式输出 |
+
+### 工具调用
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "获取天气",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### 扩展思考
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## Responses API 参数
+
+### 核心参数
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `model` | string | 模型标识符 |
+| `input` | string/array | 输入内容 |
+| `instructions` | string | 系统指令 |
+| `max_output_tokens` | integer | 最大输出 token 数 |
+| `previous_response_id` | string | 继续对话 |
+
+### 高级参数
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `truncation_strategy` | string | `"auto"` 或 `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | 推理模型专用 |
+| `service_tier` | string | 优先级层级 |
+
+### 工具格式
+
+同时支持 OpenAI 和 Anthropic 工具格式：
+
+```json
+// OpenAI 格式
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Anthropic 格式（Cursor 兼容）
+{ "name": "fn", "input_schema": {...} }
+```
+
+## Gemini API 参数
+
+### 核心参数
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `contents` | array | 对话内容 |
+| `systemInstruction` | object | 系统提示 |
+| `generationConfig` | object | 生成设置 |
+
+### 工具
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "搜索网络",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### 安全设置
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### 其他参数
+
+| 参数 | 类型 | 描述 |
+|------|------|------|
+| `cachedContent` | string | 缓存内容引用 |
+| `responseMimeType` | string | `"text/plain"` 或 `"application/json"` |
+| `responseSchema` | object | 结构化输出的 JSON schema |
+
+## 流式输出
+
+所有端点支持 Server-Sent Events (SSE) 流式输出：
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# 带使用量追踪
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## 错误处理
+
+LemonData 返回 OpenAI 兼容的错误响应：
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+详见[错误处理指南](/zh/guides/error-handling)。
+
+## 最佳实践
+
+<AccordionGroup>
+  <Accordion title="使用透传处理未知参数">
+    所有 schema 使用 `.passthrough()` - 未知参数会转发给上游提供商。
+  </Accordion>
+
+  <Accordion title="使用 stream_options 获取准确计费">
+    启用 `stream_options.include_usage` 以在流式响应中获取准确的 token 计数。
+  </Accordion>
+
+  <Accordion title="使用适当的 tool_choice 格式">
+    匹配您 SDK 期望的格式。LemonData 同时接受 OpenAI 和 Anthropic 格式。
+  </Accordion>
+</AccordionGroup>
