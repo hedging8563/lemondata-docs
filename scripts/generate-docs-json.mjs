@@ -44,10 +44,10 @@ const navigationTabs = {
         group: 'Guides',
         pages: [
           'guides/api-formats',
-          'guides/sdks',
-          'guides/streaming',
           'guides/caching',
           'guides/prompt-cache',
+          'guides/sdks',
+          'guides/streaming',
           'guides/error-handling',
           'guides/rate-limits',
           'guides/billing',
