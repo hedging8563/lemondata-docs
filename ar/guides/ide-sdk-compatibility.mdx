@@ -1,0 +1,354 @@
+---
+title: "توافق IDE و SDK"
+description: "مرجع التوافق الكامل لأدوات البرمجة بالذكاء الاصطناعي، وSDKs، وأطر العمل"
+---
+
+## نظرة عامة
+
+تم تصميم LemonData API ليكون **متوافقاً بشكل مباشر (drop-in compatibility)** مع جميع أدوات تطوير الذكاء الاصطناعي الرئيسية. يوثق هذا الدليل المعلمات المدعومة والتكاملات التي تم التحقق منها.
+
+<Note>
+  يتم التحقق من جميع المعلمات ولكن يتم تمريرها إلى المزودين الأصليين. يتم تجاهل المعلمات غير المدعومة لنماذج معينة تلقائياً، مما يضمن أقصى قدر من التوافق.
+</Note>
+
+## تنسيقات API المدعومة
+
+| Endpoint | التنسيق | حالة الاستخدام |
+|----------|--------|----------|
+| `/v1/chat/completions` | OpenAI Chat | توافق عالمي |
+| `/v1/responses` | OpenAI Responses | محادثات ذات حالة (Stateful) |
+| `/v1/messages` | Anthropic Messages | ميزات Claude الأصلية |
+| `/v1beta/models/:model:generateContent` | Google Gemini | ميزات Gemini الأصلية |
+
+## توافق IDE و CLI
+
+### الأدوات التي تم التحقق منها
+
+| الأداة | الحالة | التنسيق | ملاحظات |
+|------|--------|--------|-------|
+| **Cursor** | ✅ كامل | OpenAI | تنسيق أدوات Anthropic مدعوم |
+| **Claude Code CLI** | ✅ كامل | Anthropic | التفكير الموسع (Extended thinking)، و `tool_choice` |
+| **Windsurf** | ✅ كامل | OpenAI | تنسيق OpenAI القياسي |
+| **Aider** | ✅ كامل | OpenAI | جميع النماذج مدعومة |
+| **Continue.dev** | ✅ كامل | OpenAI/Anthropic | دعم التنسيق المزدوج |
+| **OpenCode** | ✅ كامل | OpenAI | دعم مزودين متعددين |
+| **Cline/Roo Code** | ✅ كامل | OpenAI | عبر تنسيق OpenRouter |
+| **GitHub Copilot** | ✅ كامل | OpenAI | التنسيق القياسي |
+| **Codex CLI** | ✅ كامل | OpenAI | OpenAI Responses API |
+| **Gemini CLI** | ✅ كامل | Gemini | تنسيق Gemini الأصلي |
+
+### أمثلة التكوين
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    يستخدم Cursor تنسيق أدوات بأسلوب Anthropic داخلياً. يدعم LemonData كليهما:
+    - تنسيق OpenAI: `{ type: "function", function: { name, parameters } }`
+    - تنسيق Anthropic: `{ name, input_schema }` (بدون حقل `type`)
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## توافق SDK
+
+### SDKs التي تم التحقق منها
+
+| SDK | اللغة | الحالة | ملاحظات |
+|-----|----------|--------|-------|
+| **OpenAI SDK** | Python/JS/Go | ✅ كامل | جميع المعلمات مدعومة |
+| **Anthropic SDK** | Python/JS | ✅ كامل | التفكير الموسع، والأدوات |
+| **Vercel AI SDK** | TypeScript | ✅ كامل | `streamText` ، `generateObject` |
+| **LangChain** | Python/JS | ✅ كامل | `ChatOpenAI` ، `bind_tools` |
+| **LlamaIndex** | Python | ✅ كامل | متوافق مع OpenAI |
+| **Dify** | - | ✅ كامل | تنسيق OpenAI |
+
+## معلمات Chat Completions
+
+### المعلمات الأساسية
+
+| المعلمة | النوع | الوصف |
+|-----------|------|-------------|
+| `model` | string | معرف النموذج (مطلوب) |
+| `messages` | array | رسائل المحادثة (مطلوب) |
+| `max_tokens` | integer | الحد الأقصى لرموز الإخراج (tokens) |
+| `temperature` | number | درجة حرارة العينات (0-2) |
+| `top_p` | number | أخذ عينات النواة (0-1) |
+| `stream` | boolean | تفعيل البث (streaming) |
+
+### استدعاء الأدوات (Tool Calling)
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### خيارات Tool Choice
+
+| التنسيق | مثال | الوصف |
+|--------|---------|-------------|
+| String | `"auto"`, `"none"`, `"required"` | اختيار بسيط |
+| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | فرض وظيفة معينة |
+| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | تنسيق Anthropic الأصلي |
+
+### المعلمات المتقدمة
+
+| المعلمة | النوع | الوصف |
+|-----------|------|-------------|
+| `stream_options` | object | `{ include_usage: true }` لحساب الرموز (tokens) |
+| `reasoning_effort` | string | `"low"`, `"medium"`, `"high"` لنماذج o1/o3 |
+| `service_tier` | string | `"auto"` أو `"default"` |
+| `seed` | integer | مخرجات حتمية |
+| `logprobs` | boolean | إرجاع احتمالات السجل (log probabilities) |
+| `top_logprobs` | integer | عدد أعلى `logprobs` (0-20) |
+| `logit_bias` | object | خريطة انحياز الرموز (-100 إلى 100) |
+| `frequency_penalty` | number | عقوبة التكرار (-2 إلى 2) |
+| `presence_penalty` | number | عقوبة الحضور (-2 إلى 2) |
+| `stop` | string/array | تسلسلات التوقف |
+| `n` | integer | عدد الإكمالات (1-128) |
+| `user` | string | معرف المستخدم للتتبع |
+
+### ميزات OpenAI المتقدمة
+
+| المعلمة | النوع | الوصف |
+|-----------|------|-------------|
+| `modalities` | array | `["text", "audio"]` للنماذج متعددة الوسائط |
+| `audio` | object | تكوين إخراج الصوت (الصوت، التنسيق) |
+| `prediction` | object | المخرجات المتوقعة لإكمال أسرع |
+| `metadata` | object | أزواج مفتاح-قيمة للتتبع |
+| `store` | boolean | التخزين للاسترجاع لاحقاً |
+
+### خيارات خاصة بالمزود
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## معلمات Anthropic Messages
+
+### المعلمات الأساسية
+
+| المعلمة | النوع | الوصف |
+|-----------|------|-------------|
+| `model` | string | معرف النموذج |
+| `messages` | array | رسائل المحادثة |
+| `max_tokens` | integer | الحد الأقصى للإخراج (حتى 128000) |
+| `system` | string/array | موجه النظام (System prompt) |
+| `stream` | boolean | تفعيل البث (streaming) |
+
+### استدعاء الأدوات (Tool Calling)
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### التفكير الموسع (Extended Thinking)
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## معلمات Responses API
+
+### المعلمات الأساسية
+
+| المعلمة | النوع | الوصف |
+|-----------|------|-------------|
+| `model` | string | معرف النموذج |
+| `input` | string/array | محتوى الإدخال |
+| `instructions` | string | تعليمات النظام |
+| `max_output_tokens` | integer | الحد الأقصى لرموز الإخراج |
+| `previous_response_id` | string | متابعة المحادثة |
+
+### المعلمات المتقدمة
+
+| المعلمة | النوع | الوصف |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` أو `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | لنماذج الاستدلال (reasoning models) |
+| `service_tier` | string | فئة الأولوية |
+
+### تنسيق الأدوات
+
+يدعم كلاً من تنسيقات أدوات OpenAI و Anthropic:
+
+```json
+// OpenAI format
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Anthropic format (Cursor compatibility)
+{ "name": "fn", "input_schema": {...} }
+```
+
+## معلمات Gemini API
+
+### المعلمات الأساسية
+
+| المعلمة | النوع | الوصف |
+|-----------|------|-------------|
+| `contents` | array | محتوى المحادثة |
+| `systemInstruction` | object | موجه النظام |
+| `generationConfig` | object | إعدادات التوليد |
+
+### الأدوات
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "Search the web",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### إعدادات الأمان
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### معلمات إضافية
+
+| المعلمة | النوع | الوصف |
+|-----------|------|-------------|
+| `cachedContent` | string | مرجع المحتوى المخزن مؤقتاً |
+| `responseMimeType` | string | `"text/plain"` أو `"application/json"` |
+| `responseSchema` | object | مخطط JSON للمخرجات المنظمة |
+
+## البث (Streaming)
+
+تدعم جميع نقاط النهاية بث Server-Sent Events (SSE):
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# With usage tracking
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## معالجة الأخطاء
+
+يعيد LemonData استجابات خطأ متوافقة مع OpenAI:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+راجع [دليل معالجة الأخطاء](/guides/error-handling) للحصول على التفاصيل.
+
+## أفضل الممارسات
+
+<AccordionGroup>
+  <Accordion title="استخدم التمرير (passthrough) للمعلمات غير المعروفة">
+    تستخدم جميع المخططات `.passthrough()` - يتم توجيه المعلمات غير المعروفة إلى المزودين الأصليين.
+  </Accordion>
+
+  <Accordion title="فضل استخدام stream_options لفوترة دقيقة">
+    قم بتمكين `stream_options.include_usage` للحصول على تعداد دقيق للرموز في استجابات البث.
+  </Accordion>
+
+  <Accordion title="استخدم تنسيق tool_choice المناسب">
+    طابق التنسيق المتوقع لـ SDK الخاص بك. يقبل LemonData كلاً من تنسيقات OpenAI و Anthropic.
+  </Accordion>
+</AccordionGroup>

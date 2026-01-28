@@ -1,0 +1,354 @@
+---
+title: "IDE 및 SDK 호환성"
+description: "AI 코딩 도구, SDK 및 프레임워크에 대한 전체 호환성 참조 가이드"
+---
+
+## 개요
+
+LemonData API는 모든 주요 AI 개발 도구와의 **드롭인 호환성(drop-in compatibility)**을 위해 설계되었습니다. 이 가이드는 지원되는 파라미터와 검증된 통합 사례를 설명합니다.
+
+<Note>
+  모든 파라미터는 검증을 거치지만 업스트림 제공자에게 그대로 전달됩니다. 특정 모델에서 지원되지 않는 파라미터는 자동으로 무시되어 최대의 호환성을 보장합니다.
+</Note>
+
+## 지원되는 API 형식
+
+| Endpoint | 형식 | 사용 사례 |
+|----------|--------|----------|
+| `/v1/chat/completions` | OpenAI Chat | 범용 호환성 |
+| `/v1/responses` | OpenAI Responses | 상태 유지 대화 |
+| `/v1/messages` | Anthropic Messages | Claude 네이티브 기능 |
+| `/v1beta/models/:model:generateContent` | Google Gemini | Gemini 네이티브 기능 |
+
+## IDE 및 CLI 호환성
+
+### 검증된 도구
+
+| 도구 | 상태 | 형식 | 참고 사항 |
+|------|--------|--------|-------|
+| **Cursor** | ✅ 전체 지원 | OpenAI | Anthropic 도구 형식 지원 |
+| **Claude Code CLI** | ✅ 전체 지원 | Anthropic | 확장된 사고(Extended thinking), tool_choice |
+| **Windsurf** | ✅ 전체 지원 | OpenAI | 표준 OpenAI 형식 |
+| **Aider** | ✅ 전체 지원 | OpenAI | 모든 모델 지원 |
+| **Continue.dev** | ✅ 전체 지원 | OpenAI/Anthropic | 이중 형식 지원 |
+| **OpenCode** | ✅ 전체 지원 | OpenAI | 다중 제공자 지원 |
+| **Cline/Roo Code** | ✅ 전체 지원 | OpenAI | OpenRouter 형식을 통해 지원 |
+| **GitHub Copilot** | ✅ 전체 지원 | OpenAI | 표준 형식 |
+| **Codex CLI** | ✅ 전체 지원 | OpenAI | OpenAI Responses API |
+| **Gemini CLI** | ✅ 전체 지원 | Gemini | 네이티브 Gemini 형식 |
+
+### 설정 예시
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    Cursor는 내부적으로 Anthropic 스타일의 도구 형식을 사용합니다. LemonData는 다음 두 가지를 모두 지원합니다:
+    - OpenAI 형식: `{ type: "function", function: { name, parameters } }`
+    - Anthropic 형식: `{ name, input_schema }` (type 필드 없음)
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## SDK 호환성
+
+### 검증된 SDK
+
+| SDK | 언어 | 상태 | 참고 사항 |
+|-----|----------|--------|-------|
+| **OpenAI SDK** | Python/JS/Go | ✅ 전체 지원 | 모든 파라미터 지원 |
+| **Anthropic SDK** | Python/JS | ✅ 전체 지원 | 확장된 사고, 도구 |
+| **Vercel AI SDK** | TypeScript | ✅ 전체 지원 | streamText, generateObject |
+| **LangChain** | Python/JS | ✅ 전체 지원 | ChatOpenAI, bind_tools |
+| **LlamaIndex** | Python | ✅ 전체 지원 | OpenAI 호환 |
+| **Dify** | - | ✅ 전체 지원 | OpenAI 형식 |
+
+## Chat Completions 파라미터
+
+### 핵심 파라미터
+
+| 파라미터 | 유형 | 설명 |
+|-----------|------|-------------|
+| `model` | string | 모델 식별자 (필수) |
+| `messages` | array | 대화 메시지 (필수) |
+| `max_tokens` | integer | 최대 출력 토큰 |
+| `temperature` | number | 샘플링 온도 (0-2) |
+| `top_p` | number | 핵 샘플링 (0-1) |
+| `stream` | boolean | 스트리밍 활성화 |
+
+### 도구 호출 (Tool Calling)
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### Tool Choice 옵션
+
+| 형식 | 예시 | 설명 |
+|--------|---------|-------------|
+| String | `"auto"`, `"none"`, `"required"` | 단순 선택 |
+| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | 특정 함수 강제 지정 |
+| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Anthropic 네이티브 형식 |
+
+### 고급 파라미터
+
+| 파라미터 | 유형 | 설명 |
+|-----------|------|-------------|
+| `stream_options` | object | 토큰 수 확인을 위한 `{ include_usage: true }` |
+| `reasoning_effort` | string | o1/o3 모델용 `"low"`, `"medium"`, `"high"` |
+| `service_tier` | string | `"auto"` 또는 `"default"` |
+| `seed` | integer | 결정론적 출력 |
+| `logprobs` | boolean | 로그 확률 반환 |
+| `top_logprobs` | integer | 상위 로그 확률 수 (0-20) |
+| `logit_bias` | object | 토큰 편향 맵 (-100 ~ 100) |
+| `frequency_penalty` | number | 반복 페널티 (-2 ~ 2) |
+| `presence_penalty` | number | 주제 페널티 (-2 ~ 2) |
+| `stop` | string/array | 중단 시퀀스 |
+| `n` | integer | 생성 결과 수 (1-128) |
+| `user` | string | 추적용 사용자 식별자 |
+
+### OpenAI 고급 기능
+
+| 파라미터 | 유형 | 설명 |
+|-----------|------|-------------|
+| `modalities` | array | 멀티모달용 `["text", "audio"]` |
+| `audio` | object | 오디오 출력 설정 (음성, 형식) |
+| `prediction` | object | 빠른 생성을 위한 예측 출력 |
+| `metadata` | object | 추적용 키-값 쌍 |
+| `store` | boolean | 나중에 검색할 수 있도록 저장 |
+
+### 제공자별 옵션
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## Anthropic Messages 파라미터
+
+### 핵심 파라미터
+
+| 파라미터 | 유형 | 설명 |
+|-----------|------|-------------|
+| `model` | string | 모델 식별자 |
+| `messages` | array | 대화 메시지 |
+| `max_tokens` | integer | 최대 출력 (최대 128,000) |
+| `system` | string/array | 시스템 프롬프트 |
+| `stream` | boolean | 스트리밍 활성화 |
+
+### 도구 호출 (Tool Calling)
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### 확장된 사고 (Extended Thinking)
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## Responses API 파라미터
+
+### 핵심 파라미터
+
+| 파라미터 | 유형 | 설명 |
+|-----------|------|-------------|
+| `model` | string | 모델 식별자 |
+| `input` | string/array | 입력 콘텐츠 |
+| `instructions` | string | 시스템 지침 |
+| `max_output_tokens` | integer | 최대 출력 토큰 |
+| `previous_response_id` | string | 대화 계속하기 |
+
+### 고급 파라미터
+
+| 파라미터 | 유형 | 설명 |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` 또는 `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | 추론 모델용 |
+| `service_tier` | string | 우선순위 티어 |
+
+### 도구 형식
+
+OpenAI 및 Anthropic 도구 형식을 모두 지원합니다:
+
+```json
+// OpenAI 형식
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Anthropic 형식 (Cursor 호환성)
+{ "name": "fn", "input_schema": {...} }
+```
+
+## Gemini API 파라미터
+
+### 핵심 파라미터
+
+| 파라미터 | 유형 | 설명 |
+|-----------|------|-------------|
+| `contents` | array | 대화 콘텐츠 |
+| `systemInstruction` | object | 시스템 프롬프트 |
+| `generationConfig` | object | 생성 설정 |
+
+### 도구 (Tools)
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "Search the web",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### 안전 설정 (Safety Settings)
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### 추가 파라미터
+
+| 파라미터 | 유형 | 설명 |
+|-----------|------|-------------|
+| `cachedContent` | string | 캐시된 콘텐츠 참조 |
+| `responseMimeType` | string | `"text/plain"` 또는 `"application/json"` |
+| `responseSchema` | object | 구조화된 출력을 위한 JSON 스키마 |
+
+## 스트리밍
+
+모든 엔드포인트는 Server-Sent Events (SSE) 스트리밍을 지원합니다:
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# 사용량 추적 포함
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## 오류 처리
+
+LemonData는 OpenAI와 호환되는 오류 응답을 반환합니다:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+자세한 내용은 [오류 처리 가이드](/guides/error-handling)를 참조하세요.
+
+## 권장 사항
+
+<AccordionGroup>
+  <Accordion title="알 수 없는 파라미터에 패스스루(passthrough) 사용">
+    모든 스키마는 `.passthrough()`를 사용합니다. 알 수 없는 파라미터는 업스트림 제공자에게 그대로 전달됩니다.
+  </Accordion>
+
+  <Accordion title="정확한 과금을 위해 stream_options 권장">
+    스트리밍 응답에서 정확한 토큰 수를 확인하려면 `stream_options.include_usage`를 활성화하세요.
+  </Accordion>
+
+  <Accordion title="적절한 tool_choice 형식 사용">
+    사용 중인 SDK에서 기대하는 형식에 맞추세요. LemonData는 OpenAI와 Anthropic 형식을 모두 수용합니다.
+  </Accordion>
+</AccordionGroup>

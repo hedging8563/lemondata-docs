@@ -1,0 +1,52 @@
+---
+title: "✨ Cache de prompt amont"
+description: "Comprendre le cache de prompt au niveau du fournisseur et comment il réduit les coûts"
+---
+
+## Présentation
+
+En plus du [cache sémantique de plateforme](/guides/caching) de LemonData, de nombreux fournisseurs d'IA proposent leur propre fonctionnalité de **prompt caching**. Il s'agit d'un mécanisme de mise en cache distinct qui opère au niveau du fournisseur (Anthropic, OpenAI, DeepSeek, etc.).
+
+<Note>
+**Deux types de mise en cache**
+
+| Type | Emplacement | Fonctionnement | Coût |
+|------|-------|--------------|------|
+| **Cache de plateforme** | LemonData | Correspondance par similitude sémantique | Gratuit (pas d'appel API) |
+| **Cache fournisseur** | Amont (Anthropic/OpenAI/etc) | Correspondance exacte du préfixe | Tarifs de jetons réduits |
+
+Ceux-ci sont **mutuellement exclusifs** : si le cache de plateforme est activé (hit), aucun appel en amont n'est effectué, le cache fournisseur ne s'applique donc pas.
+</Note>
+
+## Fonctionnement du cache de prompt fournisseur
+
+Le cache de prompt fournisseur stocke la représentation traitée du préfixe de votre prompt sur les serveurs du fournisseur. Lorsque vous envoyez une requête avec le même préfixe, le fournisseur peut ignorer le retraitement de ces jetons.
+
+### Caractéristiques clés
+
+- **Basé sur le préfixe** : Seul le début de votre prompt peut être mis en cache
+- **Correspondance exacte** : Nécessite des jetons identiques (pas de similitude sémantique)
+- **Limité dans le temps** : Les entrées de cache expirent (généralement 5 à 60 minutes)
+- **Automatique** : Aucune configuration spéciale requise
+
+```
+Request 1: [System prompt + Context A + Question 1]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+           This prefix gets cached
+
+Request 2: [System prompt + Context A + Question 2]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+           Cache hit! Only Question 2 is processed
+```
+
+## Fournisseurs pris en charge
+
+| Fournisseur | Remise sur lecture cache | Coût d'écriture cache | Jetons min. |
+|----------|---------------------|------------------|------------|
+| **Anthropic** | 90 % de réduction | Identique à l'entrée | 1024 |
+| **OpenAI** | 50 % de réduction | Identique à l'entrée | 1024 |
+| **DeepSeek** | 90 % de réduction | Identique à l'entrée | 64 |
+| **Google** | 75 % de réduction | Surcoût de 25 % | 32768 |
+
+<Info>
+Les remises sont appliquées automatiquement. LemonData vous répercute la tarification

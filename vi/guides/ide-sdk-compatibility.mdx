@@ -1,0 +1,354 @@
+---
+title: "Tương thích IDE & SDK"
+description: "Tài liệu tham khảo đầy đủ về khả năng tương thích cho các công cụ lập trình AI, SDK và framework"
+---
+
+## Tổng quan
+
+LemonData API được thiết kế để **tương thích thay thế trực tiếp (drop-in compatibility)** với tất cả các công cụ phát triển AI chính. Hướng dẫn này tài liệu hóa các tham số được hỗ trợ và các tích hợp đã được xác minh.
+
+<Note>
+  Tất cả các tham số đều được xác thực nhưng được chuyển tiếp đến các nhà cung cấp thượng nguồn (upstream providers). Các tham số không được hỗ trợ cho các mô hình cụ thể sẽ bị bỏ qua một cách âm thầm, đảm bảo khả năng tương thích tối đa.
+</Note>
+
+## Các định dạng API được hỗ trợ
+
+| Endpoint | Định dạng | Trường hợp sử dụng |
+|----------|--------|----------|
+| `/v1/chat/completions` | OpenAI Chat | Tương thích phổ quát |
+| `/v1/responses` | OpenAI Responses | Hội thoại có trạng thái |
+| `/v1/messages` | Anthropic Messages | Các tính năng gốc của Claude |
+| `/v1beta/models/:model:generateContent` | Google Gemini | Các tính năng gốc của Gemini |
+
+## Tương thích IDE & CLI
+
+### Các công cụ đã xác minh
+
+| Công cụ | Trạng thái | Định dạng | Ghi chú |
+|------|--------|--------|-------|
+| **Cursor** | ✅ Đầy đủ | OpenAI | Hỗ trợ định dạng công cụ của Anthropic |
+| **Claude Code CLI** | ✅ Đầy đủ | Anthropic | Suy nghĩ mở rộng (Extended thinking), `tool_choice` |
+| **Windsurf** | ✅ Đầy đủ | OpenAI | Định dạng OpenAI tiêu chuẩn |
+| **Aider** | ✅ Đầy đủ | OpenAI | Hỗ trợ tất cả các mô hình |
+| **Continue.dev** | ✅ Đầy đủ | OpenAI/Anthropic | Hỗ trợ định dạng kép |
+| **OpenCode** | ✅ Đầy đủ | OpenAI | Hỗ trợ đa nhà cung cấp |
+| **Cline/Roo Code** | ✅ Đầy đủ | OpenAI | Qua định dạng OpenRouter |
+| **GitHub Copilot** | ✅ Đầy đủ | OpenAI | Định dạng tiêu chuẩn |
+| **Codex CLI** | ✅ Đầy đủ | OpenAI | API OpenAI Responses |
+| **Gemini CLI** | ✅ Đầy đủ | Gemini | Định dạng Gemini gốc |
+
+### Ví dụ cấu hình
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    Cursor sử dụng định dạng công cụ kiểu Anthropic trong nội bộ. LemonData hỗ trợ cả hai:
+    - Định dạng OpenAI: `{ type: "function", function: { name, parameters } }`
+    - Định dạng Anthropic: `{ name, input_schema }` (không có trường `type`)
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## Tương thích SDK
+
+### Các SDK đã xác minh
+
+| SDK | Ngôn ngữ | Trạng thái | Ghi chú |
+|-----|----------|--------|-------|
+| **OpenAI SDK** | Python/JS/Go | ✅ Đầy đủ | Hỗ trợ tất cả các tham số |
+| **Anthropic SDK** | Python/JS | ✅ Đầy đủ | Suy nghĩ mở rộng (Extended thinking), công cụ |
+| **Vercel AI SDK** | TypeScript | ✅ Đầy đủ | `streamText`, `generateObject` |
+| **LangChain** | Python/JS | ✅ Đầy đủ | `ChatOpenAI`, `bind_tools` |
+| **LlamaIndex** | Python | ✅ Đầy đủ | Tương thích OpenAI |
+| **Dify** | - | ✅ Đầy đủ | Định dạng OpenAI |
+
+## Tham số Chat Completions
+
+### Các tham số cốt lõi
+
+| Tham số | Kiểu | Mô tả |
+|-----------|------|-------------|
+| `model` | string | Định danh mô hình (bắt buộc) |
+| `messages` | array | Các tin nhắn hội thoại (bắt buộc) |
+| `max_tokens` | integer | Số lượng token đầu ra tối đa |
+| `temperature` | number | Nhiệt độ lấy mẫu (0-2) |
+| `top_p` | number | Lấy mẫu hạt nhân (Nucleus sampling) (0-1) |
+| `stream` | boolean | Bật truyền phát (streaming) |
+
+### Gọi công cụ (Tool Calling)
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### Các tùy chọn Tool Choice
+
+| Định dạng | Ví dụ | Mô tả |
+|--------|---------|-------------|
+| String | `"auto"`, `"none"`, `"required"` | Lựa chọn đơn giản |
+| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | Bắt buộc một hàm cụ thể |
+| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Định dạng gốc của Anthropic |
+
+### Các tham số nâng cao
+
+| Tham số | Kiểu | Mô tả |
+|-----------|------|-------------|
+| `stream_options` | object | `{ include_usage: true }` để đếm số lượng token |
+| `reasoning_effort` | string | `"low"`, `"medium"`, `"high"` cho các mô hình o1/o3 |
+| `service_tier` | string | `"auto"` hoặc `"default"` |
+| `seed` | integer | Đầu ra xác định (Deterministic outputs) |
+| `logprobs` | boolean | Trả về xác suất log (log probabilities) |
+| `top_logprobs` | integer | Số lượng logprobs hàng đầu (0-20) |
+| `logit_bias` | object | Bản đồ độ lệch token (Token bias map) (-100 đến 100) |
+| `frequency_penalty` | number | Hình phạt lặp lại (-2 đến 2) |
+| `presence_penalty` | number | Hình phạt chủ đề (-2 đến 2) |
+| `stop` | string/array | Các chuỗi dừng (Stop sequences) |
+| `n` | integer | Số lượng kết quả hoàn thành (1-128) |
+| `user` | string | Định danh người dùng để theo dõi |
+
+### Các tính năng nâng cao của OpenAI
+
+| Tham số | Kiểu | Mô tả |
+|-----------|------|-------------|
+| `modalities` | array | `["text", "audio"]` cho đa phương thức (multimodal) |
+| `audio` | object | Cấu hình đầu ra âm thanh (giọng nói, định dạng) |
+| `prediction` | object | Đầu ra dự đoán để hoàn thành nhanh hơn |
+| `metadata` | object | Các cặp khóa-giá trị để theo dõi |
+| `store` | boolean | Lưu trữ để truy xuất sau |
+
+### Các tùy chọn riêng của nhà cung cấp
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## Tham số Anthropic Messages
+
+### Các tham số cốt lõi
+
+| Tham số | Kiểu | Mô tả |
+|-----------|------|-------------|
+| `model` | string | Định danh mô hình |
+| `messages` | array | Các tin nhắn hội thoại |
+| `max_tokens` | integer | Đầu ra tối đa (lên đến 128000) |
+| `system` | string/array | Lời nhắc hệ thống (System prompt) |
+| `stream` | boolean | Bật truyền phát (streaming) |
+
+### Gọi công cụ (Tool Calling)
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### Suy nghĩ mở rộng (Extended Thinking)
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## Tham số Responses API
+
+### Các tham số cốt lõi
+
+| Tham số | Kiểu | Mô tả |
+|-----------|------|-------------|
+| `model` | string | Định danh mô hình |
+| `input` | string/array | Nội dung đầu vào |
+| `instructions` | string | Hướng dẫn hệ thống |
+| `max_output_tokens` | integer | Số lượng token đầu ra tối đa |
+| `previous_response_id` | string | Tiếp tục hội thoại |
+
+### Các tham số nâng cao
+
+| Tham số | Kiểu | Mô tả |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` hoặc `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | Cho các mô hình suy luận (reasoning models) |
+| `service_tier` | string | Cấp độ ưu tiên (Priority tier) |
+
+### Định dạng công cụ
+
+Hỗ trợ cả định dạng công cụ của OpenAI và Anthropic:
+
+```json
+// Định dạng OpenAI
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Định dạng Anthropic (tương thích với Cursor)
+{ "name": "fn", "input_schema": {...} }
+```
+
+## Tham số Gemini API
+
+### Các tham số cốt lõi
+
+| Tham số | Kiểu | Mô tả |
+|-----------|------|-------------|
+| `contents` | array | Nội dung hội thoại |
+| `systemInstruction` | object | Lời nhắc hệ thống (System prompt) |
+| `generationConfig` | object | Cài đặt tạo (Generation settings) |
+
+### Công cụ
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "Search the web",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### Cài đặt an toàn
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### Các tham số bổ sung
+
+| Tham số | Kiểu | Mô tả |
+|-----------|------|-------------|
+| `cachedContent` | string | Tham chiếu nội dung được lưu trong bộ nhớ đệm (cached content) |
+| `responseMimeType` | string | `"text/plain"` hoặc `"application/json"` |
+| `responseSchema` | object | JSON schema cho đầu ra có cấu trúc |
+
+## Truyền phát (Streaming)
+
+Tất cả các endpoint đều hỗ trợ truyền phát Server-Sent Events (SSE):
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# Với theo dõi mức sử dụng
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## Xử lý lỗi
+
+LemonData trả về các phản hồi lỗi tương thích với OpenAI:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+Xem [Hướng dẫn xử lý lỗi](/guides/error-handling) để biết thêm chi tiết.
+
+## Thực hành tốt nhất
+
+<AccordionGroup>
+  <Accordion title="Sử dụng passthrough cho các tham số không xác định">
+    Tất cả các schema đều sử dụng `.passthrough()` - các tham số không xác định sẽ được chuyển tiếp đến các nhà cung cấp thượng nguồn.
+  </Accordion>
+
+  <Accordion title="Ưu tiên stream_options để tính phí chính xác">
+    Bật `stream_options.include_usage` để đếm số lượng token chính xác trong các phản hồi truyền phát.
+  </Accordion>
+
+  <Accordion title="Sử dụng định dạng tool_choice phù hợp">
+    Khớp với định dạng mong đợi của SDK của bạn. LemonData chấp nhận cả định dạng OpenAI và Anthropic.
+  </Accordion>
+</AccordionGroup>

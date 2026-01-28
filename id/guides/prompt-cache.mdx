@@ -1,0 +1,203 @@
+---
+title: "✨ Upstream Prompt Cache"
+description: "Pahami prompt caching tingkat penyedia dan bagaimana hal ini mengurangi biaya"
+---
+
+## Gambaran Umum
+
+Selain [platform semantic cache](/guides/caching) LemonData, banyak penyedia AI menawarkan fitur **prompt caching** mereka sendiri. Ini adalah mekanisme caching terpisah yang beroperasi pada tingkat penyedia (Anthropic, OpenAI, DeepSeek, dll.).
+
+<Note>
+**Dua Jenis Caching**
+
+| Jenis | Lokasi | Cara Kerja | Biaya |
+|------|-------|--------------|------|
+| **Platform Cache** | LemonData | Pencocokan kemiripan semantik | Gratis (tanpa panggilan API) |
+| **Provider Cache** | Upstream (Anthropic/OpenAI/dll) | Pencocokan awalan (prefix) yang tepat | Tarif token diskon |
+
+Ini bersifat **mutually exclusive**: jika platform cache hit, tidak ada panggilan upstream yang dilakukan, sehingga provider cache tidak berlaku.
+</Note>
+
+## Cara Kerja Provider Prompt Cache
+
+Provider prompt caching menyimpan representasi terproses dari awalan (prefix) prompt Anda di server penyedia. Saat Anda mengirim permintaan dengan awalan yang sama, penyedia dapat melewati pemrosesan ulang token tersebut.
+
+### Karakteristik Utama
+
+- **Berbasis awalan (prefix)**: Hanya bagian awal prompt Anda yang dapat di-cache
+- **Pencocokan tepat**: Memerlukan token yang identik (bukan kemiripan semantik)
+- **Terbatas waktu**: Entri cache kedaluwarsa (biasanya 5-60 menit)
+- **Otomatis**: Tidak diperlukan konfigurasi khusus
+
+```
+Request 1: [System prompt + Context A + Question 1]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+           This prefix gets cached
+
+Request 2: [System prompt + Context A + Question 2]
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+           Cache hit! Only Question 2 is processed
+```
+
+## Penyedia yang Didukung
+
+| Penyedia | Diskon Baca Cache | Biaya Tulis Cache | Token Minimum |
+|----------|---------------------|------------------|------------|
+| **Anthropic** | Diskon 90% | Sama dengan input | 1024 |
+| **OpenAI** | Diskon 50% | Sama dengan input | 1024 |
+| **DeepSeek** | Diskon 90% | Sama dengan input | 64 |
+| **Google** | Diskon 75% | Premium 25% | 32768 |
+
+<Info>
+Diskon diterapkan secara otomatis. LemonData meneruskan harga cache penyedia kepada Anda.
+</Info>
+
+## Mengidentifikasi Penggunaan Cache
+
+### Dalam Log Penggunaan
+
+Log penggunaan Anda menunjukkan rincian token cache yang mendetail:
+
+| Bidang | Deskripsi |
+|-------|-------------|
+| `cacheReadTokens` | Token yang dilayani dari provider cache (didiskon) |
+| `cacheWriteTokens` | Token yang ditulis ke cache (untuk permintaan di masa mendatang) |
+| `nonCachedPromptTokens` | Token yang diproses tanpa cache |
+
+### Dalam Transaksi
+
+Transaksi menunjukkan label **Provider Cache** saat caching upstream digunakan:
+
+- **Cache** (biru langit): Platform semantic cache hit - biaya nol
+- **Provider Cache** (teal): Upstream prompt cache hit - tarif diskon
+
+## Contoh Perhitungan Biaya
+
+Untuk permintaan dengan 10.000 token input ke Claude (Anthropic):
+
+**Tanpa cache:**
+```
+10,000 tokens × $3.00/1M = $0.030
+```
+
+**Dengan provider cache (8.000 di-cache + 2.000 baru):**
+```
+Baca cache:  8,000 tokens × $0.30/1M = $0.0024  (diskon 90%)
+Tulis cache: 2,000 tokens × $3.00/1M = $0.0060
+Total: $0.0084 (penghematan 72%)
+```
+
+## Praktik Terbaik
+
+<AccordionGroup>
+  <Accordion title="Gunakan system prompt yang konsisten">
+    Tempatkan system prompt dan konteks statis Anda di awal pesan. Ini memaksimalkan potensi cache hit.
+  </Accordion>
+
+  <Accordion title="Kelompokkan permintaan serupa">
+    Kirim permintaan dengan awalan yang sama dalam waktu yang berdekatan untuk mendapatkan manfaat dari cache sebelum kedaluwarsa.
+  </Accordion>
+
+  <Accordion title="Penuhi persyaratan token minimum">
+    Pastikan awalan yang dapat di-cache memenuhi batas minimum penyedia (misalnya, 1024 token untuk Anthropic/OpenAI).
+  </Accordion>
+
+  <Accordion title="Pantau metrik cache">
+    Periksa statistik penggunaan dasbor Anda untuk tingkat cache hit dan penghematan.
+  </Accordion>
+</AccordionGroup>
+
+## Platform Cache vs Provider Cache
+
+| Aspek | Platform Cache | Provider Cache |
+|--------|----------------|----------------|
+| **Pencocokan** | Kemiripan semantik | Pencocokan awalan tepat |
+| **Biaya** | Gratis (tanpa panggilan API) | Tarif diskon |
+| **Latensi** | Instan (~1ms) | Berkurang (melewati pemrosesan) |
+| **Kontrol** | Pengaturan dasbor | Otomatis |
+| **Cakupan** | Lintas pengguna (opsional) | Per-API-key |
+
+### Kapan Masing-masing Berlaku
+
+```
+Permintaan tiba
+    │
+    ▼
+┌─────────────────────┐
+│ Platform Cache Hit? │
+└─────────────────────┘
+    │ Ya               │ Tidak
+    ▼                  ▼
+┌─────────┐    ┌─────────────────────┐
+│ Kembalikan  │    │ Panggil Upstream API│
+│ Cache       │    └─────────────────────┘
+│ (Gratis)    │            │
+└─────────┘            ▼
+               ┌─────────────────────┐
+               │ Provider Cache Hit? │
+               └─────────────────────┘
+                   │ Ya         │ Tidak
+                   ▼            ▼
+               Tarif Token   Tarif Token
+               Diskon        Harga Penuh
+```
+
+## Memeriksa Status Cache
+
+### Header Respons
+
+```
+X-Cache-Status: HIT           # Platform cache hit
+X-Cache-Status: MISS          # Tidak ada platform cache
+X-Upstream-Cache-Read: 8000   # Token baca provider cache
+X-Upstream-Cache-Write: 2000  # Token tulis provider cache
+```
+
+### API Penggunaan
+
+Kueri log penggunaan Anda untuk melihat rincian cache:
+
+```bash
+curl https://api.lemondata.cc/v1/usage/logs \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json"
+```
+
+Respons mencakup:
+```json
+{
+  "promptTokens": 10000,
+  "cacheReadTokens": 8000,
+  "cacheWriteTokens": 2000,
+  "nonCachedPromptTokens": 0,
+  "completionTokens": 500,
+  "cost": 0.0084
+}
+```
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Dapatkah saya menonaktifkan provider caching?">
+    Provider caching bersifat otomatis dan tidak dapat dinonaktifkan. Namun, hal ini hanya menguntungkan Anda (biaya lebih rendah), jadi tidak ada alasan untuk menonaktifkannya.
+  </Accordion>
+
+  <Accordion title="Mengapa permintaan saya tidak hit provider cache?">
+    Alasan umum:
+    - Awalan berubah (bahkan perbedaan satu token)
+    - Cache kedaluwarsa (biasanya 5-60 menit)
+    - Awalan terlalu pendek (di bawah token minimum)
+    - Kunci API yang digunakan berbeda
+  </Accordion>
+
+  <Accordion title="Apakah BYOK mendukung provider caching?">
+    Ya! Saat menggunakan kunci API Anda sendiri (BYOK), provider caching bekerja dengan cara yang sama. Cache terikat pada kunci API upstream Anda.
+  </Accordion>
+
+  <Accordion title="Bagaimana cara memaksimalkan penghematan cache?">
+    1. Gunakan platform semantic cache untuk kueri serupa yang berulang
+    2. Strukturkan prompt dengan konten statis terlebih dahulu
+    3. Jaga agar system prompt tetap konsisten di seluruh permintaan
+    4. Kirim permintaan terkait secara berurutan dengan cepat
+  </Accordion>
+</AccordionGroup>

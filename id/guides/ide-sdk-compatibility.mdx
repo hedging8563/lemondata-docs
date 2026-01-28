@@ -1,0 +1,354 @@
+---
+title: "Kompatibilitas IDE & SDK"
+description: "Referensi kompatibilitas lengkap untuk alat pengodean AI, SDK, dan framework"
+---
+
+## Gambaran Umum
+
+LemonData API dirancang untuk **kompatibilitas drop-in** dengan semua alat pengembangan AI utama. Panduan ini mendokumentasikan parameter yang didukung dan integrasi yang telah diverifikasi.
+
+<Note>
+  Semua parameter divalidasi tetapi diteruskan ke penyedia upstream. Parameter yang tidak didukung untuk model tertentu akan diabaikan secara diam-diam, memastikan kompatibilitas maksimal.
+</Note>
+
+## Format API yang Didukung
+
+| Endpoint | Format | Kasus Penggunaan |
+|----------|--------|----------|
+| `/v1/chat/completions` | OpenAI Chat | Kompatibilitas universal |
+| `/v1/responses` | OpenAI Responses | Percakapan stateful |
+| `/v1/messages` | Anthropic Messages | Fitur native Claude |
+| `/v1beta/models/:model:generateContent` | Google Gemini | Fitur native Gemini |
+
+## Kompatibilitas IDE & CLI
+
+### Alat yang Terverifikasi
+
+| Alat | Status | Format | Catatan |
+|------|--------|--------|-------|
+| **Cursor** | ✅ Penuh | OpenAI | Format tool Anthropic didukung |
+| **Claude Code CLI** | ✅ Penuh | Anthropic | Extended thinking, tool_choice |
+| **Windsurf** | ✅ Penuh | OpenAI | Format OpenAI standar |
+| **Aider** | ✅ Penuh | OpenAI | Semua model didukung |
+| **Continue.dev** | ✅ Penuh | OpenAI/Anthropic | Dukungan format ganda |
+| **OpenCode** | ✅ Penuh | OpenAI | Dukungan multi-provider |
+| **Cline/Roo Code** | ✅ Penuh | OpenAI | Melalui format OpenRouter |
+| **GitHub Copilot** | ✅ Penuh | OpenAI | Format standar |
+| **Codex CLI** | ✅ Penuh | OpenAI | OpenAI Responses API |
+| **Gemini CLI** | ✅ Penuh | Gemini | Format Gemini native |
+
+### Contoh Konfigurasi
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    Cursor menggunakan format tool gaya Anthropic secara internal. LemonData mendukung keduanya:
+    - Format OpenAI: `{ type: "function", function: { name, parameters } }`
+    - Format Anthropic: `{ name, input_schema }` (tanpa field type)
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## Kompatibilitas SDK
+
+### SDK yang Terverifikasi
+
+| SDK | Bahasa | Status | Catatan |
+|-----|----------|--------|-------|
+| **OpenAI SDK** | Python/JS/Go | ✅ Penuh | Semua parameter didukung |
+| **Anthropic SDK** | Python/JS | ✅ Penuh | Extended thinking, tools |
+| **Vercel AI SDK** | TypeScript | ✅ Penuh | streamText, generateObject |
+| **LangChain** | Python/JS | ✅ Penuh | ChatOpenAI, bind_tools |
+| **LlamaIndex** | Python | ✅ Penuh | Kompatibel dengan OpenAI |
+| **Dify** | - | ✅ Penuh | Format OpenAI |
+
+## Parameter Chat Completions
+
+### Parameter Inti
+
+| Parameter | Tipe | Deskripsi |
+|-----------|------|-------------|
+| `model` | string | Pengidentifikasi model (wajib) |
+| `messages` | array | Pesan percakapan (wajib) |
+| `max_tokens` | integer | Token output maksimum |
+| `temperature` | number | Suhu sampling (0-2) |
+| `top_p` | number | Sampling nucleus (0-1) |
+| `stream` | boolean | Aktifkan streaming |
+
+### Tool Calling
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### Opsi Tool Choice
+
+| Format | Contoh | Deskripsi |
+|--------|---------|-------------|
+| String | `"auto"`, `"none"`, `"required"` | Seleksi sederhana |
+| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | Paksa fungsi spesifik |
+| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Format native Anthropic |
+
+### Parameter Lanjutan
+
+| Parameter | Tipe | Deskripsi |
+|-----------|------|-------------|
+| `stream_options` | object | `{ include_usage: true }` untuk jumlah token |
+| `reasoning_effort` | string | `"low"`, `"medium"`, `"high"` untuk model o1/o3 |
+| `service_tier` | string | `"auto"` atau `"default"` |
+| `seed` | integer | Output deterministik |
+| `logprobs` | boolean | Kembalikan probabilitas log |
+| `top_logprobs` | integer | Jumlah logprob teratas (0-20) |
+| `logit_bias` | object | Map bias token (-100 hingga 100) |
+| `frequency_penalty` | number | Penalti repetisi (-2 hingga 2) |
+| `presence_penalty` | number | Penalti topik (-2 hingga 2) |
+| `stop` | string/array | Urutan stop |
+| `n` | integer | Jumlah penyelesaian (1-128) |
+| `user` | string | Pengidentifikasi pengguna untuk pelacakan |
+
+### Fitur Lanjutan OpenAI
+
+| Parameter | Tipe | Deskripsi |
+|-----------|------|-------------|
+| `modalities` | array | `["text", "audio"]` untuk multimodal |
+| `audio` | object | Konfigurasi output audio (suara, format) |
+| `prediction` | object | Output yang diprediksi untuk penyelesaian lebih cepat |
+| `metadata` | object | Pasangan key-value untuk pelacakan |
+| `store` | boolean | Simpan untuk pengambilan nanti |
+
+### Opsi Spesifik Penyedia
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## Parameter Anthropic Messages
+
+### Parameter Inti
+
+| Parameter | Tipe | Deskripsi |
+|-----------|------|-------------|
+| `model` | string | Pengidentifikasi model |
+| `messages` | array | Pesan percakapan |
+| `max_tokens` | integer | Output maksimum (hingga 128000) |
+| `system` | string/array | Prompt sistem |
+| `stream` | boolean | Aktifkan streaming |
+
+### Tool Calling
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### Extended Thinking
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## Parameter Responses API
+
+### Parameter Inti
+
+| Parameter | Tipe | Deskripsi |
+|-----------|------|-------------|
+| `model` | string | Pengidentifikasi model |
+| `input` | string/array | Konten input |
+| `instructions` | string | Instruksi sistem |
+| `max_output_tokens` | integer | Token output maksimum |
+| `previous_response_id` | string | Lanjutkan percakapan |
+
+### Parameter Lanjutan
+
+| Parameter | Tipe | Deskripsi |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` atau `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | Untuk model reasoning |
+| `service_tier` | string | Tier prioritas |
+
+### Format Tool
+
+Mendukung format tool OpenAI dan Anthropic:
+
+```json
+// Format OpenAI
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Format Anthropic (kompatibilitas Cursor)
+{ "name": "fn", "input_schema": {...} }
+```
+
+## Parameter Gemini API
+
+### Parameter Inti
+
+| Parameter | Tipe | Deskripsi |
+|-----------|------|-------------|
+| `contents` | array | Konten percakapan |
+| `systemInstruction` | object | Prompt sistem |
+| `generationConfig` | object | Pengaturan generasi |
+
+### Tools
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "Search the web",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### Pengaturan Keamanan
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### Parameter Tambahan
+
+| Parameter | Tipe | Deskripsi |
+|-----------|------|-------------|
+| `cachedContent` | string | Referensi konten yang di-cache |
+| `responseMimeType` | string | `"text/plain"` atau `"application/json"` |
+| `responseSchema` | object | Skema JSON untuk output terstruktur |
+
+## Streaming
+
+Semua endpoint mendukung streaming Server-Sent Events (SSE):
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# Dengan pelacakan penggunaan
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## Penanganan Error
+
+LemonData mengembalikan respons error yang kompatibel dengan OpenAI:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+Lihat [Panduan Penanganan Error](/guides/error-handling) untuk detailnya.
+
+## Praktik Terbaik
+
+<AccordionGroup>
+  <Accordion title="Gunakan passthrough untuk parameter yang tidak dikenal">
+    Semua skema menggunakan `.passthrough()` - parameter yang tidak dikenal diteruskan ke penyedia upstream.
+  </Accordion>
+
+  <Accordion title="Utamakan stream_options untuk penagihan yang akurat">
+    Aktifkan `stream_options.include_usage` untuk jumlah token yang akurat dalam respons streaming.
+  </Accordion>
+
+  <Accordion title="Gunakan format tool_choice yang sesuai">
+    Sesuaikan dengan format yang diharapkan SDK Anda. LemonData menerima format OpenAI dan Anthropic.
+  </Accordion>
+</AccordionGroup>

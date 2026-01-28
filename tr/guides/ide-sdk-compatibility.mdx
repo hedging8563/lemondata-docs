@@ -1,0 +1,354 @@
+---
+title: "IDE ve SDK Uyumluluğu"
+description: "Yapay zeka kodlama araçları, SDK'lar ve çerçeveler için tam uyumluluk referansı"
+---
+
+## Genel Bakış
+
+LemonData API, tüm ana yapay zeka geliştirme araçlarıyla **doğrudan uyumluluk** (drop-in compatibility) için tasarlanmıştır. Bu kılavuz, desteklenen parametreleri ve doğrulanmış entegrasyonları belgelemektedir.
+
+<Note>
+  Tüm parametreler doğrulanır ancak üst sağlayıcılara iletilir. Belirli modeller için desteklenmeyen parametreler, maksimum uyumluluk sağlamak amacıyla sessizce yoksayılır.
+</Note>
+
+## Desteklenen API Formatları
+
+| Uç Nokta | Format | Kullanım Durumu |
+|----------|--------|----------|
+| `/v1/chat/completions` | OpenAI Chat | Evrensel uyumluluk |
+| `/v1/responses` | OpenAI Responses | Durumlu (stateful) konuşmalar |
+| `/v1/messages` | Anthropic Messages | Claude yerel özellikleri |
+| `/v1beta/models/:model:generateContent` | Google Gemini | Gemini yerel özellikleri |
+
+## IDE ve CLI Uyumluluğu
+
+### Doğrulanmış Araçlar
+
+| Araç | Durum | Format | Notlar |
+|------|--------|--------|-------|
+| **Cursor** | ✅ Tam | OpenAI | Anthropic araç formatı destekleniyor |
+| **Claude Code CLI** | ✅ Tam | Anthropic | Genişletilmiş düşünme (extended thinking), `tool_choice` |
+| **Windsurf** | ✅ Tam | OpenAI | Standart OpenAI formatı |
+| **Aider** | ✅ Tam | OpenAI | Tüm modeller destekleniyor |
+| **Continue.dev** | ✅ Tam | OpenAI/Anthropic | Çift format desteği |
+| **OpenCode** | ✅ Tam | OpenAI | Çoklu sağlayıcı desteği |
+| **Cline/Roo Code** | ✅ Tam | OpenAI | OpenRouter formatı üzerinden |
+| **GitHub Copilot** | ✅ Tam | OpenAI | Standart format |
+| **Codex CLI** | ✅ Tam | OpenAI | OpenAI Responses API |
+| **Gemini CLI** | ✅ Tam | Gemini | Yerel Gemini formatı |
+
+### Yapılandırma Örnekleri
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    Cursor dahili olarak Anthropic tarzı araç formatını kullanır. LemonData her ikisini de destekler:
+    - OpenAI formatı: `{ type: "function", function: { name, parameters } }`
+    - Anthropic formatı: `{ name, input_schema }` (`type` alanı yok)
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## SDK Uyumluluğu
+
+### Doğrulanmış SDK'lar
+
+| SDK | Dil | Durum | Notlar |
+|-----|----------|--------|-------|
+| **OpenAI SDK** | Python/JS/Go | ✅ Tam | Tüm parametreler destekleniyor |
+| **Anthropic SDK** | Python/JS | ✅ Tam | Genişletilmiş düşünme, araçlar |
+| **Vercel AI SDK** | TypeScript | ✅ Tam | `streamText`, `generateObject` |
+| **LangChain** | Python/JS | ✅ Tam | `ChatOpenAI`, `bind_tools` |
+| **LlamaIndex** | Python | ✅ Tam | OpenAI uyumlu |
+| **Dify** | - | ✅ Tam | OpenAI formatı |
+
+## Chat Completions Parametreleri
+
+### Temel Parametreler
+
+| Parametre | Tür | Açıklama |
+|-----------|------|-------------|
+| `model` | string | Model tanımlayıcı (gerekli) |
+| `messages` | array | Konuşma mesajları (gerekli) |
+| `max_tokens` | integer | Maksimum çıktı token'ları |
+| `temperature` | number | Örnekleme sıcaklığı (0-2) |
+| `top_p` | number | Çekirdek örnekleme (0-1) |
+| `stream` | boolean | Akışı (streaming) etkinleştir |
+
+### Araç Çağırma (Tool Calling)
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### Tool Choice Seçenekleri
+
+| Format | Örnek | Açıklama |
+|--------|---------|-------------|
+| String | `"auto"`, `"none"`, `"required"` | Basit seçim |
+| OpenAI Nesnesi | `{ "type": "function", "function": { "name": "fn" } }` | Belirli bir fonksiyonu zorla |
+| Anthropic Nesnesi | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Anthropic yerel formatı |
+
+### Gelişmiş Parametreler
+
+| Parametre | Tür | Açıklama |
+|-----------|------|-------------|
+| `stream_options` | object | Token sayıları için `{ include_usage: true }` |
+| `reasoning_effort` | string | o1/o3 modelleri için `"low"`, `"medium"`, `"high"` |
+| `service_tier` | string | `"auto"` veya `"default"` |
+| `seed` | integer | Deterministik çıktılar |
+| `logprobs` | boolean | Log olasılıklarını döndür |
+| `top_logprobs` | integer | En yüksek logprob sayısı (0-20) |
+| `logit_bias` | object | Token sapma haritası (-100 ile 100 arası) |
+| `frequency_penalty` | number | Tekrarlama cezası (-2 ile 2 arası) |
+| `presence_penalty` | number | Konu cezası (-2 ile 2 arası) |
+| `stop` | string/array | Durdurma dizileri |
+| `n` | integer | Tamamlama sayısı (1-128) |
+| `user` | string | Takip için kullanıcı tanımlayıcı |
+
+### OpenAI Gelişmiş Özellikleri
+
+| Parametre | Tür | Açıklama |
+|-----------|------|-------------|
+| `modalities` | array | Çok modlu (multimodal) için `["text", "audio"]` |
+| `audio` | object | Ses çıktısı yapılandırması (ses, format) |
+| `prediction` | object | Daha hızlı tamamlama için tahmin edilen çıktı |
+| `metadata` | object | Takip için anahtar-değer çiftleri |
+| `store` | boolean | Daha sonra geri çağırmak için sakla |
+
+### Sağlayıcıya Özel Seçenekler
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## Anthropic Messages Parametreleri
+
+### Temel Parametreler
+
+| Parametre | Tür | Açıklama |
+|-----------|------|-------------|
+| `model` | string | Model tanımlayıcı |
+| `messages` | array | Konuşma mesajları |
+| `max_tokens` | integer | Maksimum çıktı (128000'e kadar) |
+| `system` | string/array | Sistem istemi (system prompt) |
+| `stream` | boolean | Akışı etkinleştir |
+
+### Araç Çağırma (Tool Calling)
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### Genişletilmiş Düşünme (Extended Thinking)
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## Responses API Parametreleri
+
+### Temel Parametreler
+
+| Parametre | Tür | Açıklama |
+|-----------|------|-------------|
+| `model` | string | Model tanımlayıcı |
+| `input` | string/array | Girdi içeriği |
+| `instructions` | string | Sistem talimatları |
+| `max_output_tokens` | integer | Maksimum çıktı token'ları |
+| `previous_response_id` | string | Konuşmaya devam et |
+
+### Gelişmiş Parametreler
+
+| Parametre | Tür | Açıklama |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` veya `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | Akıl yürütme (reasoning) modelleri için |
+| `service_tier` | string | Öncelik katmanı |
+
+### Araç Formatı
+
+Hem OpenAI hem de Anthropic araç formatlarını destekler:
+
+```json
+// OpenAI formatı
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Anthropic formatı (Cursor uyumluluğu)
+{ "name": "fn", "input_schema": {...} }
+```
+
+## Gemini API Parametreleri
+
+### Temel Parametreler
+
+| Parametre | Tür | Açıklama |
+|-----------|------|-------------|
+| `contents` | array | Konuşma içeriği |
+| `systemInstruction` | object | Sistem istemi |
+| `generationConfig` | object | Oluşturma ayarları |
+
+### Araçlar (Tools)
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "Search the web",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### Güvenlik Ayarları (Safety Settings)
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### Ek Parametreler
+
+| Parametre | Tür | Açıklama |
+|-----------|------|-------------|
+| `cachedContent` | string | Önbelleğe alınmış içerik referansı |
+| `responseMimeType` | string | `"text/plain"` veya `"application/json"` |
+| `responseSchema` | object | Yapılandırılmış çıktı için JSON şeması |
+
+## Akış (Streaming)
+
+Tüm uç noktalar Server-Sent Events (SSE) akışını destekler:
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# Kullanım takibi ile
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## Hata Yönetimi
+
+LemonData, OpenAI uyumlu hata yanıtları döndürür:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+Detaylar için [Hata Yönetimi Kılavuzu](/guides/error-handling) sayfasına bakın.
+
+## En İyi Uygulamalar
+
+<AccordionGroup>
+  <Accordion title="Bilinmeyen parametreler için passthrough kullanın">
+    Tüm şemalar `.passthrough()` kullanır - bilinmeyen parametreler üst sağlayıcılara iletilir.
+  </Accordion>
+
+  <Accordion title="Doğru faturalandırma için stream_options tercih edin">
+    Akış yanıtlarında doğru token sayıları için `stream_options.include_usage` özelliğini etkinleştirin.
+  </Accordion>
+
+  <Accordion title="Uygun tool_choice formatını kullanın">
+    SDK'nızın beklediği formatla eşleştirin. LemonData hem OpenAI hem de Anthropic formatlarını kabul eder.
+  </Accordion>
+</AccordionGroup>

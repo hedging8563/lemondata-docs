@@ -1,0 +1,354 @@
+---
+title: "IDE & SDKの互換性"
+description: "AIコーディングツール、SDK、フレームワークの完全な互換性リファレンス"
+---
+
+## 概要
+
+LemonData APIは、すべての主要なAI開発ツールとの**ドロップイン互換性**を考慮して設計されています。このガイドでは、サポートされているパラメータと検証済みの統合について説明します。
+
+<Note>
+  すべてのパラメータは検証されますが、アップストリームプロバイダーにそのまま渡されます。特定のモデルでサポートされていないパラメータは、互換性を最大限に確保するために、エラーを出さずに無視されます。
+</Note>
+
+## サポートされているAPIフォーマット
+
+| エンドポイント | フォーマット | ユースケース |
+|----------|--------|----------|
+| `/v1/chat/completions` | OpenAI Chat | 汎用的な互換性 |
+| `/v1/responses` | OpenAI Responses | ステートフルな会話 |
+| `/v1/messages` | Anthropic Messages | Claudeネイティブ機能 |
+| `/v1beta/models/:model:generateContent` | Google Gemini | Geminiネイティブ機能 |
+
+## IDE & CLIの互換性
+
+### 検証済みツール
+
+| ツール | ステータス | フォーマット | 備考 |
+|------|--------|--------|-------|
+| **Cursor** | ✅ 完全 | OpenAI | Anthropicツールフォーマットをサポート |
+| **Claude Code CLI** | ✅ 完全 | Anthropic | 拡張思考（Extended thinking）、`tool_choice` |
+| **Windsurf** | ✅ 完全 | OpenAI | 標準的なOpenAIフォーマット |
+| **Aider** | ✅ 完全 | OpenAI | すべてのモデルをサポート |
+| **Continue.dev** | ✅ 完全 | OpenAI/Anthropic | デュアルフォーマットサポート |
+| **OpenCode** | ✅ 完全 | OpenAI | マルチプロバイダーサポート |
+| **Cline/Roo Code** | ✅ 完全 | OpenAI | OpenRouterフォーマット経由 |
+| **GitHub Copilot** | ✅ 完全 | OpenAI | 標準フォーマット |
+| **Codex CLI** | ✅ 完全 | OpenAI | OpenAI Responses API |
+| **Gemini CLI** | ✅ 完全 | Gemini | ネイティブGeminiフォーマット |
+
+### 設定例
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    Cursorは内部的にAnthropicスタイルのツールフォーマットを使用します。LemonDataは以下の両方をサポートしています：
+    - OpenAIフォーマット：`{ type: "function", function: { name, parameters } }`
+    - Anthropicフォーマット：`{ name, input_schema }` (typeフィールドなし)
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## SDKの互換性
+
+### 検証済みSDK
+
+| SDK | 言語 | ステータス | 備考 |
+|-----|----------|--------|-------|
+| **OpenAI SDK** | Python/JS/Go | ✅ 完全 | すべてのパラメータをサポート |
+| **Anthropic SDK** | Python/JS | ✅ 完全 | 拡張思考（Extended thinking）、ツール |
+| **Vercel AI SDK** | TypeScript | ✅ 完全 | `streamText`, `generateObject` |
+| **LangChain** | Python/JS | ✅ 完全 | `ChatOpenAI`, `bind_tools` |
+| **LlamaIndex** | Python | ✅ 完全 | OpenAI互換 |
+| **Dify** | - | ✅ 完全 | OpenAIフォーマット |
+
+## Chat Completionsパラメータ
+
+### コアパラメータ
+
+| パラメータ | 型 | 説明 |
+|-----------|------|-------------|
+| `model` | string | モデル識別子（必須） |
+| `messages` | array | 会話メッセージ（必須） |
+| `max_tokens` | integer | 最大出力トークン |
+| `temperature` | number | サンプリング温度 (0-2) |
+| `top_p` | number | 核サンプリング (0-1) |
+| `stream` | boolean | ストリーミングを有効化 |
+
+### ツール呼び出し
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### Tool Choiceオプション
+
+| フォーマット | 例 | 説明 |
+|--------|---------|-------------|
+| String | `"auto"`, `"none"`, `"required"` | シンプルな選択 |
+| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | 特定の関数を強制 |
+| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Anthropicネイティブフォーマット |
+
+### 高度なパラメータ
+
+| パラメータ | 型 | 説明 |
+|-----------|------|-------------|
+| `stream_options` | object | トークン数カウント用の `{ include_usage: true }` |
+| `reasoning_effort` | string | o1/o3モデル用の `"low"`, `"medium"`, `"high"` |
+| `service_tier` | string | `"auto"` または `"default"` |
+| `seed` | integer | 決定論的な出力 |
+| `logprobs` | boolean | ログ確率を返す |
+| `top_logprobs` | integer | 上位ログ確率の数 (0-20) |
+| `logit_bias` | object | トークンバイアスマップ (-100 ～ 100) |
+| `frequency_penalty` | number | 繰り返しペナルティ (-2 ～ 2) |
+| `presence_penalty` | number | トピックペナルティ (-2 ～ 2) |
+| `stop` | string/array | 停止シーケンス |
+| `n` | integer | 補完の数 (1-128) |
+| `user` | string | トラッキング用のユーザー識別子 |
+
+### OpenAIの高度な機能
+
+| パラメータ | 型 | 説明 |
+|-----------|------|-------------|
+| `modalities` | array | マルチモーダル用の `["text", "audio"]` |
+| `audio` | object | オーディオ出力設定（音声、フォーマット） |
+| `prediction` | object | 高速な補完のための予測出力 |
+| `metadata` | object | トラッキング用のキー値ペア |
+| `store` | boolean | 後で取得するために保存 |
+
+### プロバイダー固有のオプション
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## Anthropic Messagesパラメータ
+
+### コアパラメータ
+
+| パラメータ | 型 | 説明 |
+|-----------|------|-------------|
+| `model` | string | モデル識別子 |
+| `messages` | array | 会話メッセージ |
+| `max_tokens` | integer | 最大出力（最大128,000） |
+| `system` | string/array | システムプロンプト |
+| `stream` | boolean | ストリーミングを有効化 |
+
+### ツール呼び出し
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### 拡張思考（Extended Thinking）
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## Responses APIパラメータ
+
+### コアパラメータ
+
+| パラメータ | 型 | 説明 |
+|-----------|------|-------------|
+| `model` | string | モデル識別子 |
+| `input` | string/array | 入力コンテンツ |
+| `instructions` | string | システム指示 |
+| `max_output_tokens` | integer | 最大出力トークン |
+| `previous_response_id` | string | 会話を継続 |
+
+### 高度なパラメータ
+
+| パラメータ | 型 | 説明 |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` または `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | 推論モデル用 |
+| `service_tier` | string | 優先ティア |
+
+### ツールフォーマット
+
+OpenAIとAnthropicの両方のツールフォーマットをサポートしています：
+
+```json
+// OpenAI format
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Anthropic format (Cursor compatibility)
+{ "name": "fn", "input_schema": {...} }
+```
+
+## Gemini APIパラメータ
+
+### コアパラメータ
+
+| パラメータ | 型 | 説明 |
+|-----------|------|-------------|
+| `contents` | array | 会話コンテンツ |
+| `systemInstruction` | object | システムプロンプト |
+| `generationConfig` | object | 生成設定 |
+
+### ツール
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "Search the web",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### 安全設定
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### 追加パラメータ
+
+| パラメータ | 型 | 説明 |
+|-----------|------|-------------|
+| `cachedContent` | string | キャッシュされたコンテンツの参照 |
+| `responseMimeType` | string | `"text/plain"` または `"application/json"` |
+| `responseSchema` | object | 構造化出力用のJSONスキーマ |
+
+## ストリーミング
+
+すべてのエンドポイントはServer-Sent Events (SSE) ストリーミングをサポートしています：
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# 使用状況トラッキングあり
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## エラーハンドリング
+
+LemonDataはOpenAI互換のエラーレスポンスを返します：
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+詳細は[エラーハンドリングガイド](/guides/error-handling)を参照してください。
+
+## ベストプラクティス
+
+<AccordionGroup>
+  <Accordion title="未知のパラメータにはパススルーを使用する">
+    すべてのスキーマは `.passthrough()` を使用しており、未知のパラメータはアップストリームプロバイダーに転送されます。
+  </Accordion>
+
+  <Accordion title="正確な請求のために stream_options を優先する">
+    ストリーミングレスポンスで正確なトークン数を取得するには、`stream_options.include_usage` を有効にしてください。
+  </Accordion>
+
+  <Accordion title="適切な tool_choice フォーマットを使用する">
+    SDKが期待するフォーマットに合わせてください。LemonDataはOpenAIとAnthropicの両方のフォーマットを受け入れます。
+  </Accordion>
+</AccordionGroup>

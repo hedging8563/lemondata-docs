@@ -1,0 +1,354 @@
+---
+title: "IDE- & SDK-Kompatibilität"
+description: "Vollständige Kompatibilitätsreferenz für KI-Coding-Tools, SDKs und Frameworks"
+---
+
+## Übersicht
+
+Die LemonData API ist für **Drop-in-Kompatibilität** mit allen gängigen KI-Entwicklungstools konzipiert. Dieser Leitfaden dokumentiert unterstützte Parameter und verifizierte Integrationen.
+
+<Note>
+  Alle Parameter werden validiert, aber an die Upstream-Provider weitergereicht. Nicht unterstützte Parameter für spezifische Modelle werden stillschweigend ignoriert, um maximale Kompatibilität zu gewährleisten.
+</Note>
+
+## Unterstützte API-Formate
+
+| Endpoint | Format | Anwendungsfall |
+|----------|--------|----------|
+| `/v1/chat/completions` | OpenAI Chat | Universelle Kompatibilität |
+| `/v1/responses` | OpenAI Responses | Stateful Konversationen |
+| `/v1/messages` | Anthropic Messages | Claude-native Funktionen |
+| `/v1beta/models/:model:generateContent` | Google Gemini | Gemini-native Funktionen |
+
+## IDE- & CLI-Kompatibilität
+
+### Verifizierte Tools
+
+| Tool | Status | Format | Anmerkungen |
+|------|--------|--------|-------|
+| **Cursor** | ✅ Vollständig | OpenAI | Anthropic-Tool-Format unterstützt |
+| **Claude Code CLI** | ✅ Vollständig | Anthropic | Extended Thinking, tool_choice |
+| **Windsurf** | ✅ Vollständig | OpenAI | Standard-OpenAI-Format |
+| **Aider** | ✅ Vollständig | OpenAI | Alle Modelle unterstützt |
+| **Continue.dev** | ✅ Vollständig | OpenAI/Anthropic | Unterstützung für duale Formate |
+| **OpenCode** | ✅ Vollständig | OpenAI | Multi-Provider-Unterstützung |
+| **Cline/Roo Code** | ✅ Vollständig | OpenAI | Über OpenRouter-Format |
+| **GitHub Copilot** | ✅ Vollständig | OpenAI | Standardformat |
+| **Codex CLI** | ✅ Vollständig | OpenAI | OpenAI Responses API |
+| **Gemini CLI** | ✅ Vollständig | Gemini | Natives Gemini-Format |
+
+### Konfigurationsbeispiele
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    Cursor verwendet intern das Tool-Format im Anthropic-Stil. LemonData unterstützt beide:
+    - OpenAI-Format: `{ type: "function", function: { name, parameters } }`
+    - Anthropic-Format: `{ name, input_schema }` (kein type-Feld)
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## SDK-Kompatibilität
+
+### Verifizierte SDKs
+
+| SDK | Sprache | Status | Anmerkungen |
+|-----|----------|--------|-------|
+| **OpenAI SDK** | Python/JS/Go | ✅ Vollständig | Alle Parameter unterstützt |
+| **Anthropic SDK** | Python/JS | ✅ Vollständig | Extended Thinking, Tools |
+| **Vercel AI SDK** | TypeScript | ✅ Vollständig | streamText, generateObject |
+| **LangChain** | Python/JS | ✅ Vollständig | ChatOpenAI, bind_tools |
+| **LlamaIndex** | Python | ✅ Vollständig | OpenAI-kompatibel |
+| **Dify** | - | ✅ Vollständig | OpenAI-Format |
+
+## Chat Completions Parameter
+
+### Kernparameter
+
+| Parameter | Typ | Beschreibung |
+|-----------|------|-------------|
+| `model` | string | Modell-Identifikator (erforderlich) |
+| `messages` | array | Konversationsnachrichten (erforderlich) |
+| `max_tokens` | integer | Maximale Output-Tokens |
+| `temperature` | number | Sampling-Temperatur (0-2) |
+| `top_p` | number | Nucleus-Sampling (0-1) |
+| `stream` | boolean | Streaming aktivieren |
+
+### Tool-Aufrufe
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### Optionen für Tool Choice
+
+| Format | Beispiel | Beschreibung |
+|--------|---------|-------------|
+| String | `"auto"`, `"none"`, `"required"` | Einfache Auswahl |
+| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | Spezifische Funktion erzwingen |
+| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Natives Anthropic-Format |
+
+### Erweiterte Parameter
+
+| Parameter | Typ | Beschreibung |
+|-----------|------|-------------|
+| `stream_options` | object | `{ include_usage: true }` für Token-Zählung |
+| `reasoning_effort` | string | `"low"`, `"medium"`, `"high"` für o1/o3-Modelle |
+| `service_tier` | string | `"auto"` oder `"default"` |
+| `seed` | integer | Deterministische Ausgaben |
+| `logprobs` | boolean | Log-Wahrscheinlichkeiten zurückgeben |
+| `top_logprobs` | integer | Anzahl der Top-Logprobs (0-20) |
+| `logit_bias` | object | Token-Bias-Map (-100 bis 100) |
+| `frequency_penalty` | number | Wiederholungs-Penalty (-2 bis 2) |
+| `presence_penalty` | number | Themen-Penalty (-2 bis 2) |
+| `stop` | string/array | Stop-Sequenzen |
+| `n` | integer | Anzahl der Vervollständigungen (1-128) |
+| `user` | string | Benutzer-Identifikator für Tracking |
+
+### Erweiterte OpenAI-Funktionen
+
+| Parameter | Typ | Beschreibung |
+|-----------|------|-------------|
+| `modalities` | array | `["text", "audio"]` für Multimodalität |
+| `audio` | object | Audio-Output-Konfiguration (Stimme, Format) |
+| `prediction` | object | Vorhergesagter Output für schnellere Vervollständigung |
+| `metadata` | object | Key-Value-Paare für Tracking |
+| `store` | boolean | Für späteren Abruf speichern |
+
+### Provider-spezifische Optionen
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## Anthropic Messages Parameter
+
+### Kernparameter
+
+| Parameter | Typ | Beschreibung |
+|-----------|------|-------------|
+| `model` | string | Modell-Identifikator |
+| `messages` | array | Konversationsnachrichten |
+| `max_tokens` | integer | Maximaler Output (bis zu 128000) |
+| `system` | string/array | System-Prompt |
+| `stream` | boolean | Streaming aktivieren |
+
+### Tool-Aufrufe
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### Extended Thinking
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## Responses API Parameter
+
+### Kernparameter
+
+| Parameter | Typ | Beschreibung |
+|-----------|------|-------------|
+| `model` | string | Modell-Identifikator |
+| `input` | string/array | Input-Inhalt |
+| `instructions` | string | System-Anweisungen |
+| `max_output_tokens` | integer | Maximale Output-Tokens |
+| `previous_response_id` | string | Konversation fortsetzen |
+
+### Erweiterte Parameter
+
+| Parameter | Typ | Beschreibung |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` oder `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | Für Reasoning-Modelle |
+| `service_tier` | string | Prioritätsstufe |
+
+### Tool-Format
+
+Unterstützt sowohl OpenAI- als auch Anthropic-Tool-Formate:
+
+```json
+// OpenAI format
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Anthropic format (Cursor compatibility)
+{ "name": "fn", "input_schema": {...} }
+```
+
+## Gemini API Parameter
+
+### Kernparameter
+
+| Parameter | Typ | Beschreibung |
+|-----------|------|-------------|
+| `contents` | array | Konversationsinhalt |
+| `systemInstruction` | object | System-Prompt |
+| `generationConfig` | object | Generierungseinstellungen |
+
+### Tools
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "Search the web",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### Sicherheitseinstellungen
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### Zusätzliche Parameter
+
+| Parameter | Typ | Beschreibung |
+|-----------|------|-------------|
+| `cachedContent` | string | Referenz auf gecachten Inhalt |
+| `responseMimeType` | string | `"text/plain"` oder `"application/json"` |
+| `responseSchema` | object | JSON-Schema für strukturierten Output |
+
+## Streaming
+
+Alle Endpunkte unterstützen Server-Sent Events (SSE) Streaming:
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# With usage tracking
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## Fehlerbehandlung
+
+LemonData gibt OpenAI-kompatible Fehlermeldungen zurück:
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+Siehe [Leitfaden zur Fehlerbehandlung](/guides/error-handling) für Details.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Passthrough für unbekannte Parameter verwenden">
+    Alle Schemata verwenden `.passthrough()` – unbekannte Parameter werden an die Upstream-Provider weitergeleitet.
+  </Accordion>
+
+  <Accordion title="stream_options für genaue Abrechnung bevorzugen">
+    Aktivieren Sie `stream_options.include_usage` für genaue Token-Zählungen in Streaming-Antworten.
+  </Accordion>
+
+  <Accordion title="Passendes tool_choice-Format verwenden">
+    Verwenden Sie das von Ihrem SDK erwartete Format. LemonData akzeptiert sowohl OpenAI- als auch Anthropic-Formate.
+  </Accordion>
+</AccordionGroup>
