@@ -1,0 +1,266 @@
+---
+title: "✨ API Multiformato"
+description: "Usa los formatos de OpenAI, Anthropic o Gemini con una sola API key"
+---
+
+## Resumen
+
+LemonData soporta **tres formatos de API nativos** a través de una única API key. Elige el formato que mejor se adapte a tu caso de uso, sin necesidad de cambiar la configuración.
+
+<CardGroup cols={3}>
+  <Card title="Formato OpenAI" icon="plug">
+    `/v1/chat/completions`
+    Formato estándar, la compatibilidad más amplia
+  </Card>
+  <Card title="Formato Anthropic" icon="message">
+    `/v1/messages`
+    Pensamiento extendido, funciones nativas de Claude
+  </Card>
+  <Card title="Formato Gemini" icon="sparkles">
+    `/v1beta/models/:model:generateContent`
+    Integración con el ecosistema de Google
+  </Card>
+</CardGroup>
+
+## ¿Por qué usar multiformato?
+
+| Ventaja | Descripción |
+|---------|-------------|
+| **Sin cambio de SDK** | Llama a cualquier modelo usando tu SDK preferido |
+| **Funciones nativas** | Acceso a funciones específicas de cada formato |
+| **Migración sencilla** | Cambia desde las API oficiales simplemente modificando la base URL |
+| **Facturación unificada** | Una cuenta, una API key, soporte para todos los formatos |
+
+## Comparación de formatos
+
+| Función | OpenAI | Anthropic | Gemini |
+|---------|--------|-----------|--------|
+| **Endpoint** | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/:model:generateContent` |
+| **Encabezado de autenticación** | `Authorization: Bearer` | `x-api-key` | `Authorization: Bearer` |
+| **System Prompt** | En el array de `messages` | Campo `system` independiente | En `systemInstruction` |
+| **Pensamiento extendido** | ❌ | ✅ | ❌ |
+| **Streaming** | ✅ SSE | ✅ SSE | ✅ SSE |
+| **Tool calling** | ✅ | ✅ | ✅ |
+| **Vision** | ✅ | ✅ | ✅ |
+
+## Formato OpenAI
+
+El formato con la compatibilidad más amplia. Disponible para todos los modelos de LemonData.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# Funciona para cualquier modelo
+response = client.chat.completions.create(
+    model="claude-sonnet-4-5",  # Llamada a Claude a través del formato OpenAI
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+**Ideal para:**
+- Uso general
+- Integraciones existentes con el SDK de OpenAI
+- Máxima compatibilidad
+
+## Formato Anthropic
+
+API nativa de Anthropic Messages. Esencial al usar funciones específicas de Claude (como el pensamiento extendido).
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc"  # ¡Sin el sufijo /v1!
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    system="You are a helpful assistant.",  # Campo system independiente
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+### Pensamiento extendido (Claude Opus 4.5)
+
+Disponible solo en el formato Anthropic:
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex problem..."}]
+)
+
+# Acceso al proceso de pensamiento
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Answer: {block.text}")
+```
+
+**Ideal para:**
+- Funciones específicas de Claude
+- Modo de pensamiento extendido
+- Usuarios del SDK nativo de Anthropic
+
+## Formato Gemini
+
+Formato nativo de la API de Google Gemini, utilizado para la integración con el ecosistema de Google.
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{
+      "parts": [{"text": "Hello!"}]
+    }],
+    "systemInstruction": {
+      "parts": [{"text": "You are a helpful assistant."}]
+    }
+  }'
+```
+
+### Streaming
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{"parts": [{"text": "Write a story"}]}]
+  }'
+```
+
+**Ideal para:**
+- Integración con Google Cloud
+- Código existente del SDK de Gemini
+- Funciones nativas de Gemini
+
+## Elegir el formato correcto
+
+```mermaid
+graph TD
+    A[¿Qué formato elegir?] --> B{¿Necesitas el pensamiento extendido de Claude?}
+    B -->|Sí| C[Usar formato Anthropic]
+    B -->|No| D{¿Base de código existente?}
+    D -->|OpenAI SDK| E[Usar formato OpenAI]
+    D -->|Anthropic SDK| C
+    D -->|Gemini SDK| F[Usar formato Gemini]
+    D -->|Nuevo proyecto| E
+```
+
+## Guía de migración
+
+### Migración desde la API oficial de OpenAI
+
+```python
+# Antes de la migración (OpenAI)
+client = OpenAI(api_key="sk-openai-key")
+
+# Después de la migración (LemonData)
+client = OpenAI(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"  # Añade esta línea
+)
+# ¡Eso es todo! El mismo código funcionará
+```
+
+### Migración desde la API oficial de Anthropic
+
+```python
+# Antes de la migración (Anthropic)
+client = Anthropic(api_key="sk-ant-key")
+
+# Después de la migración (LemonData)
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"  # Añade esta línea (¡sin /v1!)
+)
+```
+
+### Migración desde Google AI Studio
+
+```python
+# Antes de la migración (Google)
+import google.generativeai as genai
+genai.configure(api_key="google-api-key")
+
+# Después de la migración (LemonData) - Usando la API REST
+import requests
+
+response = requests.post(
+    "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent",
+    headers={"Authorization": "Bearer sk-lemondata-key"},
+    json={"contents": [{"parts": [{"text": "Hello"}]}]}
+)
+```
+
+## Compatibilidad entre modelos
+
+La magia de LemonData: usa **cualquier SDK** con **cualquier modelo**. El gateway maneja automáticamente la conversión de formatos.
+
+### Cualquier SDK → Cualquier modelo
+
+```python
+# Llamada a GPT-4o usando el SDK de Anthropic (conversión automática al formato OpenAI)
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"
+)
+
+response = client.messages.create(
+    model="gpt-4o",  # ✅ ¡Funciona! Convertido automáticamente
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# El mismo SDK, diferentes modelos — sin cambios en el código
+response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ ¡Funciona!
+response = client.messages.create(model="deepseek-r1", ...)       # ✅ ¡Funciona!
+```
+
+### SDK de OpenAI → Todos los modelos
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
+
+# Los siguientes modelos funcionan con el mismo SDK:
+response = client.chat.completions.create(model="gpt-4o", ...)
+response = client.chat.completions.create(model="claude-sonnet-4-5", ...)
+response = client.chat.completions.create(model="gemini-2.5-flash", ...)
+```
+
+### Comparativa de la industria
+
+| Plataforma | Formato OpenAI | Formato Anthropic | Formato Gemini | Responses API |
+|----------|:---:|:---:|:---:|:---:|
+| **LemonData** | ✅ Todos los modelos | ✅ Todos los modelos | ✅ Todos los modelos | ✅ Todos los modelos |
+| OpenRouter | ✅ Todos los modelos | ❌ | ❌ | ❌ |
+| Together AI | ✅ Todos los modelos | ❌ | ❌ | ❌ |
+| Fireworks | ✅ Todos los modelos | ❌ | ❌ | ❌ |
+
+<Note>
+Aunque el soporte entre formatos cubre la mayoría de las funciones, las características específicas de un formato (como el pensamiento extendido de Anthropic) aún requieren el uso del formato nativo.
+</Note>

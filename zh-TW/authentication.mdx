@@ -1,0 +1,146 @@
+---
+title: "身份驗證"
+description: "使用 API 金鑰保護您的 API 請求"
+---
+
+## API 金鑰
+
+所有 API 請求都需要使用 API 金鑰進行身份驗證。請在 `Authorization` 標頭中包含您的金鑰：
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+## 獲取您的 API 金鑰
+
+1. 登入您的 [LemonData Dashboard](https://lemondata.cc/dashboard)
+2. 導覽至 **API Keys** 區塊
+3. 點擊 **Create New Key**
+4. 為您的金鑰提供一個具描述性的名稱
+5. 立即複製金鑰 — 它僅會顯示一次
+
+<Warning>
+  **安全性最佳實踐：**
+  - 切勿在用戶端程式碼中洩露 API 金鑰
+  - 不要將金鑰提交至版本控制系統
+  - 使用環境變數來儲存金鑰
+  - 定期輪換金鑰
+  - 刪除未使用的金鑰
+</Warning>
+
+## 使用 API 金鑰
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer $LEMONDATA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+```python Python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ.get("LEMONDATA_API_KEY"),
+    base_url="https://api.lemondata.cc/v1"
+)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+```
+
+```go Go
+package main
+
+import "github.com/sashabaranov/go-openai"
+
+func main() {
+    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+}
+```
+
+```php PHP
+<?php
+$apiKey = getenv('LEMONDATA_API_KEY');
+
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+curl_setopt_array($ch, [
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer ' . $apiKey,
+        'Content-Type: application/json'
+    ]
+]);
+```
+
+</CodeGroup>
+
+## API 金鑰功能
+
+### 使用限制
+
+您可以為每個 API 金鑰設置使用限制，以控制支出：
+
+| 設定 | 描述 |
+|---------|-------------|
+| **無限制** | 金鑰將無限制地使用您的帳戶餘額 |
+| **固定限制** | 金鑰在達到指定金額後將停止運作 |
+
+### 金鑰前綴
+
+所有 LemonData API 金鑰都以 `sk-` 前綴開頭。金鑰格式為：
+
+```
+sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Anthropic API 相容性
+
+對於 `/v1/messages` 端點，您可以使用 `x-api-key` 標頭（相容 Anthropic SDK）：
+
+```bash
+curl https://api.lemondata.cc/v1/messages \
+  -H "x-api-key: sk-your-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+<Note>
+  `x-api-key` 標頭僅支援 `/v1/messages` 和 `/v1/messages/count_tokens` 端點。其他端點需要 `Authorization: Bearer` 標頭。
+</Note>
+
+## 錯誤回應
+
+| 狀態碼 | 類型 | 代碼 | 描述 |
+|-------------|------|------|-------------|
+| 401 | `invalid_request_error` | `invalid_api_key` | 遺失或無效的 API 金鑰 |
+| 401 | `invalid_request_error` | `expired_api_key` | API 金鑰已被撤銷 |
+| 402 | `insufficient_quota` | `insufficient_quota` | 帳戶餘額不足 |
+| 402 | `insufficient_quota` | `quota_exceeded` | 已達到 API 金鑰使用限制 |
+
+錯誤回應範例：
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```

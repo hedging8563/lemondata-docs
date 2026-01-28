@@ -1,0 +1,266 @@
+---
+title: "✨ واجهة برمجة تطبيقات (API) متعددة التنسيقات"
+description: "استخدم تنسيقات OpenAI أو Anthropic أو Gemini بمفتاح API واحد فقط"
+---
+
+## نظرة عامة
+
+يدعم LemonData **ثلاثة تنسيقات API أصلية** عبر مفتاح API واحد. اختر التنسيق الذي يناسب حالة الاستخدام الخاصة بك — دون الحاجة إلى تغيير الإعدادات.
+
+<CardGroup cols={3}>
+  <Card title="تنسيق OpenAI" icon="plug">
+    `/v1/chat/completions`
+    التنسيق القياسي، التوافق الأوسع
+  </Card>
+  <Card title="تنسيق Anthropic" icon="message">
+    `/v1/messages`
+    التفكير الموسع، ميزات Claude الأصلية
+  </Card>
+  <Card title="تنسيق Gemini" icon="sparkles">
+    `/v1beta/models/:model:generateContent`
+    تكامل مع منظومة Google
+  </Card>
+</CardGroup>
+
+## لماذا نستخدم تنسيقات متعددة؟
+
+| الميزة | الوصف |
+|---------|-------------|
+| **لا حاجة لتبديل SDK** | استخدم الـ SDK المفضل لديك لاستدعاء أي نموذج |
+| **ميزات أصلية** | الوصول إلى الميزات الخاصة بكل تنسيق |
+| **هجرة سهلة** | قم بالتبديل من الـ API الرسمي بمجرد تغيير base URL |
+| **فوترة موحدة** | حساب واحد، ومفتاح API واحد، يدعم جميع التنسيقات |
+
+## مقارنة التنسيقات
+
+| الميزة | OpenAI | Anthropic | Gemini |
+|---------|--------|-----------|--------|
+| **Endpoint** | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/:model:generateContent` |
+| **رأس المصادقة** | `Authorization: Bearer` | `x-api-key` | `Authorization: Bearer` |
+| **System Prompt** | في مصفوفة messages | حقل `system` مستقل | في `systemInstruction` |
+| **التفكير الموسع** | ❌ | ✅ | ❌ |
+| **البث (Streaming)** | ✅ SSE | ✅ SSE | ✅ SSE |
+| **استدعاء الأدوات** | ✅ | ✅ | ✅ |
+| **الرؤية (Vision)** | ✅ | ✅ | ✅ |
+
+## تنسيق OpenAI
+
+التنسيق الأكثر توافقاً على نطاق واسع. ينطبق على جميع نماذج LemonData.
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+# ينطبق على أي نموذج
+response = client.chat.completions.create(
+    model="claude-sonnet-4-5",  # استدعاء Claude عبر تنسيق OpenAI
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+**الأفضل لـ:**
+- الأغراض العامة
+- التكامل مع OpenAI SDK الحالي
+- أقصى درجات التوافق
+
+## تنسيق Anthropic
+
+واجهة Anthropic Messages API الأصلية. ضرورية عند استخدام ميزات Claude المحددة (مثل التفكير الموسع).
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc"  # لا حاجة للاحقة /v1!
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    system="You are a helpful assistant.",  # حقل system مستقل
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+```
+
+### التفكير الموسع (Claude Opus 4.5)
+
+متوفر فقط في تنسيق Anthropic:
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex problem..."}]
+)
+
+# الوصول إلى عملية التفكير
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Answer: {block.text}")
+```
+
+**الأفضل لـ:**
+- ميزات Claude المحددة
+- وضع التفكير الموسع
+- مستخدمي Anthropic SDK الأصليين
+
+## تنسيق Gemini
+
+تنسيق Google Gemini API الأصلي، يستخدم للتكامل مع منظومة Google.
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{
+      "parts": [{"text": "Hello!"}]
+    }],
+    "systemInstruction": {
+      "parts": [{"text": "You are a helpful assistant."}]
+    }
+  }'
+```
+
+### البث (Streaming)
+
+```bash
+curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{"parts": [{"text": "Write a story"}]}]
+  }'
+```
+
+**الأفضل لـ:**
+- التكامل مع Google Cloud
+- كود Gemini SDK الحالي
+- ميزات Gemini الأصلية
+
+## اختيار التنسيق الصحيح
+
+```mermaid
+graph TD
+    A[أي تنسيق تختار؟] --> B{هل تحتاج إلى تفكير Claude الموسع؟}
+    B -->|نعم| C[استخدم تنسيق Anthropic]
+    B -->|لا| D{قاعدة كود حالية؟}
+    D -->|OpenAI SDK| E[استخدم تنسيق OpenAI]
+    D -->|Anthropic SDK| C
+    D -->|Gemini SDK| F[استخدم تنسيق Gemini]
+    D -->|مشروع جديد| E
+```
+
+## دليل الهجرة
+
+### الهجرة من OpenAI API الرسمي
+
+```python
+# قبل الهجرة (OpenAI)
+client = OpenAI(api_key="sk-openai-key")
+
+# بعد الهجرة (LemonData)
+client = OpenAI(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc/v1"  # أضف هذا السطر
+)
+# هذا كل شيء! سيعمل نفس الكود
+```
+
+### الهجرة من Anthropic API الرسمي
+
+```python
+# قبل الهجرة (Anthropic)
+client = Anthropic(api_key="sk-ant-key")
+
+# بعد الهجرة (LemonData)
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"  # أضف هذا السطر (بدون /v1!)
+)
+```
+
+### الهجرة من Google AI Studio
+
+```python
+# قبل الهجرة (Google)
+import google.generativeai as genai
+genai.configure(api_key="google-api-key")
+
+# بعد الهجرة (LemonData) - باستخدام REST API
+import requests
+
+response = requests.post(
+    "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:generateContent",
+    headers={"Authorization": "Bearer sk-lemondata-key"},
+    json={"contents": [{"parts": [{"text": "Hello"}]}]}
+)
+```
+
+## التوافق عبر النماذج
+
+سحر LemonData: استخدم **أي SDK** مع **أي نموذج**. تتعامل البوابة تلقائياً مع تحويل التنسيق.
+
+### أي SDK ← أي نموذج
+
+```python
+# استخدام Anthropic SDK لاستدعاء GPT-4o (تحويل تلقائي إلى تنسيق OpenAI)
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-lemondata-key",
+    base_url="https://api.lemondata.cc"
+)
+
+response = client.messages.create(
+    model="gpt-4o",  # ✅ يعمل! تم التحويل تلقائياً
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+# نفس الـ SDK، نماذج مختلفة — دون تغيير الكود
+response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ يعمل!
+response = client.messages.create(model="deepseek-r1", ...)       # ✅ يعمل!
+```
+
+### OpenAI SDK ← جميع النماذج
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
+
+# جميع النماذج التالية تعمل باستخدام نفس الـ SDK:
+response = client.chat.completions.create(model="gpt-4o", ...)
+response = client.chat.completions.create(model="claude-sonnet-4-5", ...)
+response = client.chat.completions.create(model="gemini-2.5-flash", ...)
+```
+
+### مقارنة الصناعة
+
+| المنصة | تنسيق OpenAI | تنسيق Anthropic | تنسيق Gemini | Responses API |
+|----------|:---:|:---:|:---:|:---:|
+| **LemonData** | ✅ جميع النماذج | ✅ جميع النماذج | ✅ جميع النماذج | ✅ جميع النماذج |
+| OpenRouter | ✅ جميع النماذج | ❌ | ❌ | ❌ |
+| Together AI | ✅ جميع النماذج | ❌ | ❌ | ❌ |
+| Fireworks | ✅ جميع النماذج | ❌ | ❌ | ❌ |
+
+<Note>
+بينما يدعم التوافق عبر التنسيقات معظم الميزات، فإن ميزات التنسيق المحددة (مثل تفكير Anthropic الموسع) لا تزال تتطلب استخدام التنسيق الأصلي.
+</Note>

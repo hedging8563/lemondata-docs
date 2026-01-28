@@ -1,0 +1,184 @@
+---
+title: "LlamaIndex"
+description: "将 LemonData 与 LlamaIndex 整合以用于 RAG 应用程序"
+---
+
+## 概览
+
+LlamaIndex 是一个用于 LLM 应用程序的数据框架，在构建 RAG（Retrieval Augmented Generation）系统方面特别强大。LemonData 可与 LlamaIndex 的 OpenAI 整合无缝运作。
+
+## 安装
+
+```bash
+pip install llama-index llama-index-llms-openai llama-index-embeddings-openai
+```
+
+## 基本配置
+
+```python
+from llama_index.llms.openai import OpenAI
+from llama_index.core import Settings
+
+# Configure LLM
+llm = OpenAI(
+    model="gpt-4o",
+    api_key="sk-your-lemondata-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+
+# Set as default
+Settings.llm = llm
+
+# Simple query
+response = llm.complete("What is LemonData?")
+print(response.text)
+```
+
+## 使用不同模型
+
+```python
+# OpenAI GPT-4o
+gpt4 = OpenAI(
+    model="gpt-4o",
+    api_key="sk-your-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+
+# Anthropic Claude (via OpenAI-compatible endpoint)
+claude = OpenAI(
+    model="claude-sonnet-4-5",
+    api_key="sk-your-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+
+# Google Gemini
+gemini = OpenAI(
+    model="gemini-2.5-flash",
+    api_key="sk-your-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+```
+
+## 对话界面
+
+```python
+from llama_index.core.llms import ChatMessage
+
+messages = [
+    ChatMessage(role="system", content="You are a helpful assistant."),
+    ChatMessage(role="user", content="What is the capital of France?")
+]
+
+response = llm.chat(messages)
+print(response.message.content)
+```
+
+## 流式传输
+
+```python
+# Streaming completion
+for chunk in llm.stream_complete("Write a poem about AI"):
+    print(chunk.delta, end="", flush=True)
+
+# Streaming chat
+for chunk in llm.stream_chat(messages):
+    print(chunk.delta, end="", flush=True)
+```
+
+## Embeddings
+
+```python
+from llama_index.embeddings.openai import OpenAIEmbedding
+
+embed_model = OpenAIEmbedding(
+    model="text-embedding-3-small",
+    api_key="sk-your-lemondata-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+
+# Set as default
+Settings.embed_model = embed_model
+
+# Get embeddings
+embeddings = embed_model.get_text_embedding("Hello, world!")
+print(f"Embedding dimension: {len(embeddings)}")
+```
+
+## 使用文档的 RAG
+
+```python
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+
+# Configure settings
+Settings.llm = llm
+Settings.embed_model = embed_model
+
+# Load documents
+documents = SimpleDirectoryReader("./data").load_data()
+
+# Create index
+index = VectorStoreIndex.from_documents(documents)
+
+# Query
+query_engine = index.as_query_engine()
+response = query_engine.query("What is in my documents?")
+print(response)
+```
+
+## 对话引擎
+
+```python
+# Create chat engine with memory
+chat_engine = index.as_chat_engine(chat_mode="condense_question")
+
+# Multi-turn conversation
+response = chat_engine.chat("What is LemonData?")
+print(response)
+
+response = chat_engine.chat("How many models does it support?")
+print(response)
+```
+
+## 异步用法
+
+```python
+import asyncio
+
+async def main():
+    response = await llm.acomplete("Hello!")
+    print(response.text)
+
+asyncio.run(main())
+```
+
+## 环境变量
+
+为了使代码更简洁，请使用环境变量：
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+```
+
+```python
+from llama_index.llms.openai import OpenAI
+
+# Will automatically use environment variables
+llm = OpenAI(model="gpt-4o")
+```
+
+## 最佳实践
+
+<AccordionGroup>
+  <Accordion title="选择合适的模型">
+    将较快的模型 (GPT-4o-mini) 用于 Embedding 和摘要任务，将强大的模型 (GPT-4o, Claude) 留给最终响应。
+  </Accordion>
+
+  <Accordion title="优化分块大小">
+    根据您的文档类型调整分块大小 (chunk size)。对于密集的技术文档使用较小的分块，对于叙述性内容则使用较大的分块。
+  </Accordion>
+
+  <Accordion title="使用缓存">
+    启用 LlamaIndex 缓存功能，以避免在开发过程中产生多余的 API 调用。
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,208 @@
+---
+title: "✨ スマートキャッシュ"
+description: "コンテキストを認識するセマンティックキャッシュにより、コストとレイテンシを削減します"
+---
+
+## 概要
+
+LemonDataは、APIコストとレスポンスのレイテンシを大幅に削減するスマートキャッシュシステムを提供します。当社のキャッシュは単なるリクエストのマッチングにとどまらず、プロンプトの**セマンティックな意味（semantic meaning）**を理解します。
+
+<CardGroup cols={2}>
+  <Card title="コスト削減" icon="piggy-bank">
+    キャッシュヒット（Cache hits）は、通常のコストのわずかな一部のみが課金されます。
+  </Card>
+  <Card title="より高速なレスポンス" icon="bolt">
+    キャッシュされたレスポンスは即座に返され、モデルの推論は不要です。
+  </Card>
+  <Card title="コンテキスト認識" icon="brain">
+    セマンティックマッチングにより、言い回しが異なる場合でも類似のリクエストを見つけ出します。
+  </Card>
+  <Card title="プライバシーコントロール" icon="shield">
+    キャッシュおよび共有される内容を完全にコントロールできます。
+  </Card>
+</CardGroup>
+
+## 仕組み
+
+LemonDataは2層のキャッシュシステムを使用しています：
+
+### 第1層：レスポンスキャッシュ（完全一致）
+
+決定論的なリクエスト（`temperature=0`）に対して、正確なレスポンスをキャッシュします：
+
+- **一致条件**：同一のモデル、メッセージ、およびパラメータ
+- **速度**：即時（マイクロ秒単位）
+- **適用対象**：繰り返される同一のクエリ
+
+### 第2層：セマンティックキャッシュ（類似度マッチング）
+
+すべてのリクエストに対して、2段階のマッチングアルゴリズムを使用してセマンティックな類似性をチェックします：
+
+- **第1段階（クエリのみ）**：ユーザークエリの類似度 ≥95%
+- **第2段階（フルコンテキスト）**：会話コンテキストを含む類似度 ≥85%
+- **適用対象**：FAQ形式のクエリ、よくある質問
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (high semantic similarity)
+```
+
+## キャッシュコントロール
+
+### リクエストレベルのコントロール
+
+リクエストボディ内の `cache_control` パラメータを使用して、各リクエストのキャッシュ動作を制御します：
+
+```bash
+# キャッシュの検索をスキップし、常にモデルを呼び出す
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
+```
+
+| タイプ | 効果 |
+|------|------|
+| `no_cache` | キャッシュの検索をスキップし、常に新しいレスポンスを取得します |
+| `no_store` | このレスポンスをキャッシュに保存しません |
+| `response_only` | 完全一致キャッシュのみを使用します（セマンティックキャッシュをスキップ） |
+| `semantic_only` | セマンティックキャッシュのみを使用します（完全一致をスキップ） |
+
+### レスポンスヘッダー
+
+各レスポンスにはキャッシュステータスが含まれます：
+
+```
+X-Cache-Status: HIT    # レスポンスはキャッシュからのものです
+X-Cache-Status: MISS   # モデルからの新しいレスポンスです
+```
+
+## キャッシュステータスの確認
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# レスポンスヘッダーからキャッシュステータスを確認します
+# (生のHTTPレスポンスで利用可能)
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
+```
+
+## キャッシュの料金
+
+キャッシュヒットの料金は、新しいリクエストよりも大幅に低くなります：
+
+| タイプ | コスト |
+|------|------|
+| キャッシュヒット (HIT) | **80% オフ** |
+| キャッシュミス (MISS) | 通常料金 |
+
+正確な割引額は、ダッシュボードの使用状況ログに表示されます。
+
+## プライバシーコントロール
+
+### 組織 / ユーザーレベル
+
+ダッシュボードの設定でキャッシュ動作を構成します：
+
+| モード | 説明 |
+|------|-------------|
+| **共有 (Shared)** | キャッシュを有効にします。レスポンスはユーザー間で共有される可能性があります（個人アカウントのデフォルト） |
+| **分離 (Isolated)** | キャッシュを有効にしますが、レスポンスは組織内に限定されます（組織アカウントのデフォルト） |
+| **無効 (Disabled)** | キャッシュを一切使用しません |
+
+その他の設定項目：
+- **類似度しきい値**：セマンティックマッチングの感度を調整します（デフォルト：92%）
+- **カスタム TTL**：キャッシュの有効期限を上書きします
+- **除外モデル**：特定のモデルのキャッシュを無効にします
+
+### リクエストレベル
+
+`cache_control` パラメータを使用して、個別のリクエストの設定を上書きします：
+
+```bash
+# このリクエストのキャッシュを無効にする
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
+```
+
+## キャッシュのフィードバック
+
+誤ったキャッシュレスポンスを受け取った場合は、報告することができます：
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**フィードバックの種類：**
+- `wrong_answer` - 事実の誤り
+- `outdated` - 情報が古い
+- `irrelevant` - 質問に関連性がない
+- `other` - その他の問題
+
+キャッシュエントリが十分な負のフィードバックを受けた場合、自動的に無効化されます。
+
+## ベストプラクティス
+
+<AccordionGroup>
+  <Accordion title="キャッシュ可能なクエリには temperature=0 を使用する">
+    決定論的な設定により、キャッシュヒット率を最大化できます。
+  </Accordion>
+
+  <Accordion title="プロンプトの形式を標準化する">
+    一貫したフォーマットにより、セマンティックマッチングが向上します。
+  </Accordion>
+
+  <Accordion title="時間的制約があるクエリには no-cache を使用する">
+    時事問題やリアルタイムデータはキャッシュをスキップする必要があります。
+  </Accordion>
+
+  <Accordion title="キャッシュヒット率を監視する">
+    ダッシュボードでキャッシュの統計データと節約額を確認します。
+  </Accordion>
+</AccordionGroup>
+
+## キャッシュを使用すべきでない場合
+
+以下の状況ではキャッシュを無効にしてください：
+
+- **リアルタイム情報**：株価、天気、ニュース
+- **パーソナライズされたコンテンツ**：特定のユーザー向けの推奨事項
+- **クリエイティブなタスク**：多様性が必要な場合
+- **機密データ**：機密情報
+
+```python
+# 時間的制約があるクエリの場合
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_body={"cache_control": {"type": "no_cache"}}
+)
+```

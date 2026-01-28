@@ -1,0 +1,197 @@
+---
+title: 'API-Referenz'
+description: 'Vollständiger Referenzleitfaden für die LemonData API'
+---
+
+## Übersicht
+
+Die LemonData API ist **OpenAI-kompatibel**, was bedeutet, dass Sie lediglich die Base URL ändern müssen, um das offizielle OpenAI SDK zu verwenden. Wir unterstützen auch native **Anthropic**- und **Gemini**-Anfrageformate.
+
+## Base URL
+
+```
+https://api.lemondata.cc
+```
+
+## Authentifizierung
+
+Alle API-Endpunkte erfordern eine Authentifizierung mittels Bearer token:
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+Erhalten Sie Ihren API-Key über das [Dashboard](https://lemondata.cc/dashboard).
+
+<Warning>
+**Über den interaktiven Playground**: Der Playground auf dieser Dokumentationswebsite dient nur zu Demonstrationszwecken und unterstützt keine Eingabe von API-Keys. Um die API zu testen, verwenden Sie bitte:
+- **cURL** – Kopieren Sie den Beispielbefehl und ersetzen Sie `sk-your-api-key` durch Ihren tatsächlichen Key.
+- **Postman** – Importieren Sie unsere [OpenAPI-Spezifikation](/openapi.json).
+- **SDK** – Verwenden Sie das OpenAI/Anthropic SDK zusammen mit unserer Base URL.
+</Warning>
+
+## Unterstützte Endpunkte
+
+### Chat und Textgenerierung
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | OpenAI-kompatible Chat-Vervollständigung |
+| `/v1/messages` | POST | Anthropic-kompatible Messages API |
+| `/v1/responses` | POST | OpenAI Responses API |
+
+### Embeddings und Reranking
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/embeddings` | POST | Text-Embeddings erstellen |
+| `/v1/rerank` | POST | Dokumente reranken |
+
+### Bilder
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/images/generations` | POST | Bilder aus Text generieren |
+| `/v1/images/edits` | POST | Bilder bearbeiten |
+
+### Audio
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/audio/speech` | POST | Text-to-Speech (TTS) |
+| `/v1/audio/transcriptions` | POST | Speech-to-Text (STT) |
+
+### Video
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/videos/generations` | POST | Video-Generierungs-Task erstellen |
+| `/v1/videos/generations/{id}` | GET | Status des Video-Tasks abrufen |
+
+### Musik
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/music/generations` | POST | Musik-Generierungs-Task erstellen |
+| `/v1/music/generations/{id}` | GET | Status des Musik-Tasks abrufen |
+
+### 3D-Generierung
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/3d/generations` | POST | 3D-Modell-Generierungs-Task erstellen |
+| `/v1/3d/generations/{id}` | GET | Status des 3D-Tasks abrufen |
+
+### Modelle
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/models` | GET | Alle verfügbaren Modelle auflisten |
+| `/v1/models/{model}` | GET | Informationen zu einem spezifischen Modell abrufen |
+
+### Gemini (v1beta)
+
+Native Unterstützung für das Google Gemini API-Format:
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1beta/models/{model}:generateContent` | POST | Inhalt generieren (Gemini-Format) |
+| `/v1beta/models/{model}:streamGenerateContent` | POST | Inhalt via Streaming generieren (Gemini-Format) |
+
+<Note>
+Gemini-Endpunkte unterstützen neben dem Standard-Bearer token auch die Authentifizierung über den Query-Parameter `?key=`.
+</Note>
+
+## Antwortformat
+
+Alle Antworten folgen einem einheitlichen Format:
+
+### Erfolgreiche Antwort
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4o",
+  "choices": [...],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30
+  }
+}
+```
+
+### Routing-Transparenz
+
+Alle Antworten enthalten ein `_routing`-Feld mit Kanalinformationen:
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  ...,
+  "_routing": {
+    "channel": {
+      "id": "ch_xxx",
+      "name": "channel-name",
+      "provider": "openai",
+      "channelType": "PLATFORM"
+    },
+    "cached": false,
+    "retryCount": 0
+  }
+}
+```
+
+| Feld | Beschreibung |
+|-------|-------------|
+| `channel.id` | Verwendete Kanal-ID |
+| `channel.provider` | Upstream-Provider (openai, anthropic, etc.) |
+| `channel.channelType` | `PLATFORM` (LemonData) oder `PRIVATE` (BYOK) |
+| `cached` | Ob die Antwort aus dem Cache stammt |
+| `retryCount` | Anzahl der Wiederholungsversuche (falls vorhanden) |
+
+### Fehlerantwort
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+## Rate Limits
+
+Rate Limits basieren auf Rollen und können von Administratoren konfiguriert werden. Standardwerte:
+
+| Rolle | Anfragen pro Minute |
+|------|-------------|
+| Benutzer | 60 |
+| Partner | 300 |
+| VIP | 1.000 |
+
+<Note>
+Kontaktieren Sie das Support-Team für benutzerdefinierte Rate Limits. Die genauen Werte können je nach Kontokonfiguration variieren.
+</Note>
+
+Alle Antworten enthalten Rate-Limit-Header:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 55
+X-RateLimit-Reset: 1234567890
+```
+
+## OpenAPI-Spezifikation
+
+<Card
+  title="OpenAPI-Spezifikation"
+  icon="file-code"
+  href="/openapi.json"
+>
+  Laden Sie die vollständige OpenAPI 3.0 Spezifikation herunter.
+</Card>

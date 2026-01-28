@@ -1,0 +1,247 @@
+---
+title: "エラーハンドリング"
+description: "API エラーを適切に処理する"
+---
+
+## エラーレスポンス形式
+
+すべてのエラーは一貫した JSON 形式で返されます：
+
+```json
+{
+  "error": {
+    "message": "Human-readable error description",
+    "type": "error_type",
+    "code": "error_code",
+    "param": "parameter_name"  // 選填，用於驗證錯誤
+  }
+}
+```
+
+## HTTP ステータスコード
+
+| コード | 説明 |
+|------|-------------|
+| 400 | Bad Request - パラメータが無効です |
+| 401 | Unauthorized - API key が無効または欠落しています |
+| 402 | Payment Required - 残高不足 |
+| 403 | Forbidden - アクセスが拒否されたか、そのモデルの使用が許可されていません |
+| 404 | Not Found - モデルまたはリソースが見つかりません |
+| 413 | Payload Too Large - 入力またはファイルサイズが制限を超えています |
+| 429 | Too Many Requests - レート制限を超えました |
+| 500 | Internal Server Error - サーバー内部エラー |
+| 502 | Bad Gateway - アップストリームプロバイダーのエラー |
+| 503 | Service Unavailable - すべてのチャネルが失敗しました |
+| 504 | Gateway Timeout - リクエストタイムアウト |
+
+## エラータイプ
+
+### 認証エラー (401)
+
+| タイプ | コード | 説明 |
+|------|------|-------------|
+| `invalid_api_key` | `invalid_api_key` | API key が欠落しているか無効です |
+| `expired_api_key` | `expired_api_key` | API key が失効しています |
+
+```python
+from openai import OpenAI, AuthenticationError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError as e:
+    print(f"Authentication failed: {e.message}")
+```
+
+### 支払いエラー (402)
+
+| タイプ | コード | 説明 |
+|------|------|-------------|
+| `insufficient_quota` | `insufficient_quota` | アカウント残高が不足しています |
+| `quota_exceeded` | `quota_exceeded` | API key の使用制限に達しました |
+
+```python
+from openai import OpenAI, APIStatusError
+
+try:
+    response = client.chat.completions.create(...)
+except APIStatusError as e:
+    if e.status_code == 402:
+        print("Please top up your account balance")
+```
+
+### アクセスエラー (403)
+
+| タイプ | コード | 説明 |
+|------|------|-------------|
+| `access_denied` | `access_denied` | リソースへのアクセスが拒否されました |
+| `access_denied` | `model_not_allowed` | この API key ではこのモデルの使用が許可されていません |
+
+```json
+{
+  "error": {
+    "message": "You don't have permission to access this model",
+    "type": "access_denied",
+    "code": "model_not_allowed"
+  }
+}
+```
+
+### バリデーションエラー (400)
+
+| タイプ | 説明 |
+|------|-------------|
+| `invalid_request_error` | リクエストパラメータが無効です |
+| `context_length_exceeded` | 入力内容がモデルに対して長すぎます |
+| `model_not_found` | リクエストされたモデルが存在しません |
+
+```json
+{
+  "error": {
+    "message": "model: 'invalid-model' is not a valid model",
+    "type": "model_not_found",
+    "param": "model"
+  }
+}
+```
+
+### レート制限エラー (429)
+
+レート制限を超えた場合：
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**含まれるヘッダー (Headers)：**
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1234567890
+Retry-After: 60
+```
+
+### ペイロード過大 (413)
+
+入力またはファイルサイズが制限を超えた場合：
+
+```json
+{
+  "error": {
+    "message": "Input size exceeds maximum allowed",
+    "type": "invalid_request_error",
+    "code": "payload_too_large"
+  }
+}
+```
+
+主な原因：
+- 画像ファイルが大きすぎる (最大 20MB)
+- 音声ファイルが大きすぎる (最大 25MB)
+- 入力テキストがモデルのコンテキスト長 (context length) を超えている
+
+### アップストリームエラー (502, 503)
+
+| タイプ | 説明 |
+|------|-------------|
+| `upstream_error` | プロバイダーがエラーを返しました |
+| `all_channels_failed` | 利用可能なプロバイダーがありません |
+| `timeout_error` | リクエストタイムアウト |
+
+## Python でのエラーハンドリング
+
+```python
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            raise
+        except APIConnectionError as e:
+            print(f"Connection error: {e}")
+            raise
+        except APIError as e:
+            print(f"API error: {e.status_code} - {e.message}")
+            raise
+```
+
+## JavaScript でのエラーハンドリング
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function chatWithRetry(messages, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages
+      });
+    } catch (error) {
+      if (error instanceof OpenAI.RateLimitError) {
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+```
+
+## ベストプラクティス
+
+<AccordionGroup>
+  <Accordion title="指数バックオフ (Exponential Backoff) の実装">
+    レート制限が発生した際、再試行までの待ち時間を段階的に増やします：
+    ```python
+    wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+    ```
+  </Accordion>
+
+  <Accordion title="タイムアウトの設定 (Timeouts)">
+    リクエストのハングを防ぐため、適切なタイムアウト時間を設定してください：
+    ```python
+    client = OpenAI(timeout=60.0)  # 60 秒逾時
+    ```
+  </Accordion>
+
+  <Accordion title="デバッグのためのエラーログ記録">
+    サポートを依頼する際のために、完全なエラーレスポンス（request ID を含む）を記録してください：
+    ```python
+    except APIError as e:
+        logger.error(f"API Error: {e.status_code} - {e.message}")
+    ```
+  </Accordion>
+
+  <Accordion title="特定のモデル固有のエラー処理">
+    一部のモデルには特定の要件（例：最大 token 数、画像形式）があります。
+    リクエストを送信する前に入力を検証してください。
+  </Accordion>
+</AccordionGroup>

@@ -1,61 +1,71 @@
----
-title: "创建翻译"
-openapi: "POST /v1/audio/translations"
-description: "将音频翻译为英文文本"
----
+**Translation Process for MDX Documentation**
 
-## 概览
+Okay, here's the workflow. I've got this English MDX documentation to translate into Simplified Chinese. My focus is going to be translating all the text content, making sure to hit all the headings, paragraphs, lists, and even those card titles and descriptions.
 
-将任何支持的语言的音频翻译为英文文本。与转录不同，无论输入语言是什么，此端点始终输出英文文本。
+I need to be very careful, though. Rule number one is to *not* touch code blocks, inline code snippets, URLs, API endpoints, variable names, component names (like `<Card>` or `<ParamField>`), or parameter names. These should remain in English.
+
+Structurally, I'm keeping everything identical to the original MDX format, maintaining all markdown syntax, line breaks, and spacing as they are. And, of course, I'm going to leave common technical terms like "API," "SDK," and "token" in English - we're being professional and technical here. My output will be *only* the translated content.
+
+Let's start with the frontmatter: "title: \"Create Speech\"" becomes "title: \"创建语音\"". "openapi: \"POST /v1/audio/speech\"" remains untouched. "description: \"Generates audio from the input text\"" translates to "description: \"根据输入文本生成音频\"".
+
+Now, onto the headings. "## Request Body" becomes "## 请求体".
+
+The `ParamFields` section needs attention. "model: TTS model: tts-1 (standard) or tts-1-hd (higher quality)." translates to "TTS 模型：tts-1（标准）或 tts-1-hd（高质量）。" Similarly, "input: The text to generate audio for. Maximum 4096 characters." becomes "要生成音频的文本。最大长度为 4096 个字符。", and so on.
+
+The "## Response" heading translates to "## 响应", and "Returns the audio file in the requested format." becomes "返回所请求格式的音频文件。"
+
+I'll leave the request example code block as is.
+
+The heading "## Voice Samples" becomes "## 音色示例".
+
+For the table, "Voice" becomes "音色", and "Description" becomes "描述". I'll continue, translating each entry as appropriate.
+
+Finally, I need to double-check my work against the rules. Did I translate `tts-1`? No, because it's in backticks. Did I translate `model`? No, because it's a parameter name. Excellent. I also made sure to keep "API," "TTS" in English, and I've ensured the MDX structure is perfectly preserved. The translation is complete.
+
+
+---
+title: "创建语音"
+openapi: "POST /v1/audio/speech"
+description: "根据输入文本生成音频"
+---
 
 ## 请求体
 
-<ParamField body="file" type="file" required>
-  要翻译的音频文件。支持的格式：`flac`、`mp3`、`mp4`、`mpeg`、`mpga`、`m4a`、`ogg`、`wav`、`webm`。最大文件大小为 25 MB。
+<ParamField body="model" type="string" default="tts-1">
+  TTS 模型：`tts-1`（标准）或 `tts-1-hd`（高质量）。
 </ParamField>
 
-<ParamField body="model" type="string" default="whisper-1">
-  要使用的模型。目前仅支持 `whisper-1`。
+<ParamField body="input" type="string" required>
+  要生成音频的文本。最大长度为 4096 个字符。
 </ParamField>
 
-<ParamField body="prompt" type="string">
-  可选文本，用于引导模型的风格或延续之前的片段。应为英文。
+<ParamField body="voice" type="string" required>
+  使用的音色：`alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `nova`, `onyx`, `sage`, `shimmer`, `verse`。
 </ParamField>
 
-<ParamField body="response_format" type="string" default="json">
-  输出的格式。选项：`json`、`text`、`srt`、`verbose_json`、`vtt`。
+<ParamField body="response_format" type="string" default="mp3">
+  音频格式：`mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`。
 </ParamField>
 
-<ParamField body="temperature" type="number">
-  采样温度，介于 0 和 1 之间。较高的值（如 0.8）会产生更随机的输出，而较低的值（如 0.2）会使输出更集中且更具确定性。
+<ParamField body="speed" type="number" default="1.0">
+  音频语速（0.25 到 4.0）。
 </ParamField>
 
 ## 响应
 
-<ResponseField name="text" type="string">
-  翻译后的英文文本。
-</ResponseField>
-
-对于 `verbose_json` 格式，响应还包括：
-
-<ResponseField name="language" type="string">
-  检测到的输入音频语言。
-</ResponseField>
-
-<ResponseField name="duration" type="number">
-  输入音频的时长（以秒为单位）。
-</ResponseField>
-
-<ResponseField name="segments" type="array">
-  带有时间戳的翻译文本片段。
-</ResponseField>
+返回所请求格式的音频文件。
 
 <RequestExample>
 ```bash cURL
-curl -X POST "https://api.lemondata.cc/v1/audio/translations" \
+curl -X POST "https://api.lemondata.cc/v1/audio/speech" \
   -H "Authorization: Bearer sk-your-api-key" \
-  -F "file=@german_audio.mp3" \
-  -F "model=whisper-1"
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Hello, welcome to LemonData!"
+  }' \
+  --output speech.mp3
 ```
 
 ```python Python
@@ -66,13 +76,13 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-with open("german_audio.mp3", "rb") as audio_file:
-    response = client.audio.translations.create(
-        model="whisper-1",
-        file=audio_file
-    )
+response = client.audio.speech.create(
+    model="tts-1-hd",
+    voice="nova",
+    input="Hello, welcome to LemonData!"
+)
 
-print(response.text)
+response.stream_to_file("speech.mp3")
 ```
 
 ```javascript JavaScript
@@ -84,12 +94,14 @@ const client = new OpenAI({
   baseURL: 'https://api.lemondata.cc/v1'
 });
 
-const response = await client.audio.translations.create({
-  model: 'whisper-1',
-  file: fs.createReadStream('german_audio.mp3')
+const response = await client.audio.speech.create({
+  model: 'tts-1-hd',
+  voice: 'nova',
+  input: 'Hello, welcome to LemonData!'
 });
 
-console.log(response.text);
+const buffer = Buffer.from(await response.arrayBuffer());
+fs.writeFileSync('speech.mp3', buffer);
 ```
 
 ```go Go
@@ -97,7 +109,8 @@ package main
 
 import (
     "context"
-    "fmt"
+    "io"
+    "os"
     "github.com/sashabaranov/go-openai"
 )
 
@@ -106,85 +119,62 @@ func main() {
     config.BaseURL = "https://api.lemondata.cc/v1"
     client := openai.NewClientWithConfig(config)
 
-    resp, err := client.CreateTranslation(
+    resp, err := client.CreateSpeech(
         context.Background(),
-        openai.AudioRequest{
-            Model:    openai.Whisper1,
-            FilePath: "german_audio.mp3",
+        openai.CreateSpeechRequest{
+            Model: openai.TTSModel1HD,
+            Voice: openai.VoiceNova,
+            Input: "Hello, welcome to LemonData!",
         },
     )
     if err != nil {
         panic(err)
     }
-    fmt.Println(resp.Text)
+    defer resp.Close()
+
+    file, _ := os.Create("speech.mp3")
+    defer file.Close()
+    io.Copy(file, resp)
 }
 ```
 
 ```php PHP
 <?php
-$ch = curl_init('https://api.lemondata.cc/v1/audio/translations');
-
-$file = new CURLFile('german_audio.mp3', 'audio/mpeg', 'german_audio.mp3');
+$ch = curl_init('https://api.lemondata.cc/v1/audio/speech');
 
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
         'Authorization: Bearer sk-your-api-key'
     ],
-    CURLOPT_POSTFIELDS => [
-        'file' => $file,
-        'model' => 'whisper-1'
-    ]
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'tts-1-hd',
+        'voice' => 'nova',
+        'input' => 'Hello, welcome to LemonData!'
+    ])
 ]);
 
-$response = curl_exec($ch);
+$audio = curl_exec($ch);
 curl_close($ch);
 
-$data = json_decode($response, true);
-echo $data['text'];
+file_put_contents('speech.mp3', $audio);
 ```
 </RequestExample>
 
-<ResponseExample>
-```json json
-{
-  "text": "Hello, my name is Wolfgang and I come from Germany. Where are you from?"
-}
-```
+## 音色示例
 
-```json verbose_json
-{
-  "task": "translate",
-  "language": "german",
-  "duration": 8.470000267028809,
-  "text": "Hello, my name is Wolfgang and I come from Germany. Where are you from?",
-  "segments": [
-    {
-      "id": 0,
-      "seek": 0,
-      "start": 0.0,
-      "end": 4.0,
-      "text": " Hello, my name is Wolfgang and I come from Germany.",
-      "tokens": [50364, 2425, 11, 452, 1315, 307, 25329, 293, 286, 808, 490, 5765, 13, 50564],
-      "temperature": 0.0,
-      "avg_logprob": -0.45,
-      "compression_ratio": 1.0,
-      "no_speech_prob": 0.0
-    }
-  ]
-}
-```
-</ResponseExample>
-
-## 翻译与转录
-
-| 特性 | 翻译 | 转录 |
-|---------|-------------|---------------|
-| 输出语言 | 始终为英文 | 与输入相同 |
-| 使用场景 | 将外语音频转换为英文 | 保留原始语言 |
-| 语言参数 | 不适用 | 可选提示 |
-
-<Note>
-  翻译端点会自动检测源语言并翻译为英文。转录中的 `language` 参数将被忽略。
-</Note>
+| 音色 | 描述 |
+|-------|-------------|
+| `alloy` | 中性，平衡 |
+| `ash` | 冷静，沉稳 |
+| `ballad` | 悦耳，富有表现力 |
+| `coral` | 温暖，诱人 |
+| `echo` | 温暖，谈话式 |
+| `fable` | 富有表现力，叙述式 |
+| `nova` | 友好，清晰 |
+| `onyx` | 深沉，权威 |
+| `sage` | 睿智，深思熟虑 |
+| `shimmer` | 柔和，温柔 |
+| `verse` | 动态，多才多艺 |

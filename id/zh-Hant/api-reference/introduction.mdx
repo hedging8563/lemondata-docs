@@ -1,0 +1,197 @@
+---
+title: 'Referensi API'
+description: 'Panduan referensi lengkap untuk LemonData API'
+---
+
+## Ikhtisar
+
+LemonData API **kompatibel dengan OpenAI**, yang berarti Anda hanya perlu mengubah Base URL untuk menggunakan SDK resmi OpenAI. Kami juga mendukung format permintaan asli **Anthropic** dan **Gemini**.
+
+## Base URL
+
+```
+https://api.lemondata.cc
+```
+
+## Autentikasi
+
+Semua endpoint API memerlukan autentikasi menggunakan Bearer token:
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+Dapatkan API key Anda dari [Konsol](https://lemondata.cc/dashboard).
+
+<Warning>
+**Tentang Playground Interaktif**: Playground di situs dokumentasi ini hanya untuk tujuan demonstrasi dan tidak mendukung input API key. Untuk menguji API, silakan gunakan:
+- **cURL** - Salin perintah contoh, ganti `sk-your-api-key` dengan key asli Anda
+- **Postman** - Impor [Spesifikasi OpenAPI](/openapi.json) kami
+- **SDK** - Gunakan SDK OpenAI/Anthropic dengan Base URL kami
+</Warning>
+
+## Endpoint yang Didukung
+
+### Chat & Generasi Teks
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | Chat completion yang kompatibel dengan OpenAI |
+| `/v1/messages` | POST | Messages API yang kompatibel dengan Anthropic |
+| `/v1/responses` | POST | OpenAI Responses API |
+
+### Embedding & Reranking
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1/embeddings` | POST | Buat text embedding |
+| `/v1/rerank` | POST | Rerank dokumen |
+
+### Gambar
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1/images/generations` | POST | Generasi gambar dari teks |
+| `/v1/images/edits` | POST | Edit gambar |
+
+### Audio
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1/audio/speech` | POST | Text-to-Speech (TTS) |
+| `/v1/audio/transcriptions` | POST | Speech-to-Text (STT) |
+
+### Video
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1/videos/generations` | POST | Buat tugas generasi video |
+| `/v1/videos/generations/{id}` | GET | Dapatkan status tugas video |
+
+### Musik
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1/music/generations` | POST | Buat tugas generasi musik |
+| `/v1/music/generations/{id}` | GET | Dapatkan status tugas musik |
+
+### Generasi 3D
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1/3d/generations` | POST | Buat tugas generasi model 3D |
+| `/v1/3d/generations/{id}` | GET | Dapatkan status tugas 3D |
+
+### Model
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1/models` | GET | Daftar semua model yang tersedia |
+| `/v1/models/{model}` | GET | Dapatkan informasi model tertentu |
+
+### Gemini (v1beta)
+
+Dukungan format Google Gemini API asli:
+
+| Endpoint | Metode | Deskripsi |
+|----------|--------|-------------|
+| `/v1beta/models/{model}:generateContent` | POST | Generasi konten (format Gemini) |
+| `/v1beta/models/{model}:streamGenerateContent` | POST | Streaming generasi konten (format Gemini) |
+
+<Note>
+Endpoint Gemini mendukung autentikasi parameter query `?key=` selain Bearer token standar.
+</Note>
+
+## Format Respons
+
+Semua respons mengikuti format yang konsisten:
+
+### Respons Berhasil
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4o",
+  "choices": [...],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30
+  }
+}
+```
+
+### Transparansi Routing
+
+Semua respons menyertakan field `_routing` dengan informasi channel:
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  ...,
+  "_routing": {
+    "channel": {
+      "id": "ch_xxx",
+      "name": "channel-name",
+      "provider": "openai",
+      "channelType": "PLATFORM"
+    },
+    "cached": false,
+    "retryCount": 0
+  }
+}
+```
+
+| Field | Deskripsi |
+|-------|-------------|
+| `channel.id` | ID channel yang digunakan |
+| `channel.provider` | Penyedia upstream (openai, anthropic, dll.) |
+| `channel.channelType` | `PLATFORM` (LemonData) atau `PRIVATE` (BYOK) |
+| `cached` | Apakah respons berasal dari cache |
+| `retryCount` | Jumlah percobaan ulang (jika ada) |
+
+### Respons Error
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+## Rate Limit
+
+Rate limit didasarkan pada peran dan dapat dikonfigurasi oleh admin. Nilai default:
+
+| Peran | Permintaan per Menit |
+|------|-------------|
+| User | 60 |
+| Partner | 300 |
+| VIP | 1,000 |
+
+<Note>
+Hubungi tim dukungan untuk mendapatkan rate limit kustom. Nilai pastinya mungkin bervariasi tergantung pada konfigurasi akun.
+</Note>
+
+Header rate limit disertakan dalam semua respons:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 55
+X-RateLimit-Reset: 1234567890
+```
+
+## Spesifikasi OpenAPI
+
+<Card
+  title="Spesifikasi OpenAPI"
+  icon="file-code"
+  href="/openapi.json"
+>
+  Unduh spesifikasi OpenAPI 3.0 lengkap
+</Card>

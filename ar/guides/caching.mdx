@@ -48,38 +48,33 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## التحكم في التخزين المؤقت
+## رؤوس التخزين المؤقت (Cache Headers)
 
-### التحكم على مستوى الطلب
+### رؤوس الطلب (Request Headers)
 
-تحكم في سلوك التخزين المؤقت لكل طلب باستخدام معلمة `cache_control` في جسم الطلب:
+التحكم في سلوك التخزين المؤقت لكل طلب:
 
 ```bash
-# تخطي البحث في التخزين المؤقت، استدعاء النموذج دائماً
+# Skip cache lookup, always call the model
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "cache_control": {"type": "no_cache"}
-  }'
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
 ```
 
-| النوع | التأثير |
-|-------|--------|
-| `no_cache` | تخطي البحث في التخزين المؤقت، الحصول دائماً على استجابة جديدة |
-| `no_store` | عدم تخزين هذه الاستجابة في التخزين المؤقت |
-| `response_only` | استخدام التخزين المؤقت للمطابقة التامة فقط (تخطي الدلالي) |
-| `semantic_only` | استخدام التخزين المؤقت الدلالي فقط (تخطي المطابقة التامة) |
+| الرأس | القيمة | التأثير |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | تخطي التخزين المؤقت، استجابة جديدة |
+| `Cache-Control: no-store` | - | لا تقم بتخزين هذه الاستجابة مؤقتاً |
 
 ### رؤوس الاستجابة (Response Headers)
 
 تتضمن كل استجابة حالة التخزين المؤقت:
 
 ```
-X-Cache-Status: HIT    # استجابة مقدمة من التخزين المؤقت
-X-Cache-Status: MISS   # استجابة جديدة من النموذج
+X-Cache: HIT           # Response served from cache
+X-Cache: MISS          # Fresh response from model
+X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
 ```
 
 ## التحقق من حالة التخزين المؤقت
@@ -97,9 +92,9 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is 2+2?"}]
 )
 
-# التحقق من حالة التخزين المؤقت من رؤوس الاستجابة
-# (متاح في استجابة HTTP الخام)
-print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
 ```
 
 ## فوترة التخزين المؤقت
@@ -115,35 +110,25 @@ print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
 
 ## عناصر التحكم في الخصوصية
 
-### مستوى المؤسسة / المستخدم
+### مستوى مفتاح API
 
-قم بتكوين سلوك التخزين المؤقت في إعدادات لوحة التحكم الخاصة بك:
+تكوين سلوك التخزين المؤقت لكل مفتاح API في لوحة التحكم الخاصة بك:
 
 | الوضع | الوصف |
 |------|-------------|
-| **مشترك (Shared)** | التخزين المؤقت مفعل، قد تتم مشاركة الاستجابات بين المستخدمين (الافتراضي للحسابات الشخصية) |
-| **معزول (Isolated)** | التخزين المؤقت مفعل، لكن الاستجابات خاصة بمؤسستك (الافتراضي للمؤسسات) |
-| **معطل (Disabled)** | لا يوجد تخزين مؤقت على الإطلاق |
-
-إعدادات إضافية متاحة:
-- **عتبة التشابه**: ضبط حساسية المطابقة الدلالية (الافتراضي: 92%)
-- **TTL مخصص**: تجاوز وقت انتهاء صلاحية التخزين المؤقت
-- **النماذج المستبعدة**: تعطيل التخزين المؤقت لنماذج محددة
+| **Default** | التخزين المؤقت مفعل، قد تتم المشاركة مع طلبات مماثلة |
+| **No Share** | التخزين المؤقت مفعل، لكن الاستجابات خاصة بحسابك فقط |
+| **Disabled** | لا يوجد تخزين مؤقت على الإطلاق |
 
 ### مستوى الطلب
 
-التجاوز لكل طلب باستخدام معلمة `cache_control`:
+التجاوز لكل طلب:
 
 ```bash
-# تعطيل التخزين المؤقت لهذا الطلب
+# Disable caching for this request
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "..."}],
-    "cache_control": {"type": "no_store"}
-  }'
+  -H "Cache-Control: no-store" \
+  -d '...'
 ```
 
 ## ملاحظات التخزين المؤقت
@@ -199,10 +184,10 @@ curl -X POST https://api.lemondata.cc/v1/cache/feedback \
 - **البيانات الحساسة**: المعلومات السرية
 
 ```python
-# للاستعلامات الحساسة للوقت
+# For time-sensitive queries
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_body={"cache_control": {"type": "no_cache"}}
+    extra_headers={"Cache-Control": "no-cache"}
 )
 ```

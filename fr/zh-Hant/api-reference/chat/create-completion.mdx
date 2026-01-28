@@ -1,0 +1,292 @@
+---
+title: "Créer une complétion de chat (Create Chat Completion)"
+openapi: "POST /v1/chat/completions"
+description: "Crée une complétion pour les messages de chat"
+---
+
+## Corps de la requête (Request Body)
+
+<ParamField body="model" type="string" required>
+  L'ID du modèle à utiliser. Veuillez consulter [Models](https://lemondata.cc/zh-TW/models) pour voir les options disponibles.
+</ParamField>
+
+<ParamField body="messages" type="array" required>
+  Une liste de messages comprenant la conversation.
+
+  Chaque objet message contient :
+  - `role` (string) : `system`, `user` ou `assistant`
+  - `content` (string | array) : contenu du message
+</ParamField>
+
+<ParamField body="temperature" type="number" default="1">
+  Température d'échantillonnage comprise entre 0 et 2. Des valeurs plus élevées rendent la sortie plus aléatoire.
+</ParamField>
+
+<ParamField body="max_tokens" type="integer">
+  Le nombre maximum de tokens à générer.
+</ParamField>
+
+<ParamField body="stream" type="boolean" default="false">
+  Si true, les deltas de messages partiels seront envoyés sous forme d'événements SSE.
+</ParamField>
+
+<ParamField body="stream_options" type="object">
+  Options de streaming. Définissez `include_usage: true` pour recevoir l'utilisation des tokens dans les blocs de streaming.
+</ParamField>
+
+<ParamField body="top_p" type="number" default="1">
+  Paramètre d'échantillonnage nucléaire (Nucleus sampling). Nous recommandons d'ajuster ce paramètre ou la `temperature`, mais pas les deux simultanément.
+</ParamField>
+
+<ParamField body="frequency_penalty" type="number" default="0">
+  Nombre compris entre -2.0 et 2.0. Les valeurs positives pénalisent les tokens répétés.
+</ParamField>
+
+<ParamField body="presence_penalty" type="number" default="0">
+  Nombre compris entre -2.0 et 2.0. Les valeurs positives pénalisent les tokens déjà présents dans le texte.
+</ParamField>
+
+<ParamField body="stop" type="string | array">
+  Jusqu'à 4 séquences où l'API s'arrêtera de générer des tokens.
+</ParamField>
+
+<ParamField body="tools" type="array">
+  Une liste d'outils que le modèle peut appeler (function calling).
+</ParamField>
+
+<ParamField body="tool_choice" type="string | object">
+  Contrôle la manière dont le modèle utilise les outils. Options : `auto`, `none`, `required` ou un objet outil spécifique.
+</ParamField>
+
+<ParamField body="parallel_tool_calls" type="boolean" default="true">
+  Indique si les appels de fonctions parallèles sont activés. Définissez sur false pour appeler les fonctions de manière séquentielle.
+</ParamField>
+
+<ParamField body="max_completion_tokens" type="integer">
+  Le nombre maximum de tokens pour la complétion. Alternative à `max_tokens`, recommandée pour les modèles plus récents comme o1/o3.
+</ParamField>
+
+<ParamField body="reasoning_effort" type="string">
+  Intensité du raisonnement pour les modèles o1/o3. Options : `low`, `medium`, `high`.
+</ParamField>
+
+<ParamField body="seed" type="integer">
+  Graine aléatoire utilisée pour un échantillonnage déterministe.
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  Le nombre de complétions à générer (1-128).
+</ParamField>
+
+<ParamField body="logprobs" type="boolean">
+  Indique s'il faut retourner les probabilités logarithmiques (log probabilities).
+</ParamField>
+
+<ParamField body="top_logprobs" type="integer">
+  Le nombre de probabilités logarithmiques les plus probables à retourner (0-20). Nécessite `logprobs: true`.
+</ParamField>
+
+<ParamField body="top_k" type="integer">
+  Paramètre d'échantillonnage Top-K (applicable aux modèles Anthropic/Gemini).
+</ParamField>
+
+<ParamField body="response_format" type="object">
+  Spécification du format de réponse. Utilisez `{"type": "json_object"}` pour activer le mode JSON, ou `{"type": "json_schema", "json_schema": {...}}` pour une sortie structurée.
+</ParamField>
+
+<ParamField body="logit_bias" type="object">
+  Modifie la probabilité d'apparition de tokens spécifiques. Mappe les ID de tokens (sous forme de chaîne) à des valeurs de biais comprises entre -100 et 100.
+</ParamField>
+
+<ParamField body="user" type="string">
+  Un identifiant unique représentant votre utilisateur final, utilisé pour la surveillance des abus.
+</ParamField>
+
+<ParamField body="cache_control" type="object">
+  Options de contrôle du cache LemonData.
+
+  - `type` (string) : Stratégie de cache - `default`, `no_cache`, `no_store`, `response_only`, `semantic_only`
+  - `max_age` (integer) : Durée de vie du cache (TTL) en secondes (max 86400)
+</ParamField>
+
+## Réponse (Response)
+
+<ResponseField name="id" type="string">
+  L'identifiant unique de la complétion.
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  Toujours `chat.completion`.
+</ResponseField>
+
+<ResponseField name="created" type="integer">
+  L'horodatage Unix de la création de la complétion.
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Le modèle utilisé pour la complétion.
+</ResponseField>
+
+<ResponseField name="choices" type="array">
+  Liste des choix de complétion.
+
+  Chaque choix contient :
+  - `index` (integer) : Index du choix
+  - `message` (object) : Le message généré
+  - `finish_reason` (string) : La raison pour laquelle le modèle s'est arrêté (`stop`, `length`, `tool_calls`)
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Statistiques d'utilisation des tokens.
+
+  - `prompt_tokens` (integer) : Nombre de tokens dans le prompt
+  - `completion_tokens` (integer) : Nombre de tokens dans la complétion
+  - `total_tokens` (integer) : Nombre total de tokens utilisés
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/chat/completions" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Hello!"}
+    ],
+    "temperature": 0.7,
+    "max_tokens": 1000
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ],
+    temperature=0.7,
+    max_tokens=1000
+)
+
+print(response.choices[0].message.content)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Hello!' }
+  ],
+  temperature: 0.7,
+  max_tokens: 1000
+});
+
+console.log(response.choices[0].message.content);
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateChatCompletion(
+        context.Background(),
+        openai.ChatCompletionRequest{
+            Model: "gpt-4o",
+            Messages: []openai.ChatCompletionMessage{
+                {Role: openai.ChatMessageRoleSystem, Content: "You are a helpful assistant."},
+                {Role: openai.ChatMessageRoleUser, Content: "Hello!"},
+            },
+            Temperature: 0.7,
+            MaxTokens:   1000,
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'gpt-4o',
+        'messages' => [
+            ['role' => 'system', 'content' => 'You are a helpful assistant.'],
+            ['role' => 'user', 'content' => 'Hello!']
+        ],
+        'temperature' => 0.7,
+        'max_tokens' => 1000
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['choices'][0]['message']['content'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1706000000,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello! How can I help you today?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 9,
+    "total_tokens": 29
+  }
+}
+```
+</ResponseExample>

@@ -48,38 +48,33 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## 캐시 제어
+## 캐시 헤더
 
-### 요청 수준 제어
+### 요청 헤더
 
-요청 본문의 `cache_control` 매개변수를 사용하여 요청별로 캐싱 동작을 제어합니다:
+요청별로 캐싱 동작을 제어합니다:
 
 ```bash
-# 캐시 조회를 건너뛰고 항상 모델을 호출
+# Skip cache lookup, always call the model
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "cache_control": {"type": "no_cache"}
-  }'
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
 ```
 
-| 유형 | 효과 |
-|------|--------|
-| `no_cache` | 캐시 조회를 건너뛰고 항상 새로운 응답을 가져옴 |
-| `no_store` | 이 응답을 캐시에 저장하지 않음 |
-| `response_only` | 정확한 일치 캐시만 사용 (시맨틱 건너뛰기) |
-| `semantic_only` | 시맨틱 캐시만 사용 (정확한 일치 건너뛰기) |
+| 헤더 | 값 | 효과 |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | 캐시 건너뛰기, 새로운 응답 |
+| `Cache-Control: no-store` | - | 이 응답을 캐싱하지 않음 |
 
 ### 응답 헤더
 
 모든 응답에는 캐시 상태가 포함됩니다:
 
 ```
-X-Cache-Status: HIT    # 캐시에서 응답 제공
-X-Cache-Status: MISS   # 모델의 새로운 응답
+X-Cache: HIT           # 캐시에서 응답 제공
+X-Cache: MISS          # 모델의 새로운 응답
+X-Cache-Entry-Id: abc  # 캐시 엔트리 ID (피드백용)
 ```
 
 ## 캐시 상태 확인
@@ -97,9 +92,9 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is 2+2?"}]
 )
 
-# 응답 헤더에서 캐시 상태 확인
-# (원시 HTTP 응답에서 사용 가능)
-print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
 ```
 
 ## 캐시 과금
@@ -115,35 +110,25 @@ print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
 
 ## 개인정보 제어
 
-### 조직 / 사용자 수준
+### API 키 수준
 
-대시보드 설정에서 캐싱 동작을 구성합니다:
+대시보드에서 각 API 키에 대한 캐싱 동작을 구성합니다:
 
 | 모드 | 설명 |
 |------|-------------|
-| **공유 (Shared)** | 캐시 활성화, 응답이 사용자 간에 공유될 수 있음 (개인 계정 기본값) |
-| **격리 (Isolated)** | 캐시 활성화, 하지만 응답은 조직 내에서만 비공개로 유지됨 (조직 계정 기본값) |
-| **비활성화 (Disabled)** | 캐싱 사용 안 함 |
-
-추가 설정 항목:
-- **유사도 임계값**: 시맨틱 매칭 민감도 조정 (기본값: 92%)
-- **사용자 정의 TTL**: 캐시 만료 시간 재정의
-- **제외 모델**: 특정 모델에 대해 캐싱 비활성화
+| **Default** | 캐시 활성화, 유사한 요청과 공유될 수 있음 |
+| **No Share** | 캐시 활성화, 하지만 응답은 귀하의 계정에만 비공개로 유지됨 |
+| **Disabled** | 캐싱 사용 안 함 |
 
 ### 요청 수준
 
-`cache_control` 매개변수를 사용하여 요청별로 재정의:
+요청별 재정의:
 
 ```bash
-# 이 요청에 대해 캐싱 비활성화
+# Disable caching for this request
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "..."}],
-    "cache_control": {"type": "no_store"}
-  }'
+  -H "Cache-Control: no-store" \
+  -d '...'
 ```
 
 ## 캐시 피드백
@@ -199,10 +184,10 @@ curl -X POST https://api.lemondata.cc/v1/cache/feedback \
 - **민감한 데이터**: 기밀 정보
 
 ```python
-# 시간에 민감한 쿼리의 경우
+# For time-sensitive queries
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_body={"cache_control": {"type": "no_cache"}}
+    extra_headers={"Cache-Control": "no-cache"}
 )
 ```

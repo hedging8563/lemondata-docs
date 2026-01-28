@@ -1,0 +1,184 @@
+---
+title: "LlamaIndex"
+description: "دمج LemonData مع LlamaIndex لاستخدامه في تطبيقات RAG"
+---
+
+## نظرة عامة
+
+LlamaIndex هو إطار عمل بيانات لتطبيقات LLM، وهو قوي بشكل خاص في بناء أنظمة RAG (Retrieval Augmented Generation). يعمل LemonData بسلاسة مع تكامل OpenAI الخاص بـ LlamaIndex.
+
+## التثبيت
+
+```bash
+pip install llama-index llama-index-llms-openai llama-index-embeddings-openai
+```
+
+## الإعداد الأساسي
+
+```python
+from llama_index.llms.openai import OpenAI
+from llama_index.core import Settings
+
+# Configure LLM
+llm = OpenAI(
+    model="gpt-4o",
+    api_key="sk-your-lemondata-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+
+# Set as default
+Settings.llm = llm
+
+# Simple query
+response = llm.complete("What is LemonData?")
+print(response.text)
+```
+
+## استخدام نماذج مختلفة
+
+```python
+# OpenAI GPT-4o
+gpt4 = OpenAI(
+    model="gpt-4o",
+    api_key="sk-your-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+
+# Anthropic Claude (via OpenAI-compatible endpoint)
+claude = OpenAI(
+    model="claude-sonnet-4-5",
+    api_key="sk-your-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+
+# Google Gemini
+gemini = OpenAI(
+    model="gemini-2.5-flash",
+    api_key="sk-your-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+```
+
+## واجهة الدردشة
+
+```python
+from llama_index.core.llms import ChatMessage
+
+messages = [
+    ChatMessage(role="system", content="You are a helpful assistant."),
+    ChatMessage(role="user", content="What is the capital of France?")
+]
+
+response = llm.chat(messages)
+print(response.message.content)
+```
+
+## البث (Streaming)
+
+```python
+# Streaming completion
+for chunk in llm.stream_complete("Write a poem about AI"):
+    print(chunk.delta, end="", flush=True)
+
+# Streaming chat
+for chunk in llm.stream_chat(messages):
+    print(chunk.delta, end="", flush=True)
+```
+
+## Embeddings
+
+```python
+from llama_index.embeddings.openai import OpenAIEmbedding
+
+embed_model = OpenAIEmbedding(
+    model="text-embedding-3-small",
+    api_key="sk-your-lemondata-key",
+    api_base="https://api.lemondata.cc/v1"
+)
+
+# Set as default
+Settings.embed_model = embed_model
+
+# Get embeddings
+embeddings = embed_model.get_text_embedding("Hello, world!")
+print(f"Embedding dimension: {len(embeddings)}")
+```
+
+## RAG باستخدام المستندات
+
+```python
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+
+# Configure settings
+Settings.llm = llm
+Settings.embed_model = embed_model
+
+# Load documents
+documents = SimpleDirectoryReader("./data").load_data()
+
+# Create index
+index = VectorStoreIndex.from_documents(documents)
+
+# Query
+query_engine = index.as_query_engine()
+response = query_engine.query("What is in my documents?")
+print(response)
+```
+
+## محرك الدردشة
+
+```python
+# Create chat engine with memory
+chat_engine = index.as_chat_engine(chat_mode="condense_question")
+
+# Multi-turn conversation
+response = chat_engine.chat("What is LemonData?")
+print(response)
+
+response = chat_engine.chat("How many models does it support?")
+print(response)
+```
+
+## الاستخدام غير المتزامن
+
+```python
+import asyncio
+
+async def main():
+    response = await llm.acomplete("Hello!")
+    print(response.text)
+
+asyncio.run(main())
+```
+
+## متغيرات البيئة
+
+لجعل الكود أكثر بساطة، استخدم متغيرات البيئة:
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+```
+
+```python
+from llama_index.llms.openai import OpenAI
+
+# Will automatically use environment variables
+llm = OpenAI(model="gpt-4o")
+```
+
+## أفضل الممارسات
+
+<AccordionGroup>
+  <Accordion title="اختيار النموذج المناسب">
+    استخدم النماذج الأسرع (GPT-4o-mini) لمهام Embedding والتلخيص، واترك النماذج القوية (GPT-4o, Claude) للاستجابة النهائية.
+  </Accordion>
+
+  <Accordion title="تحسين حجم الكتلة">
+    قم بتعديل حجم الكتلة (chunk size) بناءً على نوع المستند الخاص بك. استخدم كتلًا أصغر للمستندات التقنية الكثيفة، وكتلًا أكبر للمحتوى السردي.
+  </Accordion>
+
+  <Accordion title="استخدام التخزين المؤقت">
+    قم بتمكين ميزة التخزين المؤقت (caching) في LlamaIndex لتجنب استدعاءات API غير الضرورية أثناء عملية التطوير.
+  </Accordion>
+</AccordionGroup>

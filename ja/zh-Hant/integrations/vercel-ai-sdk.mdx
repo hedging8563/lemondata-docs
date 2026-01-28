@@ -1,0 +1,220 @@
+---
+title: "Vercel AI SDK"
+description: "LemonData を Vercel AI SDK と統合し、React および Next.js アプリケーションで使用する"
+---
+
+## 概要
+
+Vercel AI SDK は、React、Next.js、Vue、Svelte などのフレームワークを使用して AI 駆動のストリーミングアプリケーションを構築するための TypeScript ツールキットです。LemonData は、OpenAI 互換の provider を介してシームレスに動作します。
+
+## インストール
+
+```bash
+npm install ai @ai-sdk/openai
+```
+
+## 基本設定
+
+```typescript
+import { createOpenAI } from '@ai-sdk/openai';
+
+const lemondata = createOpenAI({
+  apiKey: 'sk-your-lemondata-key',
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+## テキスト生成
+
+```typescript
+import { generateText } from 'ai';
+
+const { text } = await generateText({
+  model: lemondata('gpt-4o'),
+  prompt: 'What is LemonData?',
+});
+
+console.log(text);
+```
+
+## テキストストリーミング
+
+```typescript
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: lemondata('gpt-4o'),
+  prompt: 'Write a poem about AI.',
+});
+
+for await (const textPart of result.textStream) {
+  process.stdout.write(textPart);
+}
+```
+
+## チャットメッセージ
+
+```typescript
+import { generateText } from 'ai';
+
+const { text } = await generateText({
+  model: lemondata('gpt-4o'),
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'What is the capital of France?' },
+  ],
+});
+```
+
+## 異なるモデルの使用
+
+```typescript
+// OpenAI GPT-4o
+const gpt4Response = await generateText({
+  model: lemondata('gpt-4o'),
+  prompt: 'Hello!',
+});
+
+// Anthropic Claude
+const claudeResponse = await generateText({
+  model: lemondata('claude-sonnet-4-5'),
+  prompt: 'Hello!',
+});
+
+// Google Gemini
+const geminiResponse = await generateText({
+  model: lemondata('gemini-2.5-flash'),
+  prompt: 'Hello!',
+});
+
+// DeepSeek
+const deepseekResponse = await generateText({
+  model: lemondata('deepseek-r1'),
+  prompt: 'Hello!',
+});
+```
+
+## Next.js API ルート
+
+```typescript
+// app/api/chat/route.ts
+import { createOpenAI } from '@ai-sdk/openai';
+import { streamText } from 'ai';
+
+const lemondata = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  const result = streamText({
+    model: lemondata('gpt-4o'),
+    messages,
+  });
+
+  return result.toDataStreamResponse();
+}
+```
+
+## React チャットコンポーネント
+
+```tsx
+'use client';
+
+import { useChat } from 'ai/react';
+
+export default function Chat() {
+  const { messages, input, handleInputChange, handleSubmit } = useChat({
+    api: '/api/chat',
+  });
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id}>
+          {m.role}: {m.content}
+        </div>
+      ))}
+
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={handleInputChange} />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  );
+}
+```
+
+## ツール呼び出し
+
+```typescript
+import { generateText, tool } from 'ai';
+import { z } from 'zod';
+
+const { text, toolCalls } = await generateText({
+  model: lemondata('gpt-4o'),
+  tools: {
+    weather: tool({
+      description: 'Get the weather in a location',
+      parameters: z.object({
+        location: z.string().describe('The location to get weather for'),
+      }),
+      execute: async ({ location }) => {
+        return { temperature: 72, condition: 'sunny' };
+      },
+    }),
+  },
+  prompt: 'What is the weather in San Francisco?',
+});
+```
+
+## 構造化出力
+
+```typescript
+import { generateObject } from 'ai';
+import { z } from 'zod';
+
+const { object } = await generateObject({
+  model: lemondata('gpt-4o'),
+  schema: z.object({
+    name: z.string(),
+    age: z.number(),
+    email: z.string().email(),
+  }),
+  prompt: 'Generate a fake user profile.',
+});
+
+console.log(object);
+```
+
+## 環境変数
+
+```bash
+# .env.local
+LEMONDATA_API_KEY=sk-your-lemondata-key
+```
+
+```typescript
+const lemondata = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+## ベストプラクティス
+
+<AccordionGroup>
+  <Accordion title="より良いユーザーエクスペリエンス (UX) のためのストリーミングの使用">
+    リアルタイムのフィードバックを提供するために、チャットアプリケーションでは常にストリーミングを使用してください。
+  </Accordion>
+
+  <Accordion title="エラーの適切な処理">
+    React コンポーネントで適切なエラー境界 (Error Boundaries) を実装してください。
+  </Accordion>
+
+  <Accordion title="API キーの保護">
+    クライアント側のコードで API キーを公開しないでください。必ずサーバー側の API ルートを使用してください。
+  </Accordion>
+</AccordionGroup>

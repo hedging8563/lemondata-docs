@@ -48,38 +48,33 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## Control de Cache
+## Encabezados de Cache
 
-### Control a Nivel de Solicitud
+### Encabezados de Solicitud
 
-Controle el comportamiento del caching por solicitud usando el parámetro `cache_control` en el cuerpo de la solicitud:
+Controle el comportamiento del caching por solicitud:
 
 ```bash
-# Omitir búsqueda en cache, siempre llamar al modelo
+# Skip cache lookup, always call the model
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "cache_control": {"type": "no_cache"}
-  }'
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
 ```
 
-| Tipo | Efecto |
-|------|--------|
-| `no_cache` | Omitir búsqueda en cache, siempre obtener respuesta fresca |
-| `no_store` | No almacenar esta respuesta en cache |
-| `response_only` | Solo usar cache de coincidencia exacta (omitir semántico) |
-| `semantic_only` | Solo usar cache semántico (omitir coincidencia exacta) |
+| Encabezado | Valor | Efecto |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | Omitir cache, respuesta fresca |
+| `Cache-Control: no-store` | - | No almacenar esta respuesta en cache |
 
 ### Encabezados de Respuesta
 
 Cada respuesta incluye el estado del cache:
 
 ```
-X-Cache-Status: HIT    # Respuesta servida desde cache
-X-Cache-Status: MISS   # Respuesta fresca del modelo
+X-Cache: HIT           # Response served from cache
+X-Cache: MISS          # Fresh response from model
+X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
 ```
 
 ## Comprobación del Estado del Cache
@@ -97,9 +92,9 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is 2+2?"}]
 )
 
-# Verificar estado del cache desde los encabezados de respuesta
-# (Disponible en la respuesta HTTP sin procesar)
-print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
 ```
 
 ## Facturación del Cache
@@ -115,35 +110,25 @@ El descuento exacto se muestra en los registros de uso de su dashboard.
 
 ## Controles de Privacidad
 
-### Nivel de Organización / Usuario
+### Nivel de API Key
 
-Configure el comportamiento del caching en la configuración de su dashboard:
+Configure el comportamiento del caching para cada API key en su dashboard:
 
 | Modo | Descripción |
 |------|-------------|
-| **Compartido (Shared)** | Cache habilitado, las respuestas pueden compartirse entre usuarios (predeterminado para cuentas personales) |
-| **Aislado (Isolated)** | Cache habilitado, pero las respuestas son privadas para su organización (predeterminado para organizaciones) |
-| **Deshabilitado (Disabled)** | Sin caching en absoluto |
-
-Configuraciones adicionales disponibles:
-- **Umbral de Similitud**: Ajuste la sensibilidad de la coincidencia semántica (predeterminado: 92%)
-- **TTL Personalizado**: Anule el tiempo de expiración del cache
-- **Modelos Excluidos**: Deshabilite el caching para modelos específicos
+| **Default** | Cache habilitado, puede compartirse con solicitudes similares |
+| **No Share** | Cache habilitado, pero las respuestas son privadas para su cuenta |
+| **Disabled** | Sin caching en absoluto |
 
 ### Nivel de Solicitud
 
-Anular por solicitud usando el parámetro `cache_control`:
+Anular por solicitud:
 
 ```bash
-# Deshabilitar caching para esta solicitud
+# Disable caching for this request
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "..."}],
-    "cache_control": {"type": "no_store"}
-  }'
+  -H "Cache-Control: no-store" \
+  -d '...'
 ```
 
 ## Feedback del Cache
@@ -199,10 +184,10 @@ Deshabilite el caching para:
 - **Datos sensibles**: Información confidencial
 
 ```python
-# Para consultas sensibles al tiempo
+# For time-sensitive queries
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_body={"cache_control": {"type": "no_cache"}}
+    extra_headers={"Cache-Control": "no-cache"}
 )
 ```

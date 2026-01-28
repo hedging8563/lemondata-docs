@@ -12,39 +12,34 @@ LemonData 实施速率限制以确保公平使用和平台稳定性。限制因�
 | 层级 | 请求数/分钟 | 描述 |
 |------|-------------|-------------|
 | **User** | 60 | 所有账户的默认层级 |
-| **Partner** | 300 | 适用于集成合作伙伴 |
+| **Partner** | 300 | 适用于合作伙伴 |
 | **VIP** | 1,000 | 高用量用户 |
 
 <Note>
   速率限制可能会发生变化。如需自定义限制，请联系 support@lemondata.cc。
 </Note>
 
-## 速率限制响应头
+## 速率限制响应
 
-每个 API 响应都包含速率限制信息：
+当您超过速率限制时，API 将返回 `429` 状态码，并带有 `Retry-After` 响应头，指示在重试前需要等待多长时间。
 
-```
-X-RateLimit-Limit: 60          # 您每分钟的限制
-X-RateLimit-Remaining: 55      # 剩余请求数
-X-RateLimit-Reset: 1234567890  # 限制重置的 Unix 时间戳
-```
+## 速率限制已超出
 
-## 超过速率限制
-
-当您超过限制时，将收到 `429` 响应：
+当您超出限制时，将收到 `429` 响应：
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
-    "type": "rate_limit_exceeded"
+    "message": "Rate limit exceeded. Please retry later.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
   }
 }
 ```
 
-附带额外的响应头：
+响应包含一个 `Retry-After` 响应头：
 ```
-Retry-After: 60  # 重试前需要等待的秒数
+Retry-After: 60  # Seconds to wait before retrying
 ```
 
 ## 处理速率限制
@@ -73,7 +68,7 @@ def make_request_with_backoff(messages, max_retries=5):
             if attempt == max_retries - 1:
                 raise
 
-            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 秒
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
             print(f"Rate limited. Waiting {wait_time}s...")
             time.sleep(wait_time)
 ```
@@ -93,7 +88,7 @@ class RateLimitedClient:
         self.last_request = 0
 
     async def request(self, messages):
-        # 如果需要，等待以遵守速率限制
+        # Wait if needed to respect rate limit
         now = asyncio.get_event_loop().time()
         wait_time = max(0, self.last_request + self.interval - now)
         if wait_time > 0:
@@ -108,7 +103,7 @@ class RateLimitedClient:
 
 ### 批量处理
 
-对于批量操作，请进行带延迟的分批处理：
+对于批量操作，请通过延迟进行分批处理：
 
 ```python
 def process_batch(items, batch_size=50, delay=1):
@@ -121,7 +116,7 @@ def process_batch(items, batch_size=50, delay=1):
                 messages=[{"role": "user", "content": item}]
             )
             results.append(result)
-        time.sleep(delay)  # 批次之间的停顿
+        time.sleep(delay)  # Pause between batches
     return results
 ```
 
@@ -153,7 +148,7 @@ def process_batch(items, batch_size=50, delay=1):
 2. 前往 **Settings → Account**
 3. 联系支持团队并说明您的使用场景
 
-或者发送邮件至 support@lemondata.cc，并提供以下信息：
+或者发送电子邮件至 support@lemondata.cc，并提供以下信息：
 - 您的账户邮箱
 - 预期的请求量
 - 使用场景描述

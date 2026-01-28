@@ -1,0 +1,220 @@
+---
+title: "Vercel AI SDK"
+description: "将 LemonData 与 Vercel AI SDK 集成，用于 React 和 Next.js 应用程序"
+---
+
+## 概览
+
+Vercel AI SDK 是一个 TypeScript 工具包，用于使用 React、Next.js、Vue、Svelte 等框架构建 AI 驱动的流式应用程序。LemonData 可通过与 OpenAI 兼容的 provider 无缝运行。
+
+## 安装
+
+```bash
+npm install ai @ai-sdk/openai
+```
+
+## 基本配置
+
+```typescript
+import { createOpenAI } from '@ai-sdk/openai';
+
+const lemondata = createOpenAI({
+  apiKey: 'sk-your-lemondata-key',
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+## 生成文本
+
+```typescript
+import { generateText } from 'ai';
+
+const { text } = await generateText({
+  model: lemondata('gpt-4o'),
+  prompt: 'What is LemonData?',
+});
+
+console.log(text);
+```
+
+## 流式传输文本
+
+```typescript
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: lemondata('gpt-4o'),
+  prompt: 'Write a poem about AI.',
+});
+
+for await (const textPart of result.textStream) {
+  process.stdout.write(textPart);
+}
+```
+
+## 对话消息
+
+```typescript
+import { generateText } from 'ai';
+
+const { text } = await generateText({
+  model: lemondata('gpt-4o'),
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'What is the capital of France?' },
+  ],
+});
+```
+
+## 使用不同的模型
+
+```typescript
+// OpenAI GPT-4o
+const gpt4Response = await generateText({
+  model: lemondata('gpt-4o'),
+  prompt: 'Hello!',
+});
+
+// Anthropic Claude
+const claudeResponse = await generateText({
+  model: lemondata('claude-sonnet-4-5'),
+  prompt: 'Hello!',
+});
+
+// Google Gemini
+const geminiResponse = await generateText({
+  model: lemondata('gemini-2.5-flash'),
+  prompt: 'Hello!',
+});
+
+// DeepSeek
+const deepseekResponse = await generateText({
+  model: lemondata('deepseek-r1'),
+  prompt: 'Hello!',
+});
+```
+
+## Next.js API 路由
+
+```typescript
+// app/api/chat/route.ts
+import { createOpenAI } from '@ai-sdk/openai';
+import { streamText } from 'ai';
+
+const lemondata = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  const result = streamText({
+    model: lemondata('gpt-4o'),
+    messages,
+  });
+
+  return result.toDataStreamResponse();
+}
+```
+
+## React 对话组件
+
+```tsx
+'use client';
+
+import { useChat } from 'ai/react';
+
+export default function Chat() {
+  const { messages, input, handleInputChange, handleSubmit } = useChat({
+    api: '/api/chat',
+  });
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id}>
+          {m.role}: {m.content}
+        </div>
+      ))}
+
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={handleInputChange} />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  );
+}
+```
+
+## 工具调用
+
+```typescript
+import { generateText, tool } from 'ai';
+import { z } from 'zod';
+
+const { text, toolCalls } = await generateText({
+  model: lemondata('gpt-4o'),
+  tools: {
+    weather: tool({
+      description: 'Get the weather in a location',
+      parameters: z.object({
+        location: z.string().describe('The location to get weather for'),
+      }),
+      execute: async ({ location }) => {
+        return { temperature: 72, condition: 'sunny' };
+      },
+    }),
+  },
+  prompt: 'What is the weather in San Francisco?',
+});
+```
+
+## 结构化输出
+
+```typescript
+import { generateObject } from 'ai';
+import { z } from 'zod';
+
+const { object } = await generateObject({
+  model: lemondata('gpt-4o'),
+  schema: z.object({
+    name: z.string(),
+    age: z.number(),
+    email: z.string().email(),
+  }),
+  prompt: 'Generate a fake user profile.',
+});
+
+console.log(object);
+```
+
+## 环境变量
+
+```bash
+# .env.local
+LEMONDATA_API_KEY=sk-your-lemondata-key
+```
+
+```typescript
+const lemondata = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+## 最佳实践
+
+<AccordionGroup>
+  <Accordion title="使用流式传输以获得更好的用户体验 (UX)">
+    在对话应用程序中始终使用流式传输，以提供实时反馈。
+  </Accordion>
+
+  <Accordion title="优雅地处理错误">
+    在 React 组件中实现适当的错误边界 (Error Boundaries)。
+  </Accordion>
+
+  <Accordion title="保护您的 API key">
+    切勿在客户端代码中泄露您的 API key。请务必使用服务端 API 路由。
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,111 @@
+---
+title: "Manajemen Cache"
+description: "Kontrol perilaku caching untuk permintaan API Anda"
+---
+
+## Gambaran Umum
+
+LemonData secara otomatis mengelola caching untuk mengoptimalkan performa dan mengurangi biaya. Meskipun tidak ada endpoint publik untuk menghapus entri cache, Anda memiliki kontrol penuh atas perilaku caching melalui kontrol tingkat permintaan.
+
+## Melewati Cache
+
+Untuk mendapatkan respons terbaru tanpa menggunakan cache, gunakan parameter `cache_control` dalam permintaan Anda:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/chat/completions" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "cache_control": {"type": "no_cache"}
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}],
+    extra_body={"cache_control": {"type": "no_cache"}}
+)
+
+print(response.choices[0].message.content)
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.lemondata.cc/v1/chat/completions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer sk-your-api-key',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'Hello!' }],
+      cache_control: { type: 'no_cache' }
+    })
+  }
+);
+
+const data = await response.json();
+console.log(data);
+```
+
+</CodeGroup>
+
+## Opsi Kontrol Cache
+
+| Tipe | Efek |
+|------|--------|
+| `no_cache` | Lewati pencarian cache, selalu dapatkan respons terbaru |
+| `no_store` | Jangan simpan respons ini di dalam cache |
+| `response_only` | Hanya gunakan cache kecocokan persis (lewati semantik) |
+| `semantic_only` | Hanya gunakan cache semantik (lewati kecocokan persis) |
+
+## Umpan Balik Cache
+
+Jika Anda menerima respons cache yang salah, Anda dapat melaporkannya:
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/cache/feedback" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+Ketika sebuah entri cache menerima cukup banyak umpan balik negatif, entri tersebut akan dibatalkan secara otomatis.
+
+## Kasus Penggunaan
+
+<AccordionGroup>
+  <Accordion title="Menguji respons terbaru">
+    Selama pengembangan, gunakan `cache_control: {"type": "no_cache"}` untuk memastikan Anda mendapatkan respons API terbaru.
+  </Accordion>
+
+  <Accordion title="Kueri yang sensitif terhadap waktu">
+    Untuk data real-time seperti harga saham atau cuaca, selalu gunakan `no_cache` untuk mendapatkan informasi terkini.
+  </Accordion>
+
+  <Accordion title="Debugging">
+    Saat melakukan debugging pada respons yang tidak terduga, gunakan `no_cache` untuk menyingkirkan hasil yang di-cache.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  Untuk detail lebih lanjut tentang caching, lihat [Panduan Caching](/guides/caching).
+</Note>

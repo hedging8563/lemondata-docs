@@ -1,0 +1,201 @@
+---
+title: "إنشاء تفريغ صوتي"
+openapi: "POST /v1/audio/transcriptions"
+description: "تحويل الصوت إلى نص باللغة المدخلة"
+---
+
+## جسم الطلب
+
+<ParamField body="file" type="file" required>
+  ملف الصوت المراد تفريغه. التنسيقات المدعومة: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm.
+</ParamField>
+
+<ParamField body="model" type="string" default="whisper-1">
+  النموذج المراد استخدامه. حالياً يتم دعم `whisper-1` فقط.
+</ParamField>
+
+<ParamField body="language" type="string">
+  لغة الصوت، بتنسيق ISO-639-1 (مثال: `en`، `zh`، `ja`).
+</ParamField>
+
+<ParamField body="prompt" type="string">
+  نص اختياري لتوجيه أسلوب النموذج أو مواصلة مقطع سابق.
+</ParamField>
+
+<ParamField body="response_format" type="string" default="json">
+  تنسيق المخرجات: `json`، `text`، `srt`، `verbose_json`، `vtt`.
+</ParamField>
+
+<ParamField body="temperature" type="number" default="0">
+  درجة حرارة العينات (من 0 إلى 1).
+</ParamField>
+
+<ParamField body="timestamp_granularities" type="array">
+  دقة الطوابع الزمنية: `word` و/أو `segment`. يتطلب `verbose_json`.
+</ParamField>
+
+## الاستجابة
+
+<ResponseField name="text" type="string">
+  النص المفرغ.
+</ResponseField>
+
+بالنسبة لـ `verbose_json`:
+
+<ResponseField name="task" type="string">
+  ثابت كـ `transcribe`.
+</ResponseField>
+
+<ResponseField name="language" type="string">
+  اللغة المكتشفة.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  مدة الصوت (بالثواني).
+</ResponseField>
+
+<ResponseField name="segments" type="array">
+  مقاطع التفريغ التي تتضمن طوابع زمنية.
+</ResponseField>
+
+<ResponseField name="words" type="array">
+  طوابع زمنية على مستوى الكلمات (إذا تم طلبها).
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/audio/transcriptions" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F file="@audio.mp3" \
+  -F model="whisper-1" \
+  -F language="en"
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+with open("audio.mp3", "rb") as audio_file:
+    response = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_file,
+        language="en"
+    )
+
+print(response.text)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+import fs from 'fs';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.audio.transcriptions.create({
+  model: 'whisper-1',
+  file: fs.createReadStream('audio.mp3'),
+  language: 'en'
+});
+
+console.log(response.text);
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateTranscription(
+        context.Background(),
+        openai.AudioRequest{
+            Model:    openai.Whisper1,
+            FilePath: "audio.mp3",
+            Language: "en",
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(resp.Text)
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/audio/transcriptions');
+
+$file = new CURLFile('audio.mp3', 'audio/mpeg', 'audio.mp3');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => [
+        'file' => $file,
+        'model' => 'whisper-1',
+        'language' => 'en'
+    ]
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['text'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response (json)
+{
+  "text": "Hello, this is a test of the transcription API."
+}
+```
+
+```json Response (verbose_json)
+{
+  "task": "transcribe",
+  "language": "english",
+  "duration": 5.5,
+  "text": "Hello, this is a test of the transcription API.",
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.0,
+      "end": 2.5,
+      "text": "Hello, this is a test",
+      "tokens": [...]
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## الترجمة
+
+لترجمة الصوت إلى اللغة الإنجليزية، استخدم نقطة نهاية الترجمة:
+
+```python
+response = client.audio.translations.create(
+    model="whisper-1",
+    file=audio_file
+)
+```

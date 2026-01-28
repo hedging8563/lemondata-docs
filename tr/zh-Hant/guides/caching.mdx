@@ -1,0 +1,208 @@
+---
+title: "✨ Akıllı Önbellekleme"
+description: "Bağlam duyarlı anlamsal önbellekleme ile maliyetleri ve gecikmeyi azaltın"
+---
+
+## Genel Bakış
+
+LemonData, API maliyetlerinizi ve yanıt gecikmenizi önemli ölçüde azaltan akıllı bir önbellekleme sistemi sunar. Önbelleğimiz sadece basit bir istek eşleştirmesi değil, aynı zamanda istemlerinizin (prompts) **anlamsal anlamını (semantic meaning)** de anlar.
+
+<CardGroup cols={2}>
+  <Card title="Maliyet Tasarrufu" icon="piggy-bank">
+    Önbellek isabetleri (Cache hits), normal maliyetin yalnızca küçük bir kısmı kadar ücretlendirilir.
+  </Card>
+  <Card title="Daha Hızlı Yanıtlar" icon="bolt">
+    Önbelleğe alınan yanıtlar, model çıkarımı gerektirmeden anında döndürülür.
+  </Card>
+  <Card title="Bağlam Duyarlı" icon="brain">
+    Anlamsal eşleştirme, farklı ifadeler kullanıldığında bile benzer istekleri bulur.
+  </Card>
+  <Card title="Gizlilik Kontrolü" icon="shield">
+    Neyin önbelleğe alınacağı ve paylaşılacağı üzerinde tam kontrol sahibi olun.
+  </Card>
+</CardGroup>
+
+## Nasıl Çalışır?
+
+LemonData iki katmanlı bir önbellekleme sistemi kullanır:
+
+### 1. Katman: Yanıt Önbelleği (Tam Eşleşme)
+
+Belirleyici istekler (`temperature=0`) için tam yanıtları önbelleğe alıyoruz:
+
+- **Eşleşme Koşulları**: Aynı model, mesajlar ve parametreler
+- **Hız**: Anlık (mikrosaniye seviyesinde)
+- **Şunlar için uygundur**: Tekrarlanan aynı sorgular
+
+### 2. Katman: Anlamsal Önbellek (Benzerlik Eşleşmesi)
+
+Tüm istekler için iki aşamalı bir eşleştirme algoritması kullanarak anlamsal benzerliği kontrol ediyoruz:
+
+- **1. Aşama (Yalnızca Sorgu)**: Kullanıcı sorgu benzerliği ≥%95
+- **2. Aşama (Tam Bağlam)**: Diyalog bağlamını içeren benzerlik ≥%85
+- **Şunlar için uygundur**: SSS türü sorgular, yaygın sorular
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Same cached response (high semantic similarity)
+```
+
+## Önbellek Kontrolü
+
+### İstek Seviyesi Kontrolü
+
+İstek gövdesindeki `cache_control` parametresini kullanarak her isteğin önbellekleme davranışını kontrol edin:
+
+```bash
+# Önbellek sorgusunu atla, her zaman modeli çağır
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
+```
+
+| Tür | Etki |
+|------|------|
+| `no_cache` | Önbellek sorgusunu atlar, her zaman yeni bir yanıt alır |
+| `no_store` | Bu yanıtı önbelleğe kaydetmez |
+| `response_only` | Yalnızca tam eşleşme önbelleğini kullanır (anlamsal önbelleği atlar) |
+| `semantic_only` | Yalnızca anlamsal önbelleği kullanır (tam eşleşmeyi atlar) |
+
+### Yanıt Başlıkları
+
+Her yanıt bir önbellek durumu içerir:
+
+```
+X-Cache-Status: HIT    # Yanıt önbellekten geldi
+X-Cache-Status: MISS   # Modelden gelen yeni yanıt
+```
+
+## Önbellek Durumunu Kontrol Etme
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Yanıt başlıklarından önbellek durumunu kontrol edin
+# (Ham HTTP yanıtında mevcuttur)
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
+```
+
+## Önbellek 計費 (Faturalandırma)
+
+Önbellek isabetlerinin maliyeti, yeni isteklere göre önemli ölçüde daha düşüktür:
+
+| Tür | Maliyet |
+|------|------|
+| Önbellek İsabeti (HIT) | **%80 indirimli** |
+| Önbellek Iskalama (MISS) | Normal fiyat |
+
+Kesin indirim oranı, panelinizdeki kullanım günlüklerinde gösterilir.
+
+## Gizlilik Kontrolü
+
+### Organizasyon / Kullanıcı Seviyesi
+
+Panel ayarlarından önbellek davranışını yapılandırın:
+
+| Mod | Açıklama |
+|------|-------------|
+| **Paylaşımlı (Shared)** | Önbelleği etkinleştirir, yanıtlar kullanıcılar arasında paylaşılabilir (kişisel hesaplar için varsayılan) |
+| **İzole (Isolated)** | Önbelleği etkinleştirir, ancak yanıtlar yalnızca organizasyonunuza özeldir (organizasyon hesapları için varsayılan) |
+| **Devre Dışı (Disabled)** | Önbelleği tamamen devre dışı bırakır |
+
+Diğer yapılandırılabilir öğeler:
+- **Benzerlik Eşiği**: Anlamsal eşleşme hassasiyetini ayarlar (varsayılan: %92)
+- **Özel TTL**: Önbellek geçerlilik süresini geçersiz kılar
+- **Hariç Tutulan Modeller**: Belirli modeller için önbelleği devre dışı bırakır
+
+### İstek Seviyesi
+
+Tekil isteklerin ayarlarını geçersiz kılmak için `cache_control` parametresini kullanın:
+
+```bash
+# Bu istek için önbelleği devre dışı bırak
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
+```
+
+## Önbellek Geri Bildirimi
+
+Hatalı bir önbellek yanıtı alırsanız bildirebilirsiniz:
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**Geri Bildirim Türleri:**
+- `wrong_answer` - Hatalı cevap
+- `outdated` - Bilgi güncel değil
+- `irrelevant` - Soruyla alakasız
+- `other` - Diğer sorunlar
+
+Bir önbellek öğesi yeterli miktarda olumsuz geri bildirim aldığında otomatik olarak geçersiz kılınacaktır.
+
+## En İyi Uygulamalar
+
+<AccordionGroup>
+  <Accordion title="Önbelleğe alınabilir sorgular için temperature=0 kullanın">
+    Belirleyici ayarlar önbellek isabet oranını maksimize eder.
+  </Accordion>
+
+  <Accordion title="İstem formatını standartlaştırın">
+    Tutarlı formatlama anlamsal eşleşmeyi iyileştirir.
+  </Accordion>
+
+  <Accordion title="Zamana duyarlı sorgular için no-cache kullanın">
+    Güncel olaylar ve gerçek zamanlı veriler önbelleği atlamalıdır.
+  </Accordion>
+
+  <Accordion title="Önbellek isabet oranını izleyin">
+    Panelden önbellek istatistiklerini ve tasarruf miktarını görüntüleyin.
+  </Accordion>
+</AccordionGroup>
+
+## Ne Zaman Önbellek Kullanılmamalıdır?
+
+Aşağıdaki durumlar için önbelleği devre dışı bırakın:
+
+- **Gerçek Zamanlı Bilgiler**: Hisse senedi fiyatları, hava durumu, haberler
+- **Kişiselleştirilmiş İçerik**: Belirli bir kullanıcıya özel öneriler
+- **Yaratıcı Görevler**: Çeşitlilik gerektiğinde
+- **Hassas Veriler**: Gizli bilgiler
+
+```python
+# Zamana duyarlı sorgular için
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_body={"cache_control": {"type": "no_cache"}}
+)
+```

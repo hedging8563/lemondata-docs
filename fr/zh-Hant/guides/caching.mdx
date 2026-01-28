@@ -1,0 +1,208 @@
+---
+title: "✨ Cache Intelligent"
+description: "Réduisez les coûts et la latence grâce à la mise en cache sémantique sensible au contexte"
+---
+
+## Aperçu
+
+LemonData propose un système de cache intelligent qui réduit considérablement vos coûts d'API et la latence des réponses. Notre cache ne se contente pas d'une simple correspondance de requêtes ; il comprend également la **signification sémantique (semantic meaning)** de vos prompts.
+
+<CardGroup cols={2}>
+  <Card title="Économies de coûts" icon="piggy-bank">
+    Les hits de cache (Cache hits) sont facturés à une fraction du coût normal.
+  </Card>
+  <Card title="Réponses plus rapides" icon="bolt">
+    Les réponses mises en cache sont renvoyées instantanément, sans nécessiter d'inférence du modèle.
+  </Card>
+  <Card title="Sensible au contexte" icon="brain">
+    La correspondance sémantique trouve des requêtes similaires même si la formulation diffère.
+  </Card>
+  <Card title="Contrôle de la confidentialité" icon="shield">
+    Contrôlez entièrement ce qui est mis en cache et partagé.
+  </Card>
+</CardGroup>
+
+## Fonctionnement
+
+LemonData utilise un système de cache à deux niveaux :
+
+### Niveau 1 : Cache de réponse (correspondance exacte)
+
+Pour les requêtes déterministes (`temperature=0`), nous mettons en cache la réponse exacte :
+
+- **Conditions de correspondance** : Modèle, messages et paramètres identiques
+- **Vitesse** : Instantanée (niveau microseconde)
+- **Idéal pour** : Requêtes identiques répétées
+
+### Niveau 2 : Cache sémantique (correspondance par similitude)
+
+Pour toutes les requêtes, nous vérifions également la similitude sémantique à l'aide d'un algorithme de correspondance en deux étapes :
+
+- **Étape 1 (Requête uniquement)** : Similitude de la requête utilisateur ≥95%
+- **Étape 2 (Contexte complet)** : Similitude incluant le contexte de la conversation ≥85%
+- **Idéal pour** : Requêtes de type FAQ, questions fréquentes
+
+```
+User A: "What is the capital of France?"
+User B: "Tell me the capital city of France"
+→ Même réponse en cache (haute similitude sémantique)
+```
+
+## Contrôle du cache
+
+### Contrôle au niveau de la requête
+
+Utilisez le paramètre `cache_control` dans le corps de la requête pour contrôler le comportement de mise en cache de chaque requête :
+
+```bash
+# Ignorer la recherche en cache, toujours appeler le modèle
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "cache_control": {"type": "no_cache"}
+  }'
+```
+
+| Type | Effet |
+|------|------|
+| `no_cache` | Ignore la recherche en cache, obtient toujours une nouvelle réponse |
+| `no_store` | Ne stocke pas cette réponse dans le cache |
+| `response_only` | Utilise uniquement le cache de correspondance exacte (ignore le cache sémantique) |
+| `semantic_only` | Utilise uniquement le cache sémantique (ignore la correspondance exacte) |
+
+### En-têtes de réponse
+
+Chaque réponse inclut un statut de cache :
+
+```
+X-Cache-Status: HIT    # La réponse provient du cache
+X-Cache-Status: MISS   # Nouvelle réponse provenant du modèle
+```
+
+## Vérifier le statut du cache
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What is 2+2?"}]
+)
+
+# Vérifier le statut du cache à partir des en-têtes de réponse
+# (Disponible dans la réponse HTTP brute)
+print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
+```
+
+## Facturation du cache
+
+Les frais pour un hit de cache sont nettement inférieurs à ceux d'une nouvelle requête :
+
+| Type | Coût |
+|------|------|
+| Hit de cache (HIT) | **80 % de réduction (80% off)** |
+| Miss de cache (MISS) | Prix standard |
+
+La remise exacte est affichée dans vos journaux d'utilisation du tableau de bord.
+
+## Contrôle de la confidentialité
+
+### Niveau Organisation / Utilisateur
+
+Configurez le comportement du cache dans les paramètres du tableau de bord :
+
+| Mode | Description |
+|------|-------------|
+| **Partagé (Shared)** | Active le cache, les réponses peuvent être partagées entre utilisateurs (par défaut pour les comptes personnels) |
+| **Isolé (Isolated)** | Active le cache, mais les réponses sont limitées à votre organisation (par défaut pour les comptes d'organisation) |
+| **Désactivé (Disabled)** | N'utilise pas du tout le cache |
+
+Autres éléments configurables :
+- **Seuil de similitude** : Ajuste la sensibilité de la correspondance sémantique (par défaut : 92 %)
+- **TTL personnalisé** : Remplace le temps d'expiration du cache
+- **Exclure des modèles** : Désactive le cache pour des modèles spécifiques
+
+### Niveau de la requête
+
+Utilisez le paramètre `cache_control` pour écraser les paramètres d'une requête individuelle :
+
+```bash
+# Désactiver le cache pour cette requête
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "..."}],
+    "cache_control": {"type": "no_store"}
+  }'
+```
+
+## Feedback sur le cache
+
+Si vous recevez une réponse en cache incorrecte, vous pouvez la signaler :
+
+```bash
+curl -X POST https://api.lemondata.cc/v1/cache/feedback \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cache_entry_id": "abc123",
+    "feedback_type": "wrong_answer",
+    "description": "Response was outdated"
+  }'
+```
+
+**Types de feedback :**
+- `wrong_answer` - Erreur factuelle
+- `outdated` - Information obsolète
+- `irrelevant` - Non pertinent par rapport à la question
+- `other` - Autre problème
+
+Lorsqu'une entrée de cache reçoit suffisamment de retours négatifs, elle est automatiquement invalidée.
+
+## Bonnes pratiques
+
+<AccordionGroup>
+  <Accordion title="Utilisez temperature=0 pour les requêtes pouvant être mises en cache">
+    Les paramètres déterministes maximisent le taux de hit du cache.
+  </Accordion>
+
+  <Accordion title="Standardisez le format des prompts">
+    Un formatage cohérent améliore la correspondance sémantique.
+  </Accordion>
+
+  <Accordion title="Utilisez no-cache pour les requêtes sensibles au temps">
+    Les actualités et les données en temps réel doivent ignorer le cache.
+  </Accordion>
+
+  <Accordion title="Surveillez le taux de hit du cache">
+    Consultez les statistiques de cache et les économies réalisées dans le tableau de bord.
+  </Accordion>
+</AccordionGroup>
+
+## Quand ne pas utiliser le cache
+
+Désactivez le cache pour les cas suivants :
+
+- **Informations en temps réel** : cours de la bourse, météo, actualités
+- **Contenu personnalisé** : recommandations pour un utilisateur spécifique
+- **Tâches créatives** : lorsqu'une certaine diversité est requise
+- **Données sensibles** : informations confidentielles
+
+```python
+# Pour les requêtes sensibles au temps
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
+    extra_body={"cache_control": {"type": "no_cache"}}
+)
+```

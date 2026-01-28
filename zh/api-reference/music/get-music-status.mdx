@@ -1,183 +1,185 @@
+**Assessing the Translation**
+
+I've finished translating the first section of the document. I focused on the frontmatter, introduction, headings, and parameter/response field descriptions. I've confirmed that I've correctly kept all code, API endpoints, and other technical elements in English. Also, I've checked myself against the initial parameters to be sure I am on track.
+
+
 ---
-title: "获取音乐状态"
-openapi: "GET /v1/music/generations/{id}"
-description: "获取音乐生成任务的状态和结果"
+title: "创建音乐"
+openapi: "POST /v1/music/generations"
+description: "使用 Suno 创建音乐生成任务"
 ---
 
-轮询此端点以检查音乐生成任务的状态。
+使用 AI 生成音乐和歌词。这是一个异步 API - 您将收到一个任务 ID 用于轮询完成状态。
 
-## 路径参数
+## 请求体
 
-<ParamField path="id" type="string" required>
-  音乐生成任务 ID。
+<ParamField body="model" type="string" default="suno_music">
+  使用的模型：`suno_music` 用于音乐生成，`suno_lyrics` 仅用于歌词。
+</ParamField>
+
+<ParamField body="prompt" type="string" required>
+  生成音乐的描述。可以包含风格、情绪、乐器等。
+</ParamField>
+
+<ParamField body="title" type="string">
+  生成歌曲的标题。
+</ParamField>
+
+<ParamField body="tags" type="string">
+  风格标签（例如 "pop, upbeat, electronic"）。
+</ParamField>
+
+<ParamField body="action" type="string">
+  生成类型：`MUSIC`（默认）或 `LYRICS`。
+</ParamField>
+
+<ParamField body="mv" type="string">
+  要使用的模型版本。
+</ParamField>
+
+<ParamField body="continue_clip_id" type="string">
+  要续写的上一个片段的 ID。
+</ParamField>
+
+<ParamField body="continue_at" type="number">
+  续写的起始时间戳（以秒为单位）。
+</ParamField>
+
+<ParamField body="user" type="string">
+  终端用户的唯一标识符。
 </ParamField>
 
 ## 响应
 
 <ResponseField name="id" type="string">
-  任务 ID。
+  用于轮询状态的任务 ID。
 </ResponseField>
 
 <ResponseField name="status" type="string">
   任务状态：`pending`、`processing`、`completed` 或 `failed`。
 </ResponseField>
 
-<ResponseField name="progress" type="integer">
-  进度百分比 (0-100)。
-</ResponseField>
-
-<ResponseField name="audio_url" type="string">
-  音频文件下载 URL（完成后）。
-</ResponseField>
-
-<ResponseField name="video_url" type="string">
-  带有可视化效果的视频版本 URL（完成后）。
-</ResponseField>
-
-<ResponseField name="title" type="string">
-  生成的歌曲标题。
-</ResponseField>
-
-<ResponseField name="lyrics" type="string">
-  生成或提供的歌词。
-</ResponseField>
-
-<ResponseField name="error" type="string">
-  错误信息（失败时）。
+<ResponseField name="created" type="integer">
+  任务创建的 Unix 时间戳。
 </ResponseField>
 
 <RequestExample>
 ```bash cURL
-curl "https://api.lemondata.cc/v1/music/generations/music_abc123" \
-  -H "Authorization: Bearer sk-your-api-key"
+curl -X POST "https://api.lemondata.cc/v1/music/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "suno_music",
+    "prompt": "An upbeat electronic dance track with heavy bass",
+    "title": "Night Drive",
+    "tags": "electronic, EDM, energetic"
+  }'
 ```
 
 ```python Python
 import requests
-import time
 
-task_id = "music_abc123"
+response = requests.post(
+    "https://api.lemondata.cc/v1/music/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "suno_music",
+        "prompt": "An upbeat electronic dance track with heavy bass",
+        "title": "Night Drive",
+        "tags": "electronic, EDM, energetic"
+    }
+)
 
-while True:
-    response = requests.get(
-        f"https://api.lemondata.cc/v1/music/generations/{task_id}",
-        headers={"Authorization": "Bearer sk-your-api-key"}
-    )
-    result = response.json()
-
-    if result["status"] == "completed":
-        print(f"Audio URL: {result['audio_url']}")
-        break
-    elif result["status"] == "failed":
-        print(f"Error: {result['error']}")
-        break
-
-    time.sleep(5)  # Poll every 5 seconds
+task_id = response.json()["id"]
+print(f"Task ID: {task_id}")
 ```
 
 ```javascript JavaScript
-const taskId = 'music_abc123';
+const response = await fetch('https://api.lemondata.cc/v1/music/generations', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer sk-your-api-key',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    model: 'suno_music',
+    prompt: 'An upbeat electronic dance track with heavy bass',
+    title: 'Night Drive',
+    tags: 'electronic, EDM, energetic'
+  })
+});
 
-async function pollForMusic() {
-  while (true) {
-    const response = await fetch(
-      `https://api.lemondata.cc/v1/music/generations/${taskId}`,
-      { headers: { 'Authorization': 'Bearer sk-your-api-key' } }
-    );
-
-    const result = await response.json();
-
-    if (result.status === 'completed') {
-      console.log(`Audio URL: ${result.audio_url}`);
-      return result.audio_url;
-    } else if (result.status === 'failed') {
-      throw new Error(result.error);
-    }
-
-    await new Promise(r => setTimeout(r, 5000));
-  }
-}
+const data = await response.json();
+console.log(`Task ID: ${data.id}`);
 ```
 
 ```go Go
 package main
 
 import (
+    "bytes"
     "encoding/json"
     "fmt"
     "net/http"
-    "time"
 )
 
 func main() {
-    taskID := "music_abc123"
-
-    for {
-        req, _ := http.NewRequest("GET",
-            fmt.Sprintf("https://api.lemondata.cc/v1/music/generations/%s", taskID), nil)
-        req.Header.Set("Authorization", "Bearer sk-your-api-key")
-
-        client := &http.Client{}
-        resp, _ := client.Do(req)
-
-        var result map[string]interface{}
-        json.NewDecoder(resp.Body).Decode(&result)
-        resp.Body.Close()
-
-        if result["status"] == "completed" {
-            fmt.Printf("Audio URL: %s\n", result["audio_url"])
-            break
-        } else if result["status"] == "failed" {
-            fmt.Printf("Error: %s\n", result["error"])
-            break
-        }
-
-        time.Sleep(5 * time.Second)
+    payload := map[string]interface{}{
+        "model":  "suno_music",
+        "prompt": "An upbeat electronic dance track with heavy bass",
+        "title":  "Night Drive",
+        "tags":   "electronic, EDM, energetic",
     }
+    body, _ := json.Marshal(payload)
+
+    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/music/generations", bytes.NewBuffer(body))
+    req.Header.Set("Authorization", "Bearer sk-your-api-key")
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Printf("Task ID: %s\n", result["id"])
 }
 ```
 
 ```php PHP
 <?php
-$taskId = 'music_abc123';
+$ch = curl_init('https://api.lemondata.cc/v1/music/generations');
 
-while (true) {
-    $ch = curl_init("https://api.lemondata.cc/v1/music/generations/{$taskId}");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'suno_music',
+        'prompt' => 'An upbeat electronic dance track with heavy bass',
+        'title' => 'Night Drive',
+        'tags' => 'electronic, EDM, energetic'
+    ])
+]);
 
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            'Authorization: Bearer sk-your-api-key'
-        ]
-    ]);
+$response = curl_exec($ch);
+curl_close($ch);
 
-    $response = curl_exec($ch);
-    curl_close($ch);
-
-    $result = json_decode($response, true);
-
-    if ($result['status'] === 'completed') {
-        echo "Audio URL: {$result['audio_url']}\n";
-        break;
-    } elseif ($result['status'] === 'failed') {
-        echo "Error: {$result['error']}\n";
-        break;
-    }
-
-    sleep(5);
-}
+$data = json_decode($response, true);
+echo "Task ID: " . $data['id'];
 ```
 </RequestExample>
 
 <ResponseExample>
-```json 响应 (已完成)
+```json Response
 {
-  "id": "music_abc123def456",
-  "status": "completed",
-  "audio_url": "https://cdn.example.com/music/abc123.mp3",
-  "video_url": "https://cdn.example.com/music/abc123.mp4",
-  "title": "Night Drive",
-  "lyrics": "[Verse 1]\nDriving through the night..."
+  "id": "music_abc123",
+  "status": "pending",
+  "created": 1706000000,
+  "model": "suno_music"
 }
 ```
 </ResponseExample>

@@ -1,0 +1,232 @@
+---
+title: "Anthropic SDK"
+description: "LemonData와 Anthropic SDK를 사용하여 Claude 모델에 액세스하세요"
+---
+
+## 개요
+
+LemonData는 네이티브 Anthropic Messages API 형식을 지원합니다. LemonData와 함께 공식 Anthropic SDK를 사용하여 Claude 모델에 액세스하세요.
+
+## 설치
+
+<CodeGroup>
+
+```bash Python
+pip install anthropic
+```
+
+```bash Node.js
+npm install @anthropic-ai/sdk
+```
+
+</CodeGroup>
+
+## 설정
+
+<CodeGroup>
+
+```python Python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-lemondata-key",
+    base_url="https://api.lemondata.cc"
+)
+```
+
+```javascript JavaScript
+import Anthropic from '@anthropic-ai/sdk';
+
+const client = new Anthropic({
+  apiKey: 'sk-your-lemondata-key',
+  baseURL: 'https://api.lemondata.cc'
+});
+```
+
+</CodeGroup>
+
+<Note>
+  참고: Anthropic SDK의 base URL은 `https://api.lemondata.cc`입니다 (`/v1` 제외).
+</Note>
+
+## 기본 사용법
+
+```python
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "Hello, Claude!"}
+    ]
+)
+
+print(message.content[0].text)
+```
+
+## System Prompt 사용
+
+```python
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    system="You are a helpful coding assistant.",
+    messages=[
+        {"role": "user", "content": "Write a Python function to reverse a string"}
+    ]
+)
+```
+
+## 스트리밍 (Streaming)
+
+```python
+with client.messages.stream(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Tell me a story"}]
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+```
+
+## 비전 (Vision)
+
+```python
+import base64
+
+# From URL
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "What's in this image?"},
+            {
+                "type": "image",
+                "source": {
+                    "type": "url",
+                    "url": "https://example.com/image.jpg"
+                }
+            }
+        ]
+    }]
+)
+
+# From base64
+with open("image.png", "rb") as f:
+    image_data = base64.b64encode(f.read()).decode()
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Describe this image"},
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": image_data
+                }
+            }
+        ]
+    }]
+)
+```
+
+## 도구 사용 (Tool Use)
+
+```python
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    tools=[{
+        "name": "get_weather",
+        "description": "Get the weather for a location",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "City name"}
+            },
+            "required": ["location"]
+        }
+    }],
+    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}]
+)
+
+# Check for tool use
+for block in message.content:
+    if block.type == "tool_use":
+        print(f"Tool: {block.name}")
+        print(f"Input: {block.input}")
+```
+
+## 추론 확장 (Extended Thinking) (Claude Opus 4.5)
+
+추론 확장을 지원하는 모델에 적용 가능:
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex math problem..."}]
+)
+
+# Access thinking blocks
+for block in message.content:
+    if block.type == "thinking":
+        print(f"Thinking: {block.thinking}")
+    elif block.type == "text":
+        print(f"Response: {block.text}")
+```
+
+## 사용 가능한 Claude 모델
+
+| 모델 | 최적 용도 |
+|-------|----------|
+| `claude-opus-4-5` | 복잡한 추론, 추론 확장 |
+| `claude-sonnet-4-5` | 범용, 프로그래밍 |
+| `claude-haiku-4-5` | 빠른 응답 |
+
+## 오류 처리
+
+```python
+from anthropic import APIError, APIStatusError, APIConnectionError
+
+try:
+    message = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except APIStatusError as e:
+    if e.status_code == 401:
+        print("Invalid API key")
+    elif e.status_code == 429:
+        print("Rate limit exceeded")
+    else:
+        print(f"API error: {e.status_code}")
+except APIConnectionError:
+    print("Connection error")
+except APIError as e:
+    print(f"Unexpected error: {e}")
+```
+
+## 비교: OpenAI SDK vs Anthropic SDK
+
+두 가지 모두 LemonData와 함께 Claude 모델에 사용할 수 있습니다:
+
+| 특징 | OpenAI SDK | Anthropic SDK |
+|---------|-----------|---------------|
+| Base URL | `https://api.lemondata.cc/v1` | `https://api.lemondata.cc` |
+| Endpoint | `/chat/completions` | `/v1/messages` |
+| System prompt | `messages` 배열 내 | 독립적인 `system` 파라미터 |
+| 추론 확장 (Extended thinking) | 지원하지 않음 | 지원 |
+
+선호도나 기존 코드베이스에 따라 선택하세요.

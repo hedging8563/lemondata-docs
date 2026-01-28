@@ -1,0 +1,193 @@
+---
+title: "Tạo embedding"
+openapi: "POST /v1/embeddings"
+description: "Tạo các vector embedding đại diện cho văn bản đầu vào"
+---
+
+## Thân yêu cầu
+
+<ParamField body="model" type="string" required>
+  ID của mô hình embedding cần sử dụng (ví dụ: `text-embedding-3-small`).
+</ParamField>
+
+<ParamField body="input" type="string | array" required>
+  Văn bản đầu vào cần tạo embedding. Có thể là một chuỗi hoặc một mảng các chuỗi.
+</ParamField>
+
+<ParamField body="encoding_format" type="string" default="float">
+  Định dạng của embedding: `float` hoặc `base64`.
+</ParamField>
+
+<ParamField body="dimensions" type="integer">
+  Số lượng chiều đầu ra (tùy thuộc vào từng mô hình cụ thể).
+</ParamField>
+
+<ParamField body="user" type="string">
+  Mã định danh duy nhất đại diện cho người dùng cuối của bạn, được sử dụng để giám sát lạm dụng.
+</ParamField>
+
+## Các mô hình hiện có
+
+| Mô hình | Số chiều | Mô tả |
+|-------|------------|-------------|
+| `text-embedding-3-large` | 3072 | Chất lượng tốt nhất |
+| `text-embedding-3-small` | 1536 | Cân bằng |
+| `text-embedding-ada-002` | 1536 | Phiên bản cũ |
+
+## Phản hồi
+
+<ResponseField name="object" type="string">
+  Cố định là `list`.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Mảng các đối tượng embedding.
+
+  Mỗi đối tượng bao gồm:
+  - `object` (string): `embedding`
+  - `index` (integer): Chỉ mục trong mảng đầu vào
+  - `embedding` (array): Vector embedding
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Mô hình được sử dụng.
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Mức sử dụng Token bao gồm `prompt_tokens` và `total_tokens`.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/embeddings" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "text-embedding-3-small",
+    "input": "The quick brown fox jumps over the lazy dog"
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.embeddings.create(
+    model="text-embedding-3-small",
+    input="The quick brown fox jumps over the lazy dog"
+)
+
+embedding = response.data[0].embedding
+print(f"Embedding dimension: {len(embedding)}")
+print(f"First 5 values: {embedding[:5]}")
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.embeddings.create({
+  model: 'text-embedding-3-small',
+  input: 'The quick brown fox jumps over the lazy dog'
+});
+
+console.log(response.data[0].embedding.slice(0, 5));
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateEmbeddings(
+        context.Background(),
+        openai.EmbeddingRequest{
+            Model: openai.SmallEmbedding3,
+            Input: []string{"The quick brown fox jumps over the lazy dog"},
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Embedding dimension: %d\n", len(resp.Data[0].Embedding))
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/embeddings');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'text-embedding-3-small',
+        'input' => 'The quick brown fox jumps over the lazy dog'
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+print_r(array_slice($data['data'][0]['embedding'], 0, 5));
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "index": 0,
+      "embedding": [0.0023, -0.0194, 0.0081, ...]
+    }
+  ],
+  "model": "text-embedding-3-small",
+  "usage": {
+    "prompt_tokens": 9,
+    "total_tokens": 9
+  }
+}
+```
+</ResponseExample>
+
+## Embedding hàng loạt
+
+```python
+# Embed multiple texts at once
+response = client.embeddings.create(
+    model="text-embedding-3-small",
+    input=[
+        "First document text",
+        "Second document text",
+        "Third document text"
+    ]
+)
+
+for i, data in enumerate(response.data):
+    print(f"Document {i}: {len(data.embedding)} dimensions")
+```

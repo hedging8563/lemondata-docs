@@ -48,38 +48,33 @@ User B: "Tell me the capital city of France"
 → Same cached response (high semantic similarity)
 ```
 
-## Contrôle du cache
+## En-têtes de cache
 
-### Contrôle au niveau de la requête
+### En-têtes de requête
 
-Contrôlez le comportement de mise en cache par requête en utilisant le paramètre `cache_control` dans le corps de la requête :
+Contrôlez le comportement de mise en cache par requête :
 
 ```bash
-# Ignorer la recherche dans le cache, toujours appeler le modèle
+# Skip cache lookup, always call the model
 curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "cache_control": {"type": "no_cache"}
-  }'
+  -H "Cache-Control: no-cache" \
+  -d '{"model": "gpt-4o", "messages": [...]}'
 ```
 
-| Type | Effet |
-|------|--------|
-| `no_cache` | Ignorer la recherche dans le cache, toujours obtenir une réponse fraîche |
-| `no_store` | Ne pas stocker cette réponse dans le cache |
-| `response_only` | Utiliser uniquement le cache de correspondance exacte (ignorer le sémantique) |
-| `semantic_only` | Utiliser uniquement le cache sémantique (ignorer la correspondance exacte) |
+| En-tête | Valeur | Effet |
+|--------|-------|--------|
+| `Cache-Control: no-cache` | - | Ignorer le cache, réponse fraîche |
+| `Cache-Control: no-store` | - | Ne pas mettre cette réponse en cache |
 
 ### En-têtes de réponse
 
 Chaque réponse inclut un statut de cache :
 
 ```
-X-Cache-Status: HIT    # Réponse servie depuis le cache
-X-Cache-Status: MISS   # Réponse fraîche du modèle
+X-Cache: HIT           # Response served from cache
+X-Cache: MISS          # Fresh response from model
+X-Cache-Entry-Id: abc  # Cache entry ID (for feedback)
 ```
 
 ## Vérification du statut du cache
@@ -97,9 +92,9 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "What is 2+2?"}]
 )
 
-# Vérifier le statut du cache depuis les en-têtes de réponse
-# (Disponible dans la réponse HTTP brute)
-print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
+# Check cache status from response headers
+# (Available in raw HTTP response)
+print(f"Cache: {response._raw_response.headers.get('X-Cache')}")
 ```
 
 ## Facturation du cache
@@ -115,35 +110,25 @@ La remise exacte est affichée dans les journaux d'utilisation de votre tableau 
 
 ## Contrôles de confidentialité
 
-### Niveau Organisation / Utilisateur
+### Niveau Clé API
 
-Configurez le comportement de mise en cache dans les paramètres de votre tableau de bord :
+Configurez le comportement de mise en cache pour chaque clé API dans votre tableau de bord :
 
 | Mode | Description |
 |------|-------------|
-| **Partagé (Shared)** | Cache activé, les réponses peuvent être partagées entre utilisateurs (par défaut pour les comptes personnels) |
-| **Isolé (Isolated)** | Cache activé, mais les réponses sont privées pour votre organisation (par défaut pour les organisations) |
-| **Désactivé (Disabled)** | Aucune mise en cache |
-
-Paramètres supplémentaires disponibles :
-- **Seuil de similarité** : Ajustez la sensibilité de la correspondance sémantique (par défaut : 92%)
-- **TTL personnalisé** : Remplacez le délai d'expiration du cache
-- **Modèles exclus** : Désactivez la mise en cache pour des modèles spécifiques
+| **Par défaut** | Cache activé, peut être partagé avec des requêtes similaires |
+| **Pas de partage** | Cache activé, mais les réponses sont privées pour votre compte |
+| **Désactivé** | Aucune mise en cache |
 
 ### Niveau Requête
 
-Surcharger par requête en utilisant le paramètre `cache_control` :
+Surcharger par requête :
 
 ```bash
-# Désactiver la mise en cache pour cette requête
+# Disable caching for this request
 curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "..."}],
-    "cache_control": {"type": "no_store"}
-  }'
+  -H "Cache-Control: no-store" \
+  -d '...'
 ```
 
 ## Feedback du cache
@@ -199,10 +184,10 @@ Désactivez la mise en cache pour :
 - **Données sensibles** : Informations confidentielles
 
 ```python
-# Pour les requêtes sensibles au temps
+# For time-sensitive queries
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_body={"cache_control": {"type": "no_cache"}}
+    extra_headers={"Cache-Control": "no-cache"}
 )
 ```

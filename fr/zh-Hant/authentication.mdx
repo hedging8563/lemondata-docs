@@ -1,0 +1,146 @@
+---
+title: "Authentification"
+description: "Sécurisez vos requêtes API avec des clés API"
+---
+
+## Clés API
+
+Toutes les requêtes API nécessitent une authentification à l'aide d'une clé API. Veuillez inclure votre clé dans l'en-tête `Authorization` :
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+## Obtenir votre clé API
+
+1. Connectez-vous à votre [LemonData Dashboard](https://lemondata.cc/dashboard)
+2. Accédez à la section **API Keys**
+3. Cliquez sur **Create New Key**
+4. Donnez un nom descriptif à votre clé
+5. Copiez immédiatement la clé — elle ne sera affichée qu'une seule fois
+
+<Warning>
+  **Meilleures pratiques de sécurité :**
+  - Ne divulguez jamais vos clés API dans le code côté client
+  - Ne soumettez pas vos clés aux systèmes de contrôle de version
+  - Utilisez des variables d'environnement pour stocker vos clés
+  - Effectuez une rotation régulière de vos clés
+  - Supprimez les clés inutilisées
+</Warning>
+
+## Utilisation de la clé API
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer $LEMONDATA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+```python Python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ.get("LEMONDATA_API_KEY"),
+    base_url="https://api.lemondata.cc/v1"
+)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+```
+
+```go Go
+package main
+
+import "github.com/sashabaranov/go-openai"
+
+func main() {
+    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+}
+```
+
+```php PHP
+<?php
+$apiKey = getenv('LEMONDATA_API_KEY');
+
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+curl_setopt_array($ch, [
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer ' . $apiKey,
+        'Content-Type: application/json'
+    ]
+]);
+```
+
+</CodeGroup>
+
+## Fonctionnalités des clés API
+
+### Limites d'utilisation
+
+Vous pouvez définir des limites d'utilisation pour chaque clé API afin de contrôler vos dépenses :
+
+| Paramètre | Description |
+|---------|-------------|
+| **Illimité** | La clé utilisera le solde de votre compte sans restriction |
+| **Limite fixe** | La clé cessera de fonctionner après avoir atteint le montant spécifié |
+
+### Préfixe de clé
+
+Toutes les clés API LemonData commencent par le préfixe `sk-`. Le format de la clé est :
+
+```
+sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Compatibilité avec l'API Anthropic
+
+Pour le point de terminaison `/v1/messages`, vous pouvez utiliser l'en-tête `x-api-key` (compatible avec le SDK Anthropic) :
+
+```bash
+curl https://api.lemondata.cc/v1/messages \
+  -H "x-api-key: sk-your-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+<Note>
+  L'en-tête `x-api-key` est uniquement pris en charge pour les points de terminaison `/v1/messages` et `/v1/messages/count_tokens`. Les autres points de terminaison nécessitent l'en-tête `Authorization: Bearer`.
+</Note>
+
+## Réponses d'erreur
+
+| Code d'état | Type | Code | Description |
+|-------------|------|------|-------------|
+| 401 | `invalid_request_error` | `invalid_api_key` | Clé API manquante ou invalide |
+| 401 | `invalid_request_error` | `expired_api_key` | La clé API a été révoquée |
+| 402 | `insufficient_quota` | `insufficient_quota` | Solde du compte insuffisant |
+| 402 | `insufficient_quota` | `quota_exceeded` | Limite d'utilisation de la clé API atteinte |
+
+Exemple de réponse d'erreur :
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```

@@ -1,0 +1,233 @@
+---
+title: "Yanıt Oluştur"
+openapi: "POST /v1/responses"
+description: "OpenAI Responses API formatını kullanarak yanıt oluşturun"
+---
+
+Responses API, OpenAI'ın daha yeni, stateful (durum bilgisi olan) bir diyalog API'sidir. LemonData, uyumlu modeller için bu formatta destek sağlar.
+
+## İstek Gövdesi
+
+<ParamField body="model" type="string" required>
+  Kullanılacak model kimliği. Mevcut seçenekleri görmek için lütfen [Models](https://lemondata.cc/zh-TW/models) sayfasına bakın.
+</ParamField>
+
+<ParamField body="input" type="array" required>
+  Diyaloğu oluşturan giriş öğelerinin listesi.
+
+  Her öğe şunlardan biri olabilir:
+  - `message`: Rol ve içerik içeren diyalog mesajı
+  - `function_call`: Fonksiyon çağırma isteği
+  - `function_call_output`: Fonksiyon çağırma çıktısı
+</ParamField>
+
+<ParamField body="instructions" type="string">
+  Model için sistem talimatları (sistem mesajına eşdeğerdir).
+</ParamField>
+
+<ParamField body="max_output_tokens" type="integer">
+  Oluşturulacak maksimum token sayısı.
+</ParamField>
+
+<ParamField body="temperature" type="number" default="1">
+  0 ile 2 arasında bir örnekleme sıcaklığı.
+</ParamField>
+
+<ParamField body="tools" type="array">
+  Modelin çağırabileceği araçların listesi.
+</ParamField>
+
+<ParamField body="stream" type="boolean" default="false">
+  Eğer true ise, bir olay akışı (event stream) döndürülür.
+</ParamField>
+
+<ParamField body="previous_response_id" type="string">
+  Diyaloğa devam etmek için kullanılan önceki yanıtın kimliği.
+</ParamField>
+
+<ParamField body="store" type="boolean" default="true">
+  Yanıtın daha sonra geri alınabilmesi için saklanıp saklanmayacağı.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  İzleme amaçları için yanıta eklenen meta veriler.
+</ParamField>
+
+<ParamField body="text" type="object">
+  Metin oluşturma yapılandırma seçenekleri.
+</ParamField>
+
+<ParamField body="parallel_tool_calls" type="boolean" default="true">
+  Birden fazla araç çağrısının eşzamanlı olarak yapılmasına izin verilip verilmeyeceği.
+</ParamField>
+
+<ParamField body="top_p" type="number">
+  Nucleus sampling (çekirdek örnekleme) parametresi (0-1).
+</ParamField>
+
+<ParamField body="reasoning" type="object">
+  o1/o3 modelleri için akıl yürütme (reasoning) yapılandırması.
+
+  - `effort` (string): Akıl yürütme yoğunluk seviyesi (`low`, `medium`, `high`)
+</ParamField>
+
+## Yanıt
+
+<ResponseField name="id" type="string">
+  Yanıtın benzersiz kimliği.
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  Sabit olarak `response`.
+</ResponseField>
+
+<ResponseField name="created_at" type="integer">
+  Yanıtın oluşturulduğu Unix zaman damgası.
+</ResponseField>
+
+<ResponseField name="output" type="array">
+  Model tarafından oluşturulan çıktı öğelerinin listesi.
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Token kullanım istatistikleri.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/responses" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "input": [
+      {"type": "message", "role": "user", "content": "Hello!"}
+    ],
+    "max_output_tokens": 1000
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.responses.create(
+    model="gpt-4o",
+    input=[
+        {"type": "message", "role": "user", "content": "Hello!"}
+    ],
+    max_output_tokens=1000
+)
+
+print(response.output)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.responses.create({
+  model: 'gpt-4o',
+  input: [
+    { type: 'message', role: 'user', content: 'Hello!' }
+  ],
+  max_output_tokens: 1000
+});
+
+console.log(response.output);
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+func main() {
+    payload := map[string]interface{}{
+        "model": "gpt-4o",
+        "input": []map[string]interface{}{
+            {"type": "message", "role": "user", "content": "Hello!"},
+        },
+        "max_output_tokens": 1000,
+    }
+    body, _ := json.Marshal(payload)
+
+    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/responses", bytes.NewBuffer(body))
+    req.Header.Set("Authorization", "Bearer sk-your-api-key")
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Println(result["output"])
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/responses');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'gpt-4o',
+        'input' => [
+            ['type' => 'message', 'role' => 'user', 'content' => 'Hello!']
+        ],
+        'max_output_tokens' => 1000
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+print_r($data['output']);
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "id": "resp_abc123",
+  "object": "response",
+  "created_at": 1706000000,
+  "model": "gpt-4o",
+  "output": [
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {"type": "text", "text": "Hello! How can I help you today?"}
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 12,
+    "total_tokens": 22
+  }
+}
+```
+</ResponseExample>

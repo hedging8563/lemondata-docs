@@ -1,0 +1,197 @@
+---
+title: 'API Referansı'
+description: 'LemonData API için kapsamlı referans kılavuzu'
+---
+
+## Genel Bakış
+
+LemonData API **OpenAI ile uyumludur**, bu da resmi OpenAI SDK'sını kullanmak için yalnızca Base URL'yi değiştirmeniz gerektiği anlamına gelir. Ayrıca yerel **Anthropic** ve **Gemini** istek formatlarını da destekliyoruz.
+
+## Base URL
+
+```
+https://api.lemondata.cc
+```
+
+## Kimlik Doğrulama
+
+Tüm API uç noktaları, bir Bearer token kullanılarak kimlik doğrulaması gerektirir:
+
+```bash
+Authorization: Bearer sk-your-api-key
+```
+
+API anahtarınızı [Kontrol Paneli](https://lemondata.cc/dashboard) üzerinden edinebilirsiniz.
+
+<Warning>
+**Etkileşimli Playground Hakkında**: Bu dokümantasyon sitesindeki Playground yalnızca gösterim amaçlıdır ve API anahtarı girişini desteklemez. API'yi test etmek için lütfen şunları kullanın:
+- **cURL** - Örnek komutları kopyalayın ve `sk-your-api-key` kısmını gerçek anahtarınızla değiştirin
+- **Postman** - [OpenAPI spesifikasyonumuzu](/openapi.json) içe aktarın
+- **SDK** - OpenAI/Anthropic SDK'larını bizim Base URL'miz ile kullanın
+</Warning>
+
+## Desteklenen Uç Noktalar
+
+### Sohbet ve Metin Oluşturma
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | OpenAI uyumlu sohbet tamamlama |
+| `/v1/messages` | POST | Anthropic uyumlu mesaj API'si |
+| `/v1/responses` | POST | OpenAI Responses API |
+
+### Embedding ve Yeniden Sıralama
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1/embeddings` | POST | Metin embedding'leri oluşturun |
+| `/v1/rerank` | POST | Dokümanları yeniden sıralayın |
+
+### Görüntü
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1/images/generations` | POST | Metinden görüntü oluşturun |
+| `/v1/images/edits` | POST | Görüntüleri düzenleyin |
+
+### Ses
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1/audio/speech` | POST | Metinden sese (TTS) |
+| `/v1/audio/transcriptions` | POST | Sesten metne (STT) |
+
+### Video
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1/videos/generations` | POST | Video oluşturma görevi oluşturun |
+| `/v1/videos/generations/{id}` | GET | Video görevi durumunu alın |
+
+### Müzik
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1/music/generations` | POST | Müzik oluşturma görevi oluşturun |
+| `/v1/music/generations/{id}` | GET | Müzik görevi durumunu alın |
+
+### 3D Oluşturma
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1/3d/generations` | POST | 3D model oluşturma görevi oluşturun |
+| `/v1/3d/generations/{id}` | GET | 3D görevi durumunu alın |
+
+### Modeller
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1/models` | GET | Tüm kullanılabilir modelleri listeleyin |
+| `/v1/models/{model}` | GET | Belirli bir model hakkında bilgi alın |
+
+### Gemini (v1beta)
+
+Yerel Google Gemini API formatı desteği:
+
+| Uç Nokta | Yöntem | Açıklama |
+|----------|--------|-------------|
+| `/v1beta/models/{model}:generateContent` | POST | İçerik oluşturun (Gemini formatı) |
+| `/v1beta/models/{model}:streamGenerateContent` | POST | Akışlı içerik oluşturun (Gemini formatı) |
+
+<Note>
+Gemini uç noktaları, standart Bearer token'a ek olarak `?key=` sorgu parametresi ile kimlik doğrulamayı da destekler.
+</Note>
+
+## Yanıt Formatı
+
+Tüm yanıtlar tutarlı bir format izler:
+
+### Başarılı Yanıt
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4o",
+  "choices": [...],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30
+  }
+}
+```
+
+### Yönlendirme Şeffaflığı
+
+Tüm yanıtlar, kanal bilgilerini içeren bir `_routing` alanı içerir:
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  ...,
+  "_routing": {
+    "channel": {
+      "id": "ch_xxx",
+      "name": "channel-name",
+      "provider": "openai",
+      "channelType": "PLATFORM"
+    },
+    "cached": false,
+    "retryCount": 0
+  }
+}
+```
+
+| Alan | Açıklama |
+|-------|-------------|
+| `channel.id` | Kullanılan kanal kimliği |
+| `channel.provider` | Üst sağlayıcı (openai, anthropic vb.) |
+| `channel.channelType` | `PLATFORM` (LemonData) veya `PRIVATE` (BYOK) |
+| `cached` | Yanıtın önbellekten gelip gelmediği |
+| `retryCount` | Yeniden deneme sayısı (varsa) |
+
+### Hata Yanıtı
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+## Hız Sınırları
+
+Hız sınırları rollere dayalıdır ve yönetici tarafından yapılandırılabilir. Varsayılan değerler:
+
+| Rol | Dakika Başına İstek Sayısı |
+|------|-------------|
+| Kullanıcı | 60 |
+| İş Ortağı | 300 |
+| VIP | 1,000 |
+
+<Note>
+Özel hız sınırları için destek ekibiyle iletişime geçin. Kesin değerler hesap yapılandırmasına göre değişiklik gösterebilir.
+</Note>
+
+Tüm yanıtlar hız sınırı başlıklarını içerir:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 55
+X-RateLimit-Reset: 1234567890
+```
+
+## OpenAPI Spesifikasyonu
+
+<Card
+  title="OpenAPI Spesifikasyonu"
+  icon="file-code"
+  href="/openapi.json"
+>
+  Tam OpenAPI 3.0 spesifikasyonunu indirin
+</Card>

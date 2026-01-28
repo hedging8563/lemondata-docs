@@ -1,0 +1,247 @@
+---
+title: "Xử lý lỗi"
+description: "Xử lý lỗi API một cách linh hoạt"
+---
+
+## Định dạng phản hồi lỗi
+
+Tất cả các lỗi đều trả về định dạng JSON nhất quán:
+
+```json
+{
+  "error": {
+    "message": "Human-readable error description",
+    "type": "error_type",
+    "code": "error_code",
+    "param": "parameter_name"  // 選填，用於驗證錯誤
+  }
+}
+```
+
+## Mã trạng thái HTTP
+
+| Mã | Mô tả |
+|------|-------------|
+| 400 | Bad Request - Tham số không hợp lệ |
+| 401 | Unauthorized - API key không hợp lệ hoặc bị thiếu |
+| 402 | Payment Required - Số dư không đủ |
+| 403 | Forbidden - Truy cập bị từ chối hoặc không được phép sử dụng mô hình này |
+| 404 | Not Found - Không tìm thấy mô hình hoặc tài nguyên |
+| 413 | Payload Too Large - Kích thước đầu vào hoặc tệp vượt quá giới hạn |
+| 429 | Too Many Requests - Vượt quá giới hạn tốc độ (rate limit) |
+| 500 | Internal Server Error - Lỗi máy chủ nội bộ |
+| 502 | Bad Gateway - Lỗi từ nhà cung cấp thượng nguồn |
+| 503 | Service Unavailable - Tất cả các kênh đều thất bại |
+| 504 | Gateway Timeout - Yêu cầu hết thời gian chờ |
+
+## Các loại lỗi
+
+### Lỗi xác thực (401)
+
+| Loại | Mã | Mô tả |
+|------|------|-------------|
+| `invalid_api_key` | `invalid_api_key` | API key bị thiếu hoặc không hợp lệ |
+| `expired_api_key` | `expired_api_key` | API key đã bị thu hồi |
+
+```python
+from openai import OpenAI, AuthenticationError
+
+try:
+    response = client.chat.completions.create(...)
+except AuthenticationError as e:
+    print(f"Authentication failed: {e.message}")
+```
+
+### Lỗi thanh toán (402)
+
+| Loại | Mã | Mô tả |
+|------|------|-------------|
+| `insufficient_quota` | `insufficient_quota` | Số dư tài khoản quá thấp |
+| `quota_exceeded` | `quota_exceeded` | Đã đạt đến giới hạn sử dụng của API key |
+
+```python
+from openai import OpenAI, APIStatusError
+
+try:
+    response = client.chat.completions.create(...)
+except APIStatusError as e:
+    if e.status_code == 402:
+        print("Please top up your account balance")
+```
+
+### Lỗi truy cập (403)
+
+| Loại | Mã | Mô tả |
+|------|------|-------------|
+| `access_denied` | `access_denied` | Truy cập tài nguyên bị từ chối |
+| `access_denied` | `model_not_allowed` | API key này không được phép sử dụng mô hình này |
+
+```json
+{
+  "error": {
+    "message": "You don't have permission to access this model",
+    "type": "access_denied",
+    "code": "model_not_allowed"
+  }
+}
+```
+
+### Lỗi xác thực tham số (400)
+
+| Loại | Mô tả |
+|------|-------------|
+| `invalid_request_error` | Tham số yêu cầu không hợp lệ |
+| `context_length_exceeded` | Nội dung đầu vào quá dài đối với mô hình |
+| `model_not_found` | Mô hình được yêu cầu không tồn tại |
+
+```json
+{
+  "error": {
+    "message": "model: 'invalid-model' is not a valid model",
+    "type": "model_not_found",
+    "param": "model"
+  }
+}
+```
+
+### Lỗi giới hạn tốc độ (429)
+
+Khi bạn vượt quá giới hạn tốc độ (rate limit):
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**Các header bao gồm:**
+
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1234567890
+Retry-After: 60
+```
+
+### Nội dung quá lớn (413)
+
+Khi kích thước đầu vào hoặc tệp vượt quá giới hạn:
+
+```json
+{
+  "error": {
+    "message": "Input size exceeds maximum allowed",
+    "type": "invalid_request_error",
+    "code": "payload_too_large"
+  }
+}
+```
+
+Các nguyên nhân phổ biến:
+- Tệp hình ảnh quá lớn (tối đa 20MB)
+- Tệp âm thanh quá lớn (tối đa 25MB)
+- Văn bản đầu vào vượt quá độ dài ngữ cảnh (context length) của mô hình
+
+### Lỗi thượng nguồn (502, 503)
+
+| Loại | Mô tả |
+|------|-------------|
+| `upstream_error` | Nhà cung cấp trả về lỗi |
+| `all_channels_failed` | Không có nhà cung cấp nào khả dụng |
+| `timeout_error` | Yêu cầu hết thời gian chờ |
+
+## Xử lý lỗi trong Python
+
+```python
+from openai import OpenAI, APIError, RateLimitError, APIConnectionError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def chat_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            raise
+        except APIConnectionError as e:
+            print(f"Connection error: {e}")
+            raise
+        except APIError as e:
+            print(f"API error: {e.status_code} - {e.message}")
+            raise
+```
+
+## Xử lý lỗi trong JavaScript
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function chatWithRetry(messages, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages
+      });
+    } catch (error) {
+      if (error instanceof OpenAI.RateLimitError) {
+        if (attempt < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+```
+
+## Thực hành tốt nhất
+
+<AccordionGroup>
+  <Accordion title="Triển khai Exponential Backoff (Số mũ lùi)">
+    Khi gặp giới hạn tốc độ, hãy tăng dần thời gian chờ giữa các lần thử lại:
+    ```python
+    wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
+    ```
+  </Accordion>
+
+  <Accordion title="Thiết lập thời gian chờ (Timeouts)">
+    Hãy đảm bảo thiết lập thời gian chờ hợp lý để tránh yêu cầu bị treo:
+    ```python
+    client = OpenAI(timeout=60.0)  # 60 秒逾時
+    ```
+  </Accordion>
+
+  <Accordion title="Ghi lại lỗi để gỡ lỗi">
+    Ghi lại phản hồi lỗi đầy đủ (bao gồm request ID) để nhận hỗ trợ:
+    ```python
+    except APIError as e:
+        logger.error(f"API Error: {e.status_code} - {e.message}")
+    ```
+  </Accordion>
+
+  <Accordion title="Xử lý lỗi đặc thù của mô hình">
+    Một số mô hình có các yêu cầu cụ thể (ví dụ: số lượng token tối đa, định dạng hình ảnh).
+    Hãy xác thực đầu vào trước khi gửi yêu cầu.
+  </Accordion>
+</AccordionGroup>

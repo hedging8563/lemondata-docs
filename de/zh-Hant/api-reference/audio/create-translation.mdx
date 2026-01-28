@@ -1,0 +1,190 @@
+---
+title: "Übersetzung erstellen"
+openapi: "POST /v1/audio/translations"
+description: "Audio in englischen Text übersetzen"
+---
+
+## Übersicht
+
+Übersetzen Sie Audio aus jeder unterstützten Sprache in englischen Text. Im Gegensatz zur Transkription gibt dieser Endpunkt unabhängig von der Eingabesprache immer englischen Text aus.
+
+## Request-Body
+
+<ParamField body="file" type="file" required>
+  Die zu übersetzende Audiodatei. Unterstützte Formate: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, `webm`. Die maximale Dateigröße beträgt 25 MB.
+</ParamField>
+
+<ParamField body="model" type="string" default="whisper-1">
+  Das zu verwendende Modell. Derzeit wird nur `whisper-1` unterstützt.
+</ParamField>
+
+<ParamField body="prompt" type="string">
+  Optionaler Text, um den Stil des Modells zu steuern oder ein vorheriges Segment fortzusetzen. Sollte in Englisch verfasst sein.
+</ParamField>
+
+<ParamField body="response_format" type="string" default="json">
+  Das Format der Ausgabe. Optionen: `json`, `text`, `srt`, `verbose_json`, `vtt`.
+</ParamField>
+
+<ParamField body="temperature" type="number">
+  Die Sampling-Temperatur zwischen 0 und 1. Höhere Werte (wie 0,8) führen zu einer zufälligeren Ausgabe, während niedrigere Werte (wie 0,2) die Ausgabe fokussierter und deterministischer machen.
+</ParamField>
+
+## Antwort
+
+<ResponseField name="text" type="string">
+  Der übersetzte englische Text.
+</ResponseField>
+
+Für das Format `verbose_json` enthält die Antwort zusätzlich:
+
+<ResponseField name="language" type="string">
+  Die erkannte Sprache des Eingabe-Audios.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  Die Dauer des Eingabe-Audios (in Sekunden).
+</ResponseField>
+
+<ResponseField name="segments" type="array">
+  Übersetzte Textsegmente mit Zeitstempeln.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/audio/translations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "file=@german_audio.mp3" \
+  -F "model=whisper-1"
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+with open("german_audio.mp3", "rb") as audio_file:
+    response = client.audio.translations.create(
+        model="whisper-1",
+        file=audio_file
+    )
+
+print(response.text)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+import fs from 'fs';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.audio.translations.create({
+  model: 'whisper-1',
+  file: fs.createReadStream('german_audio.mp3')
+});
+
+console.log(response.text);
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateTranslation(
+        context.Background(),
+        openai.AudioRequest{
+            Model:    openai.Whisper1,
+            FilePath: "german_audio.mp3",
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(resp.Text)
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/audio/translations');
+
+$file = new CURLFile('german_audio.mp3', 'audio/mpeg', 'german_audio.mp3');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => [
+        'file' => $file,
+        'model' => 'whisper-1'
+    ]
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['text'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json json
+{
+  "text": "Hello, my name is Wolfgang and I come from Germany. Where are you from?"
+}
+```
+
+```json verbose_json
+{
+  "task": "translate",
+  "language": "german",
+  "duration": 8.470000267028809,
+  "text": "Hello, my name is Wolfgang and I come from Germany. Where are you from?",
+  "segments": [
+    {
+      "id": 0,
+      "seek": 0,
+      "start": 0.0,
+      "end": 4.0,
+      "text": " Hello, my name is Wolfgang and I come from Germany.",
+      "tokens": [50364, 2425, 11, 452, 1315, 307, 25329, 293, 286, 808, 490, 5765, 13, 50564],
+      "temperature": 0.0,
+      "avg_logprob": -0.45,
+      "compression_ratio": 1.0,
+      "no_speech_prob": 0.0
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Übersetzung vs. Transkription
+
+| Eigenschaft | Übersetzung | Transkription |
+|---------|-------------|---------------|
+| Ausgabesprache | Immer Englisch | Gleich wie Eingabe |
+| Anwendungsfall | Fremdsprachiges Audio in Englisch umwandeln | Originalsprache beibehalten |
+| Sprachparameter | Nicht anwendbar | Optionaler Hinweis |
+
+<Note>
+  Der Übersetzungs-Endpunkt erkennt automatisch die Quellsprache und übersetzt sie ins Englische. Der Parameter `language` aus der Transkription wird ignoriert.
+</Note>

@@ -1,0 +1,159 @@
+---
+title: "Limites de débit"
+description: "Comprendre et gérer les limites de débit"
+---
+
+## Aperçu
+
+LemonData applique des limites de débit pour garantir une utilisation équitable et la stabilité de la plateforme. Les limites varient selon le niveau du compte.
+
+## Niveaux de limites de débit
+
+| Niveau | Requêtes/minute | Description |
+|------|-------------|-------------|
+| **User** | 60 | Niveau par défaut pour tous les comptes |
+| **Partner** | 300 | Pour les partenaires d'intégration |
+| **VIP** | 1,000 | Utilisateurs à haut volume |
+
+<Note>
+  Les limites de débit sont susceptibles de changer. Veuillez contacter support@lemondata.cc pour obtenir des limites personnalisées.
+</Note>
+
+## En-têtes de limite de débit
+
+Chaque réponse API contient des informations sur les limites de débit :
+
+```
+X-RateLimit-Limit: 60          # Your limit per minute
+X-RateLimit-Remaining: 55      # Requests remaining
+X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
+```
+
+## Limite de débit dépassée
+
+Lorsque vous dépassez la limite, vous recevrez une réponse `429` :
+
+```json
+{
+  "error": {
+    "message": "Rate limit exceeded. Please slow down.",
+    "type": "rate_limit_exceeded"
+  }
+}
+```
+
+Accompagné d'un en-tête supplémentaire :
+```
+Retry-After: 60  # Seconds to wait before retrying
+```
+
+## Gérer les limites de débit
+
+### Exponential Backoff (Retrait exponentiel)
+
+Implémentez un retrait exponentiel pour les tentatives automatiques :
+
+```python
+import time
+from openai import OpenAI, RateLimitError
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def make_request_with_backoff(messages, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+        except RateLimitError as e:
+            if attempt == max_retries - 1:
+                raise
+
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
+            time.sleep(wait_time)
+```
+
+### File d'attente de requêtes
+
+Pour les applications à haut volume, implémentez une file d'attente de requêtes :
+
+```python
+import asyncio
+from collections import deque
+
+class RateLimitedClient:
+    def __init__(self, requests_per_minute=60):
+        self.rpm = requests_per_minute
+        self.interval = 60 / requests_per_minute
+        self.last_request = 0
+
+    async def request(self, messages):
+        # Wait if needed to respect rate limit
+        now = asyncio.get_event_loop().time()
+        wait_time = max(0, self.last_request + self.interval - now)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        self.last_request = asyncio.get_event_loop().time()
+        return await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+```
+
+### Traitement par lots
+
+Pour les opérations massives, utilisez le traitement par lots avec un délai :
+
+```python
+def process_batch(items, batch_size=50, delay=1):
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        for item in batch:
+            result = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": item}]
+            )
+            results.append(result)
+        time.sleep(delay)  # Pause between batches
+    return results
+```
+
+## Bonnes pratiques
+
+<AccordionGroup>
+  <Accordion title="Surveillez votre utilisation">
+    Suivez les en-têtes de limite de débit pour rester proactivement dans les limites.
+  </Accordion>
+
+  <Accordion title="Implémentez la mise en cache">
+    Mettez en cache les réponses pour les requêtes identiques afin de réduire les appels API.
+  </Accordion>
+
+  <Accordion title="Utilisez le modèle approprié">
+    Les modèles plus rapides (comme gpt-4o-mini) offrent un débit plus élevé.
+  </Accordion>
+
+  <Accordion title="Contactez-nous pour des limites plus élevées">
+    Si vous avez besoin de limites plus élevées, contactez support@lemondata.cc.
+  </Accordion>
+</AccordionGroup>
+
+## Améliorer votre niveau
+
+Pour demander une mise à niveau de niveau :
+
+1. Connectez-vous à votre [Tableau de bord](https://lemondata.cc/dashboard)
+2. Allez dans **Settings → Account**
+3. Contactez l'équipe d'assistance et expliquez votre cas d'utilisation
+
+Ou envoyez un e-mail à support@lemondata.cc avec :
+- L'e-mail de votre compte
+- Le volume de requêtes attendu
+- Une description du cas d'utilisation

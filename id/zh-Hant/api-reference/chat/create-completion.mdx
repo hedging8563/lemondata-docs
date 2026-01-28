@@ -1,0 +1,292 @@
+---
+title: "Membuat Chat Completion (Create Chat Completion)"
+openapi: "POST /v1/chat/completions"
+description: "Membuat completion untuk pesan obrolan"
+---
+
+## Request Body
+
+<ParamField body="model" type="string" required>
+  ID model yang akan digunakan. Silakan merujuk ke [Models](https://lemondata.cc/zh-TW/models) untuk melihat opsi yang tersedia.
+</ParamField>
+
+<ParamField body="messages" type="array" required>
+  Daftar pesan yang membentuk percakapan.
+
+  Setiap objek pesan berisi:
+  - `role` (string): `system`, `user`, atau `assistant`
+  - `content` (string | array): Konten pesan
+</ParamField>
+
+<ParamField body="temperature" type="number" default="1">
+  Suhu pengambilan sampel antara 0 hingga 2. Nilai yang lebih tinggi akan membuat output lebih acak.
+</ParamField>
+
+<ParamField body="max_tokens" type="integer">
+  Jumlah maksimum token yang akan dihasilkan.
+</ParamField>
+
+<ParamField body="stream" type="boolean" default="false">
+  Jika true, sebagian inkremen pesan akan dikirim dalam bentuk event SSE.
+</ParamField>
+
+<ParamField body="stream_options" type="object">
+  Opsi streaming. Atur `include_usage: true` untuk menerima penggunaan token dalam chunk streaming.
+</ParamField>
+
+<ParamField body="top_p" type="number" default="1">
+  Parameter Nucleus sampling. Kami menyarankan untuk menyesuaikan parameter ini atau temperature, bukan keduanya secara bersamaan.
+</ParamField>
+
+<ParamField body="frequency_penalty" type="number" default="0">
+  Nilai antara -2.0 hingga 2.0. Nilai positif akan memberikan penalti pada token yang berulang.
+</ParamField>
+
+<ParamField body="presence_penalty" type="number" default="0">
+  Nilai antara -2.0 hingga 2.0. Nilai positif akan memberikan penalti pada token yang sudah muncul dalam teks.
+</ParamField>
+
+<ParamField body="stop" type="string | array">
+  Maksimum 4 urutan di mana API akan berhenti menghasilkan token.
+</ParamField>
+
+<ParamField body="tools" type="array">
+  Daftar alat yang mungkin dipanggil oleh model (function calling).
+</ParamField>
+
+<ParamField body="tool_choice" type="string | object">
+  Mengontrol bagaimana model menggunakan alat. Opsi: `auto`, `none`, `required`, atau objek alat tertentu.
+</ParamField>
+
+<ParamField body="parallel_tool_calls" type="boolean" default="true">
+  Apakah akan mengaktifkan panggilan fungsi paralel. Atur ke false untuk memanggil fungsi secara berurutan.
+</ParamField>
+
+<ParamField body="max_completion_tokens" type="integer">
+  Jumlah maksimum token untuk completion. Alternatif untuk `max_tokens`, disarankan untuk model yang lebih baru seperti o1/o3.
+</ParamField>
+
+<ParamField body="reasoning_effort" type="string">
+  Intensitas penalaran untuk model o1/o3. Opsi: `low`, `medium`, `high`.
+</ParamField>
+
+<ParamField body="seed" type="integer">
+  Seed acak yang digunakan untuk pengambilan sampel deterministik.
+</ParamField>
+
+<ParamField body="n" type="integer" default="1">
+  Jumlah completion yang akan dihasilkan (1-128).
+</ParamField>
+
+<ParamField body="logprobs" type="boolean">
+  Apakah akan mengembalikan probabilitas log (log probabilities).
+</ParamField>
+
+<ParamField body="top_logprobs" type="integer">
+  Jumlah probabilitas log teratas yang akan dikembalikan (0-20). Memerlukan pengaturan `logprobs: true`.
+</ParamField>
+
+<ParamField body="top_k" type="integer">
+  Parameter pengambilan sampel Top-K (berlaku untuk model Anthropic/Gemini).
+</ParamField>
+
+<ParamField body="response_format" type="object">
+  Spesifikasi format respons. Gunakan `{"type": "json_object"}` untuk mengaktifkan mode JSON, atau gunakan `{"type": "json_schema", "json_schema": {...}}` untuk output terstruktur.
+</ParamField>
+
+<ParamField body="logit_bias" type="object">
+  Mengubah kemungkinan munculnya token tertentu. Memetakan ID token (dalam bentuk string) ke nilai bias antara -100 hingga 100.
+</ParamField>
+
+<ParamField body="user" type="string">
+  Identifier unik yang mewakili pengguna akhir Anda, digunakan untuk pemantauan penyalahgunaan.
+</ParamField>
+
+<ParamField body="cache_control" type="object">
+  Opsi kontrol cache LemonData.
+
+  - `type` (string): Strategi cache - `default`, `no_cache`, `no_store`, `response_only`, `semantic_only`
+  - `max_age` (integer): Waktu hidup cache (TTL), dalam satuan detik (maksimum 86400)
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Identifier unik untuk completion.
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  Selalu `chat.completion`.
+</ResponseField>
+
+<ResponseField name="created" type="integer">
+  Timestamp Unix saat completion dibuat.
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Model yang digunakan untuk completion.
+</ResponseField>
+
+<ResponseField name="choices" type="array">
+  Daftar opsi completion.
+
+  Setiap opsi berisi:
+  - `index` (integer): Indeks opsi
+  - `message` (object): Pesan yang dihasilkan
+  - `finish_reason` (string): Alasan model berhenti (`stop`, `length`, `tool_calls`)
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Statistik penggunaan token.
+
+  - `prompt_tokens` (integer): Jumlah token dalam prompt
+  - `completion_tokens` (integer): Jumlah token dalam completion
+  - `total_tokens` (integer): Total jumlah token yang digunakan
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/chat/completions" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Hello!"}
+    ],
+    "temperature": 0.7,
+    "max_tokens": 1000
+  }'
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ],
+    temperature=0.7,
+    max_tokens=1000
+)
+
+print(response.choices[0].message.content)
+```
+
+```javascript JavaScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-api-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+const response = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Hello!' }
+  ],
+  temperature: 0.7,
+  max_tokens: 1000
+});
+
+console.log(response.choices[0].message.content);
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/sashabaranov/go-openai"
+)
+
+func main() {
+    config := openai.DefaultConfig("sk-your-api-key")
+    config.BaseURL = "https://api.lemondata.cc/v1"
+    client := openai.NewClientWithConfig(config)
+
+    resp, err := client.CreateChatCompletion(
+        context.Background(),
+        openai.ChatCompletionRequest{
+            Model: "gpt-4o",
+            Messages: []openai.ChatCompletionMessage{
+                {Role: openai.ChatMessageRoleSystem, Content: "You are a helpful assistant."},
+                {Role: openai.ChatMessageRoleUser, Content: "Hello!"},
+            },
+            Temperature: 0.7,
+            MaxTokens:   1000,
+        },
+    )
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(resp.Choices[0].Message.Content)
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'gpt-4o',
+        'messages' => [
+            ['role' => 'system', 'content' => 'You are a helpful assistant.'],
+            ['role' => 'user', 'content' => 'Hello!']
+        ],
+        'temperature' => 0.7,
+        'max_tokens' => 1000
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['choices'][0]['message']['content'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1706000000,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello! How can I help you today?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 9,
+    "total_tokens": 29
+  }
+}
+```
+</ResponseExample>
