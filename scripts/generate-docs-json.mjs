@@ -154,7 +154,6 @@ const navigationTabs = {
         pages: [
           'integrations/cursor',
           'integrations/claude-code',
-          'integrations/claude-code-skill',
           'integrations/codex-cli',
           'integrations/gemini-cli',
           'integrations/opencode'
