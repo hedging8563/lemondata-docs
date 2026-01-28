@@ -1,0 +1,354 @@
+---
+title: "IDE 與 SDK 相容性"
+description: "AI 程式設計工具、SDK 和框架的完整相容性參考"
+---
+
+## 概覽
+
+LemonData API 旨在與所有主流 AI 開發工具實現**即插即用式相容**。本指南記錄了支援的參數和經過驗證的整合。
+
+<Note>
+  所有參數均經過驗證並透傳至上游提供商。針對特定模型不支援的參數將被靜默忽略，以確保最大程度的相容性。
+</Note>
+
+## 支援的 API 格式
+
+| 端點 | 格式 | 使用場景 |
+|----------|--------|----------|
+| `/v1/chat/completions` | OpenAI Chat | 通用相容性 |
+| `/v1/responses` | OpenAI Responses | 有狀態對話 |
+| `/v1/messages` | Anthropic Messages | Claude 原生功能 |
+| `/v1beta/models/:model:generateContent` | Google Gemini | Gemini 原生功能 |
+
+## IDE 與 CLI 相容性
+
+### 已驗證工具
+
+| 工具 | 狀態 | 格式 | 備註 |
+|------|--------|--------|-------|
+| **Cursor** | ✅ 完全支援 | OpenAI | 支援 Anthropic 工具格式 |
+| **Claude Code CLI** | ✅ 完全支援 | Anthropic | 支援 Extended thinking, tool_choice |
+| **Windsurf** | ✅ 完全支援 | OpenAI | 標準 OpenAI 格式 |
+| **Aider** | ✅ 完全支援 | OpenAI | 支援所有模型 |
+| **Continue.dev** | ✅ 完全支援 | OpenAI/Anthropic | 雙格式支援 |
+| **OpenCode** | ✅ 完全支援 | OpenAI | 多提供商支援 |
+| **Cline/Roo Code** | ✅ 完全支援 | OpenAI | 透過 OpenRouter 格式 |
+| **GitHub Copilot** | ✅ 完全支援 | OpenAI | 標準格式 |
+| **Codex CLI** | ✅ 完全支援 | OpenAI | OpenAI Responses API |
+| **Gemini CLI** | ✅ 完全支援 | Gemini | 原生 Gemini 格式 |
+
+### 配置示例
+
+<Tabs>
+  <Tab title="Cursor">
+    ```
+    Base URL: https://api.lemondata.cc/v1
+    API Key: sk-your-lemondata-key
+    ```
+    Cursor 內部使用 Anthropic 風格的工具格式。LemonData 同時支援以下兩種格式：
+    - OpenAI 格式：`{ type: "function", function: { name, parameters } }`
+    - Anthropic 格式：`{ name, input_schema }`（無 type 欄位）
+  </Tab>
+  <Tab title="Claude Code">
+    ```bash
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    ```
+  </Tab>
+  <Tab title="OpenCode">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export LOCAL_ENDPOINT="https://api.lemondata.cc/v1"
+    ```
+  </Tab>
+  <Tab title="Aider">
+    ```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_API_BASE="https://api.lemondata.cc/v1"
+    aider --model gpt-4o
+    ```
+  </Tab>
+</Tabs>
+
+## SDK 相容性
+
+### 已驗證 SDK
+
+| SDK | 語言 | 狀態 | 備註 |
+|-----|----------|--------|-------|
+| **OpenAI SDK** | Python/JS/Go | ✅ 完全支援 | 支援所有參數 |
+| **Anthropic SDK** | Python/JS | ✅ 完全支援 | 支援 Extended thinking, tools |
+| **Vercel AI SDK** | TypeScript | ✅ 完全支援 | 支援 streamText, generateObject |
+| **LangChain** | Python/JS | ✅ 完全支援 | 支援 ChatOpenAI, bind_tools |
+| **LlamaIndex** | Python | ✅ 完全支援 | 相容 OpenAI |
+| **Dify** | - | ✅ 完全支援 | OpenAI 格式 |
+
+## Chat Completions 參數
+
+### 核心參數
+
+| 參數 | 類型 | 描述 |
+|-----------|------|-------------|
+| `model` | string | 模型識別碼（必填） |
+| `messages` | array | 對話訊息（必填） |
+| `max_tokens` | integer | 最大輸出 token 數 |
+| `temperature` | number | 採樣溫度 (0-2) |
+| `top_p` | number | 核採樣 (0-1) |
+| `stream` | boolean | 啟用串流傳輸 |
+
+### 工具調用
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": { "type": "string" }
+          }
+        },
+        "strict": true
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": true
+}
+```
+
+### 工具選擇選項
+
+| 格式 | 示例 | 描述 |
+|--------|---------|-------------|
+| String | `"auto"`, `"none"`, `"required"` | 簡單選擇 |
+| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | 強制指定函數 |
+| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Anthropic 原生格式 |
+
+### 進階參數
+
+| 參數 | 類型 | 描述 |
+|-----------|------|-------------|
+| `stream_options` | object | 用於獲取 token 計數的 `{ include_usage: true }` |
+| `reasoning_effort` | string | 適用於 o1/o3 模型的 `"low"`, `"medium"`, `"high"` |
+| `service_tier` | string | `"auto"` 或 `"default"` |
+| `seed` | integer | 確定性輸出 |
+| `logprobs` | boolean | 返回對數機率 |
+| `top_logprobs` | integer | 前幾個最高對數機率的數量 (0-20) |
+| `logit_bias` | object | Token 偏置映射 (-100 到 100) |
+| `frequency_penalty` | number | 重複懲罰 (-2 到 2) |
+| `presence_penalty` | number | 話題懲罰 (-2 到 2) |
+| `stop` | string/array | 停止序列 |
+| `n` | integer | 生成結果數量 (1-128) |
+| `user` | string | 用於追蹤的用戶識別碼 |
+
+### OpenAI 進階功能
+
+| 參數 | 類型 | 描述 |
+|-----------|------|-------------|
+| `modalities` | array | 用於多模態的 `["text", "audio"]` |
+| `audio` | object | 音訊輸出配置（音色、格式） |
+| `prediction` | object | 用於加速生成的預測輸出 |
+| `metadata` | object | 用於追蹤的鍵值對 |
+| `store` | boolean | 儲存以便後續檢索 |
+
+### 特定提供商選項
+
+```json
+{
+  "anthropic_options": {
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 10000
+    },
+    "prompt_caching": true
+  },
+  "google_options": {
+    "safety_settings": [...],
+    "google_search": true,
+    "code_execution": true
+  }
+}
+```
+
+## Anthropic Messages 參數
+
+### 核心參數
+
+| 參數 | 類型 | 描述 |
+|-----------|------|-------------|
+| `model` | string | 模型識別碼 |
+| `messages` | array | 對話訊息 |
+| `max_tokens` | integer | 最大輸出（最高 128000） |
+| `system` | string/array | 系統提示詞 |
+| `stream` | boolean | 啟用串流傳輸 |
+
+### 工具調用
+
+```json
+{
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": false
+  }
+}
+```
+
+### 思維鏈擴展 (Extended Thinking)
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}
+```
+
+## Responses API 參數
+
+### 核心參數
+
+| 參數 | 類型 | 描述 |
+|-----------|------|-------------|
+| `model` | string | 模型識別碼 |
+| `input` | string/array | 輸入內容 |
+| `instructions` | string | 系統指令 |
+| `max_output_tokens` | integer | 最大輸出 token 數 |
+| `previous_response_id` | string | 繼續對話 |
+
+### 進階參數
+
+| 參數 | 類型 | 描述 |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` 或 `"disabled"` |
+| `include` | array | `["reasoning.encrypted_content"]` |
+| `reasoning_effort` | string | 適用於推理模型 |
+| `service_tier` | string | 優先級層級 |
+
+### 工具格式
+
+支援 OpenAI 和 Anthropic 兩種工具格式：
+
+```json
+// OpenAI 格式
+{ "type": "function", "name": "fn", "parameters": {...} }
+
+// Anthropic 格式 (Cursor 相容)
+{ "name": "fn", "input_schema": {...} }
+```
+
+## Gemini API 參數
+
+### 核心參數
+
+| 參數 | 類型 | 描述 |
+|-----------|------|-------------|
+| `contents` | array | 對話內容 |
+| `systemInstruction` | object | 系統提示詞 |
+| `generationConfig` | object | 生成配置 |
+
+### 工具
+
+```json
+{
+  "tools": [{
+    "functionDeclarations": [{
+      "name": "search",
+      "description": "Search the web",
+      "parameters": {...}
+    }],
+    "codeExecution": {},
+    "googleSearch": {}
+  }],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  }
+}
+```
+
+### 安全設定
+
+```json
+{
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+    }
+  ]
+}
+```
+
+### 附加參數
+
+| 參數 | 類型 | 描述 |
+|-----------|------|-------------|
+| `cachedContent` | string | 快取內容引用 |
+| `responseMimeType` | string | `"text/plain"` 或 `"application/json"` |
+| `responseSchema` | object | 用於結構化輸出的 JSON schema |
+
+## 串流傳輸
+
+所有端點均支援伺服器發送事件 (SSE) 串流傳輸：
+
+```bash
+# Chat Completions
+curl https://api.lemondata.cc/v1/chat/completions \
+  -H "Authorization: Bearer sk-xxx" \
+  -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
+
+# 帶用量追蹤
+-d '{"...", "stream_options": {"include_usage": true}}'
+```
+
+## 錯誤處理
+
+LemonData 返回相容 OpenAI 的錯誤回應：
+
+```json
+{
+  "error": {
+    "message": "Invalid API key",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+詳見 [錯誤處理指南](/guides/error-handling)。
+
+## 最佳實踐
+
+<AccordionGroup>
+  <Accordion title="對未知參數使用透傳">
+    所有 schema 均使用 `.passthrough()` —— 未知參數將被轉發至上游提供商。
+  </Accordion>
+
+  <Accordion title="優先使用 stream_options 以實現精確計費">
+    啟用 `stream_options.include_usage` 以在串流回應中獲取準確的 token 計數。
+  </Accordion>
+
+  <Accordion title="使用合適的 tool_choice 格式">
+    請匹配您 SDK 預期的格式。LemonData 同時接受 OpenAI 和 Anthropic 格式。
+  </Accordion>
+</AccordionGroup>

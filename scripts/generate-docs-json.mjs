@@ -38,7 +38,7 @@ const navigationTabs = {
     groups: [
       {
         group: 'Getting Started',
-        pages: ['introduction', 'quickstart', 'authentication']
+        pages: ['introduction', 'quickstart', 'authentication', 'integrations/claude-code-skill']
       },
       {
         group: 'Guides',
