@@ -147,7 +147,7 @@ const navigationTabs = {
     ]
   },
   claw: {
-    tab: '✨ Claw',
+    tab: 'Claw',
     groups: [
       {
         group: 'Getting Started',
