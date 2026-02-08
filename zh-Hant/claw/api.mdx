@@ -1,0 +1,207 @@
+---
+title: "API 參考"
+description: "透過 /v1/claw API 以程式化方式管理 Claw 實例"
+---
+
+所有 Claw API 端點皆需要透過 `Authorization: Bearer sk-...` 標頭進行身份驗證。
+
+**基礎 URL：** `https://api.lemondata.cc/v1/claw`
+
+## 列出實例
+
+```
+GET /v1/claw/instances
+```
+
+傳回已驗證組織的所有實例。
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### 實例狀態值
+
+| 狀態 | 說明 |
+|--------|-------------|
+| `PENDING` | 剛建立，正在等待配置 |
+| `PROVISIONING` | 容器正在部署中 |
+| `RUNNING` | 實例已啟用且運行正常 |
+| `STOPPED` | 因過期而停止（數據保留 7 天） |
+| `FAILED` | 部署失敗（已自動退款） |
+| `DELETED` | 永久移除 |
+
+---
+
+## 建立實例
+
+```
+POST /v1/claw/instances
+```
+
+建立新實例並從您的組織餘額中扣除 **$20**（有效期 30 天）。
+
+<ParamField body="subdomain" type="string" required>
+  子網域（3-32 個字元，小寫字母數字 + 連字號）。實例 URL：`https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  預設 AI 模型（例如：`gpt-4o`, `claude-sonnet-4-5-20250929`）
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+餘額不足將傳回 **402 Payment Required**。在建立實例前，請確保您的組織至少有 $20 餘額。
+</Warning>
+
+---
+
+## 獲取實例
+
+```
+GET /v1/claw/instances/:id
+```
+
+傳回特定實例的詳細資訊。
+
+---
+
+## 更新實例
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+更新實例配置。
+
+<ParamField body="defaultModel" type="string | null">
+  更改預設 AI 模型
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  更新即時通訊 (IM) 平台配置（Telegram、Discord 等）
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## 重建實例
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+銷毀並重新建立容器，同時保留數據 (PVC)。每天限制重建 **10 次**。
+
+如果超過每日限制，將傳回 **429 Too Many Requests**。
+
+---
+
+## 續訂實例
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+延長計費週期 30 天 ($20)。如果實例因過期而停止，它將自動重新啟動。
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## 健康檢查
+
+```
+GET /v1/claw/health
+```
+
+傳回 Claw 服務健康狀態。無需身份驗證。
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```

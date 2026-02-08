@@ -1,0 +1,207 @@
+---
+title: "Referensi API"
+description: "Kelola instance Claw secara terprogram melalui API /v1/claw"
+---
+
+Semua endpoint API Claw memerlukan autentikasi melalui header `Authorization: Bearer sk-...`.
+
+**Base URL:** `https://api.lemondata.cc/v1/claw`
+
+## Daftar Instance
+
+```
+GET /v1/claw/instances
+```
+
+Mengembalikan semua instance untuk organisasi yang terautentikasi.
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### Nilai Status Instance
+
+| Status | Deskripsi |
+|--------|-------------|
+| `PENDING` | Baru saja dibuat, menunggu provisioning |
+| `PROVISIONING` | Container sedang dideploy |
+| `RUNNING` | Instance aktif dan sehat |
+| `STOPPED` | Dihentikan karena kedaluwarsa (data disimpan selama 7 hari) |
+| `FAILED` | Deployment gagal (pengembalian dana otomatis) |
+| `DELETED` | Dihapus secara permanen |
+
+---
+
+## Buat Instance
+
+```
+POST /v1/claw/instances
+```
+
+Membuat instance baru dan mengenakan biaya **$20** untuk 30 hari dari saldo organisasi Anda.
+
+<ParamField body="subdomain" type="string" required>
+  Subdomain (3-32 karakter, alfanumerik huruf kecil + tanda hubung). URL Instance: `https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  Model AI default (misalnya, `gpt-4o`, `claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+Saldo yang tidak mencukupi akan mengembalikan **402 Payment Required**. Pastikan organisasi Anda memiliki setidaknya $20 sebelum membuat instance.
+</Warning>
+
+---
+
+## Dapatkan Instance
+
+```
+GET /v1/claw/instances/:id
+```
+
+Mengembalikan detail untuk instance tertentu.
+
+---
+
+## Perbarui Instance
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+Perbarui konfigurasi instance.
+
+<ParamField body="defaultModel" type="string | null">
+  Ubah model AI default
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  Perbarui konfigurasi platform IM (Telegram, Discord, dll.)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## Bangun Ulang Instance
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+Menghapus dan membuat ulang container sambil mempertahankan data (PVC). Dibatasi hingga **10 pembangunan ulang per hari**.
+
+Mengembalikan **429 Too Many Requests** jika batas harian terlampaui.
+
+---
+
+## Perpanjang Instance
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+Memperpanjang periode penagihan selama 30 hari ($20). Jika instance dihentikan karena kedaluwarsa, instance akan dimulai ulang secara otomatis.
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## Pemeriksaan Kesehatan
+
+```
+GET /v1/claw/health
+```
+
+Mengembalikan status kesehatan layanan Claw. Tidak memerlukan autentikasi.
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```

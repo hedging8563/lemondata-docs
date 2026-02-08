@@ -1,0 +1,207 @@
+---
+title: "Referência da API"
+description: "Gerencie instâncias do Claw programaticamente via API /v1/claw"
+---
+
+Todos os endpoints da API Claw exigem autenticação via cabeçalho `Authorization: Bearer sk-...`.
+
+**URL Base:** `https://api.lemondata.cc/v1/claw`
+
+## Listar Instâncias
+
+```
+GET /v1/claw/instances
+```
+
+Retorna todas as instâncias da organização autenticada.
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### Valores de Status da Instância
+
+| Status | Descrição |
+|--------|-------------|
+| `PENDING` | Recém-criada, aguardando provisionamento |
+| `PROVISIONING` | O container está sendo implantado |
+| `RUNNING` | A instância está ativa e saudável |
+| `STOPPED` | Interrompida devido à expiração (dados retidos por 7 dias) |
+| `FAILED` | Falha na implantação (reembolso automático) |
+| `DELETED` | Removida permanentemente |
+
+---
+
+## Criar Instância
+
+```
+POST /v1/claw/instances
+```
+
+Cria uma nova instância e cobra **$20** por 30 dias do saldo da sua organização.
+
+<ParamField body="subdomain" type="string" required>
+  Subdomínio (3-32 caracteres, alfanuméricos minúsculos + hifens). URL da instância: `https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  Modelo de IA padrão (ex: `gpt-4o`, `claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+Saldo insuficiente retorna **402 Payment Required**. Certifique-se de que sua organização tenha pelo menos $20 antes de criar uma instância.
+</Warning>
+
+---
+
+## Obter Instância
+
+```
+GET /v1/claw/instances/:id
+```
+
+Retorna detalhes de uma instância específica.
+
+---
+
+## Atualizar Instância
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+Atualiza a configuração da instância.
+
+<ParamField body="defaultModel" type="string | null">
+  Altera o modelo de IA padrão
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  Atualiza a configuração da plataforma de IM (Telegram, Discord, etc.)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## Reconstruir Instância
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+Destrói e recria o container preservando os dados (PVC). Limitado a **10 reconstruções por dia**.
+
+Retorna **429 Too Many Requests** se o limite diário for excedido.
+
+---
+
+## Renovar Instância
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+Estende o período de faturamento em 30 dias ($20). Se a instância foi interrompida devido à expiração, ela será reiniciada automaticamente.
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## Health Check
+
+```
+GET /v1/claw/health
+```
+
+Retorna o status de saúde do serviço Claw. Nenhuma autenticação é necessária.
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```

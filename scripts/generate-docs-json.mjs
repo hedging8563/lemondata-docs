@@ -146,6 +146,28 @@ const navigationTabs = {
       }
     ]
   },
+  claw: {
+    tab: '✨ Claw',
+    groups: [
+      {
+        group: 'Getting Started',
+        pages: ['claw/introduction', 'claw/api']
+      },
+      {
+        group: 'Chat Platforms',
+        pages: [
+          'claw/telegram',
+          'claw/discord',
+          'claw/whatsapp',
+          'claw/slack',
+          'claw/feishu',
+          'claw/wecom',
+          'claw/dingtalk',
+          'claw/qq'
+        ]
+      }
+    ]
+  },
   integrations: {
     tab: 'Integrations',
     groups: [

@@ -1,0 +1,207 @@
+---
+title: "Référence API"
+description: "Gérez les instances Claw par programmation via l'API /v1/claw"
+---
+
+Tous les points de terminaison de l'API Claw nécessitent une authentification via l'en-tête `Authorization: Bearer sk-...`.
+
+**URL de base :** `https://api.lemondata.cc/v1/claw`
+
+## Lister les instances
+
+```
+GET /v1/claw/instances
+```
+
+Renvoie toutes les instances pour l'organisation authentifiée.
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### Valeurs de statut de l'instance
+
+| Statut | Description |
+|--------|-------------|
+| `PENDING` | Nouvellement créée, en attente de provisionnement |
+| `PROVISIONING` | Le conteneur est en cours de déploiement |
+| `RUNNING` | L'instance est active et saine |
+| `STOPPED` | Arrêtée pour cause d'expiration (données conservées 7 jours) |
+| `FAILED` | Échec du déploiement (remboursement automatique) |
+| `DELETED` | Supprimée définitivement |
+
+---
+
+## Créer une instance
+
+```
+POST /v1/claw/instances
+```
+
+Crée une nouvelle instance et facture **20 $** pour 30 jours sur le solde de votre organisation.
+
+<ParamField body="subdomain" type="string" required>
+  Sous-domaine (3 à 32 caractères, alphanumérique en minuscules + traits d'union). URL de l'instance : `https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  Modèle d'IA par défaut (par ex., `gpt-4o`, `claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+Un solde insuffisant renvoie **402 Payment Required**. Assurez-vous que votre organisation dispose d'au moins 20 $ avant de créer une instance.
+</Warning>
+
+---
+
+## Obtenir une instance
+
+```
+GET /v1/claw/instances/:id
+```
+
+Renvoie les détails d'une instance spécifique.
+
+---
+
+## Mettre à jour une instance
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+Mettre à jour la configuration de l'instance.
+
+<ParamField body="defaultModel" type="string | null">
+  Modifier le modèle d'IA par défaut
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  Mettre à jour la configuration de la plateforme de messagerie instantanée (Telegram, Discord, etc.)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## Reconstruire une instance
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+Détruit et recrée le conteneur tout en préservant les données (PVC). Limité à **10 reconstructions par jour**.
+
+Renvoie **429 Too Many Requests** si la limite quotidienne est dépassée.
+
+---
+
+## Renouveler une instance
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+Prolonge la période de facturation de 30 jours (20 $). Si l'instance a été arrêtée pour cause d'expiration, elle redémarrera automatiquement.
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## Vérification de l'état (Health Check)
+
+```
+GET /v1/claw/health
+```
+
+Renvoie l'état de santé du service Claw. Aucune authentification requise.
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```

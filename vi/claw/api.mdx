@@ -1,0 +1,207 @@
+---
+title: "Tài liệu tham khảo API"
+description: "Quản lý các instance Claw theo lập trình thông qua API /v1/claw"
+---
+
+Tất cả các endpoint API của Claw đều yêu cầu xác thực thông qua header `Authorization: Bearer sk-...`.
+
+**Base URL:** `https://api.lemondata.cc/v1/claw`
+
+## Liệt kê các Instance
+
+```
+GET /v1/claw/instances
+```
+
+Trả về tất cả các instance cho tổ chức đã được xác thực.
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### Các giá trị trạng thái Instance
+
+| Trạng thái | Mô tả |
+|--------|-------------|
+| `PENDING` | Vừa được tạo, đang chờ cấp phát |
+| `PROVISIONING` | Container đang được triển khai |
+| `RUNNING` | Instance đang hoạt động và ổn định |
+| `STOPPED` | Đã dừng do hết hạn (dữ liệu được lưu giữ trong 7 ngày) |
+| `FAILED` | Triển khai thất bại (tự động hoàn tiền) |
+| `DELETED` | Đã xóa vĩnh viễn |
+
+---
+
+## Tạo Instance
+
+```
+POST /v1/claw/instances
+```
+
+Tạo một instance mới và tính phí **$20** cho 30 ngày từ số dư tổ chức của bạn.
+
+<ParamField body="subdomain" type="string" required>
+  Subdomain (3-32 ký tự, chữ cái và số viết thường + dấu gạch ngang). URL của instance: `https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  Mô hình AI mặc định (ví dụ: `gpt-4o`, `claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+Số dư không đủ sẽ trả về lỗi **402 Payment Required**. Đảm bảo tổ chức của bạn có ít nhất $20 trước khi tạo instance.
+</Warning>
+
+---
+
+## Lấy thông tin Instance
+
+```
+GET /v1/claw/instances/:id
+```
+
+Trả về chi tiết cho một instance cụ thể.
+
+---
+
+## Cập nhật Instance
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+Cập nhật cấu hình instance.
+
+<ParamField body="defaultModel" type="string | null">
+  Thay đổi mô hình AI mặc định
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  Cập nhật cấu hình nền tảng IM (Telegram, Discord, v.v.)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## Xây dựng lại Instance
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+Hủy và tạo lại container trong khi vẫn bảo toàn dữ liệu (PVC). Giới hạn **10 lần rebuild mỗi ngày**.
+
+Trả về **429 Too Many Requests** nếu vượt quá giới hạn hàng ngày.
+
+---
+
+## Gia hạn Instance
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+Gia hạn chu kỳ thanh toán thêm 30 ngày ($20). Nếu instance đã bị dừng do hết hạn, nó sẽ tự động khởi động lại.
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## Kiểm tra trạng thái (Health Check)
+
+```
+GET /v1/claw/health
+```
+
+Trả về trạng thái hoạt động của dịch vụ Claw. Không yêu cầu xác thực.
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```

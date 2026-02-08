@@ -1,0 +1,207 @@
+---
+title: "API Referansı"
+description: "Claw örneklerini /v1/claw API'si üzerinden programlı olarak yönetin"
+---
+
+Tüm Claw API uç noktaları, `Authorization: Bearer sk-...` başlığı aracılığıyla kimlik doğrulaması gerektirir.
+
+**Base URL:** `https://api.lemondata.cc/v1/claw`
+
+## Örnekleri Listele
+
+```
+GET /v1/claw/instances
+```
+
+Kimliği doğrulanmış organizasyon için tüm örnekleri döndürür.
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### Örnek Durum Değerleri
+
+| Durum | Açıklama |
+|--------|-------------|
+| `PENDING` | Yeni oluşturuldu, hazırlık bekleniyor |
+| `PROVISIONING` | Konteyner dağıtılıyor |
+| `RUNNING` | Örnek aktif ve sağlıklı |
+| `STOPPED` | Süre dolumu nedeniyle durduruldu (veriler 7 gün saklanır) |
+| `FAILED` | Dağıtım başarısız oldu (otomatik iade edildi) |
+| `DELETED` | Kalıcı olarak kaldırıldı |
+
+---
+
+## Örnek Oluştur
+
+```
+POST /v1/claw/instances
+```
+
+Yeni bir örnek oluşturur ve organizasyon bakiyenizden 30 gün için **$20** ücret alır.
+
+<ParamField body="subdomain" type="string" required>
+  Alt alan adı (3-32 karakter, küçük harf alfanümerik + tire). Örnek URL'si: `https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  Varsayılan yapay zeka modeli (örneğin, `gpt-4o`, `claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+Yetersiz bakiye **402 Payment Required** hatası döndürür. Bir örnek oluşturmadan önce organizasyonunuzun en az $20 bakiyesi olduğundan emin olun.
+</Warning>
+
+---
+
+## Örneği Getir
+
+```
+GET /v1/claw/instances/:id
+```
+
+Belirli bir örneğin ayrıntılarını döndürür.
+
+---
+
+## Örneği Güncelle
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+Örnek yapılandırmasını güncelleyin.
+
+<ParamField body="defaultModel" type="string | null">
+  Varsayılan yapay zeka modelini değiştirin
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  IM platformu yapılandırmasını güncelleyin (Telegram, Discord vb.)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## Örneği Yeniden Oluştur
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+Verileri (PVC) koruyarak konteyneri yok eder ve yeniden oluşturur. **Günde 10 yeniden oluşturma** ile sınırlıdır.
+
+Günlük sınır aşılırsa **429 Too Many Requests** döndürür.
+
+---
+
+## Örneği Yenile
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+Faturalandırma dönemini 30 gün ($20) uzatır. Örnek, süre dolumu nedeniyle durdurulmuşsa otomatik olarak yeniden başlatılır.
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## Sağlık Kontrolü
+
+```
+GET /v1/claw/health
+```
+
+Claw servis sağlık durumunu döndürür. Kimlik doğrulaması gerekmez.
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```

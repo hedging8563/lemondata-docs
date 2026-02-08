@@ -37,9 +37,10 @@ const TRANSLATION_API_BASE = process.env.TRANSLATION_API_BASE || 'https://crazyr
 const TRANSLATION_MODEL = process.env.TRANSLATION_MODEL || 'gemini-3-flash-preview';
 
 // Target languages for Mintlify docs (matches main site - 12 languages)
+// NOTE: locale codes must match generate-docs-json.mjs LANGUAGES array
 const TARGET_LANGUAGES = {
   zh: { name: 'Simplified Chinese', nativeName: '简体中文', path: 'zh' },
-  'zh-TW': { name: 'Traditional Chinese', nativeName: '繁體中文', path: 'zh-TW' },
+  'zh-Hant': { name: 'Traditional Chinese', nativeName: '繁體中文', path: 'zh-Hant' },
   ja: { name: 'Japanese', nativeName: '日本語', path: 'ja' },
   ko: { name: 'Korean', nativeName: '한국어', path: 'ko' },
   de: { name: 'German', nativeName: 'Deutsch', path: 'de' },
@@ -51,6 +52,9 @@ const TARGET_LANGUAGES = {
   id: { name: 'Indonesian', nativeName: 'Indonesian', path: 'id' },
   tr: { name: 'Turkish', nativeName: 'Türkçe', path: 'tr' },
 };
+
+// Derive language directory names from TARGET_LANGUAGES to skip as source
+const LANG_DIR_NAMES = new Set(Object.values(TARGET_LANGUAGES).map(l => l.path));
 
 // Files/directories to skip
 const SKIP_PATTERNS = [
@@ -66,19 +70,6 @@ const SKIP_PATTERNS = [
   /^skill$/, // Skip skill directory (Claude Code skill files)
   /^logo$/, // Skip logo directory
   /^images$/, // Skip images directory
-  // Skip translated directories
-  /^zh$/,
-  /^zh-TW$/,
-  /^ja$/,
-  /^ko$/,
-  /^de$/,
-  /^fr$/,
-  /^es$/,
-  /^pt$/,
-  /^ar$/,
-  /^vi$/,
-  /^id$/,
-  /^tr$/,
 ];
 
 // Links to lemondata.cc that should have /en/ replaced
@@ -195,8 +186,8 @@ function findMdxFiles(dir, relativePath = '') {
     const fullPath = path.join(dir, entry.name);
     const relPath = path.join(relativePath, entry.name);
 
-    // Check skip patterns
-    if (SKIP_PATTERNS.some(pattern => pattern.test(entry.name))) {
+    // Check skip patterns (static patterns + dynamic language directories)
+    if (SKIP_PATTERNS.some(pattern => pattern.test(entry.name)) || LANG_DIR_NAMES.has(entry.name)) {
       continue;
     }
 

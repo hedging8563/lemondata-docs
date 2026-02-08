@@ -1,0 +1,207 @@
+---
+title: "API-Referenz"
+description: "Verwalten Sie Claw-Instanzen programmatisch über die /v1/claw API"
+---
+
+Alle Claw-API-Endpunkte erfordern eine Authentifizierung über den Header `Authorization: Bearer sk-...`.
+
+**Basis-URL:** `https://api.lemondata.cc/v1/claw`
+
+## Instanzen auflisten
+
+```
+GET /v1/claw/instances
+```
+
+Gibt alle Instanzen für die authentifizierte Organisation zurück.
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### Instanz-Statuswerte
+
+| Status | Beschreibung |
+|--------|-------------|
+| `PENDING` | Gerade erstellt, wartet auf Bereitstellung |
+| `PROVISIONING` | Container wird bereitgestellt |
+| `RUNNING` | Instanz ist aktiv und fehlerfrei |
+| `STOPPED` | Aufgrund von Ablauf gestoppt (Daten werden 7 Tage lang aufbewahrt) |
+| `FAILED` | Bereitstellung fehlgeschlagen (automatische Rückerstattung) |
+| `DELETED` | Dauerhaft entfernt |
+
+---
+
+## Instanz erstellen
+
+```
+POST /v1/claw/instances
+```
+
+Erstellt eine neue Instanz und berechnet **20 $** für 30 Tage von Ihrem Organisationsguthaben.
+
+<ParamField body="subdomain" type="string" required>
+  Subdomain (3-32 Zeichen, kleingeschriebene alphanumerische Zeichen + Bindestriche). Instanz-URL: `https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  Standard-KI-Modell (z. B. `gpt-4o`, `claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+Unzureichendes Guthaben gibt **402 Payment Required** zurück. Stellen Sie sicher, dass Ihre Organisation über mindestens 20 $ verfügt, bevor Sie eine Instanz erstellen.
+</Warning>
+
+---
+
+## Instanz abrufen
+
+```
+GET /v1/claw/instances/:id
+```
+
+Gibt Details für eine bestimmte Instanz zurück.
+
+---
+
+## Instanz aktualisieren
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+Instanzkonfiguration aktualisieren.
+
+<ParamField body="defaultModel" type="string | null">
+  Das Standard-KI-Modell ändern
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  IM-Plattformkonfiguration aktualisieren (Telegram, Discord, etc.)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## Instanz neu erstellen
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+Zerstört und erstellt den Container neu, während die Daten (PVC) erhalten bleiben. Begrenzt auf **10 Neuerstellungen pro Tag**.
+
+Gibt **429 Too Many Requests** zurück, wenn das tägliche Limit überschritten wird.
+
+---
+
+## Instanz verlängern
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+Verlängert den Abrechnungszeitraum um 30 Tage (20 $). Wenn die Instanz aufgrund von Ablauf gestoppt wurde, wird sie automatisch neu gestartet.
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## Health Check
+
+```
+GET /v1/claw/health
+```
+
+Gibt den Status des Claw-Dienstes zurück. Keine Authentifizierung erforderlich.
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```

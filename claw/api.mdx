@@ -1,0 +1,207 @@
+---
+title: "API Reference"
+description: "Programmatically manage Claw instances via the /v1/claw API"
+---
+
+All Claw API endpoints require authentication via `Authorization: Bearer sk-...` header.
+
+**Base URL:** `https://api.lemondata.cc/v1/claw`
+
+## List Instances
+
+```
+GET /v1/claw/instances
+```
+
+Returns all instances for the authenticated organization.
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### Instance Status Values
+
+| Status | Description |
+|--------|-------------|
+| `PENDING` | Just created, waiting for provisioning |
+| `PROVISIONING` | Container is being deployed |
+| `RUNNING` | Instance is active and healthy |
+| `STOPPED` | Stopped due to expiration (data retained 7 days) |
+| `FAILED` | Deployment failed (auto-refunded) |
+| `DELETED` | Permanently removed |
+
+---
+
+## Create Instance
+
+```
+POST /v1/claw/instances
+```
+
+Creates a new instance and charges **$20** for 30 days from your organization balance.
+
+<ParamField body="subdomain" type="string" required>
+  Subdomain (3-32 chars, lowercase alphanumeric + hyphens). Instance URL: `https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  Default AI model (e.g., `gpt-4o`, `claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+Insufficient balance returns **402 Payment Required**. Ensure your organization has at least $20 before creating an instance.
+</Warning>
+
+---
+
+## Get Instance
+
+```
+GET /v1/claw/instances/:id
+```
+
+Returns details for a specific instance.
+
+---
+
+## Update Instance
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+Update instance configuration.
+
+<ParamField body="defaultModel" type="string | null">
+  Change the default AI model
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  Update IM platform configuration (Telegram, Discord, etc.)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## Rebuild Instance
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+Destroys and recreates the container while preserving data (PVC). Limited to **10 rebuilds per day**.
+
+Returns **429 Too Many Requests** if the daily limit is exceeded.
+
+---
+
+## Renew Instance
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+Extends the billing period by 30 days ($20). If the instance was stopped due to expiration, it will automatically restart.
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## Health Check
+
+```
+GET /v1/claw/health
+```
+
+Returns Claw service health status. No authentication required.
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```

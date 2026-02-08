@@ -1,0 +1,207 @@
+---
+title: "مرجع API"
+description: "إدارة مثيلات Claw برمجياً عبر /v1/claw API"
+---
+
+تتطلب جميع نقاط نهاية Claw API المصادقة عبر رأس `Authorization: Bearer sk-...`.
+
+**رابط الـ URL الأساسي:** `https://api.lemondata.cc/v1/claw`
+
+## قائمة المثيلات
+
+```
+GET /v1/claw/instances
+```
+
+إرجاع جميع المثيلات للمؤسسة المصادق عليها.
+
+<RequestExample>
+```bash cURL
+curl https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+resp = requests.get(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200
+{
+  "instances": [
+    {
+      "id": "cm5abc123",
+      "subdomain": "mybot",
+      "url": "https://claw-mybot.lemondata.cc",
+      "defaultModel": "gpt-4o",
+      "hasIMConfig": true,
+      "status": "RUNNING",
+      "paidUntil": "2026-03-10T00:00:00.000Z",
+      "canRebuild": true,
+      "totalPaid": 20,
+      "createdAt": "2026-02-08T00:00:00.000Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### قيم حالة المثيل
+
+| الحالة | الوصف |
+|--------|-------------|
+| `PENDING` | تم الإنشاء للتو، بانتظار التجهيز |
+| `PROVISIONING` | يتم نشر الحاوية (Container) |
+| `RUNNING` | المثيل نشط وحالته سليمة |
+| `STOPPED` | متوقف بسبب انتهاء الصلاحية (يتم الاحتفاظ بالبيانات لمدة 7 أيام) |
+| `FAILED` | فشل النشر (تم استرداد المبلغ تلقائياً) |
+| `DELETED` | تمت الإزالة نهائياً |
+
+---
+
+## إنشاء مثيل
+
+```
+POST /v1/claw/instances
+```
+
+ينشئ مثيلاً جديداً ويخصم **20 دولاراً** لمدة 30 يوماً من رصيد مؤسستك.
+
+<ParamField body="subdomain" type="string" required>
+  النطاق الفرعي (3-32 حرفاً، أرقام وحروف صغيرة + شرطات). رابط المثيل: `https://claw-{subdomain}.lemondata.cc`
+</ParamField>
+
+<ParamField body="defaultModel" type="string">
+  نموذج الذكاء الاصطناعي الافتراضي (مثلاً: `gpt-4o` ،`claude-sonnet-4-5-20250929`)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST https://api.lemondata.cc/v1/claw/instances \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"subdomain": "mybot", "defaultModel": "gpt-4o"}'
+```
+
+```python Python
+import requests
+
+resp = requests.post(
+    "https://api.lemondata.cc/v1/claw/instances",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={"subdomain": "mybot", "defaultModel": "gpt-4o"}
+)
+print(resp.json())
+```
+</RequestExample>
+
+<ResponseExample>
+```json 201
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "url": "https://claw-mybot.lemondata.cc",
+  "status": "PENDING",
+  "paidUntil": "2026-03-10T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+<Warning>
+يؤدي عدم كفاية الرصيد إلى إرجاع **402 Payment Required**. تأكد من أن مؤسستك لديها 20 دولاراً على الأقل قبل إنشاء مثيل.
+</Warning>
+
+---
+
+## الحصول على مثيل
+
+```
+GET /v1/claw/instances/:id
+```
+
+إرجاع تفاصيل مثيل معين.
+
+---
+
+## تحديث المثيل
+
+```
+PATCH /v1/claw/instances/:id
+```
+
+تحديث إعدادات المثيل.
+
+<ParamField body="defaultModel" type="string | null">
+  تغيير نموذج الذكاء الاصطناعي الافتراضي
+</ParamField>
+
+<ParamField body="imConfig" type="object | null">
+  تحديث إعدادات منصة المراسلة الفورية (Telegram، Discord، إلخ.)
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X PATCH https://api.lemondata.cc/v1/claw/instances/cm5abc123 \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"defaultModel": "claude-sonnet-4-5-20250929"}'
+```
+</RequestExample>
+
+---
+
+## إعادة بناء المثيل
+
+```
+POST /v1/claw/instances/:id/rebuild
+```
+
+يقوم بتدمير وإعادة إنشاء الحاوية مع الحفاظ على البيانات (PVC). يقتصر على **10 عمليات إعادة بناء يومياً**.
+
+يُرجع **429 Too Many Requests** في حال تجاوز الحد اليومي.
+
+---
+
+## تجديد المثيل
+
+```
+POST /v1/claw/instances/:id/renew
+```
+
+تمديد فترة الفوترة لمدة 30 يوماً (20 دولاراً). إذا تم إيقاف المثيل بسبب انتهاء الصلاحية، فسيتم إعادة تشغيله تلقائياً.
+
+<ResponseExample>
+```json 200
+{
+  "id": "cm5abc123",
+  "subdomain": "mybot",
+  "status": "RUNNING",
+  "paidUntil": "2026-04-09T00:00:00.000Z",
+  "charged": true,
+  "chargedAmount": 20
+}
+```
+</ResponseExample>
+
+---
+
+## فحص الحالة (Health Check)
+
+```
+GET /v1/claw/health
+```
+
+إرجاع حالة خدمة Claw. لا يتطلب مصادقة.
+
+```json
+{"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
+```
