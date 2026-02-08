@@ -1,203 +1,36 @@
----
-title: "✨ 上游 Prompt 缓存"
-description: "了解供应商层级的 Prompt 缓存及其如何降低成本"
----
+* (End of thought process, proceeding to output).
 
-## 概览
+    *   *Wait, one last check on the flowchart:*
+        The flowchart is in a code block. I will leave it in English.
+        The calculation example is in a code block. I will leave it in English.
+        The response headers are in a code block. I will leave it in English.
+        The usage API is in a code block. I will leave it in English.
+        This is consistent with Rule 2.
 
-除了 LemonData 的[平台语义缓存](/guides/caching)之外，许多 AI 供应商也提供自有的 **Prompt 缓存**功能。这是一种运行在供应商层级（Anthropic、OpenAI、DeepSeek 等）的独立缓存机制。
+    *   *Wait, the "Two Types of Caching" table:*
+        `| Type | Where | How it Works | Cost |` -> `| 类型 | 位置 | 工作原理 | 成本 |`
+        `| **Platform Cache** | LemonData | Semantic similarity matching | 10% of normal price |` -> `| **平台缓存** | LemonData | 语义相似度匹配 | 正常价格的 10% |`
+        `| **Provider Cache** | Upstream (Anthropic/OpenAI/etc) | Exact prefix matching | Discounted token rates |` -> `| **提供商缓存** | 上游 (Anthropic/OpenAI/等) | 精确前缀匹配 | 折扣 Token 费率 |`
+        Correct.
 
-<Note>
-**两种缓存类型**
+    *   *Wait, the "Supported Providers" table:*
+        `| Provider | Cache Read Discount | Cache Write Cost | Min Tokens |` -> `| 提供商 | 缓存读取折扣 | 缓存写入成本 | 最小 Token 数 |`
+        `| **Anthropic** | 90% off | Same as input | 1024 |` -> `| **Anthropic** | 优惠 90% | 与输入相同 | 1024 |`
+        Correct.
 
-| 类型 | 位置 | 工作原理 | 成本 |
-|------|-------|--------------|------|
-| **平台缓存** | LemonData | 语义相似度匹配 | 正常价格的 10% |
-| **供应商缓存** | 上游 (Anthropic/OpenAI 等) | 精确前缀匹配 | Token 费率折扣 |
+    *   *Wait, the "Identifying Cache Usage" table:*
+        `| Field | Description |` -> `| 字段 | 描述 |`
+        `| `cacheReadTokens` | Tokens served from provider cache (discounted) |` -> `| `cacheReadTokens` | 从提供商缓存中提供的 Token（享受折扣） |`
+        Correct.
 
-这两者是**互斥的**：如果平台缓存命中，则不会发起上游调用，因此供应商缓存不适用。
-</Note>
+    *   *Wait, the "Platform Cache vs Provider Cache" table:*
+        `| Aspect | Platform Cache | Provider Cache |` -> `| 维度 | 平台缓存 | 提供商缓存 |`
+        `| **Matching** | Semantic similarity | Exact prefix match |` -> `| **匹配方式** | 语义相似度 | 精确前缀匹配 |`
+        Correct.
 
-## 供应商 Prompt 缓存的工作原理
-
-供应商 Prompt 缓存会将 Prompt 前缀的处理结果存储在供应商的服务器上。当您发送具有相同前缀的请求时，供应商可以跳过对这些 Token 的重复处理。
-
-### 核心特性
-
-- **基于前缀**：只有 Prompt 的开头部分可以被缓存
-- **精确匹配**：要求 Token 完全一致（而非语义相似）
-- **有时效性**：缓存条目会过期（通常为 5-60 分钟）
-- **自动化**：无需特殊配置
-
-```
-请求 1: [系统 Prompt + 上下文 A + 问题 1]
-           ^^^^^^^^^^^^^^^^^^^^^^^^
-           此前缀被缓存
-
-请求 2: [系统 Prompt + 上下文 A + 问题 2]
-           ^^^^^^^^^^^^^^^^^^^^^^^^
-           缓存命中！仅处理问题 2
-```
-
-## 支持的供应商
-
-| 供应商 | 缓存读取折扣 | 缓存写入成本 | 最小 Token 数 |
-|----------|---------------------|------------------|------------|
-| **Anthropic** | 1 折 (90% off) | 与输入相同 | 1024 |
-| **OpenAI** | 5 折 (50% off) | 与输入相同 | 1024 |
-| **DeepSeek** | 1 折 (90% off) | 与输入相同 | 64 |
-| **Google** | 2.5 折 (75% off) | 25% 溢价 | 32768 |
-
-<Info>
-折扣会自动应用。LemonData 会将供应商的缓存定价直接透传给您。
-</Info>
-
-## 识别缓存使用情况
-
-### 在用量日志中
-
-您的用量日志显示了详细的缓存 Token 细分：
-
-| 字段 | 描述 |
-|-------|-------------|
-| `cacheReadTokens` | 从供应商缓存中读取的 Token（享受折扣） |
-| `cacheWriteTokens` | 写入缓存的 Token（供后续请求使用） |
-| `nonCachedPromptTokens` | 未经缓存处理的 Token |
-
-### 在交易记录中
-
-当使用了上游缓存时，交易记录会显示 **Provider Cache** 标签：
-
-- **Cache**（天蓝色）：平台语义缓存命中 - 90% 折扣
-- **Provider Cache**（青色）：上游 Prompt 缓存命中 - 折扣费率
-
-## 成本计算示例
-
-对于一个向 Claude (Anthropic) 发送的包含 10,000 个输入 Token 的请求：
-
-**未使用缓存：**
-```
-10,000 tokens × $3.00/1M = $0.030
-```
-
-**使用供应商缓存（8,000 个已缓存 + 2,000 个新 Token）：**
-```
-缓存读取:  8,000 tokens × $0.30/1M = $0.0024  (1 折)
-缓存写入:  2,000 tokens × $3.00/1M = $0.0060
-总计: $0.0084 (节省 72%)
-```
-
-## 最佳实践
-
-<AccordionGroup>
-  <Accordion title="使用一致的系统 Prompt">
-    将系统 Prompt 和静态上下文放在消息的开头。这可以最大化缓存命中的可能性。
-  </Accordion>
-
-  <Accordion title="批量处理相似请求">
-    在短时间内发送具有相同前缀的请求，以便在缓存过期前获益。
-  </Accordion>
-
-  <Accordion title="满足最小 Token 要求">
-    确保您的可缓存前缀达到供应商的最小值（例如 Anthropic/OpenAI 为 1024 个 Token）。
-  </Accordion>
-
-  <Accordion title="监控缓存指标">
-    查看仪表板中的用量统计，了解缓存命中率和节省情况。
-  </Accordion>
-</AccordionGroup>
-
-## 平台缓存 vs 供应商缓存
-
-| 维度 | 平台缓存 | 供应商缓存 |
-|--------|----------------|----------------|
-| **匹配方式** | 语义相似度 | 精确前缀匹配 |
-| **成本** | 正常价格的 10% | 折扣费率 |
-| **延迟** | 极低 (~1ms) | 降低（跳过处理过程） |
-| **控制方式** | 仪表板设置 | 自动化 |
-| **范围** | 跨用户（可选） | 基于 API Key |
-
-### 适用场景
-
-```
-请求到达
-    │
-    ▼
-┌─────────────────────┐
-│ 平台缓存命中？       │
-└─────────────────────┘
-    │ 是               │ 否
-    ▼                  ▼
-┌─────────┐    ┌─────────────────────┐
-│ 返回     │    │ 调用上游 API         │
-│ 缓存内容 │    └─────────────────────┘
-│ (10%)   │            │
-└─────────┘            ▼
-               ┌─────────────────────┐
-               │ 供应商缓存命中？     │
-               └─────────────────────┘
-                   │ 是         │ 否
-                   ▼            ▼
-               折扣 Token    全额 Token
-               费率          费率
-```
-
-## 检查缓存状态
-
-### 响应头
-
-```
-X-Cache-Status: HIT           # 平台缓存命中
-X-Cache-Status: MISS          # 无平台缓存
-X-Upstream-Cache-Read: 8000   # 供应商缓存读取 Token 数
-X-Upstream-Cache-Write: 2000  # 供应商缓存写入 Token 数
-```
-
-### 用量 API
-
-查询您的用量日志以查看缓存细分：
-
-```bash
-curl https://api.lemondata.cc/v1/usage/logs \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json"
-```
-
-响应包含：
-```json
-{
-  "promptTokens": 10000,
-  "cacheReadTokens": 8000,
-  "cacheWriteTokens": 2000,
-  "nonCachedPromptTokens": 0,
-  "completionTokens": 500,
-  "cost": 0.0084
-}
-```
-
-## 常见问题
-
-<AccordionGroup>
-  <Accordion title="我可以禁用供应商缓存吗？">
-    供应商缓存是自动的，无法禁用。由于它只会为您带来好处（降低成本），因此没有理由禁用它。
-  </Accordion>
-
-  <Accordion title="为什么我的请求没有命中供应商缓存？">
-    常见原因：
-    - 前缀已更改（即使只有一个 Token 的差异）
-    - 缓存已过期（通常为 5-60 分钟）
-    - 前缀太短（低于最小 Token 数）
-    - 使用了不同的 API Key
-  </Accordion>
-
-  <Accordion title="BYOK 是否支持供应商缓存？">
-    是的！当使用您自己的 API Key (BYOK) 时，供应商缓存的工作方式相同。缓存与您的上游 API Key 绑定。
-  </Accordion>
-
-  <Accordion title="如何最大化缓存节省？">
-    1. 对重复的相似查询使用平台语义缓存
-    2. 将静态内容放在 Prompt 结构的前面
-    3. 在不同请求之间保持系统 Prompt 的一致性
-    4. 快速连续地发送相关请求
-  </Accordion>
-</AccordionGroup>
+    *   *Wait, the "FAQ" section:*
+        `Can I disable provider caching?` -> `我可以禁用提供商缓存吗？`
+        `Why didn't my request hit provider cache?` -> `为什么我的请求没有命中提供商缓存？`
+        `Does BYOK support provider caching?` -> `BYOK 是否支持提供商缓存？`
+        `How do I maximize cache savings?` -> `如何最大限度地节省缓存成本？`
+        

@@ -1,15 +1,20 @@
+**Translating and Refining**
+
+I'm now satisfied with the translation of the sample content, and I've carefully checked all the rules. It's time to translate the main documentation, focusing on accuracy and consistency. I am also updating the style of translations for better readability.
+
+
 ---
-title: "流式生成内容"
-openapi: "POST /v1beta/models/{model}:streamGenerateContent"
-description: "使用 Google Gemini API 格式流式生成内容"
+title: "生成内容"
+openapi: "POST /v1beta/models/{model}:generateContent"
+description: "使用 Google Gemini API 格式生成内容"
 ---
 
-Gemini generateContent 端点的流式版本。返回 Server-Sent Events。
+LemonData 支持 Gemini 模型的原生 Google Gemini API 格式。这使得它能够直接兼容 Google AI SDK。
 
 ## 路径参数
 
 <ParamField path="model" type="string" required>
-  模型名称（例如 `gemini-2.5-pro`、`gemini-2.5-flash`）。
+  模型名称（例如：`gemini-2.5-pro`，`gemini-2.5-flash`）。
 </ParamField>
 
 ## 查询参数
@@ -18,24 +23,64 @@ Gemini generateContent 端点的流式版本。返回 Server-Sent Events。
   API key（请求头身份验证的替代方案）。
 </ParamField>
 
+## 身份验证
+
+Gemini 端点支持多种身份验证方法：
+- `?key=YOUR_API_KEY` 查询参数
+- `x-goog-api-key: YOUR_API_KEY` 请求头
+- `Authorization: Bearer YOUR_API_KEY` 请求头
+
 ## 请求体
 
-与 [生成内容](/zh/api-reference/gemini/generate-content) 相同。
+<ParamField body="contents" type="array" required>
+  对话内容。
+
+  每个内容对象包含：
+  - `role` (string): `user` 或 `model`
+  - `parts` (array): 内容部分（文本或内联数据）
+</ParamField>
+
+<ParamField body="systemInstruction" type="object">
+  模型的系统指令。
+</ParamField>
+
+<ParamField body="generationConfig" type="object">
+  生成配置：
+  - `temperature` (number): 采样温度
+  - `topP` (number): 核采样概率
+  - `topK` (integer): Top-K 采样
+  - `maxOutputTokens` (integer): 最大输出 token 数
+  - `stopSequences` (array): 停止序列
+</ParamField>
+
+<ParamField body="safetySettings" type="array">
+  安全过滤设置。
+</ParamField>
 
 ## 响应
 
-返回 JSON 对象流，每个对象包含部分响应。
+<ResponseField name="candidates" type="array">
+  生成的候选内容。
+</ResponseField>
+
+<ResponseField name="usageMetadata" type="object">
+  Token 使用信息。
+</ResponseField>
 
 <RequestExample>
 ```bash cURL
-curl -X POST "https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:streamGenerateContent?key=sk-your-api-key" \
+curl -X POST "https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:generateContent?key=sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
     "contents": [
       {
-        "parts": [{"text": "Tell me a story"}]
+        "parts": [{"text": "Hello, Gemini!"}]
       }
-    ]
+    ],
+    "generationConfig": {
+      "temperature": 0.7,
+      "maxOutputTokens": 1024
+    }
   }'
 ```
 
@@ -49,55 +94,53 @@ genai.configure(
 )
 
 model = genai.GenerativeModel("gemini-2.5-pro")
-response = model.generate_content("Tell me a story", stream=True)
+response = model.generate_content("Hello, Gemini!")
 
-for chunk in response:
-    print(chunk.text, end="")
+print(response.text)
 ```
 
 ```javascript JavaScript
-const response = await fetch(
-  'https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:streamGenerateContent?key=sk-your-api-key',
-  {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: 'Tell me a story' }] }]
-    })
-  }
-);
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const reader = response.body.getReader();
-const decoder = new TextDecoder();
+const genAI = new GoogleGenerativeAI("sk-your-api-key", {
+  baseUrl: "https://api.lemondata.cc"
+});
 
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  console.log(decoder.decode(value));
-}
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+const result = await model.generateContent("Hello, Gemini!");
+
+console.log(result.response.text());
 ```
 
 ```go Go
 package main
 
 import (
-    "bufio"
     "bytes"
     "encoding/json"
     "fmt"
+    "io"
     "net/http"
 )
 
 func main() {
     payload := map[string]interface{}{
         "contents": []map[string]interface{}{
-            {"parts": []map[string]string{{"text": "Tell me a story"}}},
+            {
+                "parts": []map[string]string{
+                    {"text": "Hello, Gemini!"},
+                },
+            },
+        },
+        "generationConfig": map[string]interface{}{
+            "temperature":    0.7,
+            "maxOutputTokens": 1024,
         },
     }
 
     jsonData, _ := json.Marshal(payload)
     req, _ := http.NewRequest("POST",
-        "https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:streamGenerateContent?key=sk-your-api-key",
+        "https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:generateContent?key=sk-your-api-key",
         bytes.NewBuffer(jsonData))
     req.Header.Set("Content-Type", "application/json")
 
@@ -105,10 +148,8 @@ func main() {
     resp, _ := client.Do(req)
     defer resp.Body.Close()
 
-    scanner := bufio.NewScanner(resp.Body)
-    for scanner.Scan() {
-        fmt.Println(scanner.Text())
-    }
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(body))
 }
 ```
 
@@ -116,41 +157,59 @@ func main() {
 <?php
 $payload = [
     'contents' => [
-        ['parts' => [['text' => 'Tell me a story']]]
+        [
+            'parts' => [
+                ['text' => 'Hello, Gemini!']
+            ]
+        ]
+    ],
+    'generationConfig' => [
+        'temperature' => 0.7,
+        'maxOutputTokens' => 1024
     ]
 ];
 
-$ch = curl_init('https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:streamGenerateContent?key=sk-your-api-key');
+$ch = curl_init('https://api.lemondata.cc/v1beta/models/gemini-2.5-pro:generateContent?key=sk-your-api-key');
 
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-    CURLOPT_POSTFIELDS => json_encode($payload),
-    CURLOPT_WRITEFUNCTION => function($ch, $data) {
-        echo $data;
-        return strlen($data);
-    }
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json'
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload)
 ]);
 
-curl_exec($ch);
+$response = curl_exec($ch);
 curl_close($ch);
+
+$data = json_decode($response, true);
+echo $data['candidates'][0]['content']['parts'][0]['text'];
 ```
 </RequestExample>
 
 <ResponseExample>
-```json 流式数据块
+```json Response
 {
   "candidates": [
     {
       "content": {
         "role": "model",
         "parts": [
-          {"text": "Once upon a time"}
+          {"text": "Hello! How can I assist you today?"}
         ]
-      }
+      },
+      "finishReason": "STOP",
+      "safetyRatings": [
+        {"category": "HARM_CATEGORY_HARASSMENT", "probability": "NEGLIGIBLE"}
+      ]
     }
-  ]
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 5,
+    "candidatesTokenCount": 10,
+    "totalTokenCount": 15
+  }
 }
 ```
 </ResponseExample>
