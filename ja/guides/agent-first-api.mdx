@@ -1,0 +1,274 @@
+---
+title: "Agent-First API"
+description: "AIエージェントが最初の再試行で自己修正できるようにするための構造化されたエラーヒント"
+---
+
+## 概要
+
+LemonDataのAgent-First APIは、AIエージェントが即座に解析して対応できる構造化されたヒントをエラーレスポンスに付加します。ウェブ検索やドキュメントの確認、推測は不要です。
+
+すべてのエラーレスポンスには、標準の `error` オブジェクト内に `did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after` といったオプションのフィールドが含まれます。これらのフィールドは後方互換性があり、これらを使用しないクライアントには違いはありません。
+
+## エラーヒントフィールド
+
+すべてのヒントフィールドは、`error` オブジェクト内のオプションの拡張です：
+
+| フィールド | 型 | 説明 |
+|-------|------|-------------|
+| `did_you_mean` | `string` | 最も近い一致モデル名 |
+| `suggestions` | `array` | メタデータ付きの推奨モデル |
+| `alternatives` | `array` | 現在利用可能な代替モデル |
+| `hint` | `string` | 人間またはエージェントが読み取り可能な次のステップのガイダンス |
+| `retryable` | `boolean` | 同じリクエストを再試行して成功する可能性があるかどうか |
+| `retry_after` | `number` | 再試行するまでの待機秒数 |
+| `balance_usd` | `number` | 現在のアカウント残高（USD） |
+| `estimated_cost_usd` | `number` | 失敗したリクエストの推定コスト |
+
+## エラーコードの例
+
+### model_not_found (400)
+
+モデル名がアクティブなモデルと一致しない場合：
+
+```json
+{
+  "error": {
+    "message": "Model 'gpt5' not found",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [
+      {"id": "gpt-4o"},
+      {"id": "gpt-4o-mini"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+  }
+}
+```
+
+`did_you_mean` の解決には以下が使用されます：
+1. 静的エイリアスマッピング（本番環境のエラーデータから）
+2. 正規化された文字列一致（ハイフンを除去、大文字小文字を区別しない）
+3. 編集距離一致（しきい値 ≤ 3）
+
+### insufficient_balance (402)
+
+アカウント残高が推定コストに対して低すぎる場合：
+
+```json
+{
+  "error": {
+    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200.",
+    "type": "insufficient_balance",
+    "code": "insufficient_balance",
+    "balance_usd": 0.12,
+    "estimated_cost_usd": 0.35,
+    "suggestions": [
+      {"id": "gpt-4o-mini"},
+      {"id": "deepseek-chat"}
+    ],
+    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
+  }
+}
+```
+
+`suggestions` には、エージェントが切り替え可能な、推定コストよりも安価なモデルが含まれます。
+
+### all_channels_failed (503)
+
+モデルのすべてのアップストリームチャネルが利用不可の場合：
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
+      {"id": "gpt-4o", "status": "available", "tags": []}
+    ],
+    "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
+  }
+}
+```
+
+<Note>
+`retryable` は、理由が `no_channels`（このモデルに設定されたチャネルがない）の場合は `false` になります。サーキットブレーカーの作動やクォータ枯渇などの一時的な失敗の場合のみ `true` になります。
+</Note>
+
+### rate_limit_exceeded (429)
+
+```json
+{
+  "error": {
+    "message": "Rate limit: 60 rpm exceeded",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
+  }
+}
+```
+
+`retry_after` の値は、実際のレート制限ウィンドウのリセット時間から計算されます。
+
+### context_length_exceeded (400)
+
+入力がモデルのコンテキストウィンドウを超えた場合（アップストリームのエラーにヒントを付加）：
+
+```json
+{
+  "error": {
+    "message": "This model's maximum context length is 128000 tokens...",
+    "type": "invalid_request_error",
+    "code": "context_length_exceeded",
+    "retryable": false,
+    "suggestions": [
+      {"id": "gemini-2.5-pro"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Reduce your input or switch to a model with a larger context window."
+  }
+}
+```
+
+## ネイティブエンドポイントヘッダー
+
+ネイティブエンドポイント（AnthropicまたはGemini）を持つモデルで `/v1/chat/completions` を呼び出すと、**成功レスポンス**に最適化ヘッダーが含まれます：
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+| モデルプロバイダー | 推奨エンドポイント | メリット |
+|---------------|-------------------|---------|
+| Anthropic (Claude) | `/v1/messages` | フォーマット変換なし、extended thinking、プロンプトキャッシュ |
+| Google (Gemini) | `/v1beta/gemini` | フォーマット変換なし、グラウンディング、安全設定 |
+| OpenAI | — | Chat completions はすでにネイティブフォーマットです |
+
+これらのヘッダーは、ストリーミングレスポンスと非ストリーミングレスポンスの両方に表示されます。
+
+## /v1/models の強化
+
+各モデルオブジェクトの `lemondata` 拡張における3つの新しいフィールド：
+
+```json
+{
+  "id": "gpt-4o",
+  "lemondata": {
+    "category": "chat",
+    "pricing_unit": "per_token",
+    "cache_pricing": {
+      "cache_read_per_1m": "1.25",
+      "cache_write_per_1m": "2.50",
+      "platform_cache_discount": 0.9
+    }
+  }
+}
+```
+
+| フィールド | 値 | 説明 |
+|-------|--------|-------------|
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | モデルタイプ |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | モデルの課金方法 |
+| `cache_pricing` | オブジェクトまたは `null` | アップストリームのプロンプトキャッシュ価格 + プラットフォームのセマンティックキャッシュ割引 |
+
+### カテゴリフィルタリング
+
+```bash
+GET /v1/models?category=chat          # チャットモデルのみ
+GET /v1/models?category=image         # 画像生成モデル
+GET /v1/models?tag=coding&category=chat  # コーディングに最適化されたチャットモデル
+```
+
+## llms.txt
+
+マシンリーダブルな API 概要は以下で入手可能です：
+
+```
+GET https://api.lemondata.cc/llms.txt
+```
+
+以下が含まれます：
+- 動作例を含む初回呼び出しテンプレート
+- 一般的なモデル名（使用状況データから動的に生成）
+- 全12個の API エンドポイント
+- モデル検出のためのフィルタパラメータ
+- エラーハンドリングのガイダンス
+
+最初の API 呼び出しの前に `llms.txt` を読み取る AI エージェントは、通常、最初の試行で成功できます。
+
+## エージェントコードでの使用例
+
+### Python (OpenAI SDK)
+
+```python
+from openai import OpenAI, BadRequestError
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def smart_chat(messages, model="gpt-4o"):
+    try:
+        return client.chat.completions.create(
+            model=model, messages=messages
+        )
+    except BadRequestError as e:
+        error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
+        # Use did_you_mean for auto-correction
+        if error.get("code") == "model_not_found" and error.get("did_you_mean"):
+            return client.chat.completions.create(
+                model=error["did_you_mean"], messages=messages
+            )
+        raise
+```
+
+### JavaScript (OpenAI SDK)
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function smartChat(messages, model = 'gpt-4o') {
+  try {
+    return await client.chat.completions.create({ model, messages });
+  } catch (error) {
+    const err = error?.error;
+    if (err?.code === 'model_not_found' && err?.did_you_mean) {
+      return client.chat.completions.create({
+        model: err.did_you_mean, messages
+      });
+    }
+    throw error;
+  }
+}
+```
+
+## 設計原則
+
+<CardGroup cols={2}>
+  <Card title="素早く失敗し、情報を提供する" icon="bolt">
+    エラーは、エージェントが自己修正するために必要なすべてのデータとともに即座に返されます。
+  </Card>
+  <Card title="自動ルーティングなし" icon="route">
+    API が別のモデルに黙って置き換えることはありません。エージェントが決定します。
+  </Card>
+  <Card title="データ駆動型の提案" icon="database">
+    すべての推奨事項は、ハードコードされたリストではなく、本番データに基づいています。
+  </Card>
+  <Card title="後方互換性" icon="plug">
+    すべてのヒントフィールドはオプションです。既存のクライアントには違いはありません。
+  </Card>
+</CardGroup>

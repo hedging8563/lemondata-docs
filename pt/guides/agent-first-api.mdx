@@ -1,0 +1,60 @@
+---
+title: "API Agent-First"
+description: "Dicas de erro estruturadas para que agentes de IA se autocorrijam na primeira tentativa"
+---
+
+## Visão Geral
+
+A API Agent-First da LemonData enriquece as respostas de erro com dicas estruturadas que os agentes de IA podem analisar e processar imediatamente — sem buscas na web, sem consultas a documentos, sem adivinhação.
+
+Cada resposta de erro inclui campos opcionais como `did_you_mean`, `suggestions`, `hint`, `retryable` e `retry_after` dentro do objeto padrão `error`. Esses campos são retrocompatíveis — clientes que não os utilizam não percebem diferença.
+
+## Campos de Dica de Erro
+
+Todos os campos de dica são extensões opcionais dentro do objeto `error`:
+
+| Campo | Tipo | Descrição |
+|-------|------|-------------|
+| `did_you_mean` | `string` | Nome do modelo correspondente mais próximo |
+| `suggestions` | `array` | Modelos recomendados com metadados |
+| `alternatives` | `array` | Modelos alternativos disponíveis no momento |
+| `hint` | `string` | Orientação de próximo passo legível por humanos/agentes |
+| `retryable` | `boolean` | Se tentar a mesma requisição novamente pode ter sucesso |
+| `retry_after` | `number` | Segundos a aguardar antes de tentar novamente |
+| `balance_usd` | `number` | Saldo atual da conta em USD |
+| `estimated_cost_usd` | `number` | Custo estimado da requisição que falhou |
+
+## Exemplos de Códigos de Erro
+
+### model_not_found (400)
+
+Quando um nome de modelo não corresponde a nenhum modelo ativo:
+
+```json
+{
+  "error": {
+    "message": "Model 'gpt5' not found",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [
+      {"id": "gpt-4o"},
+      {"id": "gpt-4o-mini"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+  }
+}
+```
+
+A resolução de `did_you_mean` utiliza:
+1. Mapeamento de alias estático (de dados de erro de produção)
+2. Correspondência de string normalizada (remove hifens, insensível a maiúsculas/minúsculas)
+3. Correspondência por distância de edição (limiar ≤ 3)
+
+### insufficient_balance (402)
+
+Quando o saldo da conta é muito baixo para o custo estimado:
+
+```json

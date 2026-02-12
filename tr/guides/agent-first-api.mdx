@@ -1,0 +1,54 @@
+---
+title: "Agent-First API"
+description: "AI agent'larının ilk denemede kendi kendilerini düzeltmeleri için yapılandırılmış hata ipuçları"
+---
+
+## Genel Bakış
+
+LemonData'nın Agent-First API'si, hata yanıtlarını AI agent'larının anında ayrıştırabileceği ve üzerinde işlem yapabileceği yapılandırılmış ipuçlarıyla zenginleştirir — web araması yok, doküman incelemesi yok, tahmin yürütmek yok.
+
+Her hata yanıtı, standart `error` nesnesi içinde `did_you_mean`, `suggestions`, `hint`, `retryable` ve `retry_after` gibi isteğe bağlı alanlar içerir. Bu alanlar geriye dönük uyumludur — bunları kullanmayan istemciler hiçbir fark görmez.
+
+## Hata İpucu Alanları
+
+Tüm ipucu alanları, `error` nesnesi içindeki isteğe bağlı uzantılardır:
+
+| Alan | Tür | Açıklama |
+|-------|------|-------------|
+| `did_you_mean` | `string` | En yakın eşleşen model adı |
+| `suggestions` | `array` | Meta verilerle birlikte önerilen modeller |
+| `alternatives` | `array` | Şu anda mevcut olan alternatif modeller |
+| `hint` | `string` | İnsan/agent tarafından okunabilir sonraki adım rehberliği |
+| `retryable` | `boolean` | Aynı isteğin yeniden denenmesinin başarılı olup olmayacağı |
+| `retry_after` | `number` | Yeniden denemeden önce beklenecek saniye |
+| `balance_usd` | `number` | USD cinsinden mevcut hesap bakiyesi |
+| `estimated_cost_usd` | `number` | Başarısız olan isteğin tahmini maliyeti |
+
+## Hata Kodu Örnekleri
+
+### model_not_found (400)
+
+Bir model adı herhangi bir aktif modelle eşleşmediğinde:
+
+```json
+{
+  "error": {
+    "message": "Model 'gpt5' not found",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [
+      {"id": "gpt-4o"},
+      {"id": "gpt-4o-mini"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+  }
+}
+```
+
+`did_you_mean` çözümlemesi şunları kullanır:
+1. Statik alias eşlemesi (üretim hata verilerinden)
+2. Normalleştirilmiş dize eşleştirme (tireleri kaldırır, büyük/küçük harfe duyarsızdır)
+3

@@ -44,6 +44,7 @@ const navigationTabs = {
         group: 'Guides',
         pages: [
           'guides/api-formats',
+          'guides/agent-first-api',
           'guides/caching',
           'guides/prompt-cache',
           'guides/sdks',

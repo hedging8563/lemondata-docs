@@ -1,0 +1,274 @@
+---
+title: "Agent-First API"
+description: "Petunjuk kesalahan terstruktur bagi agen AI untuk melakukan koreksi mandiri pada percobaan ulang pertama"
+---
+
+## Gambaran Umum
+
+Agent-First API dari LemonData memperkaya respons kesalahan dengan petunjuk terstruktur yang dapat diurai dan ditindaklanjuti oleh agen AI secara langsung — tanpa pencarian web, tanpa melihat dokumentasi, tanpa menebak-nebak.
+
+Setiap respons kesalahan menyertakan bidang opsional seperti `did_you_mean`, `suggestions`, `hint`, `retryable`, dan `retry_after` di dalam objek `error` standar. Bidang-bidang ini bersifat kompatibel ke belakang (backward-compatible) — klien yang tidak menggunakannya tidak akan melihat perbedaan.
+
+## Bidang Petunjuk Kesalahan
+
+Semua bidang petunjuk adalah ekstensi opsional di dalam objek `error`:
+
+| Bidang | Tipe | Deskripsi |
+|-------|------|-------------|
+| `did_you_mean` | `string` | Nama model yang paling mendekati |
+| `suggestions` | `array` | Model yang direkomendasikan dengan metadata |
+| `alternatives` | `array` | Model alternatif yang saat ini tersedia |
+| `hint` | `string` | Panduan langkah selanjutnya yang dapat dibaca oleh manusia/agen |
+| `retryable` | `boolean` | Apakah mencoba ulang permintaan yang sama mungkin berhasil |
+| `retry_after` | `number` | Detik untuk menunggu sebelum mencoba ulang |
+| `balance_usd` | `number` | Saldo akun saat ini dalam USD |
+| `estimated_cost_usd` | `number` | Estimasi biaya dari permintaan yang gagal |
+
+## Contoh Kode Kesalahan
+
+### model_not_found (400)
+
+Ketika nama model tidak cocok dengan model aktif apa pun:
+
+```json
+{
+  "error": {
+    "message": "Model 'gpt5' not found",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [
+      {"id": "gpt-4o"},
+      {"id": "gpt-4o-mini"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+  }
+}
+```
+
+Resolusi `did_you_mean` menggunakan:
+1. Pemetaan alias statis (dari data kesalahan produksi)
+2. Pencocokan string yang dinormalisasi (menghapus tanda hubung, tidak peka huruf besar-kecil)
+3. Pencocokan jarak edit (ambang batas ≤ 3)
+
+### insufficient_balance (402)
+
+Ketika saldo akun terlalu rendah untuk estimasi biaya:
+
+```json
+{
+  "error": {
+    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200.",
+    "type": "insufficient_balance",
+    "code": "insufficient_balance",
+    "balance_usd": 0.12,
+    "estimated_cost_usd": 0.35,
+    "suggestions": [
+      {"id": "gpt-4o-mini"},
+      {"id": "deepseek-chat"}
+    ],
+    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
+  }
+}
+```
+
+`suggestions` berisi model yang lebih murah daripada estimasi biaya yang dapat dialihkan oleh agen.
+
+### all_channels_failed (503)
+
+Ketika semua saluran upstream untuk sebuah model tidak tersedia:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
+      {"id": "gpt-4o", "status": "available", "tags": []}
+    ],
+    "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
+  }
+}
+```
+
+<Note>
+`retryable` bernilai `false` ketika alasannya adalah `no_channels` (tidak ada saluran yang dikonfigurasi untuk model ini). Nilainya `true` hanya untuk kegagalan sementara seperti pemicuan circuit breaker atau kehabisan kuota.
+</Note>
+
+### rate_limit_exceeded (429)
+
+```json
+{
+  "error": {
+    "message": "Rate limit: 60 rpm exceeded",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
+  }
+}
+```
+
+Nilai `retry_after` dihitung dari waktu reset jendela pembatasan laju (rate limit) yang sebenarnya.
+
+### context_length_exceeded (400)
+
+Ketika input melebihi jendela konteks model (kesalahan upstream, diperkaya dengan petunjuk):
+
+```json
+{
+  "error": {
+    "message": "This model's maximum context length is 128000 tokens...",
+    "type": "invalid_request_error",
+    "code": "context_length_exceeded",
+    "retryable": false,
+    "suggestions": [
+      {"id": "gemini-2.5-pro"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Reduce your input or switch to a model with a larger context window."
+  }
+}
+```
+
+## Header Endpoint Asli
+
+Saat Anda memanggil `/v1/chat/completions` dengan model yang memiliki endpoint asli (Anthropic atau Gemini), **respons sukses** akan menyertakan header optimasi:
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+| Penyedia Model | Endpoint yang Disarankan | Manfaat |
+|---------------|-------------------|---------|
+| Anthropic (Claude) | `/v1/messages` | Tanpa konversi format, extended thinking, prompt caching |
+| Google (Gemini) | `/v1beta/gemini` | Tanpa konversi format, grounding, pengaturan keamanan |
+| OpenAI | — | Chat completions sudah merupakan format asli |
+
+Header ini muncul pada respons streaming maupun non-streaming.
+
+## Peningkatan /v1/models
+
+Tiga bidang baru dalam ekstensi `lemondata` dari setiap objek model:
+
+```json
+{
+  "id": "gpt-4o",
+  "lemondata": {
+    "category": "chat",
+    "pricing_unit": "per_token",
+    "cache_pricing": {
+      "cache_read_per_1m": "1.25",
+      "cache_write_per_1m": "2.50",
+      "platform_cache_discount": 0.9
+    }
+  }
+}
+```
+
+| Bidang | Nilai | Deskripsi |
+|-------|--------|-------------|
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Tipe model |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Cara model ditagih |
+| `cache_pricing` | objek atau `null` | Harga prompt cache upstream + diskon cache semantik platform |
+
+### Pemfilteran Kategori
+
+```bash
+GET /v1/models?category=chat          # Hanya model chat
+GET /v1/models?category=image         # Model pembuatan gambar
+GET /v1/models?tag=coding&category=chat  # Model chat yang dioptimalkan untuk pengodean
+```
+
+## llms.txt
+
+Ringkasan API yang dapat dibaca mesin tersedia di:
+
+```
+GET https://api.lemondata.cc/llms.txt
+```
+
+Ini mencakup:
+- Templat panggilan pertama dengan contoh yang berfungsi
+- Nama model umum (dihasilkan secara dinamis dari data penggunaan)
+- Semua 12 endpoint API
+- Parameter filter untuk penemuan model
+- Panduan penanganan kesalahan
+
+Agen AI yang membaca `llms.txt` sebelum panggilan API pertama mereka biasanya dapat berhasil pada upaya pertama.
+
+## Penggunaan dalam Kode Agen
+
+### Python (OpenAI SDK)
+
+```python
+from openai import OpenAI, BadRequestError
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def smart_chat(messages, model="gpt-4o"):
+    try:
+        return client.chat.completions.create(
+            model=model, messages=messages
+        )
+    except BadRequestError as e:
+        error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
+        # Gunakan did_you_mean untuk koreksi otomatis
+        if error.get("code") == "model_not_found" and error.get("did_you_mean"):
+            return client.chat.completions.create(
+                model=error["did_you_mean"], messages=messages
+            )
+        raise
+```
+
+### JavaScript (OpenAI SDK)
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function smartChat(messages, model = 'gpt-4o') {
+  try {
+    return await client.chat.completions.create({ model, messages });
+  } catch (error) {
+    const err = error?.error;
+    if (err?.code === 'model_not_found' && err?.did_you_mean) {
+      return client.chat.completions.create({
+        model: err.did_you_mean, messages
+      });
+    }
+    throw error;
+  }
+}
+```
+
+## Prinsip Desain
+
+<CardGroup cols={2}>
+  <Card title="Gagal cepat, gagal secara informatif" icon="bolt">
+    Kesalahan segera dikembalikan dengan semua data yang dibutuhkan agen untuk melakukan koreksi mandiri.
+  </Card>
+  <Card title="Tanpa perutean otomatis" icon="route">
+    API tidak pernah mengganti model lain secara diam-diam. Agen yang memutuskan.
+  </Card>
+  <Card title="Saran berbasis data" icon="database">
+    Semua rekomendasi berasal dari data produksi, bukan daftar hardcoded.
+  </Card>
+  <Card title="Kompatibel ke belakang" icon="plug">
+    Semua bidang petunjuk bersifat opsional. Klien yang sudah ada tidak melihat perbedaan.
+  </Card>
+</CardGroup>

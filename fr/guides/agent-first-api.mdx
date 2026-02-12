@@ -1,0 +1,56 @@
+---
+title: "API Agent-First"
+description: "Indices d'erreur structurés pour permettre aux agents IA de s'auto-corriger dès la première tentative"
+---
+
+## Aperçu
+
+L'API Agent-First de LemonData enrichit les réponses d'erreur avec des indices structurés que les agents IA peuvent analyser et exploiter immédiatement — sans recherche web, sans consultation de documentation, sans approximation.
+
+Chaque réponse d'erreur inclut des champs optionnels tels que `did_you_mean`, `suggestions`, `hint`, `retryable` et `retry_after` à l'intérieur de l'objet `error` standard. Ces champs sont rétrocompatibles — les clients qui ne les utilisent pas ne voient aucune différence.
+
+## Champs d'indices d'erreur
+
+Tous les champs d'indices sont des extensions optionnelles à l'intérieur de l'objet `error` :
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `did_you_mean` | `string` | Nom du modèle correspondant le plus proche |
+| `suggestions` | `array` | Modèles recommandés avec métadonnées |
+| `alternatives` | `array` | Modèles alternatifs actuellement disponibles |
+| `hint` | `string` | Conseils sur la prochaine étape lisibles par l'humain ou l'agent |
+| `retryable` | `boolean` | Indique si une nouvelle tentative de la même requête peut réussir |
+| `retry_after` | `number` | Secondes à attendre avant de réessayer |
+| `balance_usd` | `number` | Solde actuel du compte en USD |
+| `estimated_cost_usd` | `number` | Coût estimé de la requête ayant échoué |
+
+## Exemples de codes d'erreur
+
+### model_not_found (400)
+
+Lorsqu'un nom de modèle ne correspond à aucun modèle actif :
+
+```json
+{
+  "error": {
+    "message": "Model 'gpt5' not found",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [
+      {"id": "gpt-4o"},
+      {"id": "gpt-4o-mini"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+  }
+}
+```
+
+La résolution de `did_you_mean` utilise :
+1. Mappage d'alias statique (à partir des données d'erreur de production)
+2. Correspondance de chaînes normalisées (supprime les traits d'union, insensible à la casse)
+3. Correspondance par distance d'édition (seuil ≤ 3)
+
+### insufficient

@@ -1,0 +1,274 @@
+---
+title: "Agent 優先 API"
+description: "為 AI Agent 提供結構化錯誤提示，使其能在第一次重試時自我修正"
+---
+
+## 概覽
+
+LemonData 的 Agent 優先 API 在錯誤回應中豐富了結構化提示，AI Agent 可以立即解析並採取行動——無需網頁搜尋、無需查閱文件、無需猜測。
+
+每個錯誤回應在標準的 `error` 物件中都包含選填欄位，例如 `did_you_mean`、`suggestions`、`hint`、`retryable` 和 `retry_after`。這些欄位具有向下相容性——不使用它們的用戶端不會感受到任何差異。
+
+## 錯誤提示欄位
+
+所有提示欄位均為 `error` 物件內的選填擴展：
+
+| 欄位 | 類型 | 說明 |
+|-------|------|-------------|
+| `did_you_mean` | `string` | 最接近的匹配模型名稱 |
+| `suggestions` | `array` | 帶有元數據的推薦模型 |
+| `alternatives` | `array` | 目前可用的替代模型 |
+| `hint` | `string` | 人類/Agent 可讀的下一步指引 |
+| `retryable` | `boolean` | 重試相同請求是否可能成功 |
+| `retry_after` | `number` | 重試前需等待的秒數 |
+| `balance_usd` | `number` | 目前帳戶餘額（美元） |
+| `estimated_cost_usd` | `number` | 失敗請求的預估成本 |
+
+## 錯誤代碼範例
+
+### model_not_found (400)
+
+當模型名稱與任何活動模型都不匹配時：
+
+```json
+{
+  "error": {
+    "message": "Model 'gpt5' not found",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [
+      {"id": "gpt-4o"},
+      {"id": "gpt-4o-mini"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+  }
+}
+```
+
+`did_you_mean` 的解析使用：
+1. 靜態別名映射（來自生產環境錯誤數據）
+2. 標準化字串匹配（去除連字號，不區分大小寫）
+3. 編輯距離匹配（閾值 ≤ 3）
+
+### insufficient_balance (402)
+
+當帳戶餘額低於預估成本時：
+
+```json
+{
+  "error": {
+    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200.",
+    "type": "insufficient_balance",
+    "code": "insufficient_balance",
+    "balance_usd": 0.12,
+    "estimated_cost_usd": 0.35,
+    "suggestions": [
+      {"id": "gpt-4o-mini"},
+      {"id": "deepseek-chat"}
+    ],
+    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
+  }
+}
+```
+
+`suggestions` 包含比預估成本更便宜的模型，Agent 可以切換至這些模型。
+
+### all_channels_failed (503)
+
+當模型的所有上游管道皆不可用時：
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
+      {"id": "gpt-4o", "status": "available", "tags": []}
+    ],
+    "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
+  }
+}
+```
+
+<Note>
+當原因為 `no_channels`（未為此模型配置管道）時，`retryable` 為 `false`。僅在發生斷路器觸發或配額耗盡等暫時性故障時，其值才為 `true`。
+</Note>
+
+### rate_limit_exceeded (429)
+
+```json
+{
+  "error": {
+    "message": "Rate limit: 60 rpm exceeded",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
+  }
+}
+```
+
+`retry_after` 的值是根據實際速率限制窗口的重置時間計算的。
+
+### context_length_exceeded (400)
+
+當輸入超過模型的上下文窗口時（上游錯誤，並豐富了提示）：
+
+```json
+{
+  "error": {
+    "message": "This model's maximum context length is 128000 tokens...",
+    "type": "invalid_request_error",
+    "code": "context_length_exceeded",
+    "retryable": false,
+    "suggestions": [
+      {"id": "gemini-2.5-pro"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Reduce your input or switch to a model with a larger context window."
+  }
+}
+```
+
+## 原生端點標頭
+
+當您使用具有原生端點（Anthropic 或 Gemini）的模型呼叫 `/v1/chat/completions` 時，**成功回應**會包含優化標頭：
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+| 模型提供商 | 建議端點 | 優點 |
+|---------------|-------------------|---------|
+| Anthropic (Claude) | `/v1/messages` | 無格式轉換、擴展思考、提示快取 |
+| Google (Gemini) | `/v1beta/gemini` | 無格式轉換、Grounding、安全設定 |
+| OpenAI | — | Chat completions 已經是原生格式 |
+
+這些標頭會同時出現在串流與非串流回應中。
+
+## /v1/models 增強功能
+
+每個模型物件的 `lemondata` 擴展中新增了三個欄位：
+
+```json
+{
+  "id": "gpt-4o",
+  "lemondata": {
+    "category": "chat",
+    "pricing_unit": "per_token",
+    "cache_pricing": {
+      "cache_read_per_1m": "1.25",
+      "cache_write_per_1m": "2.50",
+      "platform_cache_discount": 0.9
+    }
+  }
+}
+```
+
+| 欄位 | 值 | 說明 |
+|-------|--------|-------------|
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | 模型類型 |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | 模型的計費方式 |
+| `cache_pricing` | 物件或 `null` | 上游提示快取價格 + 平台語義快取折扣 |
+
+### 類別篩選
+
+```bash
+GET /v1/models?category=chat          # 僅限聊天模型
+GET /v1/models?category=image         # 圖像生成模型
+GET /v1/models?tag=coding&category=chat  # 針對程式碼優化的聊天模型
+```
+
+## llms.txt
+
+可在以下位置獲取機器可讀的 API 概覽：
+
+```
+GET https://api.lemondata.cc/llms.txt
+```
+
+它包含：
+- 帶有實際範例的首次呼叫模板
+- 常見模型名稱（根據使用數據動態生成）
+- 所有 12 個 API 端點
+- 用於模型發現的篩選參數
+- 錯誤處理指南
+
+在首次 API 呼叫前閱讀 `llms.txt` 的 AI Agent 通常可以在第一次嘗試時成功。
+
+## 在 Agent 程式碼中的用法
+
+### Python (OpenAI SDK)
+
+```python
+from openai import OpenAI, BadRequestError
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def smart_chat(messages, model="gpt-4o"):
+    try:
+        return client.chat.completions.create(
+            model=model, messages=messages
+        )
+    except BadRequestError as e:
+        error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
+        # 使用 did_you_mean 進行自動修正
+        if error.get("code") == "model_not_found" and error.get("did_you_mean"):
+            return client.chat.completions.create(
+                model=error["did_you_mean"], messages=messages
+            )
+        raise
+```
+
+### JavaScript (OpenAI SDK)
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function smartChat(messages, model = 'gpt-4o') {
+  try {
+    return await client.chat.completions.create({ model, messages });
+  } catch (error) {
+    const err = error?.error;
+    if (err?.code === 'model_not_found' && err?.did_you_mean) {
+      return client.chat.completions.create({
+        model: err.did_you_mean, messages
+      });
+    }
+    throw error;
+  }
+}
+```
+
+## 設計原則
+
+<CardGroup cols={2}>
+  <Card title="快速失敗，提供詳盡資訊" icon="bolt">
+    錯誤會立即返回，並包含 Agent 自我修正所需的所有數據。
+  </Card>
+  <Card title="無自動路由" icon="route">
+    API 絕不會默默替換為其他模型。由 Agent 決定。
+  </Card>
+  <Card title="數據驅動的建議" icon="database">
+    所有推薦均來自生產環境數據，而非硬編碼列表。
+  </Card>
+  <Card title="向下相容" icon="plug">
+    所有提示欄位均為選填。現有用戶端不會感受到任何差異。
+  </Card>
+</CardGroup>

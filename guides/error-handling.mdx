@@ -5,7 +5,7 @@ description: "Handle API errors gracefully"
 
 ## Error Response Format
 
-All errors return a consistent JSON format:
+All errors return a consistent JSON format with optional [Agent-First hints](/guides/agent-first-api):
 
 ```json
 {
@@ -13,10 +13,17 @@ All errors return a consistent JSON format:
     "message": "Human-readable error description",
     "type": "error_type",
     "code": "error_code",
-    "param": "parameter_name"  // Optional, for validation errors
+    "param": "parameter_name",
+    "did_you_mean": "suggested_model",
+    "suggestions": [{"id": "model-id"}],
+    "hint": "Next step guidance",
+    "retryable": true,
+    "retry_after": 30
   }
 }
 ```
+
+The base fields (`message`, `type`, `code`, `param`) are always present. The hint fields (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) are optional extensions for AI agent self-correction. See the [Agent-First API guide](/guides/agent-first-api) for details.
 
 ## HTTP Status Codes
 
@@ -97,9 +104,13 @@ except APIStatusError as e:
 ```json
 {
   "error": {
-    "message": "model: 'invalid-model' is not a valid model",
-    "type": "model_not_found",
-    "param": "model"
+    "message": "Model 'invalid-model' not found",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
   }
 }
 ```
@@ -111,20 +122,23 @@ When you exceed rate limits:
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please retry later.",
+    "message": "Rate limit: 60 rpm exceeded",
     "type": "rate_limit_error",
-    "code": "rate_limit_exceeded"
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
   }
 }
 ```
 
-**Header included:**
+**Headers included:**
 
 ```
-Retry-After: 60
+Retry-After: 8
 ```
 
-The `Retry-After` header indicates how many seconds to wait before retrying.
+The `Retry-After` header and `retry_after` field both indicate the exact seconds to wait before retrying.
 
 ### Payload Too Large (413)
 
@@ -152,6 +166,24 @@ Common causes:
 | `upstream_error` | Provider returned an error |
 | `all_channels_failed` | No available providers |
 | `timeout_error` | Request timed out |
+
+When all channels fail, the response includes alternative models:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
+      {"id": "gpt-4o", "status": "available", "tags": []}
+    ],
+    "hint": "Retry in 30s or switch to an available model."
+  }
+}
+```
 
 ## Handling Errors in Python
 

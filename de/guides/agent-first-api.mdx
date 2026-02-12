@@ -1,0 +1,56 @@
+---
+title: "Agent-First API"
+description: "Strukturierte Fehlerhinweise für KI-Agenten zur Selbstkorrektur beim ersten Wiederholungsversuch"
+---
+
+## Übersicht
+
+Die Agent-First API von LemonData reichert Fehlerantworten mit strukturierten Hinweisen an, die KI-Agenten sofort parsen und verarbeiten können – ohne Websuchen, Dokumentationsrecherche oder Rätselraten.
+
+Jede Fehlerantwort enthält optionale Felder wie `did_you_mean`, `suggestions`, `hint`, `retryable` und `retry_after` innerhalb des standardmäßigen `error`-Objekts. Diese Felder sind abwärtskompatibel – Clients, die sie nicht verwenden, bemerken keinen Unterschied.
+
+## Fehlerhinweis-Felder
+
+Alle Hinweisfelder sind optionale Erweiterungen innerhalb des `error`-Objekts:
+
+| Feld | Typ | Beschreibung |
+|-------|------|-------------|
+| `did_you_mean` | `string` | Am nächsten übereinstimmender Modellname |
+| `suggestions` | `array` | Empfohlene Modelle mit Metadaten |
+| `alternatives` | `array` | Aktuell verfügbare alternative Modelle |
+| `hint` | `string` | Für Menschen/Agenten lesbare Anleitung für den nächsten Schritt |
+| `retryable` | `boolean` | Ob ein erneuter Versuch derselben Anfrage erfolgreich sein könnte |
+| `retry_after` | `number` | Sekunden, die vor einem erneuten Versuch gewartet werden soll |
+| `balance_usd` | `number` | Aktuelles Kontoguthaben in USD |
+| `estimated_cost_usd` | `number` | Geschätzte Kosten der fehlgeschlagenen Anfrage |
+
+## Beispiele für Fehlercodes
+
+### model_not_found (400)
+
+Wenn ein Modellname mit keinem aktiven Modell übereinstimmt:
+
+```json
+{
+  "error": {
+    "message": "Model 'gpt5' not found",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [
+      {"id": "gpt-4o"},
+      {"id": "gpt-4o-mini"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+  }
+}
+```
+
+Die Auflösung von `did_you_mean` verwendet:
+1. Statisches Alias-Mapping (aus Produktions-Fehlerdaten)
+2. Normalisierter String-Abgleich (entfernt Bindestriche, ignoriert Groß-/Kleinschreibung)
+3. Edit-Distanz-Abgleich (Schwellenwert ≤ 3)
+
+### insufficient_balance (4
