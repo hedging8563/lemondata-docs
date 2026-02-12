@@ -1,17 +1,17 @@
 ---
 title: "建立影片"
-api: "POST /v1/videos/generations"
+openapi: "POST /v1/videos/generations"
 description: "建立影片生成任務"
 ---
 
 ## 概覽
 
-影片生成是非同步的。您提交請求並收到一個 task ID，然後輪詢結果。
+影片生成是異步的。您提交請求並收到一個任務 ID，然後輪詢結果。
 
-## 請求主體
+## Request Body
 
-<ParamField body="model" type="string" default="kling-video">
-  影片模型（例如：`kling-video`、`veo3.1`、`wan2.6-i2v`）。
+<ParamField body="model" type="string" default="sora-2">
+  影片模型 ID。請參閱 [Video Generation Guide](/guides/video-generation) 以獲取涵蓋 11 個供應商、超過 80 個模型的完整列表。
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -19,19 +19,23 @@ description: "建立影片生成任務"
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  圖生影片（image-to-video）生成的選填起始圖片。
+  用於圖生影片 (I2V) 生成的起始圖片 URL。
+</ParamField>
+
+<ParamField body="image" type="string">
+  帶有數據 URL 前綴的 Base64 編碼圖片（例如 `data:image/jpeg;base64,...`）。圖生影片 (I2V) 生成中 `image_url` 的替代方案。
 </ParamField>
 
 <ParamField body="duration" type="integer">
-  影片時長，以秒為單位（取決於模型）。
+  影片時長（以秒為單位，取決於模型）。
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  長寬比（例如：`16:9`、`9:16`、`1:1`）。
+  長寬比（例如 `16:9`、`9:16`、`1:1`）。
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  影片解析度（例如：`1080p`、`720p`）。
+  影片解析度（例如 `1080p`、`720p`）。
 </ParamField>
 
 <ParamField body="fps" type="integer">
@@ -66,7 +70,7 @@ description: "建立影片生成任務"
   終端用戶的唯一識別碼。
 </ParamField>
 
-## 回應
+## Response
 
 <ResponseField name="task_id" type="string">
   用於輪詢的唯一任務識別碼。
@@ -86,7 +90,7 @@ curl -X POST "https://api.lemondata.cc/v1/videos/generations" \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "kling-video",
+    "model": "sora-2",
     "prompt": "A cat walking through a garden, cinematic lighting",
     "duration": 5
   }'
@@ -102,7 +106,7 @@ response = requests.post(
         "Content-Type": "application/json"
     },
     json={
-        "model": "kling-video",
+        "model": "sora-2",
         "prompt": "A cat walking through a garden, cinematic lighting",
         "duration": 5
     }
@@ -121,7 +125,7 @@ const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    model: 'kling-video',
+    model: 'sora-2',
     prompt: 'A cat walking through a garden, cinematic lighting',
     duration: 5
   })
@@ -194,7 +198,7 @@ echo "Task ID: " . $data['task_id'];
 {
   "task_id": "video_abc123",
   "status": "pending",
-  "model": "kling-video",
+  "model": "sora-2",
   "created_at": 1706000000
 }
 ```
@@ -214,12 +218,86 @@ response = requests.post(
 )
 ```
 
+## 關鍵幀控制
+
+使用 `start_image` 和 `end_image` 來控制第一幀和最後一幀（由 Seedance 2.0 支援）：
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "seedance-2-0",
+        "prompt": "Smooth transition from day to night",
+        "start_image": "https://example.com/day.jpg",
+        "end_image": "https://example.com/night.jpg",
+        "duration": 5
+    }
+)
+```
+
 ## 可用模型
 
-| 模型 | 類型 | 描述 |
-|-------|------|-------------|
-| `kling-video` | T2V/I2V | 逼真的動作，多個版本 (v1.0-v2.6) |
-| `veo3.1` | T2V | Google 最新模型 |
-| `veo3.1-pro` | T2V | 專業級品質 |
-| `minimax/video-01` | T2V | 高節奏感與穩定性 |
-| `wan2.6-i2v` | I2V | 圖生影片 |
+<Info>
+模型列表會頻繁更新。如需獲取最新可用模型和定價，請訪問 [Models page](https://lemondata.cc/zh-Hant/models)。
+</Info>
+
+如需包含功能比較和使用範例的完整指南，請參閱 [Video Generation Guide](/guides/video-generation)。
+
+### Sora (OpenAI)
+
+| 模型 | 功能 |
+|-------|-------------|
+| `sora-2` | T2V (預設) |
+| `sora-2-pro` | T2V, 更高品質 |
+| `sora-2-characters` | T2V, 專注於角色 |
+
+### 可靈 (快手)
+
+| 模型 | 功能 |
+|-------|-------------|
+| `kling-v2.6-pro` | T2V, 最新一代 |
+| `kling-v2.6-std` | T2V, 快速 |
+| `kling-v2.1-master` | T2V, I2V, 大師級品質 |
+| `kling-v2.1-pro` | T2V, I2V |
+| `kling-video` | T2V, I2V |
+| `kling-video-extend` | 影片延伸 |
+| `kling-video-o1-pro` | T2V, O1 推理 |
+| `kling-effects` | 視覺效果 |
+
+### Veo (Google)
+
+| 模型 | 功能 |
+|-------|-------------|
+| `veo3.1` | T2V |
+| `veo3.1-pro` | T2V, 專業級 |
+| `veo3.1-4k` | T2V, 4K 輸出 |
+| `veo3.1-fast` | T2V, 快速 |
+| `veo3` | T2V, 前一代 |
+
+### 豆包 (字節跳動)
+
+| 模型 | 功能 |
+|-------|-------------|
+| `seedance-2-0` | T2V, I2V, 關鍵幀, 延伸, 編輯 |
+| `seedance-1-5-pro` | T2V, I2V |
+| `seedance-1-0-pro` | T2V, I2V |
+| `seedance-1-0-lite-t2v` | T2V, 輕量級 |
+| `seedance-1-0-lite-i2v` | I2V, 輕量級 |
+
+### 其他供應商
+
+| 模型 | 供應商 | 功能 |
+|-------|----------|-------------|
+| `hailuo-2.3` | MiniMax | T2V, I2V |
+| `hailuo-2.3-pro` | MiniMax | T2V, I2V, 更高品質 |
+| `wan-2.6` | 阿里巴巴 | T2V |
+| `wan2.6-i2v` | 阿里巴巴 | I2V |
+| `runwayml-gen4-turbo-5` | Runway | T2V, I2V (5s) |
+| `runwayml-gen4-turbo-10` | Runway | T2V, I2V (10s) |
+| `luma-video-api` | Luma | T2V |
+| `luma-video-extend-api` | Luma | 影片延伸 |
+| `viduq3-pro` | 生數科技 | T2V, I2V |
+| `viduq2-pro` | 生數科技 | T2V, I2V |
+| `grok-video-3` | xAI | T2V |
+| `higgsfield-turbo` | Higgsfield | T2V |

@@ -1,17 +1,17 @@
 ---
 title: "Criar Vídeo"
-api: "POST /v1/videos/generations"
+openapi: "POST /v1/videos/generations"
 description: "Cria uma tarefa de geração de vídeo"
 ---
 
 ## Visão Geral
 
-A geração de vídeo é assíncrona. Você envia uma solicitação e recebe um `task_id`, depois realiza o polling para obter o resultado.
+A geração de vídeo é assíncrona. Você envia uma solicitação e recebe um ID de tarefa (`task_id`), depois realiza o polling para obter o resultado.
 
 ## Corpo da Requisição
 
-<ParamField body="model" type="string" default="kling-video">
-  Modelo de vídeo (ex: `kling-video`, `veo3.1`, `wan2.6-i2v`).
+<ParamField body="model" type="string" default="sora-2">
+  ID do modelo de vídeo. Consulte o [Guia de Geração de Vídeo](/guides/video-generation) para uma lista completa de mais de 80 modelos em 11 provedores.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -19,7 +19,11 @@ A geração de vídeo é assíncrona. Você envia uma solicitação e recebe um 
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  Imagem inicial opcional para geração de imagem para vídeo (image-to-video).
+  URL da imagem inicial para geração de imagem para vídeo (I2V).
+</ParamField>
+
+<ParamField body="image" type="string">
+  Imagem codificada em Base64 com prefixo de URL de dados (ex: `data:image/jpeg;base64,...`). Alternativa ao `image_url` para geração I2V.
 </ParamField>
 
 <ParamField body="duration" type="integer">
@@ -86,7 +90,7 @@ curl -X POST "https://api.lemondata.cc/v1/videos/generations" \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "kling-video",
+    "model": "sora-2",
     "prompt": "A cat walking through a garden, cinematic lighting",
     "duration": 5
   }'
@@ -102,7 +106,7 @@ response = requests.post(
         "Content-Type": "application/json"
     },
     json={
-        "model": "kling-video",
+        "model": "sora-2",
         "prompt": "A cat walking through a garden, cinematic lighting",
         "duration": 5
     }
@@ -121,7 +125,7 @@ const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    model: 'kling-video',
+    model: 'sora-2',
     prompt: 'A cat walking through a garden, cinematic lighting',
     duration: 5
   })
@@ -194,7 +198,7 @@ echo "Task ID: " . $data['task_id'];
 {
   "task_id": "video_abc123",
   "status": "pending",
-  "model": "kling-video",
+  "model": "sora-2",
   "created_at": 1706000000
 }
 ```
@@ -214,12 +218,86 @@ response = requests.post(
 )
 ```
 
+## Controle de Keyframe
+
+Use `start_image` e `end_image` para controlar o primeiro e o último quadros (suportado pelo Seedance 2.0):
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "seedance-2-0",
+        "prompt": "Smooth transition from day to night",
+        "start_image": "https://example.com/day.jpg",
+        "end_image": "https://example.com/night.jpg",
+        "duration": 5
+    }
+)
+```
+
 ## Modelos Disponíveis
 
-| Modelo | Tipo | Descrição |
-|-------|------|-------------|
-| `kling-video` | T2V/I2V | Movimento realista, múltiplas versões (v1.0-v2.6) |
-| `veo3.1` | T2V | O mais recente do Google |
-| `veo3.1-pro` | T2V | Qualidade profissional |
-| `minimax/video-01` | T2V | Alto ritmo e estabilidade |
-| `wan2.6-i2v` | I2V | Imagem para vídeo |
+<Info>
+A lista de modelos é atualizada frequentemente. Para os modelos mais recentes disponíveis e preços, visite a [página de Modelos](https://lemondata.cc/pt/models).
+</Info>
+
+Para um guia completo com comparações de recursos e exemplos de uso, consulte o [Guia de Geração de Vídeo](/guides/video-generation).
+
+### Sora (OpenAI)
+
+| Modelo | Recursos |
+|-------|-------------|
+| `sora-2` | T2V (padrão) |
+| `sora-2-pro` | T2V, qualidade superior |
+| `sora-2-characters` | T2V, focado em personagens |
+
+### Kling (Kuaishou)
+
+| Modelo | Recursos |
+|-------|-------------|
+| `kling-v2.6-pro` | T2V, última geração |
+| `kling-v2.6-std` | T2V, rápido |
+| `kling-v2.1-master` | T2V, I2V, qualidade master |
+| `kling-v2.1-pro` | T2V, I2V |
+| `kling-video` | T2V, I2V |
+| `kling-video-extend` | Extensão de vídeo |
+| `kling-video-o1-pro` | T2V, raciocínio O1 |
+| `kling-effects` | Efeitos visuais |
+
+### Veo (Google)
+
+| Modelo | Recursos |
+|-------|-------------|
+| `veo3.1` | T2V |
+| `veo3.1-pro` | T2V, profissional |
+| `veo3.1-4k` | T2V, saída 4K |
+| `veo3.1-fast` | T2V, rápido |
+| `veo3` | T2V, geração anterior |
+
+### Seedance (ByteDance)
+
+| Modelo | Recursos |
+|-------|-------------|
+| `seedance-2-0` | T2V, I2V, keyframe, extensão, edição |
+| `seedance-1-5-pro` | T2V, I2V |
+| `seedance-1-0-pro` | T2V, I2V |
+| `seedance-1-0-lite-t2v` | T2V, leve |
+| `seedance-1-0-lite-i2v` | I2V, leve |
+
+### Outros Provedores
+
+| Modelo | Provedor | Recursos |
+|-------|----------|-------------|
+| `hailuo-2.3` | MiniMax | T2V, I2V |
+| `hailuo-2.3-pro` | MiniMax | T2V, I2V, qualidade superior |
+| `wan-2.6` | Alibaba | T2V |
+| `wan2.6-i2v` | Alibaba | I2V |
+| `runwayml-gen4-turbo-5` | Runway | T2V, I2V (5s) |
+| `runwayml-gen4-turbo-10` | Runway | T2V, I2V (10s) |
+| `luma-video-api` | Luma | T2V |
+| `luma-video-extend-api` | Luma | Extensão de vídeo |
+| `viduq3-pro` | Shengshu | T2V, I2V |
+| `viduq2-pro` | Shengshu | T2V, I2V |
+| `grok-video-3` | xAI | T2V |
+| `higgsfield-turbo` | Higgsfield | T2V |

@@ -52,7 +52,8 @@ const navigationTabs = {
           'guides/rate-limits',
           'guides/billing',
           'guides/best-practices',
-          'guides/ide-sdk-compatibility'
+          'guides/ide-sdk-compatibility',
+          'guides/video-generation'
         ]
       }
     ]

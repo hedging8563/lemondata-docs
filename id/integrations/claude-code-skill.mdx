@@ -4,20 +4,20 @@ description: "Panduan mulai cepat 5 menit - Biarkan Claude Code mengintegrasikan
 ---
 
 <Note>
-Skill ini memungkinkan Anda mengintegrasikan salah satu dari **ratusan API AI** LemonData hanya dengan menjelaskan apa yang Anda butuhkan dalam bahasa Inggris sederhana!
+Skill ini memungkinkan Anda mengintegrasikan salah satu dari **ratusan API AI** LemonData hanya dengan menjelaskan apa yang Anda butuhkan dalam bahasa sehari-hari. API ini bersifat **Agent-First** — bahkan jika Claude salah menebak nama model, respons error akan memberitahunya cara memperbaikinya.
 </Note>
 
 ## Apa yang Bisa Dilakukan Skill Ini?
 
 Saat Anda ingin menggunakan fitur AI dalam kode Anda (seperti GPT-4, pembuatan gambar, pengenalan suara, dll.), skill ini akan:
 
-1. ✅ **Mencari secara otomatis** ratusan API LemonData
-2. ✅ **Menemukan API terbaik** untuk kebutuhan Anda
-3. ✅ **Menghasilkan kode lengkap yang dapat dijalankan**
-4. ✅ **Mengonfigurasi API Key Anda**
-5. ✅ **Menyediakan contoh penggunaan** dan praktik terbaik
+1. ✅ **Langsung mencoba API** — tanpa perlu mencari
+2. ✅ **Memperbaiki diri dari error** — petunjuk error terstruktur memandu percobaan berikutnya
+3. ✅ **Menghasilkan kode lengkap yang dapat dijalankan** dalam bahasa pilihan Anda
+4. ✅ **Memilih model terbaik** berdasarkan harga dan ketersediaan real-time
+5. ✅ **Mengoptimalkan integrasi Anda** dengan saran native endpoint
 
-**Singkatnya: Cukup jelaskan kebutuhan Anda dalam bahasa alami, dan dapatkan kode integrasi API yang lengkap!**
+**Singkatnya: Cukup jelaskan kebutuhan Anda, dan dapatkan kode integrasi API yang berfungsi — bahkan jika percobaan pertama tidak sempurna, API akan memandu Claude ke jawaban yang benar.**
 
 ## Langkah 1: Instal Skill
 
@@ -103,11 +103,9 @@ I want to use GPT-4 in my Python project
 ```
 
 **Claude Code akan:**
-1. Meminta API Key Anda
-2. Mencari API terkait GPT-4
-3. Menampilkan opsi API yang tersedia
-4. Menghasilkan kode Python yang lengkap
-5. Menjelaskan cara menggunakannya
+1. Langsung mencoba memanggil API dengan tebakan model terbaik
+2. Jika nama model salah, membaca `did_you_mean` dari error dan memperbaiki secara otomatis
+3. Menghasilkan kode Python lengkap dengan model yang benar
 
 **Anda mendapatkan:**
 ```python
@@ -134,8 +132,8 @@ How do I generate images with Flux in Node.js?
 ```
 
 **Claude Code akan:**
-- Mencari API pembuatan gambar
-- Menghasilkan kode JavaScript
+- Memanggil API pembuatan gambar
+- Menghasilkan kode JavaScript dengan penanganan error yang tepat
 - Menyertakan kode pengunduhan dan penyimpanan gambar
 
 ### Contoh 3: Pengenalan Suara
@@ -147,16 +145,56 @@ Integrate a speech-to-text API
 
 **Claude Code akan:**
 - Menanyakan bahasa pemrograman apa yang Anda gunakan
-- Mencari API pengenalan suara
-- Menghasilkan kode dalam bahasa pilihan Anda
+- Menghasilkan kode dengan audio endpoint yang benar
 - Menyediakan contoh penanganan file audio
+
+## Fitur API Agent-First
+
+API LemonData dirancang untuk agen AI. Setiap respons error menyertakan petunjuk terstruktur:
+
+### Pemulihan Error Cerdas
+
+| Error | Apa yang Dikembalikan API | Apa yang Dilakukan Claude |
+|-------|--------------------------|--------------------------|
+| Nama model salah | `did_you_mean` + `suggestions` | Memperbaiki otomatis dan mencoba ulang |
+| Saldo tidak cukup | `balance_usd` + `suggestions` yang lebih murah | Beralih ke model yang terjangkau |
+| Model tidak tersedia | `alternatives` + `retry_after` | Beralih ke model yang tersedia |
+| Rate limited | `retry_after` (detik yang tepat) | Menunggu dan mencoba ulang |
+| Konteks terlalu panjang | `suggestions` dengan model yang lebih besar | Beralih ke model dengan konteks lebih besar |
+
+### Penemuan Model
+
+Tidak perlu mencari dokumentasi. Gunakan API endpoint berikut:
+
+```bash
+# Baca ringkasan API yang dapat dibaca mesin
+curl https://lemondata.cc/llms.txt
+
+# Daftar model berdasarkan kategori
+curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
+
+# Filter berdasarkan kemampuan
+curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
+```
+
+### Optimasi Native Endpoint
+
+Ketika Claude menggunakan `/v1/chat/completions` dengan model Claude atau Gemini, API mengembalikan header optimasi:
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance.
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+Claude Code akan secara otomatis beralih ke native endpoint untuk performa yang lebih baik.
 
 ## Fitur yang Didukung
 
 Skill ini dapat membantu Anda mengintegrasikan semua kemampuan AI berikut:
 
 | Jenis Fitur | Contoh |
-|-------------|----------|
+|-------------|--------|
 | 💬 Chat | GPT-4o, Claude, Gemini, DeepSeek |
 | 🎨 Pembuatan Gambar | Midjourney, Flux, Stable Diffusion |
 | 🎬 Pembuatan Video | Sora, Runway, Kling, Luma AI |
@@ -225,13 +263,14 @@ I'm making a voice notes app, need speech-to-text
 - Setiap panggilan API menghabiskan kredit
 - Atur batas penggunaan di [dashboard](https://lemondata.cc/dashboard) Anda
 - Gunakan volume data kecil untuk pengujian
+- Periksa `error.balance_usd` dan `error.estimated_cost_usd` untuk memantau biaya secara programatis
 
-### Penanganan Kesalahan
+### Penanganan Error
 
-Kode yang dihasilkan mencakup penanganan kesalahan dasar, tetapi Anda mungkin ingin:
-- Menambahkan mekanisme percobaan ulang (retry)
-- Mencatat log kesalahan
-- Menyediakan pesan kesalahan yang ramah pengguna
+Kode yang dihasilkan mencakup penanganan error Agent-First yang:
+- Membaca petunjuk error terstruktur (`did_you_mean`, `suggestions`, `retry_after`)
+- Memulihkan secara otomatis dari error umum
+- Beralih ke model alternatif saat diperlukan
 
 ## FAQ
 
@@ -243,11 +282,8 @@ Kode yang dihasilkan mencakup penanganan kesalahan dasar, tetapi Anda mungkin in
     ```
   </Accordion>
 
-  <Accordion title="Tidak dapat menemukan API yang saya inginkan?">
-    Coba kata kunci yang berbeda:
-    - "chat" → "dialogue" atau "conversation"
-    - "image" → "picture" atau "generation"
-    - "voice" → "audio" atau "speech"
+  <Accordion title="Bagaimana API membantu Claude menemukan model yang tepat?">
+    API Agent-First LemonData mengembalikan petunjuk error terstruktur. Jika Claude salah menebak nama model, respons error menyertakan `did_you_mean` dengan nama yang benar dan `suggestions` dengan model alternatif. Claude membaca ini dan memperbaiki secara otomatis pada percobaan berikutnya.
   </Accordion>
 
   <Accordion title="Kode yang dihasilkan memiliki kesalahan?">
@@ -275,11 +311,11 @@ Kode yang dihasilkan mencakup penanganan kesalahan dasar, tetapi Anda mungkin in
   <Card title="Dokumentasi API" icon="book" href="https://docs.lemondata.cc">
     Referensi API lengkap
   </Card>
-  <Card title="Model" icon="robot" href="https://lemondata.cc/id/models">
+  <Card title="Model" icon="robot" href="https://lemondata.cc/en/models">
     Telusuri semua model yang tersedia
   </Card>
-  <Card title="Harga" icon="dollar-sign" href="https://lemondata.cc/#pricing">
-    30% lebih rendah dari harga resmi
+  <Card title="llms.txt" icon="file-lines" href="https://lemondata.cc/llms.txt">
+    Ringkasan API yang dapat dibaca mesin untuk agen AI
   </Card>
 </CardGroup>
 
@@ -297,7 +333,7 @@ atau
 Help me integrate image generation
 ```
 
-Claude Code akan secara otomatis menggunakan skill ini untuk menyelesaikan semua pekerjaan untuk Anda!
+Claude Code akan secara otomatis menggunakan skill ini untuk menyelesaikan semua pekerjaan untuk Anda — dan jika terjadi kesalahan, petunjuk error terstruktur dari API akan memandunya ke jawaban yang benar!
 
 <Info>
 **Punya pertanyaan?** Periksa [GitHub Issues](https://github.com/hedging8563/lemondata-api-skill/issues) kami atau hubungi [support@lemondata.cc](mailto:support@lemondata.cc)

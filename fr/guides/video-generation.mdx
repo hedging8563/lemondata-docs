@@ -1,0 +1,70 @@
+---
+title: "Génération de Vidéo"
+description: "Générez des vidéos avec plus de 80 modèles via 11 fournisseurs — text-to-video, image-to-video, contrôle par images clés, extension de vidéo et édition"
+---
+
+## Aperçu
+
+LemonData donne accès à plus de **69 modèles de génération de vidéo** provenant de 11 fournisseurs via une API unique et unifiée. La génération de vidéo est **asynchrone** — vous soumettez une requête et recevez un ID de tâche (task ID), puis vous interrogez l'API pour obtenir le résultat.
+
+<Info>
+La liste des modèles est mise à jour fréquemment. Pour consulter les derniers modèles disponibles et les tarifs, visitez la [page des Modèles](https://lemondata.cc/fr/models) ou utilisez l'[API des Modèles](/api-reference/models/list-models).
+</Info>
+
+### Flux de travail asynchrone
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant LemonData
+    participant Provider
+
+    Client->>LemonData: POST /v1/videos/generations
+    LemonData->>Provider: Forward request
+    Provider-->>LemonData: task_id + pending
+    LemonData-->>Client: { task_id, status: "pending" }
+
+    loop Poll every 5-10s
+        Client->>LemonData: GET /v1/videos/generations/{task_id}
+        LemonData->>Provider: Query status
+        Provider-->>LemonData: Status update
+        LemonData-->>Client: { status, video_url? }
+    end
+```
+
+<CodeGroup>
+
+```python Python
+import requests
+import time
+
+API_KEY = "sk-your-api-key"
+BASE = "https://api.lemondata.cc/v1"
+headers = {"Authorization": f"Bearer {API_KEY}"}
+
+# Step 1: Submit generation request
+resp = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-v2.6-pro",
+        "prompt": "A golden retriever running on a beach at sunset, cinematic 4K",
+        "duration": 5,
+        "aspect_ratio": "16:9"
+    }
+)
+task_id = resp.json()["task_id"]
+
+# Step 2: Poll for result
+while True:
+    status = requests.get(f"{BASE}/videos/generations/{task_id}", headers=headers).json()
+    if status["status"] in ("completed", "succeeded"):
+        print(f"Video URL: {status['video_url']}")
+        break
+    elif status["status"] == "failed":
+        print(f"Failed: {status.get('error')}")
+        break
+    time.sleep(10)
+```
+
+```javascript JavaScript
+const
