@@ -1,34 +1,34 @@
 ---
 title: "✨ Agent-First API"
-description: "Gợi ý lỗi có cấu trúc giúp các AI agent tự sửa lỗi ngay trong lần thử lại đầu tiên"
+description: "Các gợi ý lỗi có cấu trúc để AI agent tự sửa lỗi ngay lần thử lại đầu tiên"
 ---
 
 ## Tổng quan
 
-Agent-First API của LemonData làm phong phú các phản hồi lỗi bằng các gợi ý có cấu trúc mà AI agent có thể phân tích và xử lý ngay lập tức — không cần tìm kiếm web, không cần tra cứu tài liệu, không cần đoán mò.
+Agent-First API của LemonData làm phong phú các phản hồi lỗi bằng các gợi ý có cấu trúc mà AI agent có thể phân tích và xử lý ngay lập tức — không cần tìm kiếm web, không cần tra cứu tài liệu, không cần phỏng đoán.
 
-Mỗi phản hồi lỗi bao gồm các trường tùy chọn như `did_you_mean`, `suggestions`, `hint`, `retryable`, và `retry_after` bên trong đối tượng `error` tiêu chuẩn. Các trường này có khả năng tương thích ngược — những client không sử dụng chúng sẽ không thấy sự khác biệt nào.
+Mỗi phản hồi lỗi bao gồm các trường tùy chọn như `did_you_mean`, `suggestions`, `hint`, `retryable`, và `retry_after` bên trong đối tượng `error` tiêu chuẩn. Các trường này tương thích ngược — các client không sử dụng chúng sẽ không thấy sự khác biệt.
 
 ## Các trường gợi ý lỗi
 
 Tất cả các trường gợi ý là các phần mở rộng tùy chọn bên trong đối tượng `error`:
 
-| Trường | Kiểu dữ liệu | Mô tả |
+| Trường | Kiểu | Mô tả |
 |-------|------|-------------|
-| `did_you_mean` | `string` | Tên mô hình khớp nhất |
-| `suggestions` | `array` | Các mô hình được đề xuất kèm theo metadata |
-| `alternatives` | `array` | Các mô hình thay thế hiện đang khả dụng |
-| `hint` | `string` | Hướng dẫn bước tiếp theo có thể đọc được bởi người/agent |
+| `did_you_mean` | `string` | Tên model khớp nhất |
+| `suggestions` | `array` | Các model được đề xuất kèm theo metadata |
+| `alternatives` | `array` | Các model thay thế hiện có sẵn |
+| `hint` | `string` | Hướng dẫn bước tiếp theo dễ đọc cho người/agent |
 | `retryable` | `boolean` | Liệu việc thử lại cùng một yêu cầu có thể thành công hay không |
 | `retry_after` | `number` | Số giây cần chờ trước khi thử lại |
 | `balance_usd` | `number` | Số dư tài khoản hiện tại tính bằng USD |
 | `estimated_cost_usd` | `number` | Chi phí ước tính của yêu cầu bị lỗi |
 
-## Ví dụ mã lỗi
+## Các ví dụ về mã lỗi
 
 ### model_not_found (400)
 
-Khi tên mô hình không khớp với bất kỳ mô hình nào đang hoạt động:
+Khi tên model không khớp với bất kỳ model nào đang hoạt động:
 
 ```json
 {
@@ -48,9 +48,9 @@ Khi tên mô hình không khớp với bất kỳ mô hình nào đang hoạt đ
 }
 ```
 
-Việc phân giải `did_you_mean` sử dụng:
+Việc giải quyết `did_you_mean` sử dụng:
 1. Ánh xạ alias tĩnh (từ dữ liệu lỗi thực tế)
-2. Khớp chuỗi đã chuẩn hóa (loại bỏ dấu gạch ngang, không phân biệt chữ hoa chữ thường)
+2. Khớp chuỗi chuẩn hóa (loại bỏ dấu gạch ngang, không phân biệt chữ hoa chữ thường)
 3. Khớp khoảng cách chỉnh sửa (ngưỡng ≤ 3)
 
 ### insufficient_balance (402)
@@ -74,11 +74,11 @@ Khi số dư tài khoản quá thấp so với chi phí ước tính:
 }
 ```
 
-`suggestions` chứa các mô hình rẻ hơn chi phí ước tính mà agent có thể chuyển sang.
+`suggestions` chứa các model rẻ hơn chi phí ước tính mà agent có thể chuyển sang.
 
 ### all_channels_failed (503)
 
-Khi tất cả các kênh upstream của một mô hình không khả dụng:
+Khi tất cả các kênh upstream cho một model không khả dụng:
 
 ```json
 {
@@ -97,7 +97,7 @@ Khi tất cả các kênh upstream của một mô hình không khả dụng:
 ```
 
 <Note>
-`retryable` là `false` khi lý do là `no_channels` (không có kênh nào được cấu hình cho mô hình này). Nó chỉ là `true` đối với các lỗi tạm thời như ngắt mạch (circuit breaker) hoặc hết hạn mức (quota).
+`retryable` là `false` khi lý do là `no_channels` (không có kênh nào được cấu hình cho model này). Nó chỉ là `true` đối với các lỗi tạm thời như ngắt mạch (circuit breaker trips) hoặc hết hạn mức (quota exhaustion).
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -115,11 +115,11 @@ Khi tất cả các kênh upstream của một mô hình không khả dụng:
 }
 ```
 
-Giá trị `retry_after` được tính toán từ thời gian reset cửa sổ giới hạn tốc độ thực tế.
+Giá trị `retry_after` được tính toán từ thời gian reset thực tế của cửa sổ rate limit.
 
 ### context_length_exceeded (400)
 
-Khi đầu vào vượt quá cửa sổ ngữ cảnh của mô hình (lỗi upstream, được bổ sung thêm gợi ý):
+Khi đầu vào vượt quá cửa sổ ngữ cảnh của model (lỗi upstream, được bổ sung các gợi ý):
 
 ```json
 {
@@ -137,26 +137,26 @@ Khi đầu vào vượt quá cửa sổ ngữ cảnh của mô hình (lỗi upst
 }
 ```
 
-## Native Endpoint Headers
+## Các Header Native Endpoint
 
-Khi bạn gọi `/v1/chat/completions` với một mô hình có endpoint gốc (Anthropic hoặc Gemini), **phản hồi thành công** sẽ bao gồm các header tối ưu hóa:
+Khi bạn gọi `/v1/chat/completions` với một model có native endpoint (Anthropic hoặc Gemini), **phản hồi thành công** sẽ bao gồm các header tối ưu hóa:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Nhà cung cấp mô hình | Endpoint đề xuất | Lợi ích |
+| Nhà cung cấp Model | Endpoint được đề xuất | Lợi ích |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | Không chuyển đổi định dạng, extended thinking, prompt caching |
-| Google (Gemini) | `/v1beta/gemini` | Không chuyển đổi định dạng, grounding, thiết lập an toàn |
-| OpenAI | — | Chat completions đã là định dạng gốc |
+| Anthropic (Claude) | `/v1/messages` | Không chuyển đổi định dạng, tư duy mở rộng (extended thinking), prompt caching |
+| Google (Gemini) | `/v1beta/gemini` | Không chuyển đổi định dạng, grounding, các thiết lập an toàn |
+| OpenAI | — | Chat completions đã là định dạng native |
 
 Các header này xuất hiện trên cả phản hồi streaming và non-streaming.
 
-## Cải tiến /v1/models
+## Các cải tiến cho /v1/models
 
-Ba trường mới trong phần mở rộng `lemondata` của mỗi đối tượng mô hình:
+Ba trường mới trong phần mở rộng `lemondata` của mỗi đối tượng model:
 
 ```json
 {
@@ -175,16 +175,16 @@ Ba trường mới trong phần mở rộng `lemondata` của mỗi đối tư�
 
 | Trường | Giá trị | Mô tả |
 |-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Loại mô hình |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Cách tính phí mô hình |
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Loại model |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Cách tính phí model |
 | `cache_pricing` | đối tượng hoặc `null` | Giá prompt cache upstream + chiết khấu semantic cache của nền tảng |
 
-### Lọc theo danh mục (Category Filtering)
+### Lọc theo Category
 
 ```bash
-GET /v1/models?category=chat          # Chỉ các mô hình chat
-GET /v1/models?category=image         # Các mô hình tạo ảnh
-GET /v1/models?tag=coding&category=chat  # Các mô hình chat tối ưu cho lập trình
+GET /v1/models?category=chat          # Chỉ các model Chat
+GET /v1/models?category=image         # Các model tạo hình ảnh
+GET /v1/models?tag=coding&category=chat  # Các model chat tối ưu cho coding
 ```
 
 ## llms.txt
@@ -197,12 +197,12 @@ GET https://api.lemondata.cc/llms.txt
 
 Nó bao gồm:
 - Template cho lần gọi đầu tiên với ví dụ thực tế
-- Tên các mô hình phổ biến (được tạo động từ dữ liệu sử dụng)
+- Các tên model phổ biến (được tạo động từ dữ liệu sử dụng)
 - Tất cả 12 API endpoint
-- Các tham số lọc để khám phá mô hình
+- Các tham số lọc để khám phá model
 - Hướng dẫn xử lý lỗi
 
-Các AI agent đọc `llms.txt` trước lần gọi API đầu tiên thường có thể thành công ngay trong lần thử đầu.
+Các AI agent đọc `llms.txt` trước khi thực hiện cuộc gọi API đầu tiên thường có thể thành công ngay trong lần thử đầu tiên.
 
 ## Sử dụng trong mã nguồn Agent
 
@@ -259,16 +259,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## Nguyên tắc thiết kế
 
 <CardGroup cols={2}>
-  <Card title="Thất bại nhanh, thông báo chi tiết" icon="bolt">
-    Lỗi được trả về ngay lập tức với đầy đủ dữ liệu cần thiết để agent tự sửa lỗi.
+  <Card title="Thất bại sớm, thông báo chi tiết" icon="bolt">
+    Lỗi trả về ngay lập tức với tất cả dữ liệu mà agent cần để tự sửa lỗi.
   </Card>
   <Card title="Không tự động điều hướng" icon="route">
-    API không bao giờ âm thầm thay thế bằng một mô hình khác. Agent là bên quyết định.
+    API không bao giờ âm thầm thay thế bằng một model khác. Agent sẽ quyết định.
   </Card>
-  <Card title="Gợi ý dựa trên dữ liệu" icon="database">
-    Tất cả các đề xuất đều đến từ dữ liệu thực tế, không phải từ danh sách được mã hóa cứng.
+  <Card title="Đề xuất dựa trên dữ liệu" icon="database">
+    Tất cả các đề xuất đều đến từ dữ liệu thực tế, không phải danh sách được mã hóa cứng.
   </Card>
   <Card title="Tương thích ngược" icon="plug">
-    Tất cả các trường gợi ý là tùy chọn. Các client hiện tại sẽ không thấy sự khác biệt.
+    Tất cả các trường gợi ý đều là tùy chọn. Các client hiện tại sẽ không thấy sự khác biệt.
   </Card>
 </CardGroup>

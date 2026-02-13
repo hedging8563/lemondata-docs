@@ -1,13 +1,13 @@
 ---
 title: "✨ Agent-First API"
-description: "AIエージェントが最初の再試行で自己修正できるようにするための構造化されたエラーヒント"
+description: "AIエージェントが最初の再試行で自己修正するための構造化されたエラーヒント"
 ---
 
 ## 概要
 
-LemonDataのAgent-First APIは、AIエージェントが即座に解析して対応できる構造化されたヒントをエラーレスポンスに付加します。ウェブ検索やドキュメントの確認、推測は不要です。
+LemonDataのAgent-First APIは、AIエージェントが即座に解析して対応できる構造化されたヒントでエラーレスポンスを強化します。ウェブ検索、ドキュメントの確認、推測は不要です。
 
-すべてのエラーレスポンスには、標準の `error` オブジェクト内に `did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after` といったオプションのフィールドが含まれます。これらのフィールドは後方互換性があり、これらを使用しないクライアントには違いはありません。
+すべてのエラーレスポンスには、標準の `error` オブジェクト内に `did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after` などのオプションフィールドが含まれます。これらのフィールドは後方互換性があり、これらを使用しないクライアントには影響を与えません。
 
 ## エラーヒントフィールド
 
@@ -15,13 +15,13 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
-| `did_you_mean` | `string` | 最も近い一致モデル名 |
+| `did_you_mean` | `string` | 最も近い一致するモデル名 |
 | `suggestions` | `array` | メタデータ付きの推奨モデル |
 | `alternatives` | `array` | 現在利用可能な代替モデル |
 | `hint` | `string` | 人間またはエージェントが読み取り可能な次のステップのガイダンス |
 | `retryable` | `boolean` | 同じリクエストを再試行して成功する可能性があるかどうか |
 | `retry_after` | `number` | 再試行するまでの待機秒数 |
-| `balance_usd` | `number` | 現在のアカウント残高（USD） |
+| `balance_usd` | `number` | 現在の米ドル建てアカウント残高 |
 | `estimated_cost_usd` | `number` | 失敗したリクエストの推定コスト |
 
 ## エラーコードの例
@@ -50,8 +50,8 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 
 `did_you_mean` の解決には以下が使用されます：
 1. 静的エイリアスマッピング（本番環境のエラーデータから）
-2. 正規化された文字列一致（ハイフンを除去、大文字小文字を区別しない）
-3. 編集距離一致（しきい値 ≤ 3）
+2. 正規化された文字列マッチング（ハイフンの除去、大文字小文字を区別しない）
+3. 編集距離マッチング（しきい値 ≤ 3）
 
 ### insufficient_balance (402)
 
@@ -78,7 +78,7 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 
 ### all_channels_failed (503)
 
-モデルのすべてのアップストリームチャネルが利用不可の場合：
+モデルのすべてのアップストリームチャネルが利用できない場合：
 
 ```json
 {
@@ -97,7 +97,7 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 ```
 
 <Note>
-`retryable` は、理由が `no_channels`（このモデルに設定されたチャネルがない）の場合は `false` になります。サーキットブレーカーの作動やクォータ枯渇などの一時的な失敗の場合のみ `true` になります。
+`retryable` は、理由が `no_channels`（このモデルに設定されたチャネルがない）の場合は `false` になります。サーキットブレーカーの作動やクォータ不足などの一時的な失敗の場合のみ `true` になります。
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -119,7 +119,7 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 
 ### context_length_exceeded (400)
 
-入力がモデルのコンテキストウィンドウを超えた場合（アップストリームのエラーにヒントを付加）：
+入力がモデルのコンテキストウィンドウを超えた場合（アップストリームエラー、ヒントで強化）：
 
 ```json
 {
@@ -148,15 +148,15 @@ X-LemonData-Native-Endpoint: /v1/messages
 
 | モデルプロバイダー | 推奨エンドポイント | メリット |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | フォーマット変換なし、extended thinking、プロンプトキャッシュ |
+| Anthropic (Claude) | `/v1/messages` | フォーマット変換なし、拡張思考、プロンプトキャッシュ |
 | Google (Gemini) | `/v1beta/gemini` | フォーマット変換なし、グラウンディング、安全設定 |
-| OpenAI | — | Chat completions はすでにネイティブフォーマットです |
+| OpenAI | — | Chat completionsはすでにネイティブフォーマットです |
 
-これらのヘッダーは、ストリーミングレスポンスと非ストリーミングレスポンスの両方に表示されます。
+これらのヘッダーは、ストリーミングと非ストリーミングの両方のレスポンスに表示されます。
 
 ## /v1/models の強化
 
-各モデルオブジェクトの `lemondata` 拡張における3つの新しいフィールド：
+各モデルオブジェクトの `lemondata` 拡張にある3つの新しいフィールド：
 
 ```json
 {
@@ -175,7 +175,7 @@ X-LemonData-Native-Endpoint: /v1/messages
 
 | フィールド | 値 | 説明 |
 |-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | モデルタイプ |
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | モデルのタイプ |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | モデルの課金方法 |
 | `cache_pricing` | オブジェクトまたは `null` | アップストリームのプロンプトキャッシュ価格 + プラットフォームのセマンティックキャッシュ割引 |
 
@@ -189,7 +189,7 @@ GET /v1/models?tag=coding&category=chat  # コーディングに最適化され�
 
 ## llms.txt
 
-マシンリーダブルな API 概要は以下で入手可能です：
+マシンリーダブルなAPI概要は以下で入手可能です：
 
 ```
 GET https://api.lemondata.cc/llms.txt
@@ -198,13 +198,13 @@ GET https://api.lemondata.cc/llms.txt
 以下が含まれます：
 - 動作例を含む初回呼び出しテンプレート
 - 一般的なモデル名（使用状況データから動的に生成）
-- 全12個の API エンドポイント
-- モデル検出のためのフィルタパラメータ
+- 全12個のAPIエンドポイント
+- モデル発見のためのフィルターパラメータ
 - エラーハンドリングのガイダンス
 
-最初の API 呼び出しの前に `llms.txt` を読み取る AI エージェントは、通常、最初の試行で成功できます。
+最初のAPI呼び出しの前に `llms.txt` を読み取るAIエージェントは、通常、最初の試行で成功できます。
 
-## エージェントコードでの使用例
+## エージェントコードでの使用
 
 ### Python (OpenAI SDK)
 
@@ -223,7 +223,7 @@ def smart_chat(messages, model="gpt-4o"):
         )
     except BadRequestError as e:
         error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
-        # Use did_you_mean for auto-correction
+        # 自動修正に did_you_mean を使用する
         if error.get("code") == "model_not_found" and error.get("did_you_mean"):
             return client.chat.completions.create(
                 model=error["did_you_mean"], messages=messages
@@ -259,16 +259,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## 設計原則
 
 <CardGroup cols={2}>
-  <Card title="素早く失敗し、情報を提供する" icon="bolt">
-    エラーは、エージェントが自己修正するために必要なすべてのデータとともに即座に返されます。
+  <Card title="迅速に失敗し、有益な情報を返す" icon="bolt">
+    エージェントが自己修正するために必要なすべてのデータとともに、エラーが即座に返されます。
   </Card>
   <Card title="自動ルーティングなし" icon="route">
-    API が別のモデルに黙って置き換えることはありません。エージェントが決定します。
+    APIが勝手に別のモデルに置き換えることはありません。エージェントが決定します。
   </Card>
-  <Card title="データ駆動型の提案" icon="database">
+  <Card title="データ駆動型の推奨" icon="database">
     すべての推奨事項は、ハードコードされたリストではなく、本番データに基づいています。
   </Card>
   <Card title="後方互換性" icon="plug">
-    すべてのヒントフィールドはオプションです。既存のクライアントには違いはありません。
+    すべてのヒントフィールドはオプションです。既存のクライアントには影響ありません。
   </Card>
 </CardGroup>

@@ -1,6 +1,6 @@
 ---
 title: "✨ Agent-First API"
-description: "AI agent'larının ilk denemede kendi kendilerini düzeltmeleri için yapılandırılmış hata ipuçları"
+description: "AI agent'larının ilk yeniden denemede kendilerini düzeltebilmeleri için yapılandırılmış hata ipuçları"
 ---
 
 ## Genel Bakış
@@ -48,7 +48,227 @@ Bir model adı herhangi bir aktif modelle eşleşmediğinde:
 }
 ```
 
-`did_you_mean` çözümlemesi şunları kullanır:
-1. Statik alias eşlemesi (üretim hata verilerinden)
+`did_you_mean` çözümü şunları kullanır:
+1. Statik takma ad eşlemesi (üretim hata verilerinden)
 2. Normalleştirilmiş dize eşleştirme (tireleri kaldırır, büyük/küçük harfe duyarsızdır)
-3
+3. Düzenleme mesafesi (edit distance) eşleştirme (eşik ≤ 3)
+
+### insufficient_balance (402)
+
+Hesap bakiyesi tahmini maliyet için çok düşük olduğunda:
+
+```json
+{
+  "error": {
+    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200.",
+    "type": "insufficient_balance",
+    "code": "insufficient_balance",
+    "balance_usd": 0.12,
+    "estimated_cost_usd": 0.35,
+    "suggestions": [
+      {"id": "gpt-4o-mini"},
+      {"id": "deepseek-chat"}
+    ],
+    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
+  }
+}
+```
+
+`suggestions`, agent'ın geçiş yapabileceği, tahmini maliyetten daha ucuz modelleri içerir.
+
+### all_channels_failed (503)
+
+Bir model için tüm üst kanal (upstream) bağlantıları kullanılamaz olduğunda:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
+      {"id": "gpt-4o", "status": "available", "tags": []}
+    ],
+    "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
+  }
+}
+```
+
+<Note>
+`retryable`, neden `no_channels` (bu model için yapılandırılmış kanal yok) olduğunda `false` değerini alır. Yalnızca devre kesici (circuit breaker) tetiklenmesi veya kota tükenmesi gibi geçici hatalar için `true` değerini alır.
+</Note>
+
+### rate_limit_exceeded (429)
+
+```json
+{
+  "error": {
+    "message": "Rate limit: 60 rpm exceeded",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
+  }
+}
+```
+
+`retry_after` değeri, gerçek hız sınırı (rate limit) penceresinin sıfırlanma süresinden hesaplanır.
+
+### context_length_exceeded (400)
+
+Girdi, modelin bağlam penceresini (context window) aştığında (ipuçlarıyla zenginleştirilmiş üst kanal hatası):
+
+```json
+{
+  "error": {
+    "message": "This model's maximum context length is 128000 tokens...",
+    "type": "invalid_request_error",
+    "code": "context_length_exceeded",
+    "retryable": false,
+    "suggestions": [
+      {"id": "gemini-2.5-pro"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Reduce your input or switch to a model with a larger context window."
+  }
+}
+```
+
+## Yerel Uç Nokta Başlıkları
+
+Yerel bir uç noktaya (native endpoint) sahip bir modelle (Anthropic veya Gemini) `/v1/chat/completions` çağrısı yaptığınızda, **başarılı yanıt** optimizasyon başlıklarını içerir:
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+| Model Sağlayıcı | Önerilen Uç Nokta | Avantaj |
+|---------------|-------------------|---------|
+| Anthropic (Claude) | `/v1/messages` | Format dönüştürme yok, genişletilmiş düşünme, prompt önbelleğe alma |
+| Google (Gemini) | `/v1beta/gemini` | Format dönüştürme yok, grounding, güvenlik ayarları |
+| OpenAI | — | Chat completions zaten yerel formattır |
+
+Bu başlıklar hem akışlı (streaming) hem de akışsız yanıtlarda görünür.
+
+## /v1/models İyileştirmeleri
+
+Her model nesnesinin `lemondata` uzantısındaki üç yeni alan:
+
+```json
+{
+  "id": "gpt-4o",
+  "lemondata": {
+    "category": "chat",
+    "pricing_unit": "per_token",
+    "cache_pricing": {
+      "cache_read_per_1m": "1.25",
+      "cache_write_per_1m": "2.50",
+      "platform_cache_discount": 0.9
+    }
+  }
+}
+```
+
+| Alan | Değerler | Açıklama |
+|-------|--------|-------------|
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Model türü |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Modelin nasıl faturalandırıldığı |
+| `cache_pricing` | nesne veya `null` | Üst kanal prompt önbellek fiyatları + platform semantik önbellek indirimi |
+
+### Kategori Filtreleme
+
+```bash
+GET /v1/models?category=chat          # Yalnızca sohbet modelleri
+GET /v1/models?category=image         # Görüntü oluşturma modelleri
+GET /v1/models?tag=coding&category=chat  # Kodlama için optimize edilmiş sohbet modelleri
+```
+
+## llms.txt
+
+Makine tarafından okunabilir bir API genel bakışı şu adreste mevcuttur:
+
+```
+GET https://api.lemondata.cc/llms.txt
+```
+
+Şunları içerir:
+- Çalışan bir örnekle birlikte ilk çağrı şablonu
+- Yaygın model adları (kullanım verilerinden dinamik olarak oluşturulur)
+- Tüm 12 API uç noktası
+- Model keşfi için filtre parametreleri
+- Hata yönetimi rehberliği
+
+İlk API çağrısından önce `llms.txt` dosyasını okuyan AI agent'ları genellikle ilk denemede başarılı olabilir.
+
+## Agent Kodunda Kullanım
+
+### Python (OpenAI SDK)
+
+```python
+from openai import OpenAI, BadRequestError
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def smart_chat(messages, model="gpt-4o"):
+    try:
+        return client.chat.completions.create(
+            model=model, messages=messages
+        )
+    except BadRequestError as e:
+        error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
+        # Otomatik düzeltme için did_you_mean kullanın
+        if error.get("code") == "model_not_found" and error.get("did_you_mean"):
+            return client.chat.completions.create(
+                model=error["did_you_mean"], messages=messages
+            )
+        raise
+```
+
+### JavaScript (OpenAI SDK)
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function smartChat(messages, model = 'gpt-4o') {
+  try {
+    return await client.chat.completions.create({ model, messages });
+  } catch (error) {
+    const err = error?.error;
+    if (err?.code === 'model_not_found' && err?.did_you_mean) {
+      return client.chat.completions.create({
+        model: err.did_you_mean, messages
+      });
+    }
+    throw error;
+  }
+}
+```
+
+## Tasarım İlkeleri
+
+<CardGroup cols={2}>
+  <Card title="Hızlı hata ver, bilgilendirici hata ver" icon="bolt">
+    Hatalar, bir agent'ın kendini düzeltmesi için ihtiyaç duyduğu tüm verilerle birlikte anında döner.
+  </Card>
+  <Card title="Otomatik yönlendirme yok" icon="route">
+    API asla sessizce farklı bir model yerleştirmez. Kararı agent verir.
+  </Card>
+  <Card title="Veri odaklı öneriler" icon="database">
+    Tüm öneriler sabit listelerden değil, üretim verilerinden gelir.
+  </Card>
+  <Card title="Geriye dönük uyumlu" icon="plug">
+    Tüm ipucu alanları isteğe bağlıdır. Mevcut istemciler hiçbir fark görmez.
+  </Card>
+</CardGroup>

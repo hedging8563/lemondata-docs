@@ -5,9 +5,9 @@ description: "تلميحات أخطاء منظمة لوكلاء الذكاء ا�
 
 ## نظرة عامة
 
-تعمل Agent-First API من LemonData على إثراء استجابات الأخطاء بتلميحات منظمة يمكن لوكلاء الذكاء الاصطناعي تحليلها واتخاذ إجراء بشأنها على الفور — دون الحاجة إلى عمليات بحث على الويب، أو مراجعة المستندات، أو التخمين.
+تعمل Agent-First API من LemonData على إثراء استجابات الأخطاء بتلميحات منظمة يمكن لوكلاء الذكاء الاصطناعي تحليلها واتخاذ إجراء بشأنها على الفور — دون الحاجة إلى عمليات بحث في الويب، أو مراجعة المستندات، أو التخمين.
 
-تتضمن كل استجابة خطأ حقولاً اختيارية مثل `did_you_mean` و `suggestions` و `hint` و `retryable` و `retry_after` داخل كائن `error` القياسي. هذه الحقول متوافقة مع الإصدارات السابقة — ولن يلاحظ العملاء الذين لا يستخدمونها أي فرق.
+تتضمن كل استجابة خطأ حقولاً اختيارية مثل `did_you_mean` و `suggestions` و `hint` و `retryable` و `retry_after` داخل كائن `error` القياسي. هذه الحقول متوافقة مع الإصدارات السابقة — حيث لا يرى العملاء الذين لا يستخدمونها أي فرق.
 
 ## حقول تلميحات الأخطاء
 
@@ -48,5 +48,227 @@ description: "تلميحات أخطاء منظمة لوكلاء الذكاء ا�
 }
 ```
 
-يستخدم حل `did_you_mean` ما يلي:
-1. رسم
+يستخدم حل `did_you_mean`:
+1. رسم خرائط الأسماء المستعارة الثابتة (من بيانات أخطاء الإنتاج)
+2. مطابقة السلاسل النصية المعيارية (تجاهل الشرطات وحالة الأحرف)
+3. مطابقة مسافة التحرير (Edit distance) (عتبة ≤ 3)
+
+### insufficient_balance (402)
+
+عندما يكون رصيد الحساب منخفضاً جداً بالنسبة للتكلفة التقديرية:
+
+```json
+{
+  "error": {
+    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200.",
+    "type": "insufficient_balance",
+    "code": "insufficient_balance",
+    "balance_usd": 0.12,
+    "estimated_cost_usd": 0.35,
+    "suggestions": [
+      {"id": "gpt-4o-mini"},
+      {"id": "deepseek-chat"}
+    ],
+    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
+  }
+}
+```
+
+يحتوي `suggestions` على نماذج أرخص من التكلفة التقديرية يمكن للوكيل التبديل إليها.
+
+### all_channels_failed (503)
+
+عندما تكون جميع القنوات المصدرية للنموذج غير متاحة:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
+      {"id": "gpt-4o", "status": "available", "tags": []}
+    ],
+    "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
+  }
+}
+```
+
+<Note>
+تكون قيمة `retryable` هي `false` عندما يكون السبب هو `no_channels` (لا توجد قنوات مهيأة لهذا النموذج). وتكون `true` فقط في حالات الفشل العابر مثل توقف قاطع الدائرة (circuit breaker) أو استنفاد الحصة (quota exhaustion).
+</Note>
+
+### rate_limit_exceeded (429)
+
+```json
+{
+  "error": {
+    "message": "Rate limit: 60 rpm exceeded",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
+  }
+}
+```
+
+يتم حساب قيمة `retry_after` بناءً على وقت إعادة تعيين نافذة حد المعدل الفعلي.
+
+### context_length_exceeded (400)
+
+عندما يتجاوز الإدخال نافذة السياق للنموذج (خطأ مصدري، معزز بالتلميحات):
+
+```json
+{
+  "error": {
+    "message": "This model's maximum context length is 128000 tokens...",
+    "type": "invalid_request_error",
+    "code": "context_length_exceeded",
+    "retryable": false,
+    "suggestions": [
+      {"id": "gemini-2.5-pro"},
+      {"id": "claude-sonnet-4-5"}
+    ],
+    "hint": "Reduce your input or switch to a model with a larger context window."
+  }
+}
+```
+
+## رؤوس نقاط النهاية الأصلية (Native Endpoint Headers)
+
+عندما تقوم باستدعاء `/v1/chat/completions` باستخدام نموذج يحتوي على نقطة نهاية أصلية (Anthropic أو Gemini)، تتضمن **استجابة النجاح** رؤوس تحسين:
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+| مزود النموذج | نقطة النهاية المقترحة | الفائدة |
+|---------------|-------------------|---------|
+| Anthropic (Claude) | `/v1/messages` | لا يوجد تحويل للتنسيق، تفكير ممتد، تخزين مؤقت للمطالبات |
+| Google (Gemini) | `/v1beta/gemini` | لا يوجد تحويل للتنسيق، ربط بالواقع (grounding)، إعدادات الأمان |
+| OpenAI | — | تنسيق Chat completions هو التنسيق الأصلي بالفعل |
+
+تظهر هذه الرؤوس في كل من استجابات البث (streaming) وغير البث.
+
+## تحسينات /v1/models
+
+ثلاثة حقول جديدة في امتداد `lemondata` لكل كائن نموذج:
+
+```json
+{
+  "id": "gpt-4o",
+  "lemondata": {
+    "category": "chat",
+    "pricing_unit": "per_token",
+    "cache_pricing": {
+      "cache_read_per_1m": "1.25",
+      "cache_write_per_1m": "2.50",
+      "platform_cache_discount": 0.9
+    }
+  }
+}
+```
+
+| الحقل | القيم | الوصف |
+|-------|--------|-------------|
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | نوع النموذج |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | كيفية فوترة النموذج |
+| `cache_pricing` | object أو `null` | أسعار التخزين المؤقت للمطالبات المصدرية + خصم التخزين المؤقت الدلالي للمنصة |
+
+### تصفية الفئات (Category Filtering)
+
+```bash
+GET /v1/models?category=chat          # Chat models only
+GET /v1/models?category=image         # Image generation models
+GET /v1/models?tag=coding&category=chat  # Coding-optimized chat models
+```
+
+## llms.txt
+
+يتوفر نظرة عامة على واجهة برمجة التطبيقات (API) بتنسيق قابل للقراءة آلياً على:
+
+```
+GET https://api.lemondata.cc/llms.txt
+```
+
+وهي تتضمن:
+- قالب المكالمة الأولى مع مثال عملي
+- أسماء النماذج الشائعة (يتم إنشاؤها ديناميكياً من بيانات الاستخدام)
+- جميع نقاط نهاية API الـ 12
+- معلمات التصفية لاكتشاف النماذج
+- إرشادات معالجة الأخطاء
+
+عادةً ما ينجح وكلاء الذكاء الاصطناعي الذين يقرأون `llms.txt` قبل أول استدعاء لـ API في المحاولة الأولى.
+
+## الاستخدام في كود الوكيل
+
+### Python (OpenAI SDK)
+
+```python
+from openai import OpenAI, BadRequestError
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def smart_chat(messages, model="gpt-4o"):
+    try:
+        return client.chat.completions.create(
+            model=model, messages=messages
+        )
+    except BadRequestError as e:
+        error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
+        # Use did_you_mean for auto-correction
+        if error.get("code") == "model_not_found" and error.get("did_you_mean"):
+            return client.chat.completions.create(
+                model=error["did_you_mean"], messages=messages
+            )
+        raise
+```
+
+### JavaScript (OpenAI SDK)
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function smartChat(messages, model = 'gpt-4o') {
+  try {
+    return await client.chat.completions.create({ model, messages });
+  } catch (error) {
+    const err = error?.error;
+    if (err?.code === 'model_not_found' && err?.did_you_mean) {
+      return client.chat.completions.create({
+        model: err.did_you_mean, messages
+      });
+    }
+    throw error;
+  }
+}
+```
+
+## مبادئ التصميم
+
+<CardGroup cols={2}>
+  <Card title="الفشل السريع، الفشل المعلوماتي" icon="bolt">
+    تعود الأخطاء فوراً مع جميع البيانات التي يحتاجها الوكيل للتصحيح الذاتي.
+  </Card>
+  <Card title="لا يوجد توجيه تلقائي" icon="route">
+    لا تقوم واجهة برمجة التطبيقات أبداً باستبدال نموذج بآخر بصمت. الوكيل هو من يقرر.
+  </Card>
+  <Card title="اقتراحات مدفوعة بالبيانات" icon="database">
+    تأتي جميع التوصيات من بيانات الإنتاج، وليس من قوائم ثابتة.
+  </Card>
+  <Card title="متوافق مع الإصدارات السابقة" icon="plug">
+    جميع حقول التلميحات اختيارية. لا يرى العملاء الحاليون أي فرق.
+  </Card>
+</CardGroup>

@@ -1,25 +1,25 @@
 ---
 title: "✨ API orientada a agentes"
-description: "Sugerencias de error estructuradas para que los agentes de IA se autocorrijan en el primer reintento"
+description: "Sugerencias de error estructuradas para que los agentes de IA se corrijan automáticamente en el primer reintento"
 ---
 
-## Generalidades
+## Resumen
 
-La API orientada a agentes de LemonData enriquece las respuestas de error con sugerencias estructuradas que los agentes de IA pueden analizar y procesar de inmediato — sin búsquedas web, sin consultas de documentación y sin adivinanzas.
+La API orientada a agentes de LemonData enriquece las respuestas de error con sugerencias estructuradas que los agentes de IA pueden analizar y procesar de inmediato: sin búsquedas web, sin consultas de documentación y sin conjeturas.
 
-Cada respuesta de error incluye campos opcionales como `did_you_mean`, `suggestions`, `hint`, `retryable` y `retry_after` dentro del objeto estándar `error`. Estos campos son compatibles con versiones anteriores — los clientes que no los utilizan no notarán ninguna diferencia.
+Cada respuesta de error incluye campos opcionales como `did_you_mean`, `suggestions`, `hint`, `retryable` y `retry_after` dentro del objeto `error` estándar. Estos campos son compatibles con versiones anteriores; los clientes que no los utilizan no notarán ninguna diferencia.
 
-## Campos de sugerencias de error
+## Campos de sugerencia de error
 
-Todos los campos de sugerencias son extensiones opcionales dentro del objeto `error`:
+Todos los campos de sugerencia son extensiones opcionales dentro del objeto `error`:
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `did_you_mean` | `string` | Nombre del modelo con la coincidencia más cercana |
 | `suggestions` | `array` | Modelos recomendados con metadatos |
 | `alternatives` | `array` | Modelos alternativos disponibles actualmente |
-| `hint` | `string` | Guía del siguiente paso legible para humanos/agentes |
-| `retryable` | `boolean` | Indica si reintentar la misma solicitud puede tener éxito |
+| `hint` | `string` | Guía de pasos a seguir legible por humanos/agentes |
+| `retryable` | `boolean` | Indica si reintentar la misma solicitud podría tener éxito |
 | `retry_after` | `number` | Segundos a esperar antes de reintentar |
 | `balance_usd` | `number` | Saldo actual de la cuenta en USD |
 | `estimated_cost_usd` | `number` | Costo estimado de la solicitud fallida |
@@ -28,7 +28,7 @@ Todos los campos de sugerencias son extensiones opcionales dentro del objeto `er
 
 ### model_not_found (400)
 
-Cuando un nombre de modelo no coincide con ningún modelo activo:
+Cuando el nombre de un modelo no coincide con ningún modelo activo:
 
 ```json
 {
@@ -49,226 +49,8 @@ Cuando un nombre de modelo no coincide con ningún modelo activo:
 ```
 
 La resolución de `did_you_mean` utiliza:
-1. Mapeo de alias estáticos (a partir de datos de errores de producción)
-2. Coincidencia de cadenas normalizada (elimina guiones, insensible a mayúsculas)
+1. Mapeo de alias estáticos (a partir de datos de error de producción)
+2. Coincidencia de cadenas normalizada (elimina guiones, no distingue entre mayúsculas y minúsculas)
 3. Coincidencia por distancia de edición (umbral ≤ 3)
 
-### insufficient_balance (402)
-
-Cuando el saldo de la cuenta es demasiado bajo para el costo estimado:
-
-```json
-{
-  "error": {
-    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200.",
-    "type": "insufficient_balance",
-    "code": "insufficient_balance",
-    "balance_usd": 0.12,
-    "estimated_cost_usd": 0.35,
-    "suggestions": [
-      {"id": "gpt-4o-mini"},
-      {"id": "deepseek-chat"}
-    ],
-    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
-  }
-}
-```
-
-`suggestions` contiene modelos más económicos que el costo estimado a los que el agente puede cambiar.
-
-### all_channels_failed (503)
-
-Cuando todos los canales ascendentes para un modelo no están disponibles:
-
-```json
-{
-  "error": {
-    "message": "Model claude-opus-4-6 temporarily unavailable",
-    "code": "all_channels_failed",
-    "retryable": true,
-    "retry_after": 30,
-    "alternatives": [
-      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
-      {"id": "gpt-4o", "status": "available", "tags": []}
-    ],
-    "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
-  }
-}
-```
-
-<Note>
-`retryable` es `false` cuando el motivo es `no_channels` (no hay canales configurados para este modelo). Es `true` solo para fallos transitorios como activaciones de circuit breakers o agotamiento de cuota.
-</Note>
-
-### rate_limit_exceeded (429)
-
-```json
-{
-  "error": {
-    "message": "Rate limit: 60 rpm exceeded",
-    "type": "rate_limit_error",
-    "code": "rate_limit_exceeded",
-    "retryable": true,
-    "retry_after": 8,
-    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
-  }
-}
-```
-
-El valor de `retry_after` se calcula a partir del tiempo de reinicio de la ventana del límite de tasa real.
-
-### context_length_exceeded (400)
-
-Cuando la entrada excede la ventana de contexto del modelo (error ascendente, enriquecido con sugerencias):
-
-```json
-{
-  "error": {
-    "message": "This model's maximum context length is 128000 tokens...",
-    "type": "invalid_request_error",
-    "code": "context_length_exceeded",
-    "retryable": false,
-    "suggestions": [
-      {"id": "gemini-2.5-pro"},
-      {"id": "claude-sonnet-4-5"}
-    ],
-    "hint": "Reduce your input or switch to a model with a larger context window."
-  }
-}
-```
-
-## Cabeceras de endpoints nativos
-
-Cuando llama a `/v1/chat/completions` con un modelo que tiene un endpoint nativo (Anthropic o Gemini), la **respuesta exitosa** incluye cabeceras de optimización:
-
-```
-X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
-X-LemonData-Native-Endpoint: /v1/messages
-```
-
-| Proveedor del modelo | Endpoint sugerido | Beneficio |
-|---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | Sin conversión de formato, pensamiento extendido, prompt caching |
-| Google (Gemini) | `/v1beta/gemini` | Sin conversión de formato, grounding, ajustes de seguridad |
-| OpenAI | — | Chat completions ya es el formato nativo |
-
-Estas cabeceras aparecen tanto en respuestas de streaming como en las que no lo son.
-
-## Mejoras en /v1/models
-
-Tres nuevos campos en la extensión `lemondata` de cada objeto de modelo:
-
-```json
-{
-  "id": "gpt-4o",
-  "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
-    }
-  }
-}
-```
-
-| Campo | Valores | Descripción |
-|-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Tipo de modelo |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Cómo se factura el modelo |
-| `cache_pricing` | objeto o `null` | Precios de prompt cache ascendente + descuento de caché semántica de la plataforma |
-
-### Filtrado por categoría
-
-```bash
-GET /v1/models?category=chat          # Solo modelos de chat
-GET /v1/models?category=image         # Modelos de generación de imágenes
-GET /v1/models?tag=coding&category=chat  # Modelos de chat optimizados para programación
-```
-
-## llms.txt
-
-Una descripción general de la API legible por máquinas está disponible en:
-
-```
-GET https://api.lemondata.cc/llms.txt
-```
-
-Incluye:
-- Plantilla de primera llamada con un ejemplo funcional
-- Nombres de modelos comunes (generados dinámicamente a partir de datos de uso)
-- Los 12 endpoints de la API
-- Parámetros de filtro para el descubrimiento de modelos
-- Guía de manejo de errores
-
-Los agentes de IA que leen `llms.txt` antes de su primera llamada a la API suelen tener éxito en el primer intento.
-
-## Uso en código de agentes
-
-### Python (SDK de OpenAI)
-
-```python
-from openai import OpenAI, BadRequestError
-
-client = OpenAI(
-    api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
-)
-
-def smart_chat(messages, model="gpt-4o"):
-    try:
-        return client.chat.completions.create(
-            model=model, messages=messages
-        )
-    except BadRequestError as e:
-        error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
-        # Usar did_you_mean para autocorrección
-        if error.get("code") == "model_not_found" and error.get("did_you_mean"):
-            return client.chat.completions.create(
-                model=error["did_you_mean"], messages=messages
-            )
-        raise
-```
-
-### JavaScript (SDK de OpenAI)
-
-```javascript
-import OpenAI from 'openai';
-
-const client = new OpenAI({
-  apiKey: 'sk-your-key',
-  baseURL: 'https://api.lemondata.cc/v1'
-});
-
-async function smartChat(messages, model = 'gpt-4o') {
-  try {
-    return await client.chat.completions.create({ model, messages });
-  } catch (error) {
-    const err = error?.error;
-    if (err?.code === 'model_not_found' && err?.did_you_mean) {
-      return client.chat.completions.create({
-        model: err.did_you_mean, messages
-      });
-    }
-    throw error;
-  }
-}
-```
-
-## Principios de diseño
-
-<CardGroup cols={2}>
-  <Card title="Fallar rápido, fallar informativamente" icon="bolt">
-    Los errores regresan de inmediato con todos los datos que un agente necesita para autocorregirse.
-  </Card>
-  <Card title="Sin enrutamiento automático" icon="route">
-    La API nunca sustituye silenciosamente un modelo diferente. El agente decide.
-  </Card>
-  <Card title="Sugerencias basadas en datos" icon="database">
-    Todas las recomendaciones provienen de datos de producción, no de listas codificadas.
-  </Card>
-  <Card title="Compatible con versiones anteriores" icon="plug">
-    Todos los campos de sugerencia son opcionales. Los clientes existentes no ven ninguna diferencia.
-  </Card>
-</CardGroup>
+### insufficient_balance (402
