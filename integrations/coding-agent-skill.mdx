@@ -1,0 +1,261 @@
+---
+title: "AI Coding Agent Skill"
+description: "One-click install for Claude Code, Cursor, Copilot, and more — with Agent-First error recovery"
+---
+
+<Note>
+This skill teaches your coding agent how to integrate any of LemonData's **300+ AI APIs** by just describing what you need. It works with **Claude Code, Cursor, GitHub Copilot, Windsurf**, and any tool that supports skill/rules files.
+
+The API is **[Agent-First](/guides/agent-first-api)** — even if the agent guesses a model name wrong, the error response tells it exactly how to fix it.
+</Note>
+
+## How It Works
+
+1. **You describe what you need** — "I want to use GPT-4 in my Python project"
+2. **The agent calls the API** — it may guess a model name or endpoint
+3. **If anything goes wrong** — the API returns structured hints (`did_you_mean`, `suggestions`, `retry_after`)
+4. **The agent self-corrects** — reads the hints and retries with the right parameters
+5. **You get working code** — typically on the first or second attempt
+
+## Install
+
+<Tabs>
+  <Tab title="npx (Recommended)">
+    Installs to **all detected coding agents** automatically:
+
+    ```bash
+    npx add-skill hedging8563/lemondata-api-skill -y
+    ```
+
+    Supports: Claude Code, Cursor, GitHub Copilot, and more.
+  </Tab>
+  <Tab title="Claude Code">
+    **Personal** (all projects):
+    ```bash
+    git clone https://github.com/hedging8563/lemondata-api-skill.git ~/.claude/skills/lemondata-api-integration
+    ```
+
+    **Project-specific** (shared with team):
+    ```bash
+    git clone https://github.com/hedging8563/lemondata-api-skill.git .claude/skills/lemondata-api-integration
+    ```
+  </Tab>
+  <Tab title="Cursor">
+    ```bash
+    npx add-skill hedging8563/lemondata-api-skill -y
+    ```
+
+    Or manually copy the skill content into your `.cursor/rules/` or `.cursorrules` file.
+  </Tab>
+  <Tab title="GitHub Copilot">
+    ```bash
+    npx add-skill hedging8563/lemondata-api-skill -y
+    ```
+
+    Or manually copy the skill content into `.github/copilot-instructions.md`.
+  </Tab>
+</Tabs>
+
+### Verify Installation
+
+Ask your coding agent:
+```
+What skills are available?
+```
+
+If you see `lemondata-api-integration`, the installation was successful.
+
+## Get Your API Key
+
+<Steps>
+  <Step title="Visit LemonData">
+    Go to [lemondata.cc](https://lemondata.cc)
+  </Step>
+  <Step title="Sign In">
+    Create an account or log in
+  </Step>
+  <Step title="Get API Key">
+    Navigate to [Dashboard → API Keys](https://lemondata.cc/dashboard/api) and create a new key
+  </Step>
+  <Step title="Copy the Key">
+    Your key starts with `sk-...` — save it securely
+  </Step>
+</Steps>
+
+<Tip>
+You don't need to configure the API Key in advance. When you use the skill, the agent will ask for your key and include it in the generated code.
+</Tip>
+
+## Examples
+
+### Chat Completion
+
+**You say:**
+```
+I want to use GPT-4 in my Python project
+```
+
+**The agent generates:**
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.choices[0].message.content)
+```
+
+If the agent guesses a wrong model name (e.g. `gpt5`), the API returns:
+```json
+{
+  "error": {
+    "code": "model_not_found",
+    "did_you_mean": "gpt-4o",
+    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
+    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+  }
+}
+```
+
+The agent reads `did_you_mean`, corrects the model name, and retries — all automatically.
+
+### Image Generation
+
+**You say:**
+```
+Generate images with Flux in Node.js
+```
+
+The agent calls the image API, handles errors, and generates complete code with download and save logic.
+
+### Speech Recognition
+
+**You say:**
+```
+Integrate speech-to-text in my app
+```
+
+The agent generates code with the correct `/v1/audio/transcriptions` endpoint and audio file handling.
+
+## Agent-First Error Recovery
+
+Every error response includes structured hints that any coding agent can parse. See the [full Agent-First API reference](/guides/agent-first-api) for details.
+
+| Error | What the API Returns | What the Agent Does |
+|-------|---------------------|---------------------|
+| Wrong model name | `did_you_mean` + `suggestions` | Auto-corrects and retries |
+| Insufficient balance | `balance_usd` + cheaper `suggestions` | Switches to affordable model |
+| Model unavailable | `alternatives` + `retry_after` | Switches to available model |
+| Rate limited | `retry_after` (exact seconds) | Waits and retries |
+| Context too long | `suggestions` with larger models | Switches to bigger context model |
+
+### Native Endpoint Optimization
+
+When you call `/v1/chat/completions` with a Claude or Gemini model, the API returns optimization headers:
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance.
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+The agent automatically switches to the native endpoint for better performance (no format conversion, extended thinking, prompt caching).
+
+### Model Discovery
+
+No need to search documentation:
+
+```bash
+# Machine-readable API overview
+curl https://lemondata.cc/llms.txt
+
+# List models by category
+curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
+
+# Filter by capability
+curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
+```
+
+## Supported Capabilities
+
+| Type | Examples |
+|------|----------|
+| Chat | GPT-4o, Claude, Gemini, DeepSeek |
+| Image Generation | Midjourney, Flux, Stable Diffusion |
+| Video Generation | Sora, Runway, Kling, Luma AI |
+| Music Generation | Suno |
+| 3D Models | Tripo3D |
+| Audio | Text-to-Speech, Speech-to-Text |
+| Embeddings | text-embedding-3 |
+| Rerank | bce-reranker, qwen3-rerank |
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="API Key Security" icon="shield">
+    Use environment variables. Never commit keys to git or expose them in frontend code.
+  </Card>
+  <Card title="Cost Management" icon="wallet">
+    Set usage limits in your [dashboard](https://lemondata.cc/dashboard). Check `error.balance_usd` to monitor costs programmatically.
+  </Card>
+  <Card title="Be Direct" icon="bullseye">
+    Say "I want to generate images in Python" instead of "Does LemonData have an image API?"
+  </Card>
+  <Card title="Describe Your Scenario" icon="message">
+    "I'm building a chatbot with GPT-4" gives the agent more context than "Use GPT-4".
+  </Card>
+</CardGroup>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Skill not triggering automatically?">
+    Try mentioning "LemonData" or "LemonData API" in your request:
+    ```
+    Use LemonData to integrate GPT-4 in my project
+    ```
+  </Accordion>
+
+  <Accordion title="How does the API help the agent find the right model?">
+    LemonData's [Agent-First API](/guides/agent-first-api) returns structured error hints. If the agent guesses a wrong model name, the error includes `did_you_mean` with the correct name and `suggestions` with alternatives. The agent reads these and auto-corrects on the next attempt.
+  </Accordion>
+
+  <Accordion title="Which coding agents are supported?">
+    Any tool that supports skill/rules files: Claude Code, Cursor, GitHub Copilot, Windsurf, and more. The `npx add-skill` installer auto-detects and installs to all supported tools.
+  </Accordion>
+
+  <Accordion title="How to update the skill?">
+    Re-run the installer:
+    ```bash
+    npx add-skill hedging8563/lemondata-api-skill -y
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Agent-First API" icon="robot" href="/guides/agent-first-api">
+    Full reference for structured error hints
+  </Card>
+  <Card title="API Documentation" icon="book" href="https://docs.lemondata.cc">
+    Complete API reference
+  </Card>
+  <Card title="Models" icon="sparkles" href="https://lemondata.cc/en/models">
+    Browse all 300+ available models
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://lemondata.cc/llms.txt">
+    Machine-readable API overview for AI agents
+  </Card>
+</CardGroup>
+
+<Info>
+**Have questions?** Check our [GitHub Issues](https://github.com/hedging8563/lemondata-api-skill/issues) or contact [support@lemondata.cc](mailto:support@lemondata.cc)
+</Info>

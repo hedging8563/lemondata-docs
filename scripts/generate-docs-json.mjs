@@ -38,13 +38,13 @@ const navigationTabs = {
     groups: [
       {
         group: 'Getting Started',
-        pages: ['introduction', 'quickstart', 'authentication', 'integrations/claude-code-skill']
+        pages: ['introduction', 'quickstart', 'authentication', 'integrations/coding-agent-skill']
       },
       {
         group: 'Guides',
         pages: [
-          'guides/api-formats',
           'guides/agent-first-api',
+          'guides/api-formats',
           'guides/caching',
           'guides/prompt-cache',
           'guides/sdks',
@@ -317,6 +317,12 @@ function generateDocsJson() {
         "href": "https://lemondata.cc/dashboard"
       }
     },
+    "redirects": [
+      {
+        "source": "/integrations/claude-code-skill",
+        "destination": "/integrations/coding-agent-skill"
+      }
+    ],
     "footer": {},
     "openapi": ["/openapi.json"]
   };
