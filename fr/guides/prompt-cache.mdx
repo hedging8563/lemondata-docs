@@ -1,52 +1,203 @@
 ---
-title: "✨ Cache de prompt amont"
+title: "✨ Cache de Prompt en amont"
 description: "Comprendre le cache de prompt au niveau du fournisseur et comment il réduit les coûts"
 ---
 
 ## Présentation
 
-En plus du [cache sémantique de plateforme](/guides/caching) de LemonData, de nombreux fournisseurs d'IA proposent leur propre fonctionnalité de **prompt caching**. Il s'agit d'un mécanisme de mise en cache distinct qui opère au niveau du fournisseur (Anthropic, OpenAI, DeepSeek, etc.).
+En plus du [cache sémantique de plateforme](/guides/caching) de LemonData, de nombreux fournisseurs d'IA proposent leur propre fonctionnalité de **cache de prompt**. Il s'agit d'un mécanisme de mise en cache distinct qui opère au niveau du fournisseur (Anthropic, OpenAI, DeepSeek, etc.).
 
 <Note>
 **Deux types de mise en cache**
 
 | Type | Emplacement | Fonctionnement | Coût |
-|------|-------|--------------|------|
-| **Cache de plateforme** | LemonData | Correspondance par similitude sémantique | Gratuit (pas d'appel API) |
+|------|-------------|----------------|------|
+| **Cache de plateforme** | LemonData | Correspondance par similarité sémantique | 10 % du prix normal |
 | **Cache fournisseur** | Amont (Anthropic/OpenAI/etc) | Correspondance exacte du préfixe | Tarifs de jetons réduits |
 
-Ceux-ci sont **mutuellement exclusifs** : si le cache de plateforme est activé (hit), aucun appel en amont n'est effectué, le cache fournisseur ne s'applique donc pas.
+Ceux-ci sont **mutuellement exclusifs** : si le cache de plateforme est touché, aucun appel en amont n'est effectué, donc le cache fournisseur ne s'applique pas.
 </Note>
 
 ## Fonctionnement du cache de prompt fournisseur
 
-Le cache de prompt fournisseur stocke la représentation traitée du préfixe de votre prompt sur les serveurs du fournisseur. Lorsque vous envoyez une requête avec le même préfixe, le fournisseur peut ignorer le retraitement de ces jetons.
+Le cache de prompt fournisseur stocke la représentation traitée du préfixe de votre prompt sur les serveurs du fournisseur. Lorsque vous envoyez une requête avec le même préfixe, le fournisseur peut éviter de retraiter ces jetons.
 
 ### Caractéristiques clés
 
 - **Basé sur le préfixe** : Seul le début de votre prompt peut être mis en cache
-- **Correspondance exacte** : Nécessite des jetons identiques (pas de similitude sémantique)
+- **Correspondance exacte** : Nécessite des jetons identiques (pas de similarité sémantique)
 - **Limité dans le temps** : Les entrées de cache expirent (généralement 5 à 60 minutes)
 - **Automatique** : Aucune configuration spéciale requise
 
 ```
-Request 1: [System prompt + Context A + Question 1]
-           ^^^^^^^^^^^^^^^^^^^^^^^^
-           This prefix gets cached
+Requête 1 : [Prompt système + Contexte A + Question 1]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+             Ce préfixe est mis en cache
 
-Request 2: [System prompt + Context A + Question 2]
-           ^^^^^^^^^^^^^^^^^^^^^^^^
-           Cache hit! Only Question 2 is processed
+Requête 2 : [Prompt système + Contexte A + Question 2]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+             Cache touché ! Seule la Question 2 est traitée
 ```
 
 ## Fournisseurs pris en charge
 
-| Fournisseur | Remise sur lecture cache | Coût d'écriture cache | Jetons min. |
-|----------|---------------------|------------------|------------|
-| **Anthropic** | 90 % de réduction | Identique à l'entrée | 1024 |
+| Fournisseur | Remise lecture cache | Coût d'écriture cache | Jetons min. |
+|-------------|----------------------|-----------------------|-------------|
+| **Anthropic** | 90 % de réduction | 25 % de prime | 1024 |
 | **OpenAI** | 50 % de réduction | Identique à l'entrée | 1024 |
 | **DeepSeek** | 90 % de réduction | Identique à l'entrée | 64 |
-| **Google** | 75 % de réduction | Surcoût de 25 % | 32768 |
+| **Google** | 75 % de réduction | 25 % de prime | 32768 |
 
 <Info>
-Les remises sont appliquées automatiquement. LemonData vous répercute la tarification
+Les remises sont appliquées automatiquement. LemonData vous répercute la tarification cache du fournisseur.
+</Info>
+
+## Identifier l'utilisation du cache
+
+### Dans les journaux d'utilisation
+
+Vos journaux d'utilisation affichent le détail des jetons en cache :
+
+| Champ | Description |
+|-------|-------------|
+| `cacheReadTokens` | Jetons servis depuis le cache fournisseur (tarif réduit) |
+| `cacheWriteTokens` | Jetons écrits dans le cache (pour les requêtes futures) |
+| `nonCachedPromptTokens` | Jetons traités sans cache |
+
+### Dans les transactions
+
+Les transactions affichent un libellé **Provider Cache** lorsque le cache en amont a été utilisé :
+
+- **Cache** (bleu ciel) : Cache sémantique de plateforme touché — 90 % de réduction
+- **Provider Cache** (bleu sarcelle) : Cache de prompt en amont touché — tarifs réduits
+
+## Exemple de calcul des coûts
+
+Pour une requête de 10 000 jetons d'entrée vers Claude (Anthropic) :
+
+**Sans cache :**
+```
+10 000 jetons × 3,00 $/1M = 0,030 $
+```
+
+**Avec cache fournisseur (8 000 en cache + 2 000 nouveaux) :**
+```
+Lecture cache :  8 000 jetons × 0,30 $/1M = 0,0024 $  (90 % de réduction)
+Écriture cache : 2 000 jetons × 3,75 $/1M = 0,0075 $  (25 % de prime)
+Total : 0,0099 $ (67 % d'économie)
+```
+
+## Bonnes pratiques
+
+<AccordionGroup>
+  <Accordion title="Utilisez des prompts système cohérents">
+    Placez votre prompt système et le contexte statique au début de vos messages. Cela maximise le potentiel de cache touché.
+  </Accordion>
+
+  <Accordion title="Regroupez les requêtes similaires">
+    Envoyez les requêtes avec le même préfixe à intervalles rapprochés pour profiter du cache avant son expiration.
+  </Accordion>
+
+  <Accordion title="Respectez les seuils minimaux de jetons">
+    Assurez-vous que votre préfixe mis en cache atteint le minimum du fournisseur (par ex. 1024 jetons pour Anthropic/OpenAI).
+  </Accordion>
+
+  <Accordion title="Surveillez les métriques de cache">
+    Consultez les statistiques d'utilisation de votre tableau de bord pour connaître les taux de cache touché et les économies réalisées.
+  </Accordion>
+</AccordionGroup>
+
+## Cache de plateforme vs Cache fournisseur
+
+| Aspect | Cache de plateforme | Cache fournisseur |
+|--------|---------------------|-------------------|
+| **Correspondance** | Similarité sémantique | Correspondance exacte du préfixe |
+| **Coût** | 10 % du prix normal | Tarifs réduits |
+| **Latence** | Instantanée (~1 ms) | Réduite (traitement évité) |
+| **Contrôle** | Paramètres du tableau de bord | Automatique |
+| **Portée** | Inter-utilisateurs (optionnel) | Par clé API |
+
+### Quand chacun s'applique
+
+```
+Requête entrante
+    │
+    ▼
+┌──────────────────────────┐
+│ Cache plateforme touché ? │
+└──────────────────────────┘
+    │ Oui              │ Non
+    ▼                  ▼
+┌──────────┐    ┌──────────────────────────┐
+│ Retourner │    │ Appeler l'API en amont  │
+│ le cache  │    └──────────────────────────┘
+│ (10 %)    │            │
+└──────────┘            ▼
+               ┌──────────────────────────┐
+               │ Cache fournisseur touché ? │
+               └──────────────────────────┘
+                   │ Oui        │ Non
+                   ▼            ▼
+               Tarif de      Tarif de
+               jetons réduit jetons plein
+```
+
+## Vérifier le statut du cache
+
+### En-têtes de réponse
+
+```
+X-Cache-Status: HIT           # Cache de plateforme touché
+X-Cache-Status: MISS          # Pas de cache de plateforme
+X-Upstream-Cache-Read: 8000   # Jetons lus depuis le cache fournisseur
+X-Upstream-Cache-Write: 2000  # Jetons écrits dans le cache fournisseur
+```
+
+### API d'utilisation
+
+Interrogez vos journaux d'utilisation pour voir le détail du cache :
+
+```bash
+curl https://api.lemondata.cc/v1/usage/logs \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json"
+```
+
+La réponse inclut :
+```json
+{
+  "promptTokens": 10000,
+  "cacheReadTokens": 8000,
+  "cacheWriteTokens": 2000,
+  "nonCachedPromptTokens": 0,
+  "completionTokens": 500,
+  "cost": 0.0099
+}
+```
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Puis-je désactiver le cache fournisseur ?">
+    Le cache fournisseur est automatique et ne peut pas être désactivé. Cependant, il ne fait que vous avantager (coûts réduits), il n'y a donc aucune raison de le désactiver.
+  </Accordion>
+
+  <Accordion title="Pourquoi ma requête n'a-t-elle pas touché le cache fournisseur ?">
+    Raisons courantes :
+    - Le préfixe a changé (même un seul jeton de différence)
+    - Le cache a expiré (généralement 5 à 60 minutes)
+    - Le préfixe est trop court (en dessous du minimum de jetons)
+    - Une clé API différente a été utilisée
+  </Accordion>
+
+  <Accordion title="Le BYOK prend-il en charge le cache fournisseur ?">
+    Oui ! Lorsque vous utilisez vos propres clés API (BYOK), le cache fournisseur fonctionne de la même manière. Le cache est lié à votre clé API en amont.
+  </Accordion>
+
+  <Accordion title="Comment maximiser les économies de cache ?">
+    1. Utilisez le cache sémantique de plateforme pour les requêtes similaires répétées
+    2. Structurez vos prompts avec le contenu statique en premier
+    3. Gardez des prompts système cohérents entre les requêtes
+    4. Envoyez les requêtes liées en succession rapide
+  </Accordion>
+</AccordionGroup>
