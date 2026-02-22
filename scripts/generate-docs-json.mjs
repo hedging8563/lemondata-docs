@@ -153,7 +153,7 @@ const navigationTabs = {
     groups: [
       {
         group: 'Getting Started',
-        pages: ['claw/introduction', 'claw/api']
+        pages: ['claw/introduction', 'claw/self-hosted', 'claw/api']
       },
       {
         group: 'Chat Platforms',

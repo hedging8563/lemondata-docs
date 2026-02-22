@@ -1,0 +1,162 @@
+---
+title: "셀프 호스팅 설치"
+description: "LemonData AI API로 자체 서버에서 OpenClaw 실행 — 명령어 하나로, Docker 불필요"
+---
+
+<Note>
+**셀프 호스팅**은 OpenClaw를 자체 VPS 또는 머신에서 직접 실행하는 것을 의미합니다. LemonData 잔액으로 AI 모델 사용료만 지불하면 됩니다 — 인스턴스 비용은 없습니다.
+</Note>
+
+## 빠른 설치
+
+<CodeGroup>
+```bash Linux / macOS
+curl -fsSL https://raw.githubusercontent.com/hedging8563/lemondata-openclaw/main/install.sh | bash
+```
+
+```bash 비대화식
+LEMONDATA_API_KEY=sk-xxx curl -fsSL https://raw.githubusercontent.com/hedging8563/lemondata-openclaw/main/install.sh | bash
+```
+</CodeGroup>
+
+설치 프로그램이 **LemonData API Key** 입력을 요청합니다. [대시보드](https://lemondata.cc/dashboard)에서 발급받으세요.
+
+## 설치 내용
+
+<Steps>
+  <Step title="Node.js 22+">
+    설치되어 있지 않으면 자동으로 설치됩니다 (Linux는 NodeSource, macOS는 Homebrew 사용)
+  </Step>
+  <Step title="OpenClaw">
+    npm의 공식 OpenClaw 패키지, LemonData API 사전 구성 완료
+  </Step>
+  <Step title="15개 AI 모델">
+    Claude, GPT-5, Gemini, DeepSeek 등 — 바로 사용 가능
+  </Step>
+  <Step title="IM 플러그인">
+    DingTalk, WeCom, QQ 플러그인 사전 설치
+  </Step>
+  <Step title="시스템 서비스">
+    부팅 시 자동 시작 (Linux는 systemd, macOS는 launchd)
+  </Step>
+</Steps>
+
+## 요구 사항
+
+| 요구 사항 | 세부 정보 |
+|-----------|-----------|
+| **OS** | Linux (Ubuntu/Debian/CentOS/RHEL) 또는 macOS |
+| **아키텍처** | x64 또는 arm64 |
+| **메모리** | 최소 1 GB, 권장 2 GB |
+| **API Key** | [여기서 발급](https://lemondata.cc) |
+
+## 설치 후
+
+설치 프로그램이 접속 자격 증명을 출력합니다:
+
+```
+✓ OpenClaw installed successfully!
+
+  WebUI:        http://your-ip:18789
+  Token:        your-gateway-token
+  Auto-login:   http://your-ip:18789?token=your-gateway-token
+  Model:        claude-sonnet-4-6
+```
+
+<Warning>
+**Token을 반드시 저장하세요!** WebUI 접속과 메시징 플랫폼 연결에 필요합니다.
+</Warning>
+
+## 메시징 플랫폼 연결
+
+Token을 사용하여 WebUI `http://your-ip:18789`에 접속한 후, 각 플랫폼별 가이드를 따르세요:
+
+<CardGroup cols={2}>
+  <Card title="Telegram" icon="paper-plane" href="/claw/telegram" />
+  <Card title="Discord" icon="discord" href="/claw/discord" />
+  <Card title="WhatsApp" icon="whatsapp" href="/claw/whatsapp" />
+  <Card title="Slack" icon="slack" href="/claw/slack" />
+  <Card title="DingTalk" icon="bell" href="/claw/dingtalk" />
+  <Card title="WeCom" icon="building" href="/claw/wecom" />
+</CardGroup>
+
+## 관리 명령어
+
+<Tabs>
+  <Tab title="Linux">
+    ```bash
+    systemctl --user status openclaw    # 상태 확인
+    journalctl --user -u openclaw -f    # 로그 보기
+    systemctl --user restart openclaw   # 재시작
+    systemctl --user stop openclaw      # 중지
+    ```
+  </Tab>
+  <Tab title="macOS">
+    ```bash
+    tail -f ~/.openclaw/openclaw.log    # 로그 보기
+    launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # 재시작
+    launchctl stop cc.lemondata.openclaw  # 중지
+    ```
+  </Tab>
+</Tabs>
+
+## 설정
+
+설정 파일 위치: `~/.openclaw/openclaw.json`
+
+편집 후 변경 사항을 적용하려면 서비스를 재시작하세요.
+
+### 기본 모델 변경
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "lemondata-claude/claude-opus-4-6"
+      }
+    }
+  }
+}
+```
+
+사용 가능한 모델 접두사:
+- `lemondata-claude/` — Claude 모델 (anthropic-messages API)
+- `lemondata-minimax/` — MiniMax 모델 (anthropic-messages API)
+- `lemondata/` — 기타 모든 모델 (openai-completions API)
+
+## 업그레이드
+
+```bash
+npm update -g openclaw
+# 서비스 재시작
+systemctl --user restart openclaw  # Linux
+# 또는
+launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
+```
+
+## 제거
+
+```bash
+# 서비스 중지 및 비활성화
+systemctl --user stop openclaw && systemctl --user disable openclaw  # Linux
+launchctl unload ~/Library/LaunchAgents/cc.lemondata.openclaw.plist  # macOS
+
+# OpenClaw 제거
+npm uninstall -g openclaw
+rm -rf ~/.openclaw
+```
+
+## 셀프 호스팅 vs 매니지드
+
+| | 셀프 호스팅 | 매니지드 (Claw) |
+|---|---|---|
+| **인스턴스 비용** | 무료 | $20 / 30일 |
+| **AI 사용료** | 종량제 | 종량제 |
+| **인프라** | 자체 서버 | 전부 관리해 드립니다 |
+| **업데이트** | 수동 (`npm update`) | 자동 |
+| **지원** | 커뮤니티 | 우선 |
+
+<Info>
+**소스 코드**: [github.com/hedging8563/lemondata-openclaw](https://github.com/hedging8563/lemondata-openclaw)
+</Info>
