@@ -81,6 +81,8 @@ const navigationTabs = {
       {
         group: 'Gemini',
         pages: [
+          'api-reference/gemini/list-models',
+          'api-reference/gemini/get-model',
           'api-reference/gemini/generate-content',
           'api-reference/gemini/stream-generate-content'
         ]
