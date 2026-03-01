@@ -34,8 +34,8 @@ import * as crypto from 'node:crypto';
 const DOCS_DIR = path.join(import.meta.dirname, '..');
 const CACHE_DIR = path.join(DOCS_DIR, '.cache');
 
-const TRANSLATION_API_KEY = process.env.TRANSLATION_API_KEY || 'sk-YDeOVlSxrhPcHLOrvpCFjeGJDLGuOiA2kPwsyCrzbNa2E9vC';
-const TRANSLATION_API_BASE = process.env.TRANSLATION_API_BASE || 'https://crazyrouter.com/v1';
+const TRANSLATION_API_KEY = process.env.TRANSLATION_API_KEY || 'quotio-local-0368A0CE-D83E-4C12-B3CF-810DCB5FCBA8';
+const TRANSLATION_API_BASE = process.env.TRANSLATION_API_BASE || 'http://127.0.0.1:8317/v1';
 const TRANSLATION_MODEL = process.env.TRANSLATION_MODEL || 'gemini-3-flash-preview';
 
 // Target languages (must match generate-docs-json.mjs)

@@ -31,9 +31,9 @@ const DOCS_DIR = path.join(import.meta.dirname, '..');
 const CACHE_DIR = path.join(DOCS_DIR, '.cache');
 
 // API configuration from environment
-const TRANSLATION_API_KEY = process.env.TRANSLATION_API_KEY || '';
-const TRANSLATION_API_BASE = process.env.TRANSLATION_API_BASE || 'https://api.lemondata.cc/v1';
-const TRANSLATION_MODEL = process.env.TRANSLATION_MODEL || 'gemini-2.0-flash';
+const TRANSLATION_API_KEY = process.env.TRANSLATION_API_KEY || 'quotio-local-0368A0CE-D83E-4C12-B3CF-810DCB5FCBA8';
+const TRANSLATION_API_BASE = process.env.TRANSLATION_API_BASE || 'http://127.0.0.1:8317/v1';
+const TRANSLATION_MODEL = process.env.TRANSLATION_MODEL || 'gemini-3-flash-preview';
 
 // Target languages for Mintlify docs
 const TARGET_LANGUAGES: Record<string, { name: string; nativeName: string; path: string }> = {
