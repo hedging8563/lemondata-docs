@@ -1,251 +1,178 @@
 ---
-title: "OpenAI SDK"
-description: "通过官方 OpenAI SDK 使用 LemonData"
+title: 'API 参考'
+description: 'LemonData API 的完整参考文档'
 ---
 
 ## 概览
 
-LemonData 完全兼容 OpenAI SDK。只需更改 `base URL`，即可访问 300 多个模型。
+LemonData API **兼容 OpenAI**，这意味着您只需更改 Base URL 即可使用官方 OpenAI SDK。我们还支持原生的 **Anthropic** 和 **Gemini** 请求格式。
 
-## 安装
+## Base URL
 
-<CodeGroup>
-
-```bash Python
-pip install openai
+```
+https://api.lemondata.cc
 ```
 
-```bash JavaScript
-npm install openai
+## 身份验证
+
+所有 API 端点都需要使用 Bearer token 进行身份验证：
+
+```bash
+Authorization: Bearer sk-your-api-key
 ```
 
-```bash Go
-go get github.com/sashabaranov/go-openai
-```
+从 [控制面板](https://lemondata.cc/dashboard) 获取您的 API 密钥。
 
-```bash PHP
-composer require openai-php/client
-```
+## 支持的端点
 
-</CodeGroup>
+### 对话与文本生成
 
-## 配置
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | 兼容 OpenAI 的对话补全 |
+| `/v1/messages` | POST | 兼容 Anthropic 的消息 API |
+| `/v1/responses` | POST | OpenAI Responses API |
 
-<CodeGroup>
+### 嵌入与重排序
 
-```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-lemondata-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
-```
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/embeddings` | POST | 创建文本嵌入 |
+| `/v1/rerank` | POST | 文档重排序 |
 
-```python Python
-from openai import OpenAI
+### 图像
 
-client = OpenAI(
-    api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc/v1"
-)
-```
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/images/generations` | POST | 根据文本生成图像 |
+| `/v1/images/edits` | POST | 编辑图像 |
 
-```javascript JavaScript
-import OpenAI from 'openai';
+### 音频
 
-const client = new OpenAI({
-  apiKey: 'sk-your-lemondata-key',
-  baseURL: 'https://api.lemondata.cc/v1'
-});
-```
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/audio/speech` | POST | 文本转语音 (TTS) |
+| `/v1/audio/transcriptions` | POST | 语音转文本 (STT) |
 
-```go Go
-package main
+### 视频
 
-import "github.com/sashabaranov/go-openai"
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/videos/generations` | POST | 创建视频生成任务 |
+| `/v1/videos/generations/{id}` | GET | 获取视频任务状态 |
 
-func main() {
-    config := openai.DefaultConfig("sk-your-lemondata-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
+### 音乐
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/music/generations` | POST | 创建音乐生成任务 |
+| `/v1/music/generations/{id}` | GET | 获取音乐任务状态 |
+
+### 3D 生成
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/3d/generations` | POST | 创建 3D 模型生成任务 |
+| `/v1/3d/generations/{id}` | GET | 获取 3D 任务状态 |
+
+### 模型
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/models` | GET | 列出所有可用模型 |
+| `/v1/models/{model}` | GET | 获取特定模型信息 |
+
+## 响应格式
+
+所有响应都遵循一致的格式：
+
+### 成功响应
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4o",
+  "choices": [...],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30
+  }
 }
 ```
 
-```php PHP
-<?php
-$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer sk-your-lemondata-key'
-    ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'gpt-4o',
-        'messages' => [['role' => 'user', 'content' => 'Hello!']]
-    ])
-]);
+### 路由透明度
+
+所有响应都包含一个带有渠道信息的 `_routing` 字段：
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  ...,
+  "_routing": {
+    "channel": {
+      "id": "ch_xxx",
+      "name": "channel-name",
+      "provider": "openai",
+      "channelType": "PLATFORM"
+    },
+    "cached": false,
+    "retryCount": 0
+  }
+}
 ```
 
-</CodeGroup>
+| 字段 | 描述 |
+|-------|-------------|
+| `channel.id` | 使用的渠道标识符 |
+| `channel.provider` | 上游提供商 (openai, anthropic 等) |
+| `channel.channelType` | `PLATFORM` (LemonData) 或 `PRIVATE` (BYOK) |
+| `cached` | 响应是否来自缓存 |
+| `retryCount` | 重试次数（如果有） |
 
-## 聊天补全 (Chat Completions)
+### 错误响应
 
-工作方式与 OpenAI API 完全一致：
-
-```python
-response = client.chat.completions.create(
-    model="gpt-4o",  # Or any LemonData model
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello!"}
-    ],
-    temperature=0.7,
-    max_tokens=1000
-)
-
-print(response.choices[0].message.content)
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
 ```
 
-## 流式传输 (Streaming)
+## 速率限制
 
-```python
-stream = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Tell me a story"}],
-    stream=True
-)
+速率限制基于角色，并可由管理员配置。默认值：
 
-for chunk in stream:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
+| 角色 | 请求数/分钟 |
+|------|-------------|
+| 用户 | 60 |
+| 合作伙伴 | 300 |
+| VIP | 1,000 |
+| 管理员 | 无限制 |
+
+<Note>
+联系支持团队以获取自定义速率限制。确切数值可能因账户配置而异。
+</Note>
+
+所有响应中都包含速率限制标头：
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 55
+X-RateLimit-Reset: 1234567890
 ```
 
-## 函数调用 / 工具 (Function Calling / Tools)
+## OpenAPI 规范
 
-```python
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}],
-    tools=[{
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "Get weather for a location",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {"type": "string"}
-                },
-                "required": ["location"]
-            }
-        }
-    }]
-)
-
-# Check if model wants to call a function
-if response.choices[0].message.tool_calls:
-    tool_call = response.choices[0].message.tool_calls[0]
-    print(f"Function: {tool_call.function.name}")
-    print(f"Arguments: {tool_call.function.arguments}")
-```
-
-## 视觉 (Vision)
-
-```python
-response = client.chat.completions.create(
-    model="gpt-4o",  # Or claude-sonnet-4-5
-    messages=[{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "What's in this image?"},
-            {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
-        ]
-    }]
-)
-```
-
-## 图像生成 (Image Generation)
-
-```python
-response = client.images.generate(
-    model="dall-e-3",
-    prompt="A white siamese cat",
-    size="1024x1024",
-    quality="standard",
-    n=1
-)
-
-print(response.data[0].url)
-```
-
-## 嵌入 (Embeddings)
-
-```python
-response = client.embeddings.create(
-    model="text-embedding-3-small",
-    input="Hello world"
-)
-
-print(response.data[0].embedding[:5])  # First 5 dimensions
-```
-
-## 音频 - 文本转语音 (Text to Speech)
-
-```python
-response = client.audio.speech.create(
-    model="tts-1",
-    voice="alloy",
-    input="Hello, welcome to LemonData!"
-)
-
-response.stream_to_file("output.mp3")
-```
-
-## 音频 - 语音转文字 (Transcription)
-
-```python
-with open("audio.mp3", "rb") as audio_file:
-    response = client.audio.transcriptions.create(
-        model="whisper-1",
-        file=audio_file
-    )
-
-print(response.text)
-```
-
-## 使用不同的模型
-
-LemonData 的核心优势在于可以访问多个提供商：
-
-```python
-# OpenAI
-response = client.chat.completions.create(model="gpt-4o", messages=messages)
-
-# Anthropic Claude
-response = client.chat.completions.create(model="claude-sonnet-4-5", messages=messages)
-
-# Google Gemini
-response = client.chat.completions.create(model="gemini-2.5-flash", messages=messages)
-
-# DeepSeek
-response = client.chat.completions.create(model="deepseek-r1", messages=messages)
-```
-
-## 错误处理
-
-```python
-from openai import APIError, RateLimitError, AuthenticationError
-
-try:
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "Hello"}]
-    )
-except AuthenticationError:
-    print("Invalid API key")
-except RateLimitError:
-    print("Rate limit exceeded, please wait")
-except APIError as e:
-    print(f"API error: {e.status_code} - {e.message}")
-```
+<Card
+  title="OpenAPI 规范"
+  icon="file-code"
+  href="/openapi.json"
+>
+  下载完整的 OpenAPI 3.0 规范
+</Card>

@@ -1,168 +1,178 @@
 ---
-title: "SDK 與函式庫"
-description: "LemonData 的官方與社群 SDK"
+title: 'API 参考'
+description: 'LemonData API 的完整参考文档'
 ---
 
-## 概覽
+## 概览
 
-LemonData **相容於 OpenAI**，這意味著您只需更改 base URL 即可使用任何 OpenAI SDK。我們也支援原生的 Anthropic 和 Google Gemini SDK。
+LemonData API **兼容 OpenAI**，这意味着您只需更改 Base URL 即可使用官方 OpenAI SDK。我们还支持原生的 **Anthropic** 和 **Gemini** 请求格式。
 
-## 官方 SDK
+## Base URL
 
-由於 LemonData 相容於 OpenAI，請使用官方的 OpenAI SDK：
-
-<CardGroup cols={2}>
-  <Card title="Python" icon="python" href="https://github.com/openai/openai-python">
-    `pip install openai`
-  </Card>
-  <Card title="Node.js" icon="node-js" href="https://github.com/openai/openai-node">
-    `npm install openai`
-  </Card>
-  <Card title="Go" icon="golang" href="https://github.com/sashabaranov/go-openai">
-    `go get github.com/sashabaranov/go-openai`
-  </Card>
-  <Card title=".NET" icon="microsoft" href="https://github.com/openai/openai-dotnet">
-    `dotnet add package OpenAI`
-  </Card>
-</CardGroup>
-
-## 配置
-
-### Python
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="sk-your-api-key",
-    base_url="https://api.lemondata.cc/v1"
-)
-
-# 使用任何模型
-response = client.chat.completions.create(
-    model="gpt-4o",  # 或 claude-sonnet-4-5, gemini-2.5-flash 等
-    messages=[{"role": "user", "content": "Hello!"}]
-)
+```
+https://api.lemondata.cc
 ```
 
-### JavaScript / TypeScript
+## 身份验证
 
-```javascript
-import OpenAI from 'openai';
+所有 API 端点都需要使用 Bearer token 进行身份验证：
 
-const client = new OpenAI({
-  apiKey: 'sk-your-api-key',
-  baseURL: 'https://api.lemondata.cc/v1'
-});
-
-const response = await client.chat.completions.create({
-  model: 'gpt-4o',
-  messages: [{ role: 'user', content: 'Hello!' }]
-});
+```bash
+Authorization: Bearer sk-your-api-key
 ```
 
-### Go
+从 [控制面板](https://lemondata.cc/dashboard) 获取您的 API 密钥。
 
-```go
-package main
+## 支持的端点
 
-import (
-    "context"
-    "fmt"
-    openai "github.com/sashabaranov/go-openai"
-)
+### 对话与文本生成
 
-func main() {
-    config := openai.DefaultConfig("sk-your-api-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | 兼容 OpenAI 的对话补全 |
+| `/v1/messages` | POST | 兼容 Anthropic 的消息 API |
+| `/v1/responses` | POST | OpenAI Responses API |
 
-    client := openai.NewClientWithConfig(config)
+### 嵌入与重排序
 
-    resp, err := client.CreateChatCompletion(
-        context.Background(),
-        openai.ChatCompletionRequest{
-            Model: "gpt-4o",
-            Messages: []openai.ChatCompletionMessage{
-                {Role: "user", Content: "Hello!"},
-            },
-        },
-    )
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(resp.Choices[0].Message.Content)
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/embeddings` | POST | 创建文本嵌入 |
+| `/v1/rerank` | POST | 文档重排序 |
+
+### 图像
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/images/generations` | POST | 根据文本生成图像 |
+| `/v1/images/edits` | POST | 编辑图像 |
+
+### 音频
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/audio/speech` | POST | 文本转语音 (TTS) |
+| `/v1/audio/transcriptions` | POST | 语音转文本 (STT) |
+
+### 视频
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/videos/generations` | POST | 创建视频生成任务 |
+| `/v1/videos/generations/{id}` | GET | 获取视频任务状态 |
+
+### 音乐
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/music/generations` | POST | 创建音乐生成任务 |
+| `/v1/music/generations/{id}` | GET | 获取音乐任务状态 |
+
+### 3D 生成
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/3d/generations` | POST | 创建 3D 模型生成任务 |
+| `/v1/3d/generations/{id}` | GET | 获取 3D 任务状态 |
+
+### 模型
+
+| 端点 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/models` | GET | 列出所有可用模型 |
+| `/v1/models/{model}` | GET | 获取特定模型信息 |
+
+## 响应格式
+
+所有响应都遵循一致的格式：
+
+### 成功响应
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4o",
+  "choices": [...],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 20,
+    "total_tokens": 30
+  }
 }
 ```
 
-### .NET / C#
+### 路由透明度
 
-```csharp
-using OpenAI;
+所有响应都包含一个带有渠道信息的 `_routing` 字段：
 
-var options = new OpenAIClientOptions
+```json
 {
-    Endpoint = new Uri("https://api.lemondata.cc/v1")
-};
-
-var client = new OpenAIClient("sk-your-api-key", options);
-
-var chat = client.GetChatClient("gpt-4o");
-var response = await chat.CompleteChatAsync("Hello!");
-
-Console.WriteLine(response.Value.Content[0].Text);
+  "id": "chatcmpl-abc123",
+  ...,
+  "_routing": {
+    "channel": {
+      "id": "ch_xxx",
+      "name": "channel-name",
+      "provider": "openai",
+      "channelType": "PLATFORM"
+    },
+    "cached": false,
+    "retryCount": 0
+  }
+}
 ```
 
-### cURL
+| 字段 | 描述 |
+|-------|-------------|
+| `channel.id` | 使用的渠道标识符 |
+| `channel.provider` | 上游提供商 (openai, anthropic 等) |
+| `channel.channelType` | `PLATFORM` (LemonData) 或 `PRIVATE` (BYOK) |
+| `cached` | 响应是否来自缓存 |
+| `retryCount` | 重试次数（如果有） |
 
-```bash
-curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
+### 错误响应
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_api_key",
+    "code": "invalid_api_key"
+  }
+}
 ```
 
-## 環境變數
+## 速率限制
 
-我們建議使用環境變數來管理 API 金鑰：
+速率限制基于角色，并可由管理员配置。默认值：
 
-```bash
-# .env 或 shell 設定檔
-export LEMONDATA_API_KEY="sk-your-api-key"
-export LEMONDATA_BASE_URL="https://api.lemondata.cc/v1"
+| 角色 | 请求数/分钟 |
+|------|-------------|
+| 用户 | 60 |
+| 合作伙伴 | 300 |
+| VIP | 1,000 |
+| 管理员 | 无限制 |
+
+<Note>
+联系支持团队以获取自定义速率限制。确切数值可能因账户配置而异。
+</Note>
+
+所有响应中都包含速率限制标头：
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 55
+X-RateLimit-Reset: 1234567890
 ```
 
-```python
-import os
-from openai import OpenAI
+## OpenAPI 规范
 
-client = OpenAI(
-    api_key=os.environ.get("LEMONDATA_API_KEY"),
-    base_url=os.environ.get("LEMONDATA_BASE_URL")
-)
-```
-
-## Anthropic SDK
-
-對於 Anthropic 原生請求，請使用 Anthropic SDK：
-
-```python
-from anthropic import Anthropic
-
-client = Anthropic(
-    api_key="sk-your-api-key",
-    base_url="https://api.lemondata.cc"
-)
-
-message = client.messages.create(
-    model="claude-sonnet-4-5",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-```
-
-## LangChain 整合
-
-請參閱 [LangChain 整合](/integrations/langchain) 指南以了解框架整合。
+<Card
+  title="OpenAPI 规范"
+  icon="file-code"
+  href="/openapi.json"
+>
+  下载完整的 OpenAPI 3.0 规范
+</Card>

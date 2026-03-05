@@ -1,61 +1,46 @@
 ---
-title: "翻訳の作成"
-api: "POST /v1/audio/translations"
-description: "オーディオを英語のテキストに翻訳します"
+title: "音声の作成"
+api: "POST /v1/audio/speech"
+description: "入力テキストから音声を生成します"
 ---
-
-## 概要
-
-サポートされている任意の言語のオーディオを英語のテキストに翻訳します。文字起こし（transcription）とは異なり、このエンドポイントは入力言語に関係なく、常に英語のテキストを出力します。
 
 ## リクエストボディ
 
-<ParamField body="file" type="file" required>
-  翻訳するオーディオファイル。サポートされている形式：`flac`、`mp3`、`mp4`、`mpeg`、`mpga`、`m4a`、`ogg`、`wav`、`webm`。最大ファイルサイズは 25 MB です。
+<ParamField body="model" type="string" default="tts-1">
+  TTSモデル：`tts-1`（標準）または`tts-1-hd`（高品質）。
 </ParamField>
 
-<ParamField body="model" type="string" default="whisper-1">
-  使用するモデル。現在、`whisper-1` のみがサポートされています。
+<ParamField body="input" type="string" required>
+  音声を生成するテキスト。最大4096文字。
 </ParamField>
 
-<ParamField body="prompt" type="string">
-  モデルのスタイルをガイドしたり、前のセグメントを継続したりするためのオプションのテキスト。英語である必要があります。
+<ParamField body="voice" type="string" required>
+  使用する音声：`alloy`、`ash`、`ballad`、`coral`、`echo`、`fable`、`nova`、`onyx`、`sage`、`shimmer`、`verse`。
 </ParamField>
 
-<ParamField body="response_format" type="string" default="json">
-  出力の形式。オプション：`json`、`text`、`srt`、`verbose_json`、`vtt`。
+<ParamField body="response_format" type="string" default="mp3">
+  音声形式：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。
 </ParamField>
 
-<ParamField body="temperature" type="number">
-  サンプリング温度。0 から 1 の間です。0.8 のような高い値はよりランダムな出力を生成し、0.2 のような低い値は出力をより集中させ、決定論的にします。
+<ParamField body="speed" type="number" default="1.0">
+  音声の速度（0.25から4.0）。
 </ParamField>
 
 ## レスポンス
 
-<ResponseField name="text" type="string">
-  翻訳された英語のテキスト。
-</ResponseField>
-
-`verbose_json` 形式の場合、レスポンスには以下も含まれます：
-
-<ResponseField name="language" type="string">
-  検出された入力オーディオの言語。
-</ResponseField>
-
-<ResponseField name="duration" type="number">
-  入力オーディオの長さ（秒単位）。
-</ResponseField>
-
-<ResponseField name="segments" type="array">
-  タイムスタンプ付きの翻訳テキストのセグメント。
-</ResponseField>
+リクエストされた形式で音声ファイルを返します。
 
 <RequestExample>
 ```bash cURL
-curl -X POST "https://api.lemondata.cc/v1/audio/translations" \
+curl -X POST "https://api.lemondata.cc/v1/audio/speech" \
   -H "Authorization: Bearer sk-your-api-key" \
-  -F "file=@german_audio.mp3" \
-  -F "model=whisper-1"
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Hello, welcome to LemonData!"
+  }' \
+  --output speech.mp3
 ```
 
 ```python Python
@@ -66,13 +51,13 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-with open("german_audio.mp3", "rb") as audio_file:
-    response = client.audio.translations.create(
-        model="whisper-1",
-        file=audio_file
-    )
+response = client.audio.speech.create(
+    model="tts-1-hd",
+    voice="nova",
+    input="Hello, welcome to LemonData!"
+)
 
-print(response.text)
+response.stream_to_file("speech.mp3")
 ```
 
 ```javascript JavaScript
@@ -84,12 +69,14 @@ const client = new OpenAI({
   baseURL: 'https://api.lemondata.cc/v1'
 });
 
-const response = await client.audio.translations.create({
-  model: 'whisper-1',
-  file: fs.createReadStream('german_audio.mp3')
+const response = await client.audio.speech.create({
+  model: 'tts-1-hd',
+  voice: 'nova',
+  input: 'Hello, welcome to LemonData!'
 });
 
-console.log(response.text);
+const buffer = Buffer.from(await response.arrayBuffer());
+fs.writeFileSync('speech.mp3', buffer);
 ```
 
 ```go Go
@@ -97,7 +84,8 @@ package main
 
 import (
     "context"
-    "fmt"
+    "io"
+    "os"
     "github.com/sashabaranov/go-openai"
 )
 
@@ -106,85 +94,62 @@ func main() {
     config.BaseURL = "https://api.lemondata.cc/v1"
     client := openai.NewClientWithConfig(config)
 
-    resp, err := client.CreateTranslation(
+    resp, err := client.CreateSpeech(
         context.Background(),
-        openai.AudioRequest{
-            Model:    openai.Whisper1,
-            FilePath: "german_audio.mp3",
+        openai.CreateSpeechRequest{
+            Model: openai.TTSModel1HD,
+            Voice: openai.VoiceNova,
+            Input: "Hello, welcome to LemonData!",
         },
     )
     if err != nil {
         panic(err)
     }
-    fmt.Println(resp.Text)
+    defer resp.Close()
+
+    file, _ := os.Create("speech.mp3")
+    defer file.Close()
+    io.Copy(file, resp)
 }
 ```
 
 ```php PHP
 <?php
-$ch = curl_init('https://api.lemondata.cc/v1/audio/translations');
-
-$file = new CURLFile('german_audio.mp3', 'audio/mpeg', 'german_audio.mp3');
+$ch = curl_init('https://api.lemondata.cc/v1/audio/speech');
 
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
         'Authorization: Bearer sk-your-api-key'
     ],
-    CURLOPT_POSTFIELDS => [
-        'file' => $file,
-        'model' => 'whisper-1'
-    ]
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'tts-1-hd',
+        'voice' => 'nova',
+        'input' => 'Hello, welcome to LemonData!'
+    ])
 ]);
 
-$response = curl_exec($ch);
+$audio = curl_exec($ch);
 curl_close($ch);
 
-$data = json_decode($response, true);
-echo $data['text'];
+file_put_contents('speech.mp3', $audio);
 ```
 </RequestExample>
 
-<ResponseExample>
-```json json
-{
-  "text": "Hello, my name is Wolfgang and I come from Germany. Where are you from?"
-}
-```
+## 音声サンプル
 
-```json verbose_json
-{
-  "task": "translate",
-  "language": "german",
-  "duration": 8.470000267028809,
-  "text": "Hello, my name is Wolfgang and I come from Germany. Where are you from?",
-  "segments": [
-    {
-      "id": 0,
-      "seek": 0,
-      "start": 0.0,
-      "end": 4.0,
-      "text": " Hello, my name is Wolfgang and I come from Germany.",
-      "tokens": [50364, 2425, 11, 452, 1315, 307, 25329, 293, 286, 808, 490, 5765, 13, 50564],
-      "temperature": 0.0,
-      "avg_logprob": -0.45,
-      "compression_ratio": 1.0,
-      "no_speech_prob": 0.0
-    }
-  ]
-}
-```
-</ResponseExample>
-
-## 翻訳 vs 文字起こし
-
-| 機能 | 翻訳 | 文字起こし |
-|---------|-------------|---------------|
-| 出力言語 | 常に英語 | 入力と同じ |
-| ユースケース | 外国語のオーディオを英語に変換 | 元の言語を保持 |
-| 言語パラメータ | 該当なし | オプションのヒント |
-
-<Note>
-  翻訳エンドポイントはソース言語を自動的に検出し、英語に翻訳します。文字起こしの `language` パラメータは無視されます。
-</Note>
+| 音声 | 説明 |
+|-------|-------------|
+| `alloy` | ニュートラル、バランスが良い |
+| `ash` | 落ち着いた、慎重な |
+| `ballad` | メロディック、表現力豊か |
+| `coral` | 温かい、親しみやすい |
+| `echo` | 温かい、対話的 |
+| `fable` | 表現力豊か、ナラティブ |
+| `nova` | フレンドリー、明快 |
+| `onyx` | 深く、権威のある |
+| `sage` | 賢明、思慮深い |
+| `shimmer` | 柔らかい、穏やか |
+| `verse` | ダイナミック、多才 |

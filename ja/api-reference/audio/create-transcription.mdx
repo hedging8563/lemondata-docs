@@ -1,74 +1,46 @@
 ---
-title: "文字起こしの作成"
-api: "POST /v1/audio/transcriptions"
-description: "音声を入力言語で文字起こしします"
+title: "音声の作成"
+api: "POST /v1/audio/speech"
+description: "入力テキストから音声を生成します"
 ---
 
 ## リクエストボディ
 
-<ParamField body="file" type="file" required>
-  文字起こしする音声ファイル。サポートされている形式：flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm。
+<ParamField body="model" type="string" default="tts-1">
+  TTSモデル：`tts-1`（標準）または`tts-1-hd`（高品質）。
 </ParamField>
 
-<ParamField body="model" type="string" default="whisper-1">
-  使用するモデル。現在は `whisper-1` のみがサポートされています。
+<ParamField body="input" type="string" required>
+  音声を生成するテキスト。最大4096文字。
 </ParamField>
 
-<ParamField body="language" type="string">
-  ISO-639-1 形式の音声の言語（例：`en`, `zh`, `ja`）。
+<ParamField body="voice" type="string" required>
+  使用する音声：`alloy`、`ash`、`ballad`、`coral`、`echo`、`fable`、`nova`、`onyx`、`sage`、`shimmer`、`verse`。
 </ParamField>
 
-<ParamField body="prompt" type="string">
-  モデルのスタイルをガイドしたり、前のセグメントを継続したりするためのオプションのテキスト。
+<ParamField body="response_format" type="string" default="mp3">
+  音声形式：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。
 </ParamField>
 
-<ParamField body="response_format" type="string" default="json">
-  出力形式：`json`, `text`, `srt`, `verbose_json`, `vtt`。
-</ParamField>
-
-<ParamField body="temperature" type="number" default="0">
-  サンプリング温度（0 から 1）。
-</ParamField>
-
-<ParamField body="timestamp_granularities" type="array">
-  タイムスタンプの粒度：`word` または `segment`、あるいはその両方。`verbose_json` が必要です。
+<ParamField body="speed" type="number" default="1.0">
+  音声の速度（0.25から4.0）。
 </ParamField>
 
 ## レスポンス
 
-<ResponseField name="text" type="string">
-  文字起こしされたテキスト。
-</ResponseField>
-
-`verbose_json` の場合：
-
-<ResponseField name="task" type="string">
-  常に `transcribe`。
-</ResponseField>
-
-<ResponseField name="language" type="string">
-  検出された言語。
-</ResponseField>
-
-<ResponseField name="duration" type="number">
-  音声の長さ（秒）。
-</ResponseField>
-
-<ResponseField name="segments" type="array">
-  タイムスタンプ付きの文字起こしセグメント。
-</ResponseField>
-
-<ResponseField name="words" type="array">
-  単語レベルのタイムスタンプ（リクエストされた場合）。
-</ResponseField>
+リクエストされた形式で音声ファイルを返します。
 
 <RequestExample>
 ```bash cURL
-curl -X POST "https://api.lemondata.cc/v1/audio/transcriptions" \
+curl -X POST "https://api.lemondata.cc/v1/audio/speech" \
   -H "Authorization: Bearer sk-your-api-key" \
-  -F file="@audio.mp3" \
-  -F model="whisper-1" \
-  -F language="en"
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Hello, welcome to LemonData!"
+  }' \
+  --output speech.mp3
 ```
 
 ```python Python
@@ -79,14 +51,13 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-with open("audio.mp3", "rb") as audio_file:
-    response = client.audio.transcriptions.create(
-        model="whisper-1",
-        file=audio_file,
-        language="en"
-    )
+response = client.audio.speech.create(
+    model="tts-1-hd",
+    voice="nova",
+    input="Hello, welcome to LemonData!"
+)
 
-print(response.text)
+response.stream_to_file("speech.mp3")
 ```
 
 ```javascript JavaScript
@@ -98,13 +69,14 @@ const client = new OpenAI({
   baseURL: 'https://api.lemondata.cc/v1'
 });
 
-const response = await client.audio.transcriptions.create({
-  model: 'whisper-1',
-  file: fs.createReadStream('audio.mp3'),
-  language: 'en'
+const response = await client.audio.speech.create({
+  model: 'tts-1-hd',
+  voice: 'nova',
+  input: 'Hello, welcome to LemonData!'
 });
 
-console.log(response.text);
+const buffer = Buffer.from(await response.arrayBuffer());
+fs.writeFileSync('speech.mp3', buffer);
 ```
 
 ```go Go
@@ -112,7 +84,8 @@ package main
 
 import (
     "context"
-    "fmt"
+    "io"
+    "os"
     "github.com/sashabaranov/go-openai"
 )
 
@@ -121,81 +94,62 @@ func main() {
     config.BaseURL = "https://api.lemondata.cc/v1"
     client := openai.NewClientWithConfig(config)
 
-    resp, err := client.CreateTranscription(
+    resp, err := client.CreateSpeech(
         context.Background(),
-        openai.AudioRequest{
-            Model:    openai.Whisper1,
-            FilePath: "audio.mp3",
-            Language: "en",
+        openai.CreateSpeechRequest{
+            Model: openai.TTSModel1HD,
+            Voice: openai.VoiceNova,
+            Input: "Hello, welcome to LemonData!",
         },
     )
     if err != nil {
         panic(err)
     }
-    fmt.Println(resp.Text)
+    defer resp.Close()
+
+    file, _ := os.Create("speech.mp3")
+    defer file.Close()
+    io.Copy(file, resp)
 }
 ```
 
 ```php PHP
 <?php
-$ch = curl_init('https://api.lemondata.cc/v1/audio/transcriptions');
-
-$file = new CURLFile('audio.mp3', 'audio/mpeg', 'audio.mp3');
+$ch = curl_init('https://api.lemondata.cc/v1/audio/speech');
 
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
         'Authorization: Bearer sk-your-api-key'
     ],
-    CURLOPT_POSTFIELDS => [
-        'file' => $file,
-        'model' => 'whisper-1',
-        'language' => 'en'
-    ]
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'tts-1-hd',
+        'voice' => 'nova',
+        'input' => 'Hello, welcome to LemonData!'
+    ])
 ]);
 
-$response = curl_exec($ch);
+$audio = curl_exec($ch);
 curl_close($ch);
 
-$data = json_decode($response, true);
-echo $data['text'];
+file_put_contents('speech.mp3', $audio);
 ```
 </RequestExample>
 
-<ResponseExample>
-```json Response (json)
-{
-  "text": "Hello, this is a test of the transcription API."
-}
-```
+## 音声サンプル
 
-```json Response (verbose_json)
-{
-  "task": "transcribe",
-  "language": "english",
-  "duration": 5.5,
-  "text": "Hello, this is a test of the transcription API.",
-  "segments": [
-    {
-      "id": 0,
-      "start": 0.0,
-      "end": 2.5,
-      "text": "Hello, this is a test",
-      "tokens": [...]
-    }
-  ]
-}
-```
-</ResponseExample>
-
-## 翻訳
-
-音声を英語に翻訳するには、translations エンドポイントを使用します：
-
-```python
-response = client.audio.translations.create(
-    model="whisper-1",
-    file=audio_file
-)
-```
+| 音声 | 説明 |
+|-------|-------------|
+| `alloy` | ニュートラル、バランスが良い |
+| `ash` | 落ち着いた、慎重な |
+| `ballad` | メロディック、表現力豊か |
+| `coral` | 温かい、親しみやすい |
+| `echo` | 温かい、対話的 |
+| `fable` | 表現力豊か、ナラティブ |
+| `nova` | フレンドリー、明快 |
+| `onyx` | 深く、権威のある |
+| `sage` | 賢明、思慮深い |
+| `shimmer` | 柔らかい、穏やか |
+| `verse` | ダイナミック、多才 |
