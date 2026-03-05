@@ -5,7 +5,7 @@ description: "優雅地處理 API 錯誤"
 
 ## 錯誤回應格式
 
-所有錯誤都以一致的 JSON 格式傳回：
+所有錯誤都會回傳一致的 JSON 格式：
 
 ```json
 {
@@ -13,7 +13,7 @@ description: "優雅地處理 API 錯誤"
     "message": "Human-readable error description",
     "type": "error_type",
     "code": "error_code",
-    "param": "parameter_name"  // Optional, for validation errors
+    "param": "parameter_name"  // 選填，用於驗證錯誤
   }
 }
 ```
@@ -25,13 +25,13 @@ description: "優雅地處理 API 錯誤"
 | 400 | Bad Request - 參數無效 |
 | 401 | Unauthorized - API key 無效或缺失 |
 | 402 | Payment Required - 餘額不足 |
-| 403 | Forbidden - 拒絕存取或不允許使用該模型 |
+| 403 | Forbidden - 存取被拒絕或不允許使用該模型 |
 | 404 | Not Found - 找不到模型或資源 |
-| 413 | Payload Too Large - 超過輸入或檔案大小限制 |
+| 413 | Payload Too Large - 輸入或檔案大小超過限制 |
 | 429 | Too Many Requests - 超過速率限制 |
-| 500 | Internal Server Error |
+| 500 | Internal Server Error - 伺服器內部錯誤 |
 | 502 | Bad Gateway - 上游供應商錯誤 |
-| 503 | Service Unavailable - 所有通道均失敗 |
+| 503 | Service Unavailable - 所有管道皆失敗 |
 | 504 | Gateway Timeout - 請求逾時 |
 
 ## 錯誤類型
@@ -41,7 +41,7 @@ description: "優雅地處理 API 錯誤"
 | 類型 | 代碼 | 描述 |
 |------|------|-------------|
 | `invalid_api_key` | `invalid_api_key` | API key 缺失或無效 |
-| `expired_api_key` | `expired_api_key` | API key 已撤銷 |
+| `expired_api_key` | `expired_api_key` | API key 已被撤銷 |
 
 ```python
 from openai import OpenAI, AuthenticationError
@@ -52,7 +52,7 @@ except AuthenticationError as e:
     print(f"Authentication failed: {e.message}")
 ```
 
-### 付款錯誤 (402)
+### 支付錯誤 (402)
 
 | 類型 | 代碼 | 描述 |
 |------|------|-------------|
@@ -73,7 +73,7 @@ except APIStatusError as e:
 
 | 類型 | 代碼 | 描述 |
 |------|------|-------------|
-| `access_denied` | `access_denied` | 拒絕存取資源 |
+| `access_denied` | `access_denied` | 存取資源被拒絕 |
 | `access_denied` | `model_not_allowed` | 此 API key 不允許使用該模型 |
 
 ```json
@@ -118,7 +118,7 @@ except APIStatusError as e:
 }
 ```
 
-**包含的標頭：**
+**包含的標頭 (Headers)：**
 
 ```
 X-RateLimit-Limit: 1000
@@ -127,7 +127,7 @@ X-RateLimit-Reset: 1234567890
 Retry-After: 60
 ```
 
-### 承載量過大 (413)
+### 內容過大 (413)
 
 當輸入或檔案大小超過限制時：
 
@@ -142,15 +142,15 @@ Retry-After: 60
 ```
 
 常見原因：
-- 圖片檔案過大（最大 20MB）
-- 音訊檔案過大（最大 25MB）
-- 輸入文字超過模型上下文長度
+- 圖片檔案過大 (最大 20MB)
+- 音訊檔案過大 (最大 25MB)
+- 輸入文字超過模型上下文長度 (context length)
 
 ### 上游錯誤 (502, 503)
 
 | 類型 | 描述 |
 |------|-------------|
-| `upstream_error` | 供應商傳回錯誤 |
+| `upstream_error` | 供應商回傳錯誤 |
 | `all_channels_failed` | 無可用供應商 |
 | `timeout_error` | 請求逾時 |
 
@@ -218,22 +218,22 @@ async function chatWithRetry(messages, maxRetries = 3) {
 ## 最佳實踐
 
 <AccordionGroup>
-  <Accordion title="實作指數退避">
-    當受到速率限制時，在重試之間逐漸增加等待時間：
+  <Accordion title="實作指數退避 (Exponential Backoff)">
+    當遇到速率限制時，在重試之間逐漸增加等待時間：
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="設定逾時">
+  <Accordion title="設定逾時時間 (Timeouts)">
     務必設定合理的逾時時間，以避免請求掛起：
     ```python
-    client = OpenAI(timeout=60.0)  # 60 second timeout
+    client = OpenAI(timeout=60.0)  # 60 秒逾時
     ```
   </Accordion>
 
   <Accordion title="記錄錯誤以供偵錯">
-    記錄完整的錯誤回應（包括請求 ID）以便尋求支援：
+    記錄完整的錯誤回應（包括 request ID）以便尋求支援：
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")

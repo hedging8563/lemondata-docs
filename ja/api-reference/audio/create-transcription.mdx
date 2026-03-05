@@ -1,46 +1,74 @@
 ---
-title: "音声の作成"
-api: "POST /v1/audio/speech"
-description: "入力テキストから音声を生成します"
+title: "文字起こしの作成"
+api: "POST /v1/audio/transcriptions"
+description: "音声を入力言語で文字起こしします"
 ---
 
 ## リクエストボディ
 
-<ParamField body="model" type="string" default="tts-1">
-  TTSモデル：`tts-1`（標準）または`tts-1-hd`（高品質）。
+<ParamField body="file" type="file" required>
+  文字起こしする音声ファイル。サポートされている形式：flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm。
 </ParamField>
 
-<ParamField body="input" type="string" required>
-  音声を生成するテキスト。最大4096文字。
+<ParamField body="model" type="string" default="whisper-1">
+  使用するモデル。現在は `whisper-1` のみがサポートされています。
 </ParamField>
 
-<ParamField body="voice" type="string" required>
-  使用する音声：`alloy`、`ash`、`ballad`、`coral`、`echo`、`fable`、`nova`、`onyx`、`sage`、`shimmer`、`verse`。
+<ParamField body="language" type="string">
+  ISO-639-1 形式の音声の言語（例：`en`, `zh`, `ja`）。
 </ParamField>
 
-<ParamField body="response_format" type="string" default="mp3">
-  音声形式：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。
+<ParamField body="prompt" type="string">
+  モデルのスタイルをガイドしたり、前のセグメントを継続したりするためのオプションのテキスト。
 </ParamField>
 
-<ParamField body="speed" type="number" default="1.0">
-  音声の速度（0.25から4.0）。
+<ParamField body="response_format" type="string" default="json">
+  出力形式：`json`, `text`, `srt`, `verbose_json`, `vtt`。
+</ParamField>
+
+<ParamField body="temperature" type="number" default="0">
+  サンプリング温度（0 から 1）。
+</ParamField>
+
+<ParamField body="timestamp_granularities" type="array">
+  タイムスタンプの粒度：`word` または `segment`、あるいはその両方。`verbose_json` が必要です。
 </ParamField>
 
 ## レスポンス
 
-リクエストされた形式で音声ファイルを返します。
+<ResponseField name="text" type="string">
+  文字起こしされたテキスト。
+</ResponseField>
+
+`verbose_json` の場合：
+
+<ResponseField name="task" type="string">
+  常に `transcribe`。
+</ResponseField>
+
+<ResponseField name="language" type="string">
+  検出された言語。
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  音声の長さ（秒）。
+</ResponseField>
+
+<ResponseField name="segments" type="array">
+  タイムスタンプ付きの文字起こしセグメント。
+</ResponseField>
+
+<ResponseField name="words" type="array">
+  単語レベルのタイムスタンプ（リクエストされた場合）。
+</ResponseField>
 
 <RequestExample>
 ```bash cURL
-curl -X POST "https://api.lemondata.cc/v1/audio/speech" \
+curl -X POST "https://api.lemondata.cc/v1/audio/transcriptions" \
   -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "tts-1-hd",
-    "voice": "nova",
-    "input": "Hello, welcome to LemonData!"
-  }' \
-  --output speech.mp3
+  -F file="@audio.mp3" \
+  -F model="whisper-1" \
+  -F language="en"
 ```
 
 ```python Python
@@ -51,13 +79,14 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-response = client.audio.speech.create(
-    model="tts-1-hd",
-    voice="nova",
-    input="Hello, welcome to LemonData!"
-)
+with open("audio.mp3", "rb") as audio_file:
+    response = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_file,
+        language="en"
+    )
 
-response.stream_to_file("speech.mp3")
+print(response.text)
 ```
 
 ```javascript JavaScript
@@ -69,14 +98,13 @@ const client = new OpenAI({
   baseURL: 'https://api.lemondata.cc/v1'
 });
 
-const response = await client.audio.speech.create({
-  model: 'tts-1-hd',
-  voice: 'nova',
-  input: 'Hello, welcome to LemonData!'
+const response = await client.audio.transcriptions.create({
+  model: 'whisper-1',
+  file: fs.createReadStream('audio.mp3'),
+  language: 'en'
 });
 
-const buffer = Buffer.from(await response.arrayBuffer());
-fs.writeFileSync('speech.mp3', buffer);
+console.log(response.text);
 ```
 
 ```go Go
@@ -84,8 +112,7 @@ package main
 
 import (
     "context"
-    "io"
-    "os"
+    "fmt"
     "github.com/sashabaranov/go-openai"
 )
 
@@ -94,62 +121,81 @@ func main() {
     config.BaseURL = "https://api.lemondata.cc/v1"
     client := openai.NewClientWithConfig(config)
 
-    resp, err := client.CreateSpeech(
+    resp, err := client.CreateTranscription(
         context.Background(),
-        openai.CreateSpeechRequest{
-            Model: openai.TTSModel1HD,
-            Voice: openai.VoiceNova,
-            Input: "Hello, welcome to LemonData!",
+        openai.AudioRequest{
+            Model:    openai.Whisper1,
+            FilePath: "audio.mp3",
+            Language: "en",
         },
     )
     if err != nil {
         panic(err)
     }
-    defer resp.Close()
-
-    file, _ := os.Create("speech.mp3")
-    defer file.Close()
-    io.Copy(file, resp)
+    fmt.Println(resp.Text)
 }
 ```
 
 ```php PHP
 <?php
-$ch = curl_init('https://api.lemondata.cc/v1/audio/speech');
+$ch = curl_init('https://api.lemondata.cc/v1/audio/transcriptions');
+
+$file = new CURLFile('audio.mp3', 'audio/mpeg', 'audio.mp3');
 
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
         'Authorization: Bearer sk-your-api-key'
     ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'tts-1-hd',
-        'voice' => 'nova',
-        'input' => 'Hello, welcome to LemonData!'
-    ])
+    CURLOPT_POSTFIELDS => [
+        'file' => $file,
+        'model' => 'whisper-1',
+        'language' => 'en'
+    ]
 ]);
 
-$audio = curl_exec($ch);
+$response = curl_exec($ch);
 curl_close($ch);
 
-file_put_contents('speech.mp3', $audio);
+$data = json_decode($response, true);
+echo $data['text'];
 ```
 </RequestExample>
 
-## 音声サンプル
+<ResponseExample>
+```json Response (json)
+{
+  "text": "Hello, this is a test of the transcription API."
+}
+```
 
-| 音声 | 説明 |
-|-------|-------------|
-| `alloy` | ニュートラル、バランスが良い |
-| `ash` | 落ち着いた、慎重な |
-| `ballad` | メロディック、表現力豊か |
-| `coral` | 温かい、親しみやすい |
-| `echo` | 温かい、対話的 |
-| `fable` | 表現力豊か、ナラティブ |
-| `nova` | フレンドリー、明快 |
-| `onyx` | 深く、権威のある |
-| `sage` | 賢明、思慮深い |
-| `shimmer` | 柔らかい、穏やか |
-| `verse` | ダイナミック、多才 |
+```json Response (verbose_json)
+{
+  "task": "transcribe",
+  "language": "english",
+  "duration": 5.5,
+  "text": "Hello, this is a test of the transcription API.",
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.0,
+      "end": 2.5,
+      "text": "Hello, this is a test",
+      "tokens": [...]
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## 翻訳
+
+音声を英語に翻訳するには、translations エンドポイントを使用します：
+
+```python
+response = client.audio.translations.create(
+    model="whisper-1",
+    file=audio_file
+)
+```

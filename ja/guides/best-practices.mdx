@@ -1,20 +1,20 @@
 ---
 title: "ベストプラクティス"
-description: "コスト、パフォーマンス、信頼性の向上のために LemonData API の使用を最適化する"
+description: "コスト、パフォーマンス、信頼性のために LemonData API の使用を最適化します"
 ---
 
 ## モデルの選択
 
-適切なモデルを選択することで、コストと品質に大きな影響を与えることができます。
+適切なモデルを選択することは、コストと品質に大きな影響を与えます。
 
 ### タスク別の推奨事項
 
 | タスク | 推奨モデル | 理由 |
 |------|-------------------|-----------|
-| **シンプルな Q&A** | `gpt-4o-mini`, `gemini-2.5-flash` | 高速、低コスト、十分な性能 |
+| **シンプルな Q&A** | `gpt-4o-mini`, `gemini-2.5-flash` | 高速、低コスト、十分な品質 |
 | **複雑な推論** | `o3`, `claude-opus-4-5`, `deepseek-r1` | より優れた論理と計画 |
 | **コーディング** | `claude-sonnet-4-5`, `gpt-4o`, `deepseek-v3.2` | コードに最適化 |
-| **クリエイティブライティング** | `claude-sonnet-4-5`, `gpt-4o` | より高い文章品質 |
+| **クリエイティブライティング** | `claude-sonnet-4-5`, `gpt-4o` | より優れた文章品質 |
 | **ビジョン/画像** | `gpt-4o`, `claude-sonnet-4-5`, `gemini-2.5-flash` | ネイティブのビジョンサポート |
 | **長いコンテキスト** | `gemini-2.5-pro`, `claude-sonnet-4-5` | 100万以上のトークンウィンドウ |
 | **コスト重視** | `gpt-4o-mini`, `gemini-2.5-flash`, `deepseek-v3.2` | 最高のコスパ |
@@ -30,18 +30,18 @@ $    Economy:  deepseek-v3.2, deepseek-r1
 
 ## コストの最適化
 
-### 1. まずは小規模なモデルを使用する
+### 1. 最初に小規模なモデルを使用する
 
 ```python
 def smart_query(question: str, complexity: str = "auto"):
-    """シンプルなタスクには安価なモデルを使用します。"""
+    """Use cheaper models for simple tasks."""
 
     if complexity == "simple":
         model = "gpt-4o-mini"
     elif complexity == "complex":
         model = "gpt-4o"
     else:
-        # 安価なものから始め、必要に応じてエスカレーションする
+        # Start cheap, escalate if needed
         model = "gpt-4o-mini"
 
     response = client.chat.completions.create(
@@ -56,24 +56,24 @@ def smart_query(question: str, complexity: str = "auto"):
 常に適切な `max_tokens` 制限を設定してください：
 
 ```python
-# ❌ 悪い例: 制限なし、数千トークン生成される可能性がある
+# ❌ Bad: No limit, could generate thousands of tokens
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Summarize this article"}]
 )
 
-# ✅ 良い例: レスポンスの長さを制限する
+# ✅ Good: Limit response length
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Summarize this article"}],
-    max_tokens=500  # 要約に適した妥当な制限
+    max_tokens=500  # Reasonable limit for a summary
 )
 ```
 
 ### 3. プロンプトを最適化する
 
 ```python
-# ❌ 冗長なプロンプト（入力トークンが多い）
+# ❌ Verbose prompt (more input tokens)
 prompt = """
 I would like you to please help me by analyzing the following text
 and providing a comprehensive summary of the main points. Please be
@@ -81,7 +81,7 @@ thorough but also concise in your response. The text is as follows:
 {text}
 """
 
-# ✅ 簡潔なプロンプト（トークンが少ない）
+# ✅ Concise prompt (fewer tokens)
 prompt = "Summarize the key points:\n{text}"
 ```
 
@@ -90,25 +90,25 @@ prompt = "Summarize the key points:\n{text}"
 [セマンティックキャッシュ](/guides/caching)を活用してください：
 
 ```python
-# 同様のクエリを繰り返す場合、キャッシュによって大幅な節約が可能です
+# For repeated similar queries, caching provides major savings
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What is machine learning?"}],
-    temperature=0  # 決定論的 = キャッシュヒット率の向上
+    temperature=0  # Deterministic = better cache hits
 )
 ```
 
 ### 5. 同様のリクエストをバッチ処理する
 
 ```python
-# ❌ 多数の小さなリクエスト
+# ❌ Many small requests
 for question in questions:
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": question}]
     )
 
-# ✅ 少数の大きなリクエスト
+# ✅ Fewer larger requests
 combined_prompt = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
 response = client.chat.completions.create(
     model="gpt-4o",
@@ -120,7 +120,7 @@ response = client.chat.completions.create(
 
 ### 1. UX のためにストリーミングを使用する
 
-ストリーミングにより、体感パフォーマンスが向上します：
+ストリーミングは体感パフォーマンスを向上させます：
 
 ```python
 stream = client.chat.completions.create(
@@ -134,7 +134,7 @@ for chunk in stream:
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-### 2. インタラクティブな利用には高速なモデルを選択する
+### 2. インタラクティブな用途には高速なモデルを選択する
 
 | ユースケース | 推奨 | レイテンシ |
 |----------|-------------|---------|
@@ -148,7 +148,7 @@ for chunk in stream:
 client = OpenAI(
     api_key="sk-your-key",
     base_url="https://api.lemondata.cc/v1",
-    timeout=60.0  # 60秒のタイムアウト
+    timeout=60.0  # 60 second timeout
 )
 ```
 
@@ -169,7 +169,7 @@ def chat_with_retry(messages, max_retries=3):
             )
         except RateLimitError:
             wait = 2 ** attempt
-            print(f"レート制限がかかりました。{wait}秒待機しています...")
+            print(f"Rate limited, waiting {wait}s...")
             time.sleep(wait)
         except APIError as e:
             if attempt == max_retries - 1:
@@ -186,16 +186,16 @@ from openai import APIError, AuthenticationError, RateLimitError
 try:
     response = client.chat.completions.create(...)
 except AuthenticationError:
-    # APIキーを確認
+    # Check API key
     notify_admin("Invalid API key")
 except RateLimitError:
-    # 後で処理するためにキューに入れるか、バックアップを使用する
+    # Queue for later or use backup
     add_to_queue(request)
 except APIError as e:
     if e.status_code == 402:
         notify_admin("Balance low")
     elif e.status_code >= 500:
-        # サーバーエラー、後でリトライ
+        # Server error, retry later
         schedule_retry(request)
 ```
 
@@ -221,10 +221,10 @@ def chat_with_fallback(messages):
 ### 1. API キーを保護する
 
 ```python
-# ❌ キーをハードコードしないでください
+# ❌ Never hardcode keys
 client = OpenAI(api_key="sk-abc123...")
 
-# ✅ 環境変数を使用する
+# ✅ Use environment variables
 import os
 client = OpenAI(api_key=os.environ["LEMONDATA_API_KEY"])
 ```
@@ -233,26 +233,26 @@ client = OpenAI(api_key=os.environ["LEMONDATA_API_KEY"])
 
 ```python
 def validate_message(content: str) -> bool:
-    """APIに送信する前にユーザー入力を検証します。"""
+    """Validate user input before sending to API."""
     if len(content) > 100000:
-        raise ValueError("メッセージが長すぎます")
-    # 必要に応じて他の検証を追加
+        raise ValueError("Message too long")
+    # Add other validation as needed
     return True
 ```
 
 ### 3. API キーの制限を設定する
 
-以下の用途ごとに、利用制限を設定した個別の API キーを作成してください：
+以下の用途ごとに、支出制限を設定した個別の API キーを作成してください：
 - 開発/テスト
-- 本番環境
+- 本番
 - 異なるアプリケーション
 
 ## モニタリング
 
 ### 1. 使用状況を追跡する
 
-ダッシュボードで以下を定期的に確認してください：
-- モデルごとのトークン使用量
+ダッシュボードを定期的にチェックして、以下を確認してください：
+- モデル別のトークン使用量
 - コストの内訳
 - キャッシュヒット率
 - エラー率
@@ -274,7 +274,7 @@ logging.info({
 
 ### 3. アラートを設定する
 
-サービスの停止を避けるため、ダッシュボードで残高不足アラートを設定してください。
+サービスの停止を避けるために、ダッシュボードで残高不足のアラートを設定してください。
 
 ## チェックリスト
 
@@ -288,21 +288,21 @@ logging.info({
   </Accordion>
 
   <Accordion title="パフォーマンス">
-    - [ ] インタラクティブな UX のためにストリーミングを使用している
-    - [ ] リアルタイム利用のために高速なモデルを使用している
+    - [ ] インタラクティブな UX のためのストリーミング
+    - [ ] リアルタイム用途の高速モデル
     - [ ] タイムアウトが設定されている
   </Accordion>
 
   <Accordion title="信頼性">
     - [ ] リトライロジックが実装されている
-    - [ ] エラー処理が適切に行われている
+    - [ ] エラー処理が整っている
     - [ ] フォールバックモデルが設定されている
   </Accordion>
 
   <Accordion title="セキュリティ">
-    - [ ] API キーが環境変数に設定されている
-    - [ ] 入力検証が行われている
-    - [ ] 開発用と本番用でキーを分けている
-    - [ ] 利用制限が設定されている
+    - [ ] API キーが環境変数にある
+    - [ ] 入力検証
+    - [ ] 開発/本番用の個別のキー
+    - [ ] 支出制限が設定されている
   </Accordion>
 </AccordionGroup>
