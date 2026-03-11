@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: 2026-03-10T19:08:41.773Z
+Generated: 2026-03-11T16:42:48.918Z
 Source: https://docs.lemondata.cc
 
 ---
@@ -458,7 +458,7 @@ When all upstream channels for a model are unavailable:
 {
   "error": {
     "message": "Rate limit: 60 rpm exceeded",
-    "type": "rate_limit_error",
+    "type": "rate_limit_exceeded",
     "code": "rate_limit_exceeded",
     "retryable": true,
     "retry_after": 8,
@@ -1524,6 +1524,8 @@ All errors return a consistent JSON format with optional [Agent-First hints](/gu
 
 The base fields (`message`, `type`, `code`, `param`) are always present. The hint fields (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) are optional extensions for AI agent self-correction. See the [Agent-First API guide](/guides/agent-first-api) for details.
 
+OpenAI-compatible endpoints use LemonData's stable gateway error types. Anthropic-compatible and Gemini-compatible endpoints use their own native error families and response shapes.
+
 ## HTTP Status Codes
 
 | Code | Description |
@@ -1537,7 +1539,7 @@ The base fields (`message`, `type`, `code`, `param`) are always present. The hin
 | 429 | Too Many Requests - Rate limit exceeded |
 | 500 | Internal Server Error |
 | 502 | Bad Gateway - Upstream provider error |
-| 503 | Service Unavailable - All channels failed |
+| 503 | Service Unavailable - Service temporarily unavailable |
 | 504 | Gateway Timeout - Request timed out |
 
 ## Error Types
@@ -1562,7 +1564,8 @@ except AuthenticationError as e:
 
 | Type | Code | Description |
 |------|------|-------------|
-| `insufficient_quota` | `insufficient_quota` | Account balance is too low |
+| `insufficient_balance` | `insufficient_balance` | Account balance is too low (OpenAI-compatible endpoints) |
+| `insufficient_balance_error` | `insufficient_balance` | Account balance is too low (Anthropic-compatible endpoints) |
 | `quota_exceeded` | `quota_exceeded` | API key usage limit reached |
 
 ```python
@@ -1622,7 +1625,7 @@ When you exceed rate limits:
 {
   "error": {
     "message": "Rate limit: 60 rpm exceeded",
-    "type": "rate_limit_error",
+    "type": "rate_limit_exceeded",
     "code": "rate_limit_exceeded",
     "retryable": true,
     "retry_after": 8,
@@ -1746,7 +1749,7 @@ When you exceed the limit, you'll receive a `429` response:
 {
   "error": {
     "message": "Rate limit exceeded. Please retry later.",
-    "type": "rate_limit_error",
+    "type": "rate_limit_exceeded",
     "code": "rate_limit_exceeded"
   }
 }
@@ -4309,6 +4312,116 @@ rm -rf ~/.lemonclaw
 
 ---
 
+### LemonData Provider Setup
+
+> Configure LemonData as an AI provider in OpenClaw to access 300+ models
+
+URL: https://docs.lemondata.cc/claw/lemondata-provider
+
+## Overview
+
+OpenClaw requires **3 separate providers** to access all LemonData models, because different model families use different API formats:
+
+| Provider | API Format | Models | baseUrl |
+|----------|-----------|--------|---------|
+| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, Gemini, etc. | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | Claude (Opus, Sonnet, Haiku) | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | MiniMax models | `https://api.lemondata.cc` |
+
+## Prerequisites
+
+- A self-hosted OpenClaw instance
+- A LemonData API Key — [Get one here](https://lemondata.cc/dashboard)
+
+## Configuration
+
+Edit your OpenClaw provider settings:
+
+- **Self-hosted**: `~/.openclaw/openclaw.json`
+
+Add the following 3 providers to the `providers` array:
+
+```json
+{
+  "providers": [
+    {
+      "name": "lemondata",
+      "api": "openai-completions",
+      "baseUrl": "https://api.lemondata.cc/v1",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-claude",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-minimax",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    }
+  ]
+}
+```
+
+## Using Models
+
+Reference models with the `provider/model` format:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "lemondata-claude/claude-sonnet-4-6"
+      }
+    }
+  }
+}
+```
+
+### Model Examples
+
+| Provider | Model Reference | Description |
+|----------|----------------|-------------|
+| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
+| `lemondata` | `lemondata/deepseek-r1` | DeepSeek R1 reasoning |
+| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
+| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
+| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+
+Browse all available models at [lemondata.cc/models](https://lemondata.cc/en/models).
+
+## Common Mistakes
+
+  
+  
+
+## Verify Setup
+
+After saving the config, restart your OpenClaw instance and test with a simple message. If you see a response, the provider is configured correctly.
+
+```bash
+# Self-hosted: restart the service
+systemctl --user restart openclaw    # Linux
+launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
+```
+
+## Next Steps
+
+Once OpenClaw is connected, these guides help you use LemonData more effectively:
+
+- [Agent-First API](/guides/agent-first-api) — structured hints for model selection, retries, and fallback handling
+- [API Formats](/guides/api-formats) — understand OpenAI, Anthropic, and Gemini-compatible request formats
+- [Error Handling](/guides/error-handling) — learn common failure modes and how to recover from them
+- [Models Overview](https://lemondata.cc/en/models) — browse available model IDs before wiring them into agents
+
+---
+
 ### API Reference
 
 > Programmatically manage Claw instances via the /v1/claw API
@@ -4401,16 +4514,18 @@ Returns Claw service health status. No authentication required.
 
 ### Telegram
 
-> Connect your Claw instance to Telegram — the easiest platform to set up
+> Connect your LemonClaw instance to Telegram — the easiest platform to set up
 
 URL: https://docs.lemondata.cc/claw/telegram
 
-Telegram is the **simplest** platform to connect. You only need a bot token from BotFather, and you'll be chatting with AI in under 2 minutes.
+Connect Telegram to your LemonClaw instance. This guide works for both hosted Claw instances and self-hosted LemonClaw deployments. You only need a bot token from BotFather, and you'll be chatting with AI in under 2 minutes.
 
 ## Prerequisites
 
 - A [Telegram](https://telegram.org/) account
-- A Claw instance ([create one here](https://lemondata.cc/dashboard/claw))
+- A LemonClaw instance:
+  - Hosted: [create a Claw instance](https://lemondata.cc/dashboard/claw)
+  - Self-hosted: [install LemonClaw](/claw/self-hosted)
 
 ## Setup Guide
 
@@ -4458,17 +4573,19 @@ Control who can send direct messages to your bot:
 
 ### Discord
 
-> Connect your Claw instance to Discord with a bot application
+> Connect your LemonClaw instance to Discord with a bot application
 
 URL: https://docs.lemondata.cc/claw/discord
 
-Connect your Claw instance to Discord and chat with AI directly in your server or DMs.
+Connect Discord to your LemonClaw instance and chat with AI directly in your server or DMs. This guide works for both hosted Claw instances and self-hosted LemonClaw deployments.
 
 ## Prerequisites
 
 - A [Discord](https://discord.com/) account
 - A Discord server where you have **Manage Server** permission
-- A Claw instance ([create one here](https://lemondata.cc/dashboard/claw))
+- A LemonClaw instance:
+  - Hosted: [create a Claw instance](https://lemondata.cc/dashboard/claw)
+  - Self-hosted: [install LemonClaw](/claw/self-hosted)
 
 ## Setup Guide
 
@@ -4506,16 +4623,18 @@ Control who can send direct messages to your bot:
 
 ### WhatsApp
 
-> Connect your Claw instance to WhatsApp via QR code pairing
+> Connect your LemonClaw instance to WhatsApp via QR code pairing
 
 URL: https://docs.lemondata.cc/claw/whatsapp
 
-Connect WhatsApp to your Claw instance by scanning a QR code — just like WhatsApp Web.
+Connect WhatsApp to your LemonClaw instance by scanning a QR code — just like WhatsApp Web. This guide works for both hosted Claw instances and self-hosted LemonClaw deployments.
 
 ## Prerequisites
 
 - A phone with [WhatsApp](https://www.whatsapp.com/) installed and an active account
-- A Claw instance ([create one here](https://lemondata.cc/dashboard/claw))
+- A LemonClaw instance:
+  - Hosted: [create a Claw instance](https://lemondata.cc/dashboard/claw)
+  - Self-hosted: [install LemonClaw](/claw/self-hosted)
 
 ## Setup Guide
 
@@ -4541,16 +4660,18 @@ WhatsApp groups are supported. Configure group behavior in the **IM Integrations
 
 ### Slack
 
-> Connect your Claw instance to a Slack workspace using Socket Mode
+> Connect your LemonClaw instance to a Slack workspace using Socket Mode
 
 URL: https://docs.lemondata.cc/claw/slack
 
-Add an AI assistant to your Slack workspace using Socket Mode — no public URL required.
+Add an AI assistant to your Slack workspace using Socket Mode — no public URL required. This guide works for both hosted Claw instances and self-hosted LemonClaw deployments.
 
 ## Prerequisites
 
 - A [Slack](https://slack.com/) workspace where you have admin access
-- A Claw instance ([create one here](https://lemondata.cc/dashboard/claw))
+- A LemonClaw instance:
+  - Hosted: [create a Claw instance](https://lemondata.cc/dashboard/claw)
+  - Self-hosted: [install LemonClaw](/claw/self-hosted)
 
 ## Setup Guide
 
@@ -4579,16 +4700,18 @@ Configure channel access in the **IM Integrations** settings of your LemonClaw W
 
 ### Feishu / Lark
 
-> Connect your Claw instance to Feishu (Lark) using WebSocket events
+> Connect your LemonClaw instance to Feishu (Lark) using WebSocket events
 
 URL: https://docs.lemondata.cc/claw/feishu
 
-Connect Feishu (飞书) or Lark to your Claw instance. Uses WebSocket mode — no public callback URL needed.
+Connect Feishu (飞书) or Lark to your LemonClaw instance. This guide works for both hosted Claw instances and self-hosted LemonClaw deployments, and uses WebSocket mode so no public callback URL is needed.
 
 ## Prerequisites
 
 - A [Feishu](https://www.feishu.cn/) or [Lark](https://www.larksuite.com/) account with developer access
-- A Claw instance ([create one here](https://lemondata.cc/dashboard/claw))
+- A LemonClaw instance:
+  - Hosted: [create a Claw instance](https://lemondata.cc/dashboard/claw)
+  - Self-hosted: [install LemonClaw](/claw/self-hosted)
 
 ## Setup Guide
 
@@ -4618,16 +4741,18 @@ Configure group chat behavior in the **IM Integrations** settings of your LemonC
 
 ### WeCom
 
-> Connect your Claw instance to WeCom (WeChat Work) via webhook callback
+> Connect your LemonClaw instance to WeCom (WeChat Work) via webhook callback
 
 URL: https://docs.lemondata.cc/claw/wecom
 
-Integrate WeCom (企业微信 / WeChat Work) with your Claw instance to bring AI to your enterprise workspace.
+Integrate WeCom (企业微信 / WeChat Work) with your LemonClaw instance to bring AI to your enterprise workspace. This guide works for both hosted Claw instances and self-hosted LemonClaw deployments.
 
 ## Prerequisites
 
 - A [WeCom](https://work.weixin.qq.com/) admin account
-- A Claw instance ([create one here](https://lemondata.cc/dashboard/claw))
+- A LemonClaw instance:
+  - Hosted: [create a Claw instance](https://lemondata.cc/dashboard/claw)
+  - Self-hosted: [install LemonClaw](/claw/self-hosted)
 
 ## Setup Guide
 
@@ -4643,16 +4768,18 @@ Integrate WeCom (企业微信 / WeChat Work) with your Claw instance to bring AI
 
 ### DingTalk
 
-> Connect your Claw instance to DingTalk using Stream mode
+> Connect your LemonClaw instance to DingTalk using Stream mode
 
 URL: https://docs.lemondata.cc/claw/dingtalk
 
-Connect DingTalk (钉钉) to your Claw instance using Stream mode — a WebSocket-based connection that requires no public URL.
+Connect DingTalk (钉钉) to your LemonClaw instance using Stream mode — a WebSocket-based connection that requires no public URL. This guide works for both hosted Claw instances and self-hosted LemonClaw deployments.
 
 ## Prerequisites
 
 - A [DingTalk](https://www.dingtalk.com/) account with enterprise admin access
-- A Claw instance ([create one here](https://lemondata.cc/dashboard/claw))
+- A LemonClaw instance:
+  - Hosted: [create a Claw instance](https://lemondata.cc/dashboard/claw)
+  - Self-hosted: [install LemonClaw](/claw/self-hosted)
 
 ## Setup Guide
 
@@ -4678,17 +4805,19 @@ Configure group chat behavior in the **IM Integrations** settings of your LemonC
 
 ### QQ
 
-> Connect your Claw instance to QQ using the QQ Open Platform Bot API
+> Connect your LemonClaw instance to QQ using the QQ Open Platform Bot API
 
 URL: https://docs.lemondata.cc/claw/qq
 
-Connect QQ (the most popular messaging app in China) to your Claw instance using the official QQ Open Platform Bot API.
+Connect QQ (the most popular messaging app in China) to your LemonClaw instance using the official QQ Open Platform Bot API. This guide works for both hosted Claw instances and self-hosted LemonClaw deployments.
 
 ## Prerequisites
 
 - A [QQ](https://im.qq.com/) account
 - Access to [QQ Open Platform](https://q.qq.com/) (developer account)
-- A Claw instance ([create one here](https://lemondata.cc/dashboard/claw))
+- A LemonClaw instance:
+  - Hosted: [create a Claw instance](https://lemondata.cc/dashboard/claw)
+  - Self-hosted: [install LemonClaw](/claw/self-hosted)
 
 ## Setup Guide
 

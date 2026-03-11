@@ -1,0 +1,131 @@
+---
+title: "إعداد مزود LemonData"
+description: "قم بإعداد LemonData كمزود AI داخل OpenClaw للوصول إلى أكثر من 300 نموذج"
+---
+
+<Note>
+هذا الدليل مخصص لمستخدمي **OpenClaw** ذاتي الاستضافة الذين يريدون توصيل LemonData كمزود AI.
+</Note>
+
+<Tip>
+إذا كنت تريد استخدام حل مستضاف مباشرة، فقم [بإنشاء مثيل LemonClaw](/claw/introduction). يكون LemonData معدًا مسبقًا بشكل افتراضي، ويمكنك البدء من WebUI فورًا.
+</Tip>
+
+## نظرة عامة
+
+يتطلب OpenClaw **3 providers منفصلة** للوصول إلى جميع نماذج LemonData، لأن عائلات النماذج المختلفة تستخدم صيغ API مختلفة.
+
+| Provider | صيغة API | النماذج | baseUrl |
+|----------|-----------|--------|---------|
+| `lemondata` | `openai-completions` | GPT و DeepSeek و Qwen و Gemini وغير ذلك | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | Claude (Opus و Sonnet و Haiku) | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | نماذج MiniMax | `https://api.lemondata.cc` |
+
+<Warning>
+انتبه إلى لاحقة `/v1`. مزود `lemondata` **يتضمن** `/v1` لأن OpenAI SDK لا يضيفها تلقائيًا. أما المزودان الآخران **فلا يتضمنان** `/v1` لأن Anthropic SDK يضيفها تلقائيًا.
+</Warning>
+
+## المتطلبات المسبقة
+
+- مثيل OpenClaw ذاتي الاستضافة
+- مفتاح LemonData API واحد — [احصل عليه من هنا](https://lemondata.cc/dashboard)
+
+## الإعداد
+
+قم بتعديل إعدادات provider في OpenClaw:
+
+- **الاستضافة الذاتية**: `~/.openclaw/openclaw.json`
+
+أضف المزودات الثلاثة التالية إلى مصفوفة `providers`:
+
+```json
+{
+  "providers": [
+    {
+      "name": "lemondata",
+      "api": "openai-completions",
+      "baseUrl": "https://api.lemondata.cc/v1",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-claude",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-minimax",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    }
+  ]
+}
+```
+
+<Info>
+تستخدم المزودات الثلاثة **مفتاح API نفسه**. أنت تحتاج فقط إلى حساب LemonData واحد.
+</Info>
+
+## استخدام النماذج
+
+قم بالإشارة إلى النماذج بصيغة `provider/model`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "lemondata-claude/claude-sonnet-4-6"
+      }
+    }
+  }
+}
+```
+
+### أمثلة على النماذج
+
+| Provider | مرجع النموذج | الوصف |
+|----------|----------------|-------------|
+| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
+| `lemondata` | `lemondata/deepseek-r1` | نموذج الاستدلال DeepSeek R1 |
+| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
+| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
+| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+
+تصفح جميع النماذج المتاحة على [lemondata.cc/models](https://lemondata.cc/ar/models).
+
+## الأخطاء الشائعة
+
+<AccordionGroup>
+  <Accordion title="استخدام baseUrl خاطئة لنماذج Claude">
+    سيؤدي استخدام `https://api.lemondata.cc/v1` مع `lemondata-claude` إلى أخطاء في المصادقة. يقوم Anthropic SDK بإضافة `/v1` تلقائيًا، مما ينتج عنه مسار مكرر `/v1/v1`. استخدم `https://api.lemondata.cc` (من دون `/v1`) مع providers ذات تنسيق Anthropic.
+  </Accordion>
+  <Accordion title="استخدام اسم provider هو 'openai' بدلًا من 'lemondata'">
+    يقوم OpenClaw بحل مفاتيح API اعتمادًا على **name** الخاص بالـ provider. إذا استخدمت `"name": "openai"` فسيحاول OpenClaw استخدام مفتاح OpenAI API وليس مفتاح LemonData الخاص بك. استخدم دائمًا `"name": "lemondata"` (أو `lemondata-claude` / `lemondata-minimax`).
+  </Accordion>
+  <Accordion title="ظهور خطأ model not found">
+    تأكد من أنك تستخدم بادئة provider الصحيحة. يجب أن تستخدم نماذج Claude البادئة `lemondata-claude/` وليس `lemondata/`. تحقق من [lemondata.cc/models](https://lemondata.cc/ar/models) لمعرفة معرف النموذج الصحيح.
+  </Accordion>
+</AccordionGroup>
+
+## التحقق من الإعداد
+
+بعد حفظ الإعداد، أعد تشغيل مثيل OpenClaw واختبره برسالة بسيطة. إذا ظهرت استجابة، فهذا يعني أن إعداد provider صحيح.
+
+```bash
+# الاستضافة الذاتية: إعادة تشغيل الخدمة
+systemctl --user restart openclaw    # Linux
+launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
+```
+
+## الخطوات التالية
+
+بعد توصيل OpenClaw، تساعدك هذه الأدلة على استخدام LemonData بشكل أفضل:
+
+- [Agent-First API](/guides/agent-first-api) — تلميحات منظمة لاختيار النموذج وإعادة المحاولة و fallback
+- [API Formats](/guides/api-formats) — فهم الصيغ المتوافقة مع OpenAI و Anthropic و Gemini
+- [Error Handling](/guides/error-handling) — أشهر الأخطاء وكيفية التعافي منها
+- [نظرة عامة على النماذج](https://lemondata.cc/ar/models) — راجع معرفات النماذج المتاحة قبل ربطها بالـ agents

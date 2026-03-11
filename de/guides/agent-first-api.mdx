@@ -5,7 +5,7 @@ description: "Strukturierte Fehlerhinweise für KI-Agenten zur Selbstkorrektur b
 
 ## Übersicht
 
-Die Agent-First API von LemonData reichert Fehlerantworten mit strukturierten Hinweisen an, die KI-Agenten sofort parsen und verarbeiten können – ohne Websuchen, Dokumentationsrecherche oder Rätselraten.
+Die Agent-First API von LemonData reichert Fehlerantworten mit strukturierten Hinweisen an, die KI-Agenten sofort parsen und verarbeiten können – ohne Websuchen, Dokumentationsrecherchen oder Rätselraten.
 
 Jede Fehlerantwort enthält optionale Felder wie `did_you_mean`, `suggestions`, `hint`, `retryable` und `retry_after` innerhalb des standardmäßigen `error`-Objekts. Diese Felder sind abwärtskompatibel – Clients, die sie nicht verwenden, bemerken keinen Unterschied.
 
@@ -48,7 +48,7 @@ Wenn ein Modellname mit keinem aktiven Modell übereinstimmt:
 }
 ```
 
-Die Auflösung von `did_you_mean` verwendet:
+Die `did_you_mean`-Auflösung verwendet:
 1. Statisches Alias-Mapping (aus Produktions-Fehlerdaten)
 2. Normalisierter String-Abgleich (entfernt Bindestriche, ignoriert Groß-/Kleinschreibung)
 3. Edit-Distanz-Abgleich (Schwellenwert ≤ 3)
@@ -106,7 +106,7 @@ Wenn alle Upstream-Kanäle für ein Modell nicht verfügbar sind:
 {
   "error": {
     "message": "Rate limit: 60 rpm exceeded",
-    "type": "rate_limit_error",
+    "type": "rate_limit_exceeded",
     "code": "rate_limit_exceeded",
     "retryable": true,
     "retry_after": 8,
@@ -116,6 +116,10 @@ Wenn alle Upstream-Kanäle für ein Modell nicht verfügbar sind:
 ```
 
 Der Wert für `retry_after` wird aus der tatsächlichen Rücksetzzeit des Rate-Limit-Fensters berechnet.
+
+<Note>
+OpenAI-kompatible Endpunkte verwenden die stabilen öffentlichen Fehlertypen von LemonData wie `rate_limit_exceeded`, `upstream_error` und `all_channels_failed`. Anthropic-kompatible und Gemini-kompatible Endpunkte verwenden ihre eigenen nativen Antwortformate.
+</Note>
 
 ### context_length_exceeded (400)
 
@@ -146,11 +150,11 @@ X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/mess
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Modell-Provider | Empfohlener Endpunkt | Vorteil |
+| Modellanbieter | Empfohlener Endpunkt | Vorteil |
 |---------------|-------------------|---------|
 | Anthropic (Claude) | `/v1/messages` | Keine Formatkonvertierung, Extended Thinking, Prompt-Caching |
 | Google (Gemini) | `/v1beta/gemini` | Keine Formatkonvertierung, Grounding, Sicherheitseinstellungen |
-| OpenAI | — | Chat Completions ist bereits das native Format |
+| OpenAI | — | Chat-Completions ist bereits das native Format |
 
 Diese Header erscheinen sowohl bei Streaming- als auch bei Nicht-Streaming-Antworten.
 
@@ -177,14 +181,14 @@ Drei neue Felder in der `lemondata`-Erweiterung jedes Modell-Objekts:
 |-------|--------|-------------|
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Modelltyp |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Wie das Modell abgerechnet wird |
-| `cache_pricing` | Objekt oder `null` | Upstream-Preise für Prompt-Caching + Rabatt für semantisches Caching der Plattform |
+| `cache_pricing` | Objekt oder `null` | Upstream-Prompt-Cache-Preise + Rabatt für semantischen Plattform-Cache |
 
-### Kategorie-Filterung
+### Kategoriefilterung
 
 ```bash
 GET /v1/models?category=chat          # Nur Chat-Modelle
 GET /v1/models?category=image         # Bildgenerierungsmodelle
-GET /v1/models?tag=coding&category=chat  # Für Coding optimierte Chat-Modelle
+GET /v1/models?tag=coding&category=chat  # Coding-optimierte Chat-Modelle
 ```
 
 ## llms.txt
@@ -196,11 +200,11 @@ GET https://api.lemondata.cc/llms.txt
 ```
 
 Sie enthält:
-- Vorlage für den ersten Aufruf mit einem funktionierenden Beispiel
+- First-Call-Vorlage mit einem funktionierenden Beispiel
 - Gängige Modellnamen (dynamisch generiert aus Nutzungsdaten)
 - Alle 12 API-Endpunkte
 - Filterparameter für die Modellsuche
-- Leitfaden zur Fehlerbehandlung
+- Anleitung zur Fehlerbehandlung
 
 KI-Agenten, die `llms.txt` vor ihrem ersten API-Aufruf lesen, sind in der Regel bereits beim ersten Versuch erfolgreich.
 
@@ -223,7 +227,7 @@ def smart_chat(messages, model="gpt-4o"):
         )
     except BadRequestError as e:
         error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
-        # did_you_mean für Auto-Korrektur verwenden
+        # Verwenden Sie did_you_mean für die Autokorrektur
         if error.get("code") == "model_not_found" and error.get("did_you_mean"):
             return client.chat.completions.create(
                 model=error["did_you_mean"], messages=messages
@@ -256,7 +260,7 @@ async function smartChat(messages, model = 'gpt-4o') {
 }
 ```
 
-## Design-Prinzipien
+## Designprinzipien
 
 <CardGroup cols={2}>
   <Card title="Schnelles Scheitern, informative Fehler" icon="bolt">
@@ -265,7 +269,7 @@ async function smartChat(messages, model = 'gpt-4o') {
   <Card title="Kein Auto-Routing" icon="route">
     Die API ersetzt niemals stillschweigend ein anderes Modell. Der Agent entscheidet.
   </Card>
-  <Card title="Datengetriebene Vorschläge" icon="database">
+  <Card title="Datenbasierte Vorschläge" icon="database">
     Alle Empfehlungen stammen aus Produktionsdaten, nicht aus fest kodierten Listen.
   </Card>
   <Card title="Abwärtskompatibel" icon="plug">

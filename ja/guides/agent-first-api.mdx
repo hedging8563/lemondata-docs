@@ -1,17 +1,17 @@
 ---
 title: "✨ Agent-First API"
-description: "AIエージェントが最初の再試行で自己修正するための構造化されたエラーヒント"
+description: "AIエージェントが初回のリトライで自己修正できるようにするための、構造化されたエラーヒント"
 ---
 
 ## 概要
 
-LemonDataのAgent-First APIは、AIエージェントが即座に解析して対応できる構造化されたヒントでエラーレスポンスを強化します。ウェブ検索、ドキュメントの確認、推測は不要です。
+LemonDataのAgent-First APIは、AIエージェントが即座に解析して対応できる構造化されたヒントをエラーレスポンスに付加します。ウェブ検索やドキュメントの確認、推測は不要です。
 
 すべてのエラーレスポンスには、標準の `error` オブジェクト内に `did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after` などのオプションフィールドが含まれます。これらのフィールドは後方互換性があり、これらを使用しないクライアントには影響を与えません。
 
 ## エラーヒントフィールド
 
-すべてのヒントフィールドは、`error` オブジェクト内のオプションの拡張です：
+すべてのヒントフィールドは、`error` オブジェクト内のオプションの拡張です。
 
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
@@ -19,16 +19,16 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 | `suggestions` | `array` | メタデータ付きの推奨モデル |
 | `alternatives` | `array` | 現在利用可能な代替モデル |
 | `hint` | `string` | 人間またはエージェントが読み取り可能な次のステップのガイダンス |
-| `retryable` | `boolean` | 同じリクエストを再試行して成功する可能性があるかどうか |
-| `retry_after` | `number` | 再試行するまでの待機秒数 |
-| `balance_usd` | `number` | 現在の米ドル建てアカウント残高 |
+| `retryable` | `boolean` | 同じリクエストをリトライして成功する可能性があるかどうか |
+| `retry_after` | `number` | リトライ前に待機する秒数 |
+| `balance_usd` | `number` | 現在の米ドル（USD）建てのアカウント残高 |
 | `estimated_cost_usd` | `number` | 失敗したリクエストの推定コスト |
 
 ## エラーコードの例
 
 ### model_not_found (400)
 
-モデル名がアクティブなモデルと一致しない場合：
+モデル名がアクティブなモデルと一致しない場合:
 
 ```json
 {
@@ -48,14 +48,14 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 }
 ```
 
-`did_you_mean` の解決には以下が使用されます：
+`did_you_mean` の解決には以下が使用されます:
 1. 静的エイリアスマッピング（本番環境のエラーデータから）
 2. 正規化された文字列マッチング（ハイフンの除去、大文字小文字を区別しない）
 3. 編集距離マッチング（しきい値 ≤ 3）
 
 ### insufficient_balance (402)
 
-アカウント残高が推定コストに対して低すぎる場合：
+アカウント残高が推定コストに対して低すぎる場合:
 
 ```json
 {
@@ -78,7 +78,7 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 
 ### all_channels_failed (503)
 
-モデルのすべてのアップストリームチャネルが利用できない場合：
+モデルのすべてのアップストリームチャネルが利用できない場合:
 
 ```json
 {
@@ -106,7 +106,7 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 {
   "error": {
     "message": "Rate limit: 60 rpm exceeded",
-    "type": "rate_limit_error",
+    "type": "rate_limit_exceeded",
     "code": "rate_limit_exceeded",
     "retryable": true,
     "retry_after": 8,
@@ -117,9 +117,13 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 
 `retry_after` の値は、実際のレート制限ウィンドウのリセット時間から計算されます。
 
+<Note>
+OpenAI互換のエンドポイントは、`rate_limit_exceeded`、`upstream_error`、`all_channels_failed` などのLemonDataの安定したパブリックエラータイプを使用します。Anthropic互換およびGemini互換のエンドポイントは、独自のネイティブレスポンス形式を使用します。
+</Note>
+
 ### context_length_exceeded (400)
 
-入力がモデルのコンテキストウィンドウを超えた場合（アップストリームエラー、ヒントで強化）：
+入力がモデルのコンテキストウィンドウを超えた場合（アップストリームエラー、ヒントで強化）:
 
 ```json
 {
@@ -139,7 +143,7 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 
 ## ネイティブエンドポイントヘッダー
 
-ネイティブエンドポイント（AnthropicまたはGemini）を持つモデルで `/v1/chat/completions` を呼び出すと、**成功レスポンス**に最適化ヘッダーが含まれます：
+ネイティブエンドポイント（AnthropicまたはGemini）を持つモデルで `/v1/chat/completions` を呼び出すと、**成功レスポンス**に最適化ヘッダーが含まれます:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
@@ -148,15 +152,15 @@ X-LemonData-Native-Endpoint: /v1/messages
 
 | モデルプロバイダー | 推奨エンドポイント | メリット |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | フォーマット変換なし、拡張思考、プロンプトキャッシュ |
-| Google (Gemini) | `/v1beta/gemini` | フォーマット変換なし、グラウンディング、安全設定 |
-| OpenAI | — | Chat completionsはすでにネイティブフォーマットです |
+| Anthropic (Claude) | `/v1/messages` | フォーマット変換なし、extended thinking、プロンプトキャッシュ |
+| Google (Gemini) | `/v1beta/gemini` | フォーマット変換なし、グラウンディング、安全性設定 |
+| OpenAI | — | Chat completionsがすでにネイティブフォーマットです |
 
 これらのヘッダーは、ストリーミングと非ストリーミングの両方のレスポンスに表示されます。
 
-## /v1/models の強化
+## /v1/models の機能強化
 
-各モデルオブジェクトの `lemondata` 拡張にある3つの新しいフィールド：
+各モデルオブジェクトの `lemondata` 拡張に含まれる3つの新しいフィールド:
 
 ```json
 {
@@ -189,13 +193,13 @@ GET /v1/models?tag=coding&category=chat  # コーディングに最適化され�
 
 ## llms.txt
 
-マシンリーダブルなAPI概要は以下で入手可能です：
+マシンリーダブルなAPI概要は以下で入手可能です:
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
-以下が含まれます：
+以下が含まれます:
 - 動作例を含む初回呼び出しテンプレート
 - 一般的なモデル名（使用状況データから動的に生成）
 - 全12個のAPIエンドポイント
@@ -204,7 +208,7 @@ GET https://api.lemondata.cc/llms.txt
 
 最初のAPI呼び出しの前に `llms.txt` を読み取るAIエージェントは、通常、最初の試行で成功できます。
 
-## エージェントコードでの使用
+## エージェントコードでの使用例
 
 ### Python (OpenAI SDK)
 
@@ -260,13 +264,13 @@ async function smartChat(messages, model = 'gpt-4o') {
 
 <CardGroup cols={2}>
   <Card title="迅速に失敗し、有益な情報を返す" icon="bolt">
-    エージェントが自己修正するために必要なすべてのデータとともに、エラーが即座に返されます。
+    エージェントが自己修正するために必要なすべてのデータとともに、エラーを即座に返します。
   </Card>
   <Card title="自動ルーティングなし" icon="route">
     APIが勝手に別のモデルに置き換えることはありません。エージェントが決定します。
   </Card>
-  <Card title="データ駆動型の推奨" icon="database">
-    すべての推奨事項は、ハードコードされたリストではなく、本番データに基づいています。
+  <Card title="データ駆動型の提案" icon="database">
+    すべての推奨事項は、ハードコードされたリストではなく、本番環境のデータに基づいています。
   </Card>
   <Card title="後方互換性" icon="plug">
     すべてのヒントフィールドはオプションです。既存のクライアントには影響ありません。

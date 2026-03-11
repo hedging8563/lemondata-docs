@@ -1,11 +1,11 @@
 ---
-title: "✨ API Berorientasi Agen"
-description: "Petunjuk kesalahan terstruktur agar agen AI dapat melakukan koreksi mandiri pada percobaan pertama"
+title: "✨ API Agent-First"
+description: "Petunjuk kesalahan terstruktur untuk agen AI agar dapat melakukan koreksi mandiri pada percobaan ulang pertama"
 ---
 
 ## Gambaran Umum
 
-Agent-First API dari LemonData memperkaya respons kesalahan dengan petunjuk terstruktur yang dapat diurai dan ditindaklanjuti oleh agen AI secara langsung — tanpa pencarian web, tanpa melihat dokumentasi, tanpa tebak-tebakan.
+API Agent-First LemonData memperkaya respons kesalahan dengan petunjuk terstruktur yang dapat diurai dan ditindaklanjuti oleh agen AI secara langsung — tanpa pencarian web, tanpa pencarian dokumentasi, tanpa tebakan.
 
 Setiap respons kesalahan menyertakan bidang opsional seperti `did_you_mean`, `suggestions`, `hint`, `retryable`, dan `retry_after` di dalam objek `error` standar. Bidang-bidang ini kompatibel ke belakang — klien yang tidak menggunakannya tidak akan melihat perbedaan.
 
@@ -17,16 +17,16 @@ Semua bidang petunjuk adalah ekstensi opsional di dalam objek `error`:
 |-------|------|-------------|
 | `did_you_mean` | `string` | Nama model yang paling mendekati |
 | `suggestions` | `array` | Model yang direkomendasikan dengan metadata |
-| `alternatives` | `array` | Model alternatif yang tersedia saat ini |
-| `hint` | `string` | Panduan langkah selanjutnya yang dapat dibaca manusia/agen |
-| `retryable` | `boolean` | Apakah mengulangi permintaan yang sama dapat berhasil |
-| `retry_after` | `number` | Detik untuk menunggu sebelum mencoba lagi |
+| `alternatives` | `array` | Model alternatif yang saat ini tersedia |
+| `hint` | `string` | Panduan langkah selanjutnya yang dapat dibaca oleh manusia/agen |
+| `retryable` | `boolean` | Apakah mencoba ulang permintaan yang sama mungkin berhasil |
+| `retry_after` | `number` | Detik untuk menunggu sebelum mencoba ulang |
 | `balance_usd` | `number` | Saldo akun saat ini dalam USD |
 | `estimated_cost_usd` | `number` | Estimasi biaya dari permintaan yang gagal |
 
 ## Contoh Kode Kesalahan
 
-### model_not_found (400(400)
+### model_not_found (400)
 
 Ketika nama model tidak cocok dengan model aktif apa pun:
 
@@ -49,12 +49,11 @@ Ketika nama model tidak cocok dengan model aktif apa pun:
 ```
 
 Resolusi `did_you_mean` menggunakan:
+1. Pemetaan alias statis (dari data kesalahan produksi)
+2. Pencocokan string yang dinormalisasi (menghapus tanda hubung, tidak peka huruf besar-kecil)
+3. Pencocokan jarak edit (ambang batas ≤ 3)
 
-1.  Pemetaan alias statis (dari data kesalahan produksi)
-2.  Pencocokan string yang dinormalisasi (menghapus tanda hubung, tidak peka huruf besar-kecil)
-3.  Pencocokan jarak edit (ambang batas ≤ 3)
-
-### insufficient\_balance (402)
+### insufficient_balance (402)
 
 Ketika saldo akun terlalu rendah untuk estimasi biaya:
 
@@ -75,11 +74,11 @@ Ketika saldo akun terlalu rendah untuk estimasi biaya:
 }
 ```
 
-`suggestions` berisi model-model yang lebih murah dari estimasi biaya yang dapat dialihkan oleh agen.
+`suggestions` berisi model yang lebih murah daripada estimasi biaya yang dapat dialihkan oleh agen.
 
-### all\_channels\_failed (503)
+### all_channels_failed (503)
 
-Ketika semua saluran hulu untuk suatu model tidak tersedia:
+Ketika semua saluran upstream untuk sebuah model tidak tersedia:
 
 ```json
 {
@@ -97,17 +96,17 @@ Ketika semua saluran hulu untuk suatu model tidak tersedia:
 }
 ```
 
-\<Note\>
-`retryable` bernilai `false` ketika alasannya adalah `no_channels` (tidak ada saluran yang dikonfigurasi untuk model ini). Bernilai `true` hanya untuk kegagalan sementara seperti pemutusan sirkuit atau kehabisan kuota.
-\</Note\>
+<Note>
+`retryable` bernilai `false` ketika alasannya adalah `no_channels` (tidak ada saluran yang dikonfigurasi untuk model ini). Bernilai `true` hanya untuk kegagalan sementara seperti pemutusan sirkuit (circuit breaker) atau kuota yang habis.
+</Note>
 
-### rate\_limit\_exceeded (429)
+### rate_limit_exceeded (429)
 
 ```json
 {
   "error": {
     "message": "Rate limit: 60 rpm exceeded",
-    "type": "rate_limit_error",
+    "type": "rate_limit_exceeded",
     "code": "rate_limit_exceeded",
     "retryable": true,
     "retry_after": 8,
@@ -116,11 +115,15 @@ Ketika semua saluran hulu untuk suatu model tidak tersedia:
 }
 ```
 
-Nilai `retry_after` dihitung dari waktu pengaturan ulang jendela batas tingkat yang sebenarnya.
+Nilai `retry_after` dihitung dari waktu reset jendela batas laju (rate limit) yang sebenarnya.
 
-### context\_length\_exceeded (400)
+<Note>
+Endpoint yang kompatibel dengan OpenAI menggunakan tipe kesalahan publik LemonData yang stabil seperti `rate_limit_exceeded`, `upstream_error`, dan `all_channels_failed`. Endpoint yang kompatibel dengan Anthropic dan Gemini menggunakan bentuk respons asli mereka sendiri.
+</Note>
 
-Ketika input melebihi jendela konteks model (kesalahan hulu, diperkaya dengan petunjuk):
+### context_length_exceeded (400)
+
+Ketika input melebihi jendela konteks model (kesalahan upstream, diperkaya dengan petunjuk):
 
 ```json
 {
@@ -138,9 +141,9 @@ Ketika input melebihi jendela konteks model (kesalahan hulu, diperkaya dengan pe
 }
 ```
 
-## Header Endpoint Native
+## Header Endpoint Asli
 
-Saat Anda memanggil `/v1/chat/completions` dengan model yang memiliki endpoint native (Anthropic atau Gemini), **respons sukses** akan menyertakan header optimasi:
+Saat Anda memanggil `/v1/chat/completions` dengan model yang memiliki endpoint asli (Anthropic atau Gemini), **respons sukses** menyertakan header optimasi:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
@@ -149,15 +152,15 @@ X-LemonData-Native-Endpoint: /v1/messages
 
 | Penyedia Model | Endpoint yang Disarankan | Manfaat |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | Tanpa konversi format, pemikiran yang diperluas, prompt caching |
+| Anthropic (Claude) | `/v1/messages` | Tanpa konversi format, extended thinking, prompt caching |
 | Google (Gemini) | `/v1beta/gemini` | Tanpa konversi format, grounding, pengaturan keamanan |
-| OpenAI | — | Chat completions sudah merupakan format native |
+| OpenAI | — | Chat completions sudah merupakan format asli |
 
 Header ini muncul pada respons streaming maupun non-streaming.
 
 ## Peningkatan /v1/models
 
-Tiga bidang baru dalam ekstensi `lemondata` di setiap objek model:
+Tiga bidang baru dalam ekstensi `lemondata` dari setiap objek model:
 
 ```json
 {
@@ -178,31 +181,30 @@ Tiga bidang baru dalam ekstensi `lemondata` di setiap objek model:
 |-------|--------|-------------|
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Tipe model |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Bagaimana model ditagih |
-| `cache_pricing` | objek atau `null` | Harga prompt cache hulu + diskon semantic cache platform |
+| `cache_pricing` | objek atau `null` | Harga prompt cache upstream + diskon semantic cache platform |
 
 ### Pemfilteran Kategori
 
 ```bash
 GET /v1/models?category=chat          # Hanya model chat
 GET /v1/models?category=image         # Model pembuatan gambar
-GET /v1/models?tag=coding&category=chat  # Model chat yang dioptimalkan untuk coding
+GET /v1/models?tag=coding&category=chat  # Model chat yang dioptimalkan untuk pengodean
 ```
 
 ## llms.txt
 
-Gambaran umum API yang dapat dibaca mesin tersedia di:
+Ringkasan API yang dapat dibaca mesin tersedia di:
 
 ```
-GET /llms.txt
+GET https://api.lemondata.cc/llms.txt
 ```
 
 Ini mencakup:
-
-  - Templat panggilan pertama dengan contoh yang berfungsi
-  - Nama model umum (dihasilkan secara dinamis dari data penggunaan)
-  - Semua 12 endpoint API
-  - Parameter filter untuk penemuan model
-  - Panduan penanganan kesalahan
+- Templat panggilan pertama dengan contoh yang berfungsi
+- Nama model umum (dihasilkan secara dinamis dari data penggunaan)
+- Semua 12 endpoint API
+- Parameter filter untuk penemuan model
+- Panduan penanganan kesalahan
 
 Agen AI yang membaca `llms.txt` sebelum panggilan API pertama mereka biasanya dapat berhasil pada percobaan pertama.
 
@@ -260,17 +262,17 @@ async function smartChat(messages, model = 'gpt-4o') {
 
 ## Prinsip Desain
 
-\<CardGroup cols={2}\>
-\<Card title="Gagal cepat, gagal secara informatif" icon="bolt"\>
-Kesalahan segera kembali dengan semua data yang dibutuhkan agen untuk koreksi mandiri.
-\</Card\>
-\<Card title="Tanpa perutean otomatis" icon="route"\>
-API tidak pernah mengganti model yang berbeda secara diam-diam. Agen yang memutuskan.
-\</Card\>
-\<Card title="Saran berbasis data" icon="database"\>
-Semua rekomendasi berasal dari data produksi, bukan daftar yang dikodekan secara statis.
-\</Card\>
-\<Card title="Kompatibel ke belakang" icon="plug"\>
-Semua bidang petunjuk bersifat opsional. Klien yang ada tidak melihat perbedaan.
-\</Card\>
-\</CardGroup\>
+<CardGroup cols={2}>
+  <Card title="Gagal cepat, gagal informatif" icon="bolt">
+    Kesalahan segera kembali dengan semua data yang dibutuhkan agen untuk melakukan koreksi mandiri.
+  </Card>
+  <Card title="Tanpa perutean otomatis" icon="route">
+    API tidak pernah mengganti model lain secara diam-diam. Agen yang memutuskan.
+  </Card>
+  <Card title="Saran berbasis data" icon="database">
+    Semua rekomendasi berasal dari data produksi, bukan daftar yang dikodekan secara kaku.
+  </Card>
+  <Card title="Kompatibel ke belakang" icon="plug">
+    Semua bidang petunjuk bersifat opsional. Klien yang ada tidak melihat perbedaan.
+  </Card>
+</CardGroup>

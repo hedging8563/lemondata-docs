@@ -23,7 +23,7 @@
  *
  * Environment Variables:
  *   TRANSLATION_API_KEY   - LemonData API key for translation
- *   TRANSLATION_API_BASE  - API base URL (default: https://crazyrouter.com/v1)
+ *   TRANSLATION_API_BASE  - API base URL (default: https://cp.95278888.xyz/v1)
  *   TRANSLATION_MODEL     - Model to use (default: gemini-3-flash-preview)
  */
 
@@ -35,7 +35,7 @@ const DOCS_DIR = path.join(import.meta.dirname, '..');
 const CACHE_DIR = path.join(DOCS_DIR, '.cache');
 
 const TRANSLATION_API_KEY = process.env.TRANSLATION_API_KEY || '';
-const TRANSLATION_API_BASE = process.env.TRANSLATION_API_BASE || 'http://127.0.0.1:8317/v1';
+const TRANSLATION_API_BASE = process.env.TRANSLATION_API_BASE || 'https://cp.95278888.xyz/v1';
 const TRANSLATION_MODEL = process.env.TRANSLATION_MODEL || 'gemini-3-flash-preview';
 
 // Target languages (must match generate-docs-json.mjs)

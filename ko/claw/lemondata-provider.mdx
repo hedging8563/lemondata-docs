@@ -1,0 +1,131 @@
+---
+title: "LemonData Provider 설정"
+description: "OpenClaw에서 LemonData를 AI Provider로 설정해 300개 이상의 모델에 접근"
+---
+
+<Note>
+이 가이드는 LemonData를 AI Provider로 연결하려는 **셀프호스트 OpenClaw** 사용자를 위한 문서입니다.
+</Note>
+
+<Tip>
+호스팅 환경을 바로 쓰고 싶다면 [LemonClaw 인스턴스를 생성](/claw/introduction)하세요. LemonData가 기본으로 이미 설정되어 있어 WebUI에서 바로 시작할 수 있습니다.
+</Tip>
+
+## 개요
+
+OpenClaw에서 모든 LemonData 모델에 접근하려면 **3개의 별도 providers** 가 필요합니다. 모델 계열마다 사용하는 API 형식이 다르기 때문입니다.
+
+| Provider | API 형식 | 모델 | baseUrl |
+|----------|-----------|--------|---------|
+| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, Gemini 등 | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | Claude(Opus, Sonnet, Haiku) | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | MiniMax 모델 | `https://api.lemondata.cc` |
+
+<Warning>
+`/v1` 접미사에 주의하세요. `lemondata` provider 는 OpenAI SDK가 `/v1`을 자동으로 붙이지 않기 때문에 `/v1`을 **포함합니다**. 나머지 두 provider 는 Anthropic SDK가 `/v1`을 자동으로 붙이므로 `/v1`을 **포함하지 않습니다**.
+</Warning>
+
+## 사전 준비
+
+- 셀프호스트 OpenClaw 인스턴스 1개
+- LemonData API Key 1개 — [여기서 발급](https://lemondata.cc/dashboard)
+
+## 설정
+
+OpenClaw provider 설정을 편집하세요.
+
+- **셀프호스트**: `~/.openclaw/openclaw.json`
+
+다음 3개의 providers 를 `providers` 배열에 추가하세요.
+
+```json
+{
+  "providers": [
+    {
+      "name": "lemondata",
+      "api": "openai-completions",
+      "baseUrl": "https://api.lemondata.cc/v1",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-claude",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-minimax",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    }
+  ]
+}
+```
+
+<Info>
+세 provider 모두 **같은 API Key** 를 사용합니다. LemonData 계정 하나면 충분합니다.
+</Info>
+
+## 모델 사용
+
+모델은 `provider/model` 형식으로 지정합니다.
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "lemondata-claude/claude-sonnet-4-6"
+      }
+    }
+  }
+}
+```
+
+### 모델 예시
+
+| Provider | 모델 참조 | 설명 |
+|----------|----------------|-------------|
+| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
+| `lemondata` | `lemondata/deepseek-r1` | DeepSeek R1 추론 모델 |
+| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
+| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
+| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+
+[lemondata.cc/models](https://lemondata.cc/ko/models) 에서 전체 모델 목록을 확인할 수 있습니다.
+
+## 흔한 실수
+
+<AccordionGroup>
+  <Accordion title="Claude 모델에 잘못된 baseUrl 사용">
+    `lemondata-claude` 에 `https://api.lemondata.cc/v1` 을 사용하면 인증 오류가 발생합니다. Anthropic SDK가 `/v1`을 자동으로 붙이기 때문에 경로가 `/v1/v1`로 중복됩니다. Anthropic 형식 provider 에는 `https://api.lemondata.cc`(`/v1` 제외)를 사용하세요.
+  </Accordion>
+  <Accordion title="provider name을 'openai'로 설정함">
+    OpenClaw는 provider **name** 으로 API key를 찾습니다. `"name": "openai"` 를 사용하면 LemonData key가 아니라 OpenAI API key를 사용하려고 합니다. 반드시 `"name": "lemondata"`(또는 `lemondata-claude` / `lemondata-minimax`)를 사용하세요.
+  </Accordion>
+  <Accordion title="model not found 오류">
+    올바른 provider 접두사를 사용했는지 확인하세요. Claude 모델은 `lemondata/` 가 아니라 `lemondata-claude/` 를 사용해야 합니다. 정확한 모델 ID는 [lemondata.cc/models](https://lemondata.cc/ko/models) 에서 확인할 수 있습니다.
+  </Accordion>
+</AccordionGroup>
+
+## 설정 확인
+
+설정을 저장한 뒤 OpenClaw 인스턴스를 재시작하고 간단한 메시지로 테스트하세요. 응답이 오면 provider 설정이 정상적으로 완료된 것입니다.
+
+```bash
+# 셀프호스트: 서비스 재시작
+systemctl --user restart openclaw    # Linux
+launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
+```
+
+## 다음 단계
+
+OpenClaw 연결 후에는 아래 문서를 보면 LemonData를 더 잘 활용할 수 있습니다.
+
+- [Agent-First API](/guides/agent-first-api) — 모델 선택, 재시도, fallback을 위한 구조화된 힌트
+- [API Formats](/guides/api-formats) — OpenAI, Anthropic, Gemini 호환 형식 이해하기
+- [Error Handling](/guides/error-handling) — 자주 발생하는 오류와 복구 방법
+- [모델 개요](https://lemondata.cc/ko/models) — agent에 연결하기 전에 사용 가능한 모델 ID 확인

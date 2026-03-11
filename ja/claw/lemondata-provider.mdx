@@ -1,0 +1,131 @@
+---
+title: "LemonData Provider 設定"
+description: "OpenClaw で LemonData を AI Provider として設定し、300 以上のモデルにアクセス"
+---
+
+<Note>
+このガイドは、LemonData を AI Provider として接続したい **セルフホスト版 OpenClaw** ユーザー向けです。
+</Note>
+
+<Tip>
+ホスト型セットアップを使いたい場合は、[LemonClaw インスタンスを作成](/claw/introduction)してください。LemonData はデフォルトで設定済みなので、すぐに WebUI から使い始められます。
+</Tip>
+
+## 概要
+
+OpenClaw では、異なるモデルファミリーが異なる API 形式を使うため、すべての LemonData モデルにアクセスするには **3 つの独立した providers** が必要です。
+
+| Provider | API 形式 | モデル | baseUrl |
+|----------|-----------|--------|---------|
+| `lemondata` | `openai-completions` | GPT、DeepSeek、Qwen、Gemini など | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | Claude（Opus、Sonnet、Haiku） | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | MiniMax モデル | `https://api.lemondata.cc` |
+
+<Warning>
+`/v1` サフィックスに注意してください。`lemondata` provider は `/v1` を **含みます**。これは OpenAI SDK が自動で追加しないためです。ほかの 2 つの provider は `/v1` を **含みません**。Anthropic SDK が自動で追加するためです。
+</Warning>
+
+## 前提条件
+
+- セルフホスト版 OpenClaw インスタンス 1 つ
+- LemonData API Key 1 つ — [こちらから取得](https://lemondata.cc/dashboard)
+
+## 設定
+
+OpenClaw の provider 設定を編集します。
+
+- **セルフホスト**：`~/.openclaw/openclaw.json`
+
+次の 3 つの providers を `providers` 配列に追加してください。
+
+```json
+{
+  "providers": [
+    {
+      "name": "lemondata",
+      "api": "openai-completions",
+      "baseUrl": "https://api.lemondata.cc/v1",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-claude",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-minimax",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    }
+  ]
+}
+```
+
+<Info>
+3 つの providers はすべて **同じ API Key** を使います。必要なのは LemonData アカウント 1 つだけです。
+</Info>
+
+## モデルの使い方
+
+モデルは `provider/model` 形式で指定します。
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "lemondata-claude/claude-sonnet-4-6"
+      }
+    }
+  }
+}
+```
+
+### モデル例
+
+| Provider | モデル指定 | 説明 |
+|----------|----------------|-------------|
+| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
+| `lemondata` | `lemondata/deepseek-r1` | DeepSeek R1 推論モデル |
+| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
+| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
+| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+
+利用可能なモデルは [lemondata.cc/models](https://lemondata.cc/ja/models) で確認できます。
+
+## よくあるミス
+
+<AccordionGroup>
+  <Accordion title="Claude モデルで baseUrl を間違える">
+    `lemondata-claude` に `https://api.lemondata.cc/v1` を使うと認証エラーになります。Anthropic SDK は自動で `/v1` を付けるため、`/v1/v1` という二重パスになってしまいます。Anthropic 形式の provider には `https://api.lemondata.cc`（`/v1` なし）を使ってください。
+  </Accordion>
+  <Accordion title="provider 名に 'openai' を使ってしまう">
+    OpenClaw は provider **name** を使って API key を解決します。`"name": "openai"` を使うと、LemonData key ではなく OpenAI の API key を参照しようとします。必ず `"name": "lemondata"`（または `lemondata-claude` / `lemondata-minimax`）を使用してください。
+  </Accordion>
+  <Accordion title="model not found エラーが出る">
+    正しい provider プレフィックスを使っているか確認してください。Claude モデルは `lemondata/` ではなく `lemondata-claude/` を使う必要があります。正しいモデル ID は [lemondata.cc/models](https://lemondata.cc/ja/models) で確認できます。
+  </Accordion>
+</AccordionGroup>
+
+## 設定確認
+
+設定を保存したら OpenClaw インスタンスを再起動し、簡単なメッセージでテストしてください。応答が返ってくれば、provider の設定は正しく完了しています。
+
+```bash
+# セルフホスト: サービスを再起動
+systemctl --user restart openclaw    # Linux
+launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
+```
+
+## 次のステップ
+
+OpenClaw の接続後は、次のガイドも読むと LemonData をより活用できます。
+
+- [Agent-First API](/guides/agent-first-api) — モデル選択、再試行、fallback のための構造化ヒント
+- [API Formats](/guides/api-formats) — OpenAI、Anthropic、Gemini 互換フォーマットの違い
+- [Error Handling](/guides/error-handling) — よくある失敗パターンと復旧方法
+- [利用可能モデル一覧](https://lemondata.cc/ja/models) — agent に組み込む前に利用可能なモデル ID を確認

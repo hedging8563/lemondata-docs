@@ -1,11 +1,11 @@
 ---
 title: "✨ Agent-First API"
-description: "AI agent'larının ilk yeniden denemede kendilerini düzeltebilmeleri için yapılandırılmış hata ipuçları"
+description: "Yapay zeka agent'larının ilk yeniden denemede kendilerini düzeltebilmeleri için yapılandırılmış hata ipuçları"
 ---
 
 ## Genel Bakış
 
-LemonData'nın Agent-First API'si, hata yanıtlarını AI agent'larının anında ayrıştırabileceği ve üzerinde işlem yapabileceği yapılandırılmış ipuçlarıyla zenginleştirir — web araması yok, doküman incelemesi yok, tahmin yürütmek yok.
+LemonData'nın Agent-First API'si, hata yanıtlarını yapay zeka agent'larının anında ayrıştırabileceği ve üzerinde işlem yapabileceği yapılandırılmış ipuçlarıyla zenginleştirir — web araması yok, doküman incelemesi yok, tahmin yürütmek yok.
 
 Her hata yanıtı, standart `error` nesnesi içinde `did_you_mean`, `suggestions`, `hint`, `retryable` ve `retry_after` gibi isteğe bağlı alanlar içerir. Bu alanlar geriye dönük uyumludur — bunları kullanmayan istemciler hiçbir fark görmez.
 
@@ -13,7 +13,7 @@ Her hata yanıtı, standart `error` nesnesi içinde `did_you_mean`, `suggestions
 
 Tüm ipucu alanları, `error` nesnesi içindeki isteğe bağlı uzantılardır:
 
-| Alan | Tür | Açıklama |
+| Alan | Tip | Açıklama |
 |-------|------|-------------|
 | `did_you_mean` | `string` | En yakın eşleşen model adı |
 | `suggestions` | `array` | Meta verilerle birlikte önerilen modeller |
@@ -78,7 +78,7 @@ Hesap bakiyesi tahmini maliyet için çok düşük olduğunda:
 
 ### all_channels_failed (503)
 
-Bir model için tüm üst kanal (upstream) bağlantıları kullanılamaz olduğunda:
+Bir model için tüm üst akış (upstream) kanalları kullanılamaz olduğunda:
 
 ```json
 {
@@ -97,7 +97,7 @@ Bir model için tüm üst kanal (upstream) bağlantıları kullanılamaz olduğu
 ```
 
 <Note>
-`retryable`, neden `no_channels` (bu model için yapılandırılmış kanal yok) olduğunda `false` değerini alır. Yalnızca devre kesici (circuit breaker) tetiklenmesi veya kota tükenmesi gibi geçici hatalar için `true` değerini alır.
+`retryable`, neden `no_channels` (bu model için yapılandırılmış kanal yok) olduğunda `false` değerini alır. Yalnızca devre kesici (circuit breaker) tetiklenmesi veya kota tükenmesi gibi geçici hatalar için `true` olur.
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -106,7 +106,7 @@ Bir model için tüm üst kanal (upstream) bağlantıları kullanılamaz olduğu
 {
   "error": {
     "message": "Rate limit: 60 rpm exceeded",
-    "type": "rate_limit_error",
+    "type": "rate_limit_exceeded",
     "code": "rate_limit_exceeded",
     "retryable": true,
     "retry_after": 8,
@@ -115,11 +115,15 @@ Bir model için tüm üst kanal (upstream) bağlantıları kullanılamaz olduğu
 }
 ```
 
-`retry_after` değeri, gerçek hız sınırı (rate limit) penceresinin sıfırlanma süresinden hesaplanır.
+`retry_after` değeri, gerçek hız sınırı (rate limit) penceresi sıfırlama süresinden hesaplanır.
+
+<Note>
+OpenAI uyumlu uç noktalar, `rate_limit_exceeded`, `upstream_error` ve `all_channels_failed` gibi LemonData'nın kararlı genel hata türlerini kullanır. Anthropic uyumlu ve Gemini uyumlu uç noktalar kendi yerel (native) yanıt biçimlerini kullanır.
+</Note>
 
 ### context_length_exceeded (400)
 
-Girdi, modelin bağlam penceresini (context window) aştığında (ipuçlarıyla zenginleştirilmiş üst kanal hatası):
+Girdi, modelin bağlam penceresini (context window) aştığında (ipuçlarıyla zenginleştirilmiş üst akış hatası):
 
 ```json
 {
@@ -139,17 +143,17 @@ Girdi, modelin bağlam penceresini (context window) aştığında (ipuçlarıyla
 
 ## Yerel Uç Nokta Başlıkları
 
-Yerel bir uç noktaya (native endpoint) sahip bir modelle (Anthropic veya Gemini) `/v1/chat/completions` çağrısı yaptığınızda, **başarılı yanıt** optimizasyon başlıklarını içerir:
+Yerel bir uç noktası (Anthropic veya Gemini) olan bir modelle `/v1/chat/completions` çağrısı yaptığınızda, **başarılı yanıt** optimizasyon başlıklarını içerir:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Model Sağlayıcı | Önerilen Uç Nokta | Avantaj |
+| Model Sağlayıcısı | Önerilen Uç Nokta | Avantaj |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | Format dönüştürme yok, genişletilmiş düşünme, prompt önbelleğe alma |
-| Google (Gemini) | `/v1beta/gemini` | Format dönüştürme yok, grounding, güvenlik ayarları |
+| Anthropic (Claude) | `/v1/messages` | Format dönüştürme yok, genişletilmiş düşünme (extended thinking), istem önbelleğe alma (prompt caching) |
+| Google (Gemini) | `/v1beta/gemini` | Format dönüştürme yok, dayanaklandırma (grounding), güvenlik ayarları |
 | OpenAI | — | Chat completions zaten yerel formattır |
 
 Bu başlıklar hem akışlı (streaming) hem de akışsız yanıtlarda görünür.
@@ -175,9 +179,9 @@ Her model nesnesinin `lemondata` uzantısındaki üç yeni alan:
 
 | Alan | Değerler | Açıklama |
 |-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Model türü |
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Model tipi |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Modelin nasıl faturalandırıldığı |
-| `cache_pricing` | nesne veya `null` | Üst kanal prompt önbellek fiyatları + platform semantik önbellek indirimi |
+| `cache_pricing` | nesne veya `null` | Üst akış istem önbelleği (prompt cache) fiyatları + platform semantik önbellek indirimi |
 
 ### Kategori Filtreleme
 
@@ -196,13 +200,13 @@ GET https://api.lemondata.cc/llms.txt
 ```
 
 Şunları içerir:
-- Çalışan bir örnekle birlikte ilk çağrı şablonu
+- Çalışan bir örnekle ilk çağrı şablonu
 - Yaygın model adları (kullanım verilerinden dinamik olarak oluşturulur)
 - Tüm 12 API uç noktası
 - Model keşfi için filtre parametreleri
 - Hata yönetimi rehberliği
 
-İlk API çağrısından önce `llms.txt` dosyasını okuyan AI agent'ları genellikle ilk denemede başarılı olabilir.
+İlk API çağrılarından önce `llms.txt` dosyasını okuyan yapay zeka agent'ları genellikle ilk denemede başarılı olabilir.
 
 ## Agent Kodunda Kullanım
 
@@ -263,7 +267,7 @@ async function smartChat(messages, model = 'gpt-4o') {
     Hatalar, bir agent'ın kendini düzeltmesi için ihtiyaç duyduğu tüm verilerle birlikte anında döner.
   </Card>
   <Card title="Otomatik yönlendirme yok" icon="route">
-    API asla sessizce farklı bir model yerleştirmez. Kararı agent verir.
+    API asla sessizce farklı bir modelle değiştirme yapmaz. Kararı agent verir.
   </Card>
   <Card title="Veri odaklı öneriler" icon="database">
     Tüm öneriler sabit listelerden değil, üretim verilerinden gelir.

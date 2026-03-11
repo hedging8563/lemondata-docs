@@ -1,3 +1,8 @@
+# LemonData Docs Source
+
+This directory is the source of truth for the public `lemondata-docs` repository.
+Do not edit the public mirror by hand. Changes made there will be overwritten by sync.
+
 # Mintlify Starter Kit
 
 Use the starter kit to get your docs deployed and ready to customize.

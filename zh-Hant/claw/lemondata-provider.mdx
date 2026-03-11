@@ -1,0 +1,131 @@
+---
+title: "LemonData Provider 設定"
+description: "在 OpenClaw 中將 LemonData 設定為 AI Provider，以存取 300+ 模型"
+---
+
+<Note>
+本指南適用於希望將 LemonData 作為 AI Provider 接入的 **OpenClaw** 自託管使用者。
+</Note>
+
+<Tip>
+如果你想直接使用託管方案，可以[建立一個 LemonClaw 實例](/claw/introduction)；託管版預設已配置好 LemonData，可直接在 WebUI 中開始使用。
+</Tip>
+
+## 概覽
+
+OpenClaw 需要設定 **3 個獨立的 providers** 才能存取所有 LemonData 模型，因為不同模型家族使用不同的 API 格式：
+
+| Provider | API 格式 | 模型 | baseUrl |
+|----------|-----------|--------|---------|
+| `lemondata` | `openai-completions` | GPT、DeepSeek、Qwen、Gemini 等 | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | Claude（Opus、Sonnet、Haiku） | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | MiniMax 模型 | `https://api.lemondata.cc` |
+
+<Warning>
+請注意 `/v1` 後綴。`lemondata` provider **包含** `/v1`，因為 OpenAI SDK 不會自動加上它。其他兩個 provider **不包含** `/v1`，因為 Anthropic SDK 會自動加上它。
+</Warning>
+
+## 前置需求
+
+- 一個自託管 OpenClaw 實例
+- 一個 LemonData API Key — [在此取得](https://lemondata.cc/dashboard)
+
+## 設定
+
+編輯你的 OpenClaw provider 設定：
+
+- **自託管**：`~/.openclaw/openclaw.json`
+
+請將以下 3 個 providers 加入 `providers` 陣列：
+
+```json
+{
+  "providers": [
+    {
+      "name": "lemondata",
+      "api": "openai-completions",
+      "baseUrl": "https://api.lemondata.cc/v1",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-claude",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-minimax",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    }
+  ]
+}
+```
+
+<Info>
+這 3 個 providers 使用 **同一個 API Key**。你只需要一個 LemonData 帳戶。
+</Info>
+
+## 使用模型
+
+使用 `provider/model` 格式引用模型：
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "lemondata-claude/claude-sonnet-4-6"
+      }
+    }
+  }
+}
+```
+
+### 模型範例
+
+| Provider | 模型引用 | 說明 |
+|----------|----------------|-------------|
+| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
+| `lemondata` | `lemondata/deepseek-r1` | DeepSeek R1 推理模型 |
+| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
+| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
+| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+
+可在 [lemondata.cc/models](https://lemondata.cc/zh-tw/models) 瀏覽所有可用模型。
+
+## 常見錯誤
+
+<AccordionGroup>
+  <Accordion title="Claude 模型使用了錯誤的 baseUrl">
+    如果為 `lemondata-claude` 使用 `https://api.lemondata.cc/v1`，會導致驗證錯誤。Anthropic SDK 會自動附加 `/v1`，造成重複的 `/v1/v1` 路徑。Anthropic 格式的 providers 應使用 `https://api.lemondata.cc`（不帶 `/v1`）。
+  </Accordion>
+  <Accordion title="把 provider name 寫成 'openai' 而不是 'lemondata'">
+    OpenClaw 會根據 provider **name** 解析 API key。使用 `"name": "openai"` 會嘗試使用 OpenAI 的 API key，而不是你的 LemonData key。請務必使用 `"name": "lemondata"`（或 `lemondata-claude` / `lemondata-minimax`）。
+  </Accordion>
+  <Accordion title="出現 model not found 錯誤">
+    請確認你使用了正確的 provider 前綴。Claude 模型必須使用 `lemondata-claude/`，而不是 `lemondata/`。正確的模型 ID 可在 [lemondata.cc/models](https://lemondata.cc/zh-tw/models) 查看。
+  </Accordion>
+</AccordionGroup>
+
+## 驗證設定
+
+儲存設定後，重新啟動你的 OpenClaw 實例，並發送一則簡單訊息測試。如果能收到回應，表示 provider 已設定正確。
+
+```bash
+# 自託管：重新啟動服務
+systemctl --user restart openclaw    # Linux
+launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
+```
+
+## 下一步
+
+接好 OpenClaw 後，建議繼續閱讀這些文件，更好地使用 LemonData：
+
+- [Agent-First API](/guides/agent-first-api) — 了解模型選擇、重試與 fallback 相關的結構化提示
+- [API Formats](/guides/api-formats) — 理解 OpenAI、Anthropic、Gemini 相容格式
+- [Error Handling](/guides/error-handling) — 熟悉常見錯誤及恢復方式
+- [模型總覽](https://lemondata.cc/zh-tw/models) — 在把模型接入 agent 前先查看可用模型 ID

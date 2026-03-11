@@ -1,0 +1,131 @@
+---
+title: "Configurer le provider LemonData"
+description: "Configurez LemonData comme provider IA dans OpenClaw pour acceder a plus de 300 modeles"
+---
+
+<Note>
+Ce guide s'adresse aux utilisateurs d'**OpenClaw auto-heberge** qui souhaitent connecter LemonData comme provider IA.
+</Note>
+
+<Tip>
+Si vous preferez une solution hebergee, [cree une instance LemonClaw](/claw/introduction). LemonData y est deja configure par defaut, vous pouvez donc commencer immediatement depuis la WebUI.
+</Tip>
+
+## Vue d'ensemble
+
+OpenClaw a besoin de **3 providers distincts** pour acceder a tous les modeles LemonData, car chaque famille de modeles utilise un format d'API different.
+
+| Provider | Format API | Modeles | baseUrl |
+|----------|-----------|--------|---------|
+| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, Gemini, etc. | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | Claude (Opus, Sonnet, Haiku) | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | Modeles MiniMax | `https://api.lemondata.cc` |
+
+<Warning>
+Faites attention au suffixe `/v1`. Le provider `lemondata` **inclut** `/v1` parce que le SDK OpenAI ne l'ajoute pas automatiquement. Les deux autres providers **n'incluent pas** `/v1`, car le SDK Anthropic l'ajoute automatiquement.
+</Warning>
+
+## Prerequis
+
+- Une instance OpenClaw auto-hebergee
+- Une cle API LemonData — [obtenez-en une ici](https://lemondata.cc/dashboard)
+
+## Configuration
+
+Modifiez les parametres du provider OpenClaw :
+
+- **Auto-heberge** : `~/.openclaw/openclaw.json`
+
+Ajoutez les 3 providers suivants au tableau `providers` :
+
+```json
+{
+  "providers": [
+    {
+      "name": "lemondata",
+      "api": "openai-completions",
+      "baseUrl": "https://api.lemondata.cc/v1",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-claude",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    },
+    {
+      "name": "lemondata-minimax",
+      "api": "anthropic-messages",
+      "baseUrl": "https://api.lemondata.cc",
+      "apiKey": "sk-your-lemondata-key"
+    }
+  ]
+}
+```
+
+<Info>
+Les 3 providers utilisent **la meme API Key**. Un seul compte LemonData suffit.
+</Info>
+
+## Utilisation des modeles
+
+Referencez les modeles avec le format `provider/model` :
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "lemondata-claude/claude-sonnet-4-6"
+      }
+    }
+  }
+}
+```
+
+### Exemples de modeles
+
+| Provider | Reference du modele | Description |
+|----------|----------------|-------------|
+| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
+| `lemondata` | `lemondata/deepseek-r1` | Modele de raisonnement DeepSeek R1 |
+| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
+| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
+| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+
+Parcourez tous les modeles disponibles sur [lemondata.cc/models](https://lemondata.cc/fr/models).
+
+## Erreurs frequentes
+
+<AccordionGroup>
+  <Accordion title="Mauvaise baseUrl pour les modeles Claude">
+    Utiliser `https://api.lemondata.cc/v1` pour `lemondata-claude` provoquera des erreurs d'authentification. Le SDK Anthropic ajoute automatiquement `/v1`, ce qui cree un chemin double `/v1/v1`. Pour les providers au format Anthropic, utilisez `https://api.lemondata.cc` (sans `/v1`).
+  </Accordion>
+  <Accordion title="Utiliser le nom de provider 'openai' au lieu de 'lemondata'">
+    OpenClaw resolve les API keys a partir du **name** du provider. Si vous utilisez `"name": "openai"`, OpenClaw essaiera d'utiliser une cle OpenAI au lieu de votre cle LemonData. Utilisez toujours `"name": "lemondata"` (ou `lemondata-claude` / `lemondata-minimax`).
+  </Accordion>
+  <Accordion title="Erreur model not found">
+    Verifiez que vous utilisez le bon prefixe de provider. Les modeles Claude doivent utiliser `lemondata-claude/`, pas `lemondata/`. Consultez [lemondata.cc/models](https://lemondata.cc/fr/models) pour trouver le bon identifiant de modele.
+  </Accordion>
+</AccordionGroup>
+
+## Verifier la configuration
+
+Apres avoir enregistre la configuration, redemarrez votre instance OpenClaw et testez avec un message simple. Si vous obtenez une reponse, le provider est correctement configure.
+
+```bash
+# Auto-heberge : redemarrer le service
+systemctl --user restart openclaw    # Linux
+launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
+```
+
+## Etapes suivantes
+
+Une fois OpenClaw connecte, ces guides vous aideront a mieux utiliser LemonData :
+
+- [Agent-First API](/guides/agent-first-api) — indications structurees pour le choix du modele, les retries et les fallbacks
+- [API Formats](/guides/api-formats) — comprendre les formats compatibles OpenAI, Anthropic et Gemini
+- [Error Handling](/guides/error-handling) — erreurs courantes et methodes de recuperation
+- [Vue d'ensemble des modeles](https://lemondata.cc/fr/models) — verifiez les modeles disponibles avant de les brancher dans vos agents
