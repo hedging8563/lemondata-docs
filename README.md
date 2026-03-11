@@ -2,6 +2,7 @@
 
 This directory is the source of truth for the public `lemondata-docs` repository.
 Do not edit the public mirror by hand. Changes made there will be overwritten by sync.
+Local translation cache lives under `.cache/` and is intentionally not committed or synced.
 
 # Mintlify Starter Kit
 
