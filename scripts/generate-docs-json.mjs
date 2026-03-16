@@ -276,33 +276,6 @@ const navigationTabs = {
         pages: ['integrations/ai-chat-apps']
       }
     ]
-  },
-  skills: {
-    tab: 'Skills',
-    groups: [
-      {
-        group: 'Overview',
-        pages: ['skills/index', 'skills/publishing-pipeline']
-      },
-      {
-        group: 'Categories',
-        pages: [
-          'skills/categories/index',
-          'skills/categories/research',
-          'skills/categories/coding',
-          'skills/categories/writing',
-          'skills/categories/data-analytics',
-          'skills/categories/design',
-          'skills/categories/planning',
-          'skills/categories/communication',
-          'skills/categories/productivity',
-          'skills/categories/devops',
-          'skills/categories/ai-ml',
-          'skills/categories/security',
-          'skills/categories/business'
-        ]
-      }
-    ]
   }
 };
 
