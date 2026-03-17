@@ -5,7 +5,7 @@ description: "Generate videos with 80+ models across 11 providers — text-to-vi
 
 ## Overview
 
-LemonData provides access to **69+ video generation models** from 11 providers through a single unified API. Video generation is **asynchronous** — you submit a request and receive a task ID, then poll for the result.
+LemonData provides access to **69+ video generation models** from 11 providers through a single unified API. Video generation is **asynchronous** — you submit a request, receive a task ID and `poll_url`, then poll for the result.
 
 <Info>
 The model list is updated frequently. For the latest available models and pricing, visit the [Models page](https://lemondata.cc/en/models) or use the [Models API](/api-reference/models/list-models).
@@ -22,10 +22,10 @@ sequenceDiagram
     Client->>LemonData: POST /v1/videos/generations
     LemonData->>Provider: Forward request
     Provider-->>LemonData: task_id + pending
-    LemonData-->>Client: { task_id, status: "pending" }
+    LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
     loop Poll every 5-10s
-        Client->>LemonData: GET /v1/videos/generations/{task_id}
+        Client->>LemonData: GET poll_url
         LemonData->>Provider: Query status
         Provider-->>LemonData: Status update
         LemonData-->>Client: { status, video_url? }
@@ -52,11 +52,13 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-task_id = resp.json()["task_id"]
+create_data = resp.json()
+task_id = create_data["task_id"]
+poll_url = create_data["poll_url"]
 
 # Step 2: Poll for result
 while True:
-    status = requests.get(f"{BASE}/videos/generations/{task_id}", headers=headers).json()
+    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
     if status["status"] in ("completed", "succeeded"):
         print(f"Video URL: {status['video_url']}")
         break
@@ -72,7 +74,7 @@ const BASE = 'https://api.lemondata.cc/v1';
 const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
 
 // Step 1: Submit
-const { task_id } = await fetch(`${BASE}/videos/generations`, {
+const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
   method: 'POST', headers,
   body: JSON.stringify({
     model: 'kling-v2.6-pro',
@@ -84,7 +86,7 @@ const { task_id } = await fetch(`${BASE}/videos/generations`, {
 
 // Step 2: Poll
 const poll = setInterval(async () => {
-  const status = await fetch(`${BASE}/videos/generations/${task_id}`, { headers }).then(r => r.json());
+  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
   if (['completed', 'succeeded'].includes(status.status)) {
     console.log('Video URL:', status.video_url);
     clearInterval(poll);
@@ -120,7 +122,7 @@ Different models excel at different tasks. Use this matrix to choose the right m
 ### Capability Definitions
 
 - **T2V (Text-to-Video)**: Generate video from a text prompt
-- **I2V (Image-to-Video)**: Animate a static image into video using `image_url` or `image`
+- **I2V (Image-to-Video)**: Animate a static image into video. For the broadest compatibility, provide a public `image_url`.
 - **Keyframe**: Control start and end frames with `start_image` + `end_image`
 - **Extension**: Extend an existing video's duration
 - **Editing**: Modify specific aspects of an existing video
@@ -265,7 +267,7 @@ response = requests.post(f"{BASE}/videos/generations",
 
 ### Image-to-Video (I2V)
 
-Animate a static image. Use `image_url` for a URL or `image` for base64 data.
+Animate a static image. For the broadest compatibility across video models, host the source image and pass `image_url`.
 
 ```python
 # Using image URL
@@ -278,19 +280,6 @@ response = requests.post(f"{BASE}/videos/generations",
     }
 )
 
-# Using base64 image
-import base64
-with open("photo.jpg", "rb") as f:
-    image_b64 = base64.b64encode(f.read()).decode()
-
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "kling-v2.1-master",
-        "prompt": "Gentle wind blows through the scene",
-        "image": f"data:image/jpeg;base64,{image_b64}"
-    }
-)
 ```
 
 ### Keyframe Control (Start + End Image)
@@ -332,7 +321,7 @@ response = requests.post(f"{BASE}/videos/generations",
 | `model` | string | Model ID (default: `sora-2`) |
 | `prompt` | string | **Required.** Text description of the video |
 | `image_url` | string | URL of starting image (for I2V) |
-| `image` | string | Base64-encoded image with data URL prefix (for I2V) |
+| `image` | string | Inline image as a data URL. Supported by compatible models, but `image_url` provides the broadest compatibility. |
 | `duration` | integer | Video duration in seconds (1-60, model-dependent) |
 | `aspect_ratio` | string | `16:9`, `9:16`, `1:1`, etc. |
 | `resolution` | string | `1080p`, `720p`, `4k` |

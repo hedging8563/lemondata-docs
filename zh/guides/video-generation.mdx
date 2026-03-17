@@ -5,7 +5,7 @@ description: "通过 11 个供应商的 80 多个模型生成视频 —— 支�
 
 ## 概览
 
-LemonData 通过单一统一的 API 提供来自 11 个供应商的 **69 多个视频生成模型**。视频生成是**异步**的 —— 您提交请求并接收一个任务 ID，然后轮询结果。
+LemonData 通过单一统一的 API 提供来自 11 个供应商的 **69 多个视频生成模型**。视频生成是**异步**的 —— 您提交请求后会得到任务 ID 和 `poll_url`，然后再轮询结果。
 
 <Info>
 模型列表会频繁更新。有关最新可用模型和定价，请访问 [模型页面](https://lemondata.cc/zh/models) 或使用 [Models API](/api-reference/models/list-models)。
@@ -22,10 +22,10 @@ sequenceDiagram
     Client->>LemonData: POST /v1/videos/generations
     LemonData->>Provider: 转发请求
     Provider-->>LemonData: task_id + pending
-    LemonData-->>Client: { task_id, status: "pending" }
+    LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
     loop 每 5-10 秒轮询一次
-        Client->>LemonData: GET /v1/videos/generations/{task_id}
+        Client->>LemonData: GET poll_url
         LemonData->>Provider: 查询状态
         Provider-->>LemonData: 状态更新
         LemonData-->>Client: { status, video_url? }
@@ -52,11 +52,13 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-task_id = resp.json()["task_id"]
+create_data = resp.json()
+task_id = create_data["task_id"]
+poll_url = create_data["poll_url"]
 
 # 步骤 2：轮询结果
 while True:
-    status = requests.get(f"{BASE}/videos/generations/{task_id}", headers=headers).json()
+    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
     if status["status"] in ("completed", "succeeded"):
         print(f"Video URL: {status['video_url']}")
         break
@@ -72,7 +74,7 @@ const BASE = 'https://api.lemondata.cc/v1';
 const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
 
 // 步骤 1：提交
-const { task_id } = await fetch(`${BASE}/videos/generations`, {
+const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
   method: 'POST', headers,
   body: JSON.stringify({
     model: 'kling-v2.6-pro',
@@ -84,7 +86,7 @@ const { task_id } = await fetch(`${BASE}/videos/generations`, {
 
 // 步骤 2：轮询
 const poll = setInterval(async () => {
-  const status = await fetch(`${BASE}/videos/generations/${task_id}`, { headers }).then(r => r.json());
+  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
   if (['completed', 'succeeded'].includes(status.status)) {
     console.log('Video URL:', status.video_url);
     clearInterval(poll);
@@ -120,7 +122,7 @@ const poll = setInterval(async () => {
 ### 能力定义
 
 - **T2V (文生视频)**：从文本提示词生成视频
-- **I2V (图生视频)**：使用 `image_url` 或 `image` 将静态图像动画化为视频
+- **I2V (图生视频)**：将静态图像动画化为视频。为了获得最广泛的兼容性，优先提供公开可访问的 `image_url`
 - **关键帧**：通过 `start_image` + `end_image` 控制起始和结束帧
 - **延长**：延长现有视频的时长
 - **编辑**：修改现有视频的特定方面
@@ -265,7 +267,7 @@ response = requests.post(f"{BASE}/videos/generations",
 
 ### 图生视频 (I2V)
 
-使静态图像动起来。使用 `image_url` 传递 URL，或使用 `image` 传递 base64 数据。
+使静态图像动起来。为了获得跨视频模型的最广泛兼容性，请先托管源图像并传入 `image_url`。
 
 ```python
 # 使用图像 URL
@@ -278,19 +280,6 @@ response = requests.post(f"{BASE}/videos/generations",
     }
 )
 
-# 使用 base64 图像
-import base64
-with open("photo.jpg", "rb") as f:
-    image_b64 = base64.b64encode(f.read()).decode()
-
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "kling-v2.1-master",
-        "prompt": "Gentle wind blows through the scene",
-        "image": f"data:image/jpeg;base64,{image_b64}"
-    }
-)
 ```
 
 ### 关键帧控制（起始 + 结束图像）
@@ -332,7 +321,7 @@ response = requests.post(f"{BASE}/videos/generations",
 | `model` | string | 模型 ID (默认: `sora-2`) |
 | `prompt` | string | **必填。** 视频的文本描述 |
 | `image_url` | string | 起始图像的 URL (用于 I2V) |
-| `image` | string | 带有数据 URL 前缀的 Base64 编码图像 (用于 I2V) |
+| `image` | string | 内联数据 URL 图像。兼容的模型可以使用，但 `image_url` 提供最广泛的兼容性。 |
 | `duration` | integer | 视频时长，单位为秒 (1-60，取决于模型) |
 | `aspect_ratio` | string | `16:9`, `9:16`, `1:1` 等 |
 | `resolution` | string | `1080p`, `720p`, `4k` |
