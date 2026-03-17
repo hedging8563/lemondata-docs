@@ -1,6 +1,6 @@
 ---
 title: "LemonData Provider 設定"
-description: "OpenClaw で LemonData を AI Provider として設定し、300 以上のモデルにアクセス"
+description: "OpenClaw で LemonData を OpenAI、Responses、Anthropic、Gemini ルート対応のカスタム Provider として設定します"
 ---
 
 <Note>
@@ -13,70 +13,117 @@ description: "OpenClaw で LemonData を AI Provider として設定し、300 �
 
 ## 概要
 
-OpenClaw では、異なるモデルファミリーが異なる API 形式を使うため、すべての LemonData モデルにアクセスするには **3 つの独立した providers** が必要です。
+現在の OpenClaw では、LemonData を接続する推奨方法は `models.providers` を使うことです。
 
-| Provider | API 形式 | モデル | baseUrl |
-|----------|-----------|--------|---------|
-| `lemondata` | `openai-completions` | GPT、DeepSeek、Qwen、Gemini など | `https://api.lemondata.cc/v1` |
-| `lemondata-claude` | `anthropic-messages` | Claude（Opus、Sonnet、Haiku） | `https://api.lemondata.cc` |
-| `lemondata-minimax` | `anthropic-messages` | MiniMax モデル | `https://api.lemondata.cc` |
+まずは素早く動かしたいだけなら `lemondata` だけで十分です。**Responses API**、**Claude ネイティブ**、**Gemini ネイティブ**、**MiniMax ネイティブ** が必要な場合のみ、他の provider を追加してください。
+
+| Provider | OpenClaw `api` | 用途 | baseUrl |
+|----------|----------------|------|---------|
+| `lemondata` | `openai-completions` | GPT、DeepSeek、Qwen など大半の OpenAI 互換呼び出し | `https://api.lemondata.cc/v1` |
+| `lemondata-responses` | `openai-responses` | `/v1/responses` の意味論を前提とした OpenAI Responses ワークフロー | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | Claude のネイティブ Messages API | `https://api.lemondata.cc` |
+| `lemondata-gemini` | `google-generative-ai` | Gemini のネイティブ API 形式 | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | MiniMax のネイティブルート | `https://api.lemondata.cc` |
 
 <Warning>
-`/v1` サフィックスに注意してください。`lemondata` provider は `/v1` を **含みます**。これは OpenAI SDK が自動で追加しないためです。ほかの 2 つの provider は `/v1` を **含みません**。Anthropic SDK が自動で追加するためです。
+`/v1` サフィックスを付けるのは `openai-completions` と `openai-responses` だけです。
+
+`anthropic-messages` や `google-generative-ai` のようなネイティブ provider は `/v1` なしの `https://api.lemondata.cc` を使ってください。そうしないと OpenClaw が誤った upstream パスを組み立てる可能性があります。
 </Warning>
 
 ## 前提条件
 
-- セルフホスト版 OpenClaw インスタンス 1 つ
-- LemonData API Key 1 つ — [こちらから取得](https://lemondata.cc/dashboard)
+- セルフホスト版 OpenClaw インスタンス
+- LemonData API Key — [こちらから取得](https://lemondata.cc/dashboard)
 
 ## 設定
 
-OpenClaw の provider 設定を編集します。
+OpenClaw の設定を編集します。
 
 - **セルフホスト**：`~/.openclaw/openclaw.json`
 
-次の 3 つの providers を `providers` 配列に追加してください。
+LemonData provider を `models.providers` に追加してください。
 
-```json
+```json5
 {
-  "providers": [
-    {
-      "name": "lemondata",
-      "api": "openai-completions",
-      "baseUrl": "https://api.lemondata.cc/v1",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-claude",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-minimax",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-claude/claude-sonnet-4-6"
+      }
     }
-  ]
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      lemondata: {
+        api: "openai-completions",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o" },
+          { id: "deepseek-r1", name: "DeepSeek R1" },
+          { id: "qwen3-32b", name: "Qwen 3 32B" }
+        ]
+      },
+      "lemondata-responses": {
+        api: "openai-responses",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o (Responses)" },
+          { id: "gpt-5.2", name: "GPT-5.2 (Responses)" }
+        ]
+      },
+      "lemondata-claude": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+          { id: "claude-opus-4-6", name: "Claude Opus 4.6" }
+        ]
+      },
+      "lemondata-gemini": {
+        api: "google-generative-ai",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+          { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" }
+        ]
+      },
+      "lemondata-minimax": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "minimax-m1", name: "MiniMax M1" }
+        ]
+      }
+    }
+  }
 }
 ```
 
 <Info>
-3 つの providers はすべて **同じ API Key** を使います。必要なのは LemonData アカウント 1 つだけです。
+5 つの provider はすべて **同じ API Key** を使います。必要なのは LemonData アカウント 1 つだけです。
+</Info>
+
+<Info>
+上記の `models` 配列は代表的な例だけを示しています。必要に応じて各 provider に別の model ID を追加してください。
 </Info>
 
 ## モデルの使い方
 
-モデルは `provider/model` 形式で指定します。
+OpenClaw は引き続き `provider/model` 形式でモデルを参照します。
 
-```json
+```json5
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "lemondata-claude/claude-sonnet-4-6"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-gemini/gemini-2.5-flash"
       }
     }
   }
@@ -86,28 +133,40 @@ OpenClaw の provider 設定を編集します。
 ### モデル例
 
 | Provider | モデル指定 | 説明 |
-|----------|----------------|-------------|
-| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
-| `lemondata` | `lemondata/deepseek-r1` | DeepSeek R1 推論モデル |
-| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
-| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
-| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
-| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
-| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+|----------|------------|------|
+| `lemondata` | `lemondata/gpt-4o` | OpenAI 互換ルート |
+| `lemondata` | `lemondata/deepseek-r1` | DeepSeek 推論モデル |
+| `lemondata-responses` | `lemondata-responses/gpt-4o` | Responses API ルート |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Messages のネイティブルート |
+| `lemondata-gemini` | `lemondata-gemini/gemini-2.5-flash` | Gemini のネイティブルート |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax のネイティブルート |
 
 利用可能なモデルは [lemondata.cc/models](https://lemondata.cc/ja/models) で確認できます。
+
+## どの provider を使うべきか
+
+- `lemondata`：一般的な chat / agent 用途のデフォルト選択。
+- `lemondata-responses`：OpenClaw ワークフローが OpenAI Responses の意味論に明確に依存している場合に使用。
+- `lemondata-claude`：Claude Messages のネイティブ挙動が必要な場合に使用。
+- `lemondata-gemini`：Gemini のネイティブ形式や Gemini 向けの既存統合を使いたい場合に使用。
+- `lemondata-minimax`：MiniMax をネイティブルートで使いたい場合に使用。
+
+Gemini のネイティブ挙動が不要なら、`lemondata/gemini-*` を使って OpenAI 互換ルートで Gemini モデルを呼び出すこともできます。
 
 ## よくあるミス
 
 <AccordionGroup>
-  <Accordion title="Claude モデルで baseUrl を間違える">
-    `lemondata-claude` に `https://api.lemondata.cc/v1` を使うと認証エラーになります。Anthropic SDK は自動で `/v1` を付けるため、`/v1/v1` という二重パスになってしまいます。Anthropic 形式の provider には `https://api.lemondata.cc`（`/v1` なし）を使ってください。
+  <Accordion title="古い top-level providers 配列を使い続けている">
+    現在の OpenClaw ドキュメントは `models.providers` を前提にしています。古い top-level の `providers` 形式を使い続けると、OpenClaw が設定を無視したり、provider プレフィックスを正しく解決できなかったりすることがあります。
   </Accordion>
-  <Accordion title="provider 名に 'openai' を使ってしまう">
-    OpenClaw は provider **name** を使って API key を解決します。`"name": "openai"` を使うと、LemonData key ではなく OpenAI の API key を参照しようとします。必ず `"name": "lemondata"`（または `lemondata-claude` / `lemondata-minimax`）を使用してください。
+  <Accordion title="lemondata-responses で /v1 を付け忘れる">
+    `openai-responses` は LemonData の `/v1/responses` パスを使うため、`lemondata-responses` には `https://api.lemondata.cc/v1` を設定する必要があります。
   </Accordion>
-  <Accordion title="model not found エラーが出る">
-    正しい provider プレフィックスを使っているか確認してください。Claude モデルは `lemondata/` ではなく `lemondata-claude/` を使う必要があります。正しいモデル ID は [lemondata.cc/models](https://lemondata.cc/ja/models) で確認できます。
+  <Accordion title="lemondata-claude / lemondata-gemini / lemondata-minimax に /v1 を付けてしまう">
+    `anthropic-messages` と `google-generative-ai` は `/v1` なしの `https://api.lemondata.cc` を使う必要があります。`/v1` を付けると誤ったリクエストパスになる可能性があります。
+  </Accordion>
+  <Accordion title="OpenClaw はまだ Gemini ネイティブをサポートしているのか？">
+    はい。現在の OpenClaw ドキュメントには組み込みの `google` provider が残っており、`api: &quot;google-generative-ai&quot;` を使うカスタム provider もサポートされています。したがって `lemondata-gemini` は OpenClaw ユーザーにとって引き続き有効な Gemini ネイティブルートです。
   </Accordion>
 </AccordionGroup>
 
@@ -125,7 +184,7 @@ launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  #
 
 OpenClaw の接続後は、次のガイドも読むと LemonData をより活用できます。
 
-- [Agent-First API](/guides/agent-first-api) — モデル選択、再試行、fallback のための構造化ヒント
-- [API Formats](/guides/api-formats) — OpenAI、Anthropic、Gemini 互換フォーマットの違い
+- [API Formats](/guides/api-formats) — OpenAI、Responses、Anthropic、Gemini の各ルートの違いを理解する
+- [IDE / SDK Compatibility](/guides/ide-sdk-compatibility) — `/v1/responses` を使うべき場面を確認する
 - [Error Handling](/guides/error-handling) — よくある失敗パターンと復旧方法
-- [利用可能モデル一覧](https://lemondata.cc/ja/models) — agent に組み込む前に利用可能なモデル ID を確認
+- [利用可能モデル一覧](https://lemondata.cc/ja/models) — agent に組み込む前に利用可能な model ID を確認する

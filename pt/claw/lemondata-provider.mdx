@@ -1,82 +1,129 @@
 ---
-title: "Configuracao do provider LemonData"
-description: "Configure o LemonData como provider de IA no OpenClaw para acessar mais de 300 modelos"
+title: "Configuração do provider LemonData"
+description: "Configure o LemonData como provider personalizado no OpenClaw usando rotas OpenAI, Responses, Anthropic e Gemini"
 ---
 
 <Note>
-Este guia e voltado para usuarios do **OpenClaw auto-hospedado** que querem conectar o LemonData como provider de IA.
+Este guia é para usuários de **OpenClaw self-hosted** que querem conectar o LemonData como provider de IA.
 </Note>
 
 <Tip>
-Se preferir uma solucao hospedada, [crie uma instancia do LemonClaw](/claw/introduction). O LemonData ja vem configurado por padrao, entao voce pode comecar imediatamente pela WebUI.
+Se você preferir uma solução hospedada, [crie uma instância LemonClaw](/claw/introduction). O LemonData já vem configurado por padrão, então você pode começar direto pela WebUI.
 </Tip>
 
-## Visao geral
+## Visão geral
 
-O OpenClaw precisa de **3 providers separados** para acessar todos os modelos do LemonData, porque diferentes familias de modelos usam formatos de API diferentes.
+Nas versões atuais do OpenClaw, a forma recomendada de conectar o LemonData é usando `models.providers`.
 
-| Provider | Formato de API | Modelos | baseUrl |
-|----------|-----------|--------|---------|
-| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, Gemini etc. | `https://api.lemondata.cc/v1` |
-| `lemondata-claude` | `anthropic-messages` | Claude (Opus, Sonnet, Haiku) | `https://api.lemondata.cc` |
-| `lemondata-minimax` | `anthropic-messages` | Modelos MiniMax | `https://api.lemondata.cc` |
+Se você só quer começar rápido, `lemondata` sozinho já basta. Adicione os outros providers apenas quando precisar de **Responses API**, **Claude nativo**, **Gemini nativo** ou **MiniMax nativo**.
+
+| Provider | `api` do OpenClaw | Ideal para | baseUrl |
+|----------|-------------------|------------|---------|
+| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen e a maioria das chamadas compatíveis com OpenAI | `https://api.lemondata.cc/v1` |
+| `lemondata-responses` | `openai-responses` | Fluxos OpenAI Responses que esperam a semântica de `/v1/responses` | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | API Messages nativa do Claude | `https://api.lemondata.cc` |
+| `lemondata-gemini` | `google-generative-ai` | Formato nativo da API Gemini | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | Rota nativa do MiniMax | `https://api.lemondata.cc` |
 
 <Warning>
-Preste atencao ao sufixo `/v1`. O provider `lemondata` **inclui** `/v1` porque o SDK da OpenAI nao o adiciona automaticamente. Os outros dois providers **nao incluem** `/v1` porque o SDK da Anthropic o adiciona automaticamente.
+Use o sufixo `/v1` apenas com `openai-completions` e `openai-responses`.
+
+Providers nativos como `anthropic-messages` e `google-generative-ai` devem usar `https://api.lemondata.cc` sem `/v1`; caso contrário, o OpenClaw pode montar o caminho upstream errado.
 </Warning>
 
-## Pre-requisitos
+## Pré-requisitos
 
-- Uma instancia OpenClaw auto-hospedada
+- Uma instância OpenClaw self-hosted
 - Uma LemonData API Key — [obtenha aqui](https://lemondata.cc/dashboard)
 
-## Configuracao
+## Configuração
 
-Edite as configuracoes de provider do OpenClaw:
+Edite sua configuração do OpenClaw:
 
-- **Auto-hospedado**: `~/.openclaw/openclaw.json`
+- **Self-hosted**: `~/.openclaw/openclaw.json`
 
-Adicione os 3 providers abaixo ao array `providers`:
+Adicione os providers do LemonData dentro de `models.providers`:
 
-```json
+```json5
 {
-  "providers": [
-    {
-      "name": "lemondata",
-      "api": "openai-completions",
-      "baseUrl": "https://api.lemondata.cc/v1",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-claude",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-minimax",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-claude/claude-sonnet-4-6"
+      }
     }
-  ]
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      lemondata: {
+        api: "openai-completions",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o" },
+          { id: "deepseek-r1", name: "DeepSeek R1" },
+          { id: "qwen3-32b", name: "Qwen 3 32B" }
+        ]
+      },
+      "lemondata-responses": {
+        api: "openai-responses",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o (Responses)" },
+          { id: "gpt-5.2", name: "GPT-5.2 (Responses)" }
+        ]
+      },
+      "lemondata-claude": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+          { id: "claude-opus-4-6", name: "Claude Opus 4.6" }
+        ]
+      },
+      "lemondata-gemini": {
+        api: "google-generative-ai",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+          { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" }
+        ]
+      },
+      "lemondata-minimax": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "minimax-m1", name: "MiniMax M1" }
+        ]
+      }
+    }
+  }
 }
 ```
 
 <Info>
-Os 3 providers usam **a mesma API Key**. Voce precisa de apenas uma conta LemonData.
+Os 5 providers usam **a mesma API Key**. Você só precisa de uma conta LemonData.
 </Info>
 
-## Usando modelos
+<Info>
+As listas `models` acima mostram apenas exemplos comuns. Adicione mais model IDs em cada provider conforme necessário.
+</Info>
 
-Referencia os modelos com o formato `provider/model`:
+## Uso de modelos
 
-```json
+O OpenClaw continua usando o formato `provider/model` para referenciar modelos:
+
+```json5
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "lemondata-claude/claude-sonnet-4-6"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-gemini/gemini-2.5-flash"
       }
     }
   }
@@ -85,47 +132,59 @@ Referencia os modelos com o formato `provider/model`:
 
 ### Exemplos de modelos
 
-| Provider | Referencia do modelo | Descricao |
-|----------|----------------|-------------|
-| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
-| `lemondata` | `lemondata/deepseek-r1` | Modelo de raciocinio DeepSeek R1 |
-| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
-| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
-| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
-| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
-| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+| Provider | Referência do modelo | Descrição |
+|----------|----------------------|-----------|
+| `lemondata` | `lemondata/gpt-4o` | Rota compatível com OpenAI |
+| `lemondata` | `lemondata/deepseek-r1` | Modelo de raciocínio DeepSeek |
+| `lemondata-responses` | `lemondata-responses/gpt-4o` | Rota da Responses API |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Rota nativa Claude Messages |
+| `lemondata-gemini` | `lemondata-gemini/gemini-2.5-flash` | Rota nativa Gemini |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | Rota nativa MiniMax |
 
-Veja todos os modelos disponiveis em [lemondata.cc/models](https://lemondata.cc/pt/models).
+Veja todos os modelos disponíveis em [lemondata.cc/models](https://lemondata.cc/pt/models).
+
+## Quando usar cada provider
+
+- `lemondata`: escolha padrão para a maioria dos casos gerais de chat e agents.
+- `lemondata-responses`: use quando seu fluxo no OpenClaw depender explicitamente da semântica do OpenAI Responses.
+- `lemondata-claude`: use quando quiser o comportamento nativo do Claude Messages.
+- `lemondata-gemini`: use quando quiser formato nativo do Gemini ou integrações já pensadas para Gemini.
+- `lemondata-minimax`: use quando quiser o MiniMax na rota nativa.
+
+Se você não precisar do comportamento nativo do Gemini, ainda pode chamar modelos Gemini usando `lemondata/gemini-*` pela rota compatível com OpenAI.
 
 ## Erros comuns
 
 <AccordionGroup>
-  <Accordion title="baseUrl errada para modelos Claude">
-    Usar `https://api.lemondata.cc/v1` para `lemondata-claude` causara erros de autenticacao. O SDK da Anthropic adiciona `/v1` automaticamente, resultando em um caminho duplicado `/v1/v1`. Para providers no formato Anthropic, use `https://api.lemondata.cc` (sem `/v1`).
+  <Accordion title="Continuar usando o antigo array providers no nível superior">
+    A documentação atual do OpenClaw usa `models.providers`. Se você mantiver o formato antigo com `providers` no nível superior, o OpenClaw pode ignorar a configuração ou não resolver os prefixos do provider como esperado.
   </Accordion>
-  <Accordion title="Usar o nome de provider 'openai' em vez de 'lemondata'">
-    O OpenClaw resolve as API keys pelo **name** do provider. Se voce usar `"name": "openai"`, ele tentara usar uma chave da OpenAI em vez da sua chave LemonData. Use sempre `"name": "lemondata"` (ou `lemondata-claude` / `lemondata-minimax`).
+  <Accordion title="Esquecer /v1 em lemondata-responses">
+    `openai-responses` aponta para a rota `/v1/responses` do LemonData, então `lemondata-responses` precisa usar `https://api.lemondata.cc/v1`.
   </Accordion>
-  <Accordion title="Erros de model not found">
-    Verifique se voce esta usando o prefixo correto do provider. Modelos Claude devem usar `lemondata-claude/`, nao `lemondata/`. Consulte [lemondata.cc/models](https://lemondata.cc/pt/models) para encontrar o ID correto do modelo.
+  <Accordion title="Adicionar /v1 a lemondata-claude, lemondata-gemini ou lemondata-minimax">
+    `anthropic-messages` e `google-generative-ai` devem usar `https://api.lemondata.cc` sem `/v1`. Adicionar `/v1` pode gerar caminhos de requisição incorretos.
+  </Accordion>
+  <Accordion title="O OpenClaw ainda suporta Gemini nativo?">
+    Sim. A documentação atual do OpenClaw ainda inclui o provider embutido `google` e também aceita providers personalizados com `api: &quot;google-generative-ai&quot;`. Por isso, `lemondata-gemini` continua sendo uma rota Gemini nativa válida para usuários do OpenClaw.
   </Accordion>
 </AccordionGroup>
 
-## Verificar a configuracao
+## Verificar a configuração
 
-Depois de salvar a configuracao, reinicie sua instancia OpenClaw e teste com uma mensagem simples. Se houver resposta, o provider esta configurado corretamente.
+Depois de salvar a configuração, reinicie sua instância do OpenClaw e teste com uma mensagem simples. Se você receber uma resposta, o provider está configurado corretamente.
 
 ```bash
-# Auto-hospedado: reiniciar o servico
+# Self-hosted: reiniciar o serviço
 systemctl --user restart openclaw    # Linux
 launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
 ```
 
-## Proximos passos
+## Próximos passos
 
-Depois que o OpenClaw estiver conectado, estes guias ajudam voce a usar melhor o LemonData:
+Depois de conectar o OpenClaw, estes guias ajudam você a usar melhor o LemonData:
 
-- [Agent-First API](/guides/agent-first-api) — dicas estruturadas para selecao de modelos, retries e fallback
-- [API Formats](/guides/api-formats) — entenda os formatos compativeis com OpenAI, Anthropic e Gemini
-- [Error Handling](/guides/error-handling) — falhas comuns e como se recuperar delas
-- [Visao geral dos modelos](https://lemondata.cc/pt/models) — veja os model IDs disponiveis antes de conecta-los aos seus agents
+- [API Formats](/guides/api-formats) — entenda as diferenças entre OpenAI, Responses, Anthropic e Gemini
+- [IDE / SDK Compatibility](/guides/ide-sdk-compatibility) — veja quando `/v1/responses` faz mais sentido
+- [Error Handling](/guides/error-handling) — aprenda falhas comuns e formas de recuperação
+- [Visão geral dos modelos](https://lemondata.cc/pt/models) — confira os model IDs disponíveis antes de conectá-los aos seus agents

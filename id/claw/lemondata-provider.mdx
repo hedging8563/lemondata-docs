@@ -1,6 +1,6 @@
 ---
-title: "Pengaturan provider LemonData"
-description: "Konfigurasikan LemonData sebagai provider AI di OpenClaw untuk mengakses 300+ model"
+title: "Pengaturan Provider LemonData"
+description: "Konfigurasikan LemonData sebagai provider kustom di OpenClaw dengan rute OpenAI, Responses, Anthropic, dan Gemini"
 ---
 
 <Note>
@@ -8,21 +8,27 @@ Panduan ini ditujukan untuk pengguna **OpenClaw self-hosted** yang ingin menghub
 </Note>
 
 <Tip>
-Jika Anda ingin memakai solusi hosted, [buat instance LemonClaw](/claw/introduction). LemonData sudah dikonfigurasi secara default, jadi Anda bisa langsung mulai dari WebUI.
+Jika kamu lebih suka solusi terkelola, [buat instance LemonClaw](/claw/introduction). LemonData sudah dikonfigurasi secara default, jadi kamu bisa langsung mulai dari WebUI.
 </Tip>
 
-## Ikhtisar
+## Ringkasan
 
-OpenClaw memerlukan **3 providers terpisah** untuk mengakses semua model LemonData, karena keluarga model yang berbeda menggunakan format API yang berbeda.
+Pada versi OpenClaw saat ini, cara yang direkomendasikan untuk menghubungkan LemonData adalah melalui `models.providers`.
 
-| Provider | Format API | Model | baseUrl |
-|----------|-----------|--------|---------|
-| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, Gemini, dan lainnya | `https://api.lemondata.cc/v1` |
-| `lemondata-claude` | `anthropic-messages` | Claude (Opus, Sonnet, Haiku) | `https://api.lemondata.cc` |
-| `lemondata-minimax` | `anthropic-messages` | Model MiniMax | `https://api.lemondata.cc` |
+Jika kamu hanya ingin cepat mulai, `lemondata` saja sudah cukup. Tambahkan provider lain hanya saat kamu membutuhkan **Responses API**, **Claude native**, **Gemini native**, atau **MiniMax native**.
+
+| Provider | `api` OpenClaw | Cocok untuk | baseUrl |
+|----------|----------------|-------------|---------|
+| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, dan sebagian besar panggilan yang kompatibel dengan OpenAI | `https://api.lemondata.cc/v1` |
+| `lemondata-responses` | `openai-responses` | Workflow OpenAI Responses yang mengharapkan semantik `/v1/responses` | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | API Messages native Claude | `https://api.lemondata.cc` |
+| `lemondata-gemini` | `google-generative-ai` | Format API Gemini native | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | Rute native MiniMax | `https://api.lemondata.cc` |
 
 <Warning>
-Perhatikan suffix `/v1`. Provider `lemondata` **menyertakan** `/v1` karena OpenAI SDK tidak menambahkannya secara otomatis. Dua provider lainnya **tidak menyertakan** `/v1` karena Anthropic SDK akan menambahkannya secara otomatis.
+Gunakan sufiks `/v1` hanya untuk `openai-completions` dan `openai-responses`.
+
+Provider native seperti `anthropic-messages` dan `google-generative-ai` harus memakai `https://api.lemondata.cc` tanpa `/v1`; jika tidak, OpenClaw bisa membentuk path upstream yang salah.
 </Warning>
 
 ## Prasyarat
@@ -32,51 +38,92 @@ Perhatikan suffix `/v1`. Provider `lemondata` **menyertakan** `/v1` karena OpenA
 
 ## Konfigurasi
 
-Edit pengaturan provider OpenClaw Anda:
+Edit konfigurasi OpenClaw milikmu:
 
 - **Self-hosted**: `~/.openclaw/openclaw.json`
 
-Tambahkan 3 providers berikut ke array `providers`:
+Tambahkan provider LemonData di dalam `models.providers`:
 
-```json
+```json5
 {
-  "providers": [
-    {
-      "name": "lemondata",
-      "api": "openai-completions",
-      "baseUrl": "https://api.lemondata.cc/v1",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-claude",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-minimax",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-claude/claude-sonnet-4-6"
+      }
     }
-  ]
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      lemondata: {
+        api: "openai-completions",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o" },
+          { id: "deepseek-r1", name: "DeepSeek R1" },
+          { id: "qwen3-32b", name: "Qwen 3 32B" }
+        ]
+      },
+      "lemondata-responses": {
+        api: "openai-responses",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o (Responses)" },
+          { id: "gpt-5.2", name: "GPT-5.2 (Responses)" }
+        ]
+      },
+      "lemondata-claude": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+          { id: "claude-opus-4-6", name: "Claude Opus 4.6" }
+        ]
+      },
+      "lemondata-gemini": {
+        api: "google-generative-ai",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+          { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" }
+        ]
+      },
+      "lemondata-minimax": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "minimax-m1", name: "MiniMax M1" }
+        ]
+      }
+    }
+  }
 }
 ```
 
 <Info>
-Ketiga providers menggunakan **API Key yang sama**. Anda hanya memerlukan satu akun LemonData.
+Kelima provider memakai **API Key yang sama**. Kamu hanya butuh satu akun LemonData.
+</Info>
+
+<Info>
+Array `models` di atas hanya menunjukkan contoh umum. Tambahkan model ID lain ke tiap provider sesuai kebutuhan.
 </Info>
 
 ## Menggunakan model
 
-Referensikan model dengan format `provider/model`:
+OpenClaw tetap menggunakan format `provider/model` untuk mereferensikan model:
 
-```json
+```json5
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "lemondata-claude/claude-sonnet-4-6"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-gemini/gemini-2.5-flash"
       }
     }
   }
@@ -86,34 +133,46 @@ Referensikan model dengan format `provider/model`:
 ### Contoh model
 
 | Provider | Referensi model | Deskripsi |
-|----------|----------------|-------------|
-| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
-| `lemondata` | `lemondata/deepseek-r1` | Model reasoning DeepSeek R1 |
-| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
-| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
-| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
-| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
-| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+|----------|-----------------|-----------|
+| `lemondata` | `lemondata/gpt-4o` | Rute kompatibel OpenAI |
+| `lemondata` | `lemondata/deepseek-r1` | Model reasoning DeepSeek |
+| `lemondata-responses` | `lemondata-responses/gpt-4o` | Rute Responses API |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Rute native Claude Messages |
+| `lemondata-gemini` | `lemondata-gemini/gemini-2.5-flash` | Rute native Gemini |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | Rute native MiniMax |
 
 Lihat semua model yang tersedia di [lemondata.cc/models](https://lemondata.cc/id/models).
+
+## Kapan memakai provider tertentu
+
+- `lemondata`: pilihan default untuk sebagian besar use case chat dan agent umum.
+- `lemondata-responses`: gunakan saat workflow OpenClaw kamu secara eksplisit bergantung pada semantik OpenAI Responses.
+- `lemondata-claude`: gunakan saat kamu ingin perilaku native Claude Messages.
+- `lemondata-gemini`: gunakan saat kamu ingin format native Gemini atau integrasi yang sudah dirancang untuk Gemini.
+- `lemondata-minimax`: gunakan saat kamu ingin MiniMax melalui rute native-nya.
+
+Jika kamu tidak membutuhkan perilaku native Gemini, kamu tetap bisa memanggil model Gemini lewat `lemondata/gemini-*` pada rute yang kompatibel dengan OpenAI.
 
 ## Kesalahan umum
 
 <AccordionGroup>
-  <Accordion title="baseUrl salah untuk model Claude">
-    Jika Anda menggunakan `https://api.lemondata.cc/v1` untuk `lemondata-claude`, akan muncul error autentikasi. Anthropic SDK menambahkan `/v1` secara otomatis, sehingga menghasilkan path ganda `/v1/v1`. Untuk providers berformat Anthropic, gunakan `https://api.lemondata.cc` (tanpa `/v1`).
+  <Accordion title="Masih memakai array providers lama di level teratas">
+    Dokumentasi OpenClaw saat ini menggunakan `models.providers`. Jika kamu tetap memakai format lama dengan `providers` di level teratas, OpenClaw bisa mengabaikan konfigurasi tersebut atau gagal mengenali prefix provider dengan benar.
   </Accordion>
-  <Accordion title="Menggunakan nama provider 'openai' alih-alih 'lemondata'">
-    OpenClaw menyelesaikan API key berdasarkan **name** provider. Jika Anda menggunakan `"name": "openai"`, OpenClaw akan mencoba memakai API key OpenAI, bukan key LemonData Anda. Selalu gunakan `"name": "lemondata"` (atau `lemondata-claude` / `lemondata-minimax`).
+  <Accordion title="Lupa menambahkan /v1 pada lemondata-responses">
+    `openai-responses` mengarah ke path `/v1/responses` milik LemonData, jadi `lemondata-responses` harus memakai `https://api.lemondata.cc/v1`.
   </Accordion>
-  <Accordion title="Error model not found">
-    Pastikan Anda menggunakan prefix provider yang benar. Model Claude harus menggunakan `lemondata-claude/`, bukan `lemondata/`. Periksa [lemondata.cc/models](https://lemondata.cc/id/models) untuk mendapatkan model ID yang tepat.
+  <Accordion title="Menambahkan /v1 ke lemondata-claude, lemondata-gemini, atau lemondata-minimax">
+    `anthropic-messages` dan `google-generative-ai` harus memakai `https://api.lemondata.cc` tanpa `/v1`. Menambahkan `/v1` bisa menghasilkan path request yang salah.
+  </Accordion>
+  <Accordion title="Apakah OpenClaw masih mendukung Gemini native?">
+    Ya. Dokumentasi OpenClaw saat ini masih mencantumkan provider bawaan `google` dan juga mendukung provider kustom dengan `api: &quot;google-generative-ai&quot;`. Jadi `lemondata-gemini` tetap merupakan rute Gemini native yang valid untuk pengguna OpenClaw.
   </Accordion>
 </AccordionGroup>
 
 ## Verifikasi konfigurasi
 
-Setelah menyimpan konfigurasi, restart instance OpenClaw Anda lalu uji dengan pesan sederhana. Jika Anda menerima respons, berarti provider sudah dikonfigurasi dengan benar.
+Setelah menyimpan konfigurasi, restart instance OpenClaw kamu dan uji dengan pesan sederhana. Jika muncul respons, berarti provider sudah dikonfigurasi dengan benar.
 
 ```bash
 # Self-hosted: restart service
@@ -121,11 +180,11 @@ systemctl --user restart openclaw    # Linux
 launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
 ```
 
-## Langkah selanjutnya
+## Langkah berikutnya
 
-Setelah OpenClaw terhubung, panduan berikut akan membantu Anda memakai LemonData dengan lebih baik:
+Setelah OpenClaw terhubung, panduan berikut akan membantu kamu menggunakan LemonData dengan lebih baik:
 
-- [Agent-First API](/guides/agent-first-api) — hint terstruktur untuk pemilihan model, retry, dan fallback
-- [API Formats](/guides/api-formats) — pahami format yang kompatibel dengan OpenAI, Anthropic, dan Gemini
-- [Error Handling](/guides/error-handling) — pola kegagalan umum dan cara memulihkannya
-- [Ikhtisar Model](https://lemondata.cc/id/models) — lihat model ID yang tersedia sebelum dipasang ke agents
+- [API Formats](/guides/api-formats) — pahami perbedaan antara rute OpenAI, Responses, Anthropic, dan Gemini
+- [IDE / SDK Compatibility](/guides/ide-sdk-compatibility) — lihat kapan `/v1/responses` lebih cocok digunakan
+- [Error Handling](/guides/error-handling) — pelajari kegagalan umum dan cara pemulihannya
+- [Ringkasan model](https://lemondata.cc/id/models) — cek model ID yang tersedia sebelum menghubungkannya ke agent

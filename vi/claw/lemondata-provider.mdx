@@ -1,131 +1,190 @@
 ---
-title: "Thiet lap provider LemonData"
-description: "Cau hinh LemonData lam provider AI trong OpenClaw de truy cap hon 300 mo hinh"
+title: "Thiết lập provider LemonData"
+description: "Cấu hình LemonData làm provider tùy chỉnh trong OpenClaw với các tuyến OpenAI, Responses, Anthropic và Gemini"
 ---
 
 <Note>
-Huong dan nay danh cho nguoi dung **OpenClaw tu host** muon ket noi LemonData lam provider AI.
+Hướng dẫn này dành cho người dùng **OpenClaw tự lưu trữ** muốn kết nối LemonData làm provider AI.
 </Note>
 
 <Tip>
-Neu ban muon dung giai phap hosted, hay [tao mot instance LemonClaw](/claw/introduction). LemonData da duoc cau hinh san theo mac dinh, vi vay ban co the bat dau ngay trong WebUI.
+Nếu bạn muốn dùng giải pháp được lưu trữ sẵn, hãy [tạo một instance LemonClaw](/claw/introduction). LemonData đã được cấu hình mặc định, vì vậy bạn có thể bắt đầu ngay trong WebUI.
 </Tip>
 
-## Tong quan
+## Tổng quan
 
-OpenClaw can **3 providers rieng biet** de truy cap tat ca cac mo hinh LemonData, vi moi nhom mo hinh su dung mot dinh dang API khac nhau.
+Với các phiên bản OpenClaw hiện tại, cách được khuyến nghị để kết nối LemonData là cấu hình qua `models.providers`.
 
-| Provider | Dinh dang API | Mo hinh | baseUrl |
-|----------|-----------|--------|---------|
-| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, Gemini, v.v. | `https://api.lemondata.cc/v1` |
-| `lemondata-claude` | `anthropic-messages` | Claude (Opus, Sonnet, Haiku) | `https://api.lemondata.cc` |
-| `lemondata-minimax` | `anthropic-messages` | Cac mo hinh MiniMax | `https://api.lemondata.cc` |
+Nếu bạn chỉ muốn bắt đầu nhanh, chỉ cần `lemondata` là đủ. Chỉ thêm các provider khác khi bạn cần **Responses API**, **Claude native**, **Gemini native** hoặc **MiniMax native**.
+
+| Provider | `api` của OpenClaw | Phù hợp cho | baseUrl |
+|----------|--------------------|-------------|---------|
+| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen và hầu hết các lời gọi tương thích OpenAI | `https://api.lemondata.cc/v1` |
+| `lemondata-responses` | `openai-responses` | Workflow OpenAI Responses cần ngữ nghĩa `/v1/responses` | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | API Messages native của Claude | `https://api.lemondata.cc` |
+| `lemondata-gemini` | `google-generative-ai` | Định dạng API Gemini native | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | Tuyến MiniMax native | `https://api.lemondata.cc` |
 
 <Warning>
-Hay chu y den hau to `/v1`. Provider `lemondata` **bao gom** `/v1` vi OpenAI SDK khong tu dong them no. Hai provider con lai **khong bao gom** `/v1` vi Anthropic SDK se tu dong them no.
+Chỉ dùng hậu tố `/v1` với `openai-completions` và `openai-responses`.
+
+Các provider native như `anthropic-messages` và `google-generative-ai` phải dùng `https://api.lemondata.cc` không có `/v1`; nếu không, OpenClaw có thể tạo sai đường dẫn upstream.
 </Warning>
 
-## Dieu kien can
+## Điều kiện tiên quyết
 
-- Mot instance OpenClaw tu host
-- Mot LemonData API Key — [lay tai day](https://lemondata.cc/dashboard)
+- Một instance OpenClaw tự lưu trữ
+- Một LemonData API Key — [lấy tại đây](https://lemondata.cc/dashboard)
 
-## Cau hinh
+## Cấu hình
 
-Chinh sua cau hinh provider OpenClaw cua ban:
+Chỉnh sửa cấu hình OpenClaw của bạn:
 
-- **Tu host**: `~/.openclaw/openclaw.json`
+- **Tự lưu trữ**: `~/.openclaw/openclaw.json`
 
-Them 3 providers sau vao mang `providers`:
+Thêm các provider LemonData vào trong `models.providers`:
 
-```json
+```json5
 {
-  "providers": [
-    {
-      "name": "lemondata",
-      "api": "openai-completions",
-      "baseUrl": "https://api.lemondata.cc/v1",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-claude",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-minimax",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-claude/claude-sonnet-4-6"
+      }
     }
-  ]
-}
-```
-
-<Info>
-Ca 3 providers deu dung **cung mot API Key**. Ban chi can mot tai khoan LemonData.
-</Info>
-
-## Su dung mo hinh
-
-Tham chieu mo hinh theo dinh dang `provider/model`:
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "lemondata-claude/claude-sonnet-4-6"
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      lemondata: {
+        api: "openai-completions",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o" },
+          { id: "deepseek-r1", name: "DeepSeek R1" },
+          { id: "qwen3-32b", name: "Qwen 3 32B" }
+        ]
+      },
+      "lemondata-responses": {
+        api: "openai-responses",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o (Responses)" },
+          { id: "gpt-5.2", name: "GPT-5.2 (Responses)" }
+        ]
+      },
+      "lemondata-claude": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+          { id: "claude-opus-4-6", name: "Claude Opus 4.6" }
+        ]
+      },
+      "lemondata-gemini": {
+        api: "google-generative-ai",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+          { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" }
+        ]
+      },
+      "lemondata-minimax": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "minimax-m1", name: "MiniMax M1" }
+        ]
       }
     }
   }
 }
 ```
 
-### Vi du mo hinh
+<Info>
+Cả 5 provider đều dùng **cùng một API Key**. Bạn chỉ cần một tài khoản LemonData.
+</Info>
 
-| Provider | Tham chieu mo hinh | Mo ta |
-|----------|----------------|-------------|
-| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
-| `lemondata` | `lemondata/deepseek-r1` | Mo hinh suy luan DeepSeek R1 |
-| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
-| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
-| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
-| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
-| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+<Info>
+Các mảng `models` phía trên chỉ là ví dụ phổ biến. Hãy thêm model ID khác vào từng provider khi cần.
+</Info>
 
-Xem tat ca cac mo hinh co san tai [lemondata.cc/models](https://lemondata.cc/vi/models).
+## Sử dụng model
 
-## Loi thuong gap
+OpenClaw vẫn tham chiếu model theo định dạng `provider/model`:
+
+```json5
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-gemini/gemini-2.5-flash"
+      }
+    }
+  }
+}
+```
+
+### Ví dụ model
+
+| Provider | Tham chiếu model | Mô tả |
+|----------|------------------|-------|
+| `lemondata` | `lemondata/gpt-4o` | Tuyến tương thích OpenAI |
+| `lemondata` | `lemondata/deepseek-r1` | Model suy luận DeepSeek |
+| `lemondata-responses` | `lemondata-responses/gpt-4o` | Tuyến Responses API |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Tuyến native Claude Messages |
+| `lemondata-gemini` | `lemondata-gemini/gemini-2.5-flash` | Tuyến native Gemini |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | Tuyến native MiniMax |
+
+Xem tất cả model khả dụng tại [lemondata.cc/models](https://lemondata.cc/vi/models).
+
+## Khi nào nên dùng từng provider
+
+- `lemondata`: lựa chọn mặc định cho hầu hết các trường hợp chat và agent phổ thông.
+- `lemondata-responses`: dùng khi workflow OpenClaw của bạn phụ thuộc rõ ràng vào ngữ nghĩa OpenAI Responses.
+- `lemondata-claude`: dùng khi bạn muốn hành vi native của Claude Messages.
+- `lemondata-gemini`: dùng khi bạn muốn định dạng native của Gemini hoặc các tích hợp vốn đã dành cho Gemini.
+- `lemondata-minimax`: dùng khi bạn muốn MiniMax trên tuyến native của nó.
+
+Nếu bạn không cần hành vi native của Gemini, bạn vẫn có thể gọi model Gemini qua `lemondata/gemini-*` trên tuyến tương thích OpenAI.
+
+## Lỗi thường gặp
 
 <AccordionGroup>
-  <Accordion title="Dung sai baseUrl cho mo hinh Claude">
-    Neu dung `https://api.lemondata.cc/v1` cho `lemondata-claude`, ban se gap loi xac thuc. Anthropic SDK tu dong them `/v1`, dan den duong dan bi lap `/v1/v1`. Hay dung `https://api.lemondata.cc` (khong co `/v1`) cho providers dinh dang Anthropic.
+  <Accordion title="Vẫn dùng mảng providers cũ ở cấp cao nhất">
+    Tài liệu OpenClaw hiện tại dùng `models.providers`. Nếu bạn vẫn giữ định dạng cũ với `providers` ở cấp cao nhất, OpenClaw có thể bỏ qua cấu hình hoặc không nhận diện đúng prefix của provider.
   </Accordion>
-  <Accordion title="Dung ten provider la 'openai' thay vi 'lemondata'">
-    OpenClaw xac dinh API key dua tren **name** cua provider. Neu dung `"name": "openai"`, OpenClaw se co gang su dung API key cua OpenAI thay vi key LemonData cua ban. Luon dung `"name": "lemondata"` (hoac `lemondata-claude` / `lemondata-minimax`).
+  <Accordion title="Quên /v1 với lemondata-responses">
+    `openai-responses` trỏ tới đường dẫn `/v1/responses` của LemonData, vì vậy `lemondata-responses` phải dùng `https://api.lemondata.cc/v1`.
   </Accordion>
-  <Accordion title="Loi model not found">
-    Hay dam bao ban dang dung dung tien to provider. Cac mo hinh Claude phai dung `lemondata-claude/`, khong phai `lemondata/`. Kiem tra [lemondata.cc/models](https://lemondata.cc/vi/models) de lay dung model ID.
+  <Accordion title="Thêm /v1 vào lemondata-claude, lemondata-gemini hoặc lemondata-minimax">
+    `anthropic-messages` và `google-generative-ai` phải dùng `https://api.lemondata.cc` không có `/v1`. Việc thêm `/v1` có thể tạo ra đường dẫn request sai.
+  </Accordion>
+  <Accordion title="OpenClaw còn hỗ trợ Gemini native không?">
+    Có. Tài liệu OpenClaw hiện tại vẫn có provider tích hợp `google` và cũng hỗ trợ provider tùy chỉnh với `api: &quot;google-generative-ai&quot;`. Vì vậy `lemondata-gemini` vẫn là một tuyến Gemini native hợp lệ cho người dùng OpenClaw.
   </Accordion>
 </AccordionGroup>
 
-## Xac minh cau hinh
+## Xác minh cấu hình
 
-Sau khi luu cau hinh, hay khoi dong lai OpenClaw va thu gui mot tin nhan don gian. Neu nhan duoc phan hoi, provider da duoc cau hinh dung.
+Sau khi lưu cấu hình, hãy khởi động lại instance OpenClaw của bạn và thử bằng một tin nhắn đơn giản. Nếu nhận được phản hồi, provider đã được cấu hình đúng.
 
 ```bash
-# Tu host: khoi dong lai dich vu
+# Tự lưu trữ: khởi động lại dịch vụ
 systemctl --user restart openclaw    # Linux
 launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  # macOS
 ```
 
-## Buoc tiep theo
+## Bước tiếp theo
 
-Sau khi OpenClaw da ket noi, cac huong dan sau se giup ban su dung LemonData tot hon:
+Sau khi kết nối OpenClaw, các hướng dẫn sau sẽ giúp bạn dùng LemonData hiệu quả hơn:
 
-- [Agent-First API](/guides/agent-first-api) — goi y co cau truc cho chon model, retry va fallback
-- [API Formats](/guides/api-formats) — hieu cac dinh dang tuong thich OpenAI, Anthropic va Gemini
-- [Error Handling](/guides/error-handling) — cac loi pho bien va cach khoi phuc
-- [Tong quan model](https://lemondata.cc/vi/models) — xem cac model ID co san truoc khi noi vao agents
+- [API Formats](/guides/api-formats) — hiểu sự khác biệt giữa các tuyến OpenAI, Responses, Anthropic và Gemini
+- [IDE / SDK Compatibility](/guides/ide-sdk-compatibility) — xem khi nào `/v1/responses` phù hợp hơn
+- [Error Handling](/guides/error-handling) — tìm hiểu các lỗi phổ biến và cách khôi phục
+- [Tổng quan model](https://lemondata.cc/vi/models) — xem model ID khả dụng trước khi gắn chúng vào agent
