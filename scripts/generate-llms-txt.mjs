@@ -40,6 +40,12 @@ function getEnglishPages() {
   return pages;
 }
 
+function normalizeComponentText(content) {
+  return content
+    .replace(/^\s+|\s+$/g, '')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
 // Read and parse MDX file
 function readMdxFile(pagePath) {
   const filePath = path.join(DOCS_ROOT, `${pagePath}.mdx`);
@@ -65,14 +71,26 @@ function readMdxFile(pagePath) {
   // Remove frontmatter and convert MDX to plain text
   let body = content.replace(/^---\n[\s\S]*?\n---\n*/, '');
 
-  // Remove MDX components
+  // Preserve high-signal MDX content before stripping generic components.
+  body = body.replace(/<CodeGroup>[\s\S]*?<\/CodeGroup>/g, (match) => {
+    const codeBlocks = match.match(/```[\s\S]*?```/g) || [];
+    return codeBlocks.slice(0, 1).join('\n\n');
+  });
+  body = body.replace(/<\/?Steps>/g, '');
+  body = body.replace(/<Step title=(["'])(.*?)\1>\s*([\s\S]*?)<\/Step>/g, (_match, _quote, title, inner) => (
+    `\n#### ${title}\n\n${normalizeComponentText(inner)}\n`
+  ));
+  body = body.replace(/<(Tip|Note|Warning|Info)>\s*([\s\S]*?)<\/\1>/g, (_match, kind, inner) => (
+    `\n> ${kind}: ${normalizeComponentText(inner)}\n`
+  ));
+  body = body.replace(/<AccordionGroup>\s*([\s\S]*?)<\/AccordionGroup>/g, (_match, inner) => normalizeComponentText(inner));
+  body = body.replace(/<Accordion title=(["'])(.*?)\1>\s*([\s\S]*?)<\/Accordion>/g, (_match, _quote, title, inner) => (
+    `\n#### ${title}\n\n${normalizeComponentText(inner)}\n`
+  ));
+
+  // Remove remaining MDX components
   body = body.replace(/<[A-Z][^>]*>[\s\S]*?<\/[A-Z][^>]*>/g, '');
   body = body.replace(/<[A-Z][^>]*\/>/g, '');
-  body = body.replace(/<CodeGroup>[\s\S]*?<\/CodeGroup>/g, (match) => {
-    // Extract code blocks from CodeGroup
-    const codeBlocks = match.match(/```[\s\S]*?```/g) || [];
-    return codeBlocks.slice(0, 1).join('\n\n'); // Keep first code block only
-  });
 
   // Clean up
   body = body.replace(/<[^>]+>/g, ''); // Remove remaining HTML tags
