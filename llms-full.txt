@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: 2026-03-17T06:56:16.134Z
+Generated: 2026-03-17T18:25:56.717Z
 Source: https://docs.lemondata.cc
 
 ---
@@ -2635,7 +2635,7 @@ URL: https://docs.lemondata.cc/guides/video-generation
 
 ## Overview
 
-LemonData provides access to **69+ video generation models** from 11 providers through a single unified API. Video generation is **asynchronous** — you submit a request and receive a task ID, then poll for the result.
+LemonData provides access to **69+ video generation models** from 11 providers through a single unified API. Video generation is **asynchronous** — you submit a request, receive a task ID and `poll_url`, then poll for the result.
 
 ### Async Workflow
 
@@ -2648,10 +2648,10 @@ sequenceDiagram
     Client->>LemonData: POST /v1/videos/generations
     LemonData->>Provider: Forward request
     Provider-->>LemonData: task_id + pending
-    LemonData-->>Client: { task_id, status: "pending" }
+    LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
     loop Poll every 5-10s
-        Client->>LemonData: GET /v1/videos/generations/{task_id}
+        Client->>LemonData: GET poll_url
         LemonData->>Provider: Query status
         Provider-->>LemonData: Status update
         LemonData-->>Client: { status, video_url? }
@@ -2681,7 +2681,7 @@ Different models excel at different tasks. Use this matrix to choose the right m
 ### Capability Definitions
 
 - **T2V (Text-to-Video)**: Generate video from a text prompt
-- **I2V (Image-to-Video)**: Animate a static image into video using `image_url` or `image`
+- **I2V (Image-to-Video)**: Animate a static image into video. For the broadest compatibility, provide a public `image_url`.
 - **Keyframe**: Control start and end frames with `start_image` + `end_image`
 - **Extension**: Extend an existing video's duration
 - **Editing**: Modify specific aspects of an existing video
@@ -2822,7 +2822,7 @@ response = requests.post(f"{BASE}/videos/generations",
 
 ### Image-to-Video (I2V)
 
-Animate a static image. Use `image_url` for a URL or `image` for base64 data.
+Animate a static image. For the broadest compatibility across video models, host the source image and pass `image_url`.
 
 ```python
 # Using image URL
@@ -2835,19 +2835,6 @@ response = requests.post(f"{BASE}/videos/generations",
     }
 )
 
-# Using base64 image
-import base64
-with open("photo.jpg", "rb") as f:
-    image_b64 = base64.b64encode(f.read()).decode()
-
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "kling-v2.1-master",
-        "prompt": "Gentle wind blows through the scene",
-        "image": f"data:image/jpeg;base64,{image_b64}"
-    }
-)
 ```
 
 ### Keyframe Control (Start + End Image)
@@ -2889,7 +2876,7 @@ response = requests.post(f"{BASE}/videos/generations",
 | `model` | string | Model ID (default: `sora-2`) |
 | `prompt` | string | **Required.** Text description of the video |
 | `image_url` | string | URL of starting image (for I2V) |
-| `image` | string | Base64-encoded image with data URL prefix (for I2V) |
+| `image` | string | Inline image as a data URL. Supported by compatible models, but `image_url` provides the broadest compatibility. |
 | `duration` | integer | Video duration in seconds (1-60, model-dependent) |
 | `aspect_ratio` | string | `16:9`, `9:16`, `1:1`, etc. |
 | `resolution` | string | `1080p`, `720p`, `4k` |
@@ -2984,6 +2971,12 @@ Get your API key from the [Dashboard](https://lemondata.cc/dashboard).
 |----------|--------|-------------|
 | `/v1/videos/generations` | POST | Create video generation task |
 | `/v1/videos/generations/{id}` | GET | Get video task status |
+
+### Async Tasks
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/tasks/{taskId}` | GET | Unified async task status endpoint. Recommended when following a returned `poll_url` |
 
 ### Music
 
@@ -3663,7 +3656,7 @@ URL: https://docs.lemondata.cc/api-reference/video/create-video
 
 ## Overview
 
-Video generation is asynchronous. You submit a request and receive a task ID, then poll for the result.
+Video generation is asynchronous. You submit a request, receive a task ID and `poll_url`, then poll for the result.
 
 ## Request Body
 
@@ -3804,6 +3797,51 @@ def wait_for_video(task_id, max_wait=600, interval=5):
         time.sleep(interval)
 
     raise TimeoutError("Video generation timed out")
+```
+
+---
+
+
+## Tasks
+
+### Get Task Status
+
+> Retrieve the status and result of any async task using the poll_url returned by create endpoints
+
+URL: https://docs.lemondata.cc/api-reference/tasks/get-task-status
+
+## Overview
+
+Use this endpoint for unified async polling across task types such as video, image, music, and 3D generation.
+
+## Path Parameters
+
+## Response
+
+## Examples
+
+```bash cURL
+curl "https://api.lemondata.cc/v1/tasks/video_abc123" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```python Python
+import requests
+
+poll_url = "/v1/tasks/video_abc123"
+response = requests.get(
+    f"https://api.lemondata.cc{poll_url}",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+)
+print(response.json())
+```
+
+```javascript JavaScript
+const pollUrl = '/v1/tasks/video_abc123';
+const response = await fetch(`https://api.lemondata.cc${pollUrl}`, {
+  headers: { Authorization: 'Bearer sk-your-api-key' },
+});
+console.log(await response.json());
 ```
 
 ---
@@ -4192,12 +4230,12 @@ Most platforms (Telegram, Discord, Slack, Feishu) use an **auto-pairing** mechan
 
 ## Managing Your Instance
 
-Access your instance's WebUI at `https://claw-{subdomain}.lemondata.cc` to:
+Access your instance's WebUI at `https://claw-{subdomain}.lemondata.cc` to manage runtime behavior:
 
-- View and manage connected users
-- Monitor conversation history
-- Configure AI model settings
+- Configure models and runtime defaults
 - Manage IM platform connections
+- Review runtime history and operator state
+- View and manage connected users
 
 ---
 
@@ -4268,10 +4306,12 @@ After editing, restart the service to apply changes.
 }
 ```
 
-Available model prefixes:
-- `lemondata-claude/` — Claude models (anthropic-messages API)
-- `lemondata-minimax/` — MiniMax models (anthropic-messages API)
-- `lemondata/` — All other models (openai-completions API)
+Available model prefixes (depending on which providers you enabled in [LemonData Provider Setup](/claw/lemondata-provider)):
+- `lemondata/` — OpenAI-compatible route (`openai-completions`)
+- `lemondata-responses/` — OpenAI Responses route (`openai-responses`)
+- `lemondata-claude/` — Claude native route (`anthropic-messages`)
+- `lemondata-gemini/` — Gemini native route (`google-generative-ai`)
+- `lemondata-minimax/` — MiniMax native route (`anthropic-messages`)
 
 ## Upgrade
 
@@ -4309,19 +4349,23 @@ rm -rf ~/.lemonclaw
 
 ### LemonData Provider Setup
 
-> Configure LemonData as an AI provider in OpenClaw to access 300+ models
+> Configure LemonData as a custom provider in OpenClaw using OpenAI, Responses, Anthropic, and Gemini-compatible routes
 
 URL: https://docs.lemondata.cc/claw/lemondata-provider
 
 ## Overview
 
-OpenClaw requires **3 separate providers** to access all LemonData models, because different model families use different API formats:
+For current OpenClaw versions, the recommended approach is to configure LemonData through `models.providers`.
 
-| Provider | API Format | Models | baseUrl |
-|----------|-----------|--------|---------|
-| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, Gemini, etc. | `https://api.lemondata.cc/v1` |
-| `lemondata-claude` | `anthropic-messages` | Claude (Opus, Sonnet, Haiku) | `https://api.lemondata.cc` |
-| `lemondata-minimax` | `anthropic-messages` | MiniMax models | `https://api.lemondata.cc` |
+If you just want to get started quickly, configuring `lemondata` alone is enough. Add the other providers only when you need **Responses API**, **Claude native**, **Gemini native**, or **MiniMax native** behavior.
+
+| Provider | OpenClaw `api` | Best for | baseUrl |
+|----------|----------------|----------|---------|
+| `lemondata` | `openai-completions` | GPT, DeepSeek, Qwen, and most OpenAI-compatible calls | `https://api.lemondata.cc/v1` |
+| `lemondata-responses` | `openai-responses` | OpenAI Responses workflows that expect `/v1/responses` semantics | `https://api.lemondata.cc/v1` |
+| `lemondata-claude` | `anthropic-messages` | Native Claude Messages API | `https://api.lemondata.cc` |
+| `lemondata-gemini` | `google-generative-ai` | Native Gemini API format | `https://api.lemondata.cc` |
+| `lemondata-minimax` | `anthropic-messages` | Native MiniMax routing | `https://api.lemondata.cc` |
 
 ## Prerequisites
 
@@ -4330,47 +4374,84 @@ OpenClaw requires **3 separate providers** to access all LemonData models, becau
 
 ## Configuration
 
-Edit your OpenClaw provider settings:
+Edit your OpenClaw config:
 
 - **Self-hosted**: `~/.openclaw/openclaw.json`
 
-Add the following 3 providers to the `providers` array:
+Add LemonData providers under `models.providers`:
 
-```json
+```json5
 {
-  "providers": [
-    {
-      "name": "lemondata",
-      "api": "openai-completions",
-      "baseUrl": "https://api.lemondata.cc/v1",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-claude",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
-    },
-    {
-      "name": "lemondata-minimax",
-      "api": "anthropic-messages",
-      "baseUrl": "https://api.lemondata.cc",
-      "apiKey": "sk-your-lemondata-key"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-claude/claude-sonnet-4-6"
+      }
     }
-  ]
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      lemondata: {
+        api: "openai-completions",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o" },
+          { id: "deepseek-r1", name: "DeepSeek R1" },
+          { id: "qwen3-32b", name: "Qwen 3 32B" }
+        ]
+      },
+      "lemondata-responses": {
+        api: "openai-responses",
+        baseUrl: "https://api.lemondata.cc/v1",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o (Responses)" },
+          { id: "gpt-5.2", name: "GPT-5.2 (Responses)" }
+        ]
+      },
+      "lemondata-claude": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+          { id: "claude-opus-4-6", name: "Claude Opus 4.6" }
+        ]
+      },
+      "lemondata-gemini": {
+        api: "google-generative-ai",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+          { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" }
+        ]
+      },
+      "lemondata-minimax": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.lemondata.cc",
+        apiKey: "sk-your-lemondata-key",
+        models: [
+          { id: "minimax-m1", name: "MiniMax M1" }
+        ]
+      }
+    }
+  }
 }
 ```
 
 ## Using Models
 
-Reference models with the `provider/model` format:
+OpenClaw still references models with the `provider/model` format:
 
-```json
+```json5
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "lemondata-claude/claude-sonnet-4-6"
+  agents: {
+    defaults: {
+      model: {
+        primary: "lemondata-gemini/gemini-2.5-flash"
       }
     }
   }
@@ -4379,20 +4460,30 @@ Reference models with the `provider/model` format:
 
 ### Model Examples
 
-| Provider | Model Reference | Description |
-|----------|----------------|-------------|
-| `lemondata` | `lemondata/gpt-4o` | OpenAI GPT-4o |
-| `lemondata` | `lemondata/deepseek-r1` | DeepSeek R1 reasoning |
-| `lemondata` | `lemondata/gemini-2.5-flash` | Google Gemini |
-| `lemondata-claude` | `lemondata-claude/claude-opus-4-6` | Claude Opus |
-| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Claude Sonnet |
-| `lemondata-claude` | `lemondata-claude/claude-haiku-4-5` | Claude Haiku |
-| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | MiniMax M1 |
+| Provider | Model reference | Description |
+|----------|-----------------|-------------|
+| `lemondata` | `lemondata/gpt-4o` | OpenAI-compatible route |
+| `lemondata` | `lemondata/deepseek-r1` | DeepSeek reasoning model |
+| `lemondata-responses` | `lemondata-responses/gpt-4o` | Responses API route |
+| `lemondata-claude` | `lemondata-claude/claude-sonnet-4-6` | Native Claude Messages route |
+| `lemondata-gemini` | `lemondata-gemini/gemini-2.5-flash` | Native Gemini route |
+| `lemondata-minimax` | `lemondata-minimax/minimax-m1` | Native MiniMax route |
 
 Browse all available models at [lemondata.cc/models](https://lemondata.cc/en/models).
 
+## When to Use Which Provider
+
+- `lemondata`: default choice for most general-purpose agent and chat use cases.
+- `lemondata-responses`: use when your OpenClaw workflow explicitly depends on OpenAI Responses semantics.
+- `lemondata-claude`: use when you want Claude's native Messages behavior.
+- `lemondata-gemini`: use when you want Gemini-native request/response formatting or existing Gemini-style integrations.
+- `lemondata-minimax`: use when you want MiniMax on its native route.
+
+If you do not need Gemini-native behavior, you can still call Gemini models through `lemondata/gemini-*` on the OpenAI-compatible route.
+
 ## Common Mistakes
 
+  
   
   
 
@@ -4410,10 +4501,10 @@ launchctl stop cc.lemondata.openclaw && launchctl start cc.lemondata.openclaw  #
 
 Once OpenClaw is connected, these guides help you use LemonData more effectively:
 
-- [Agent-First API](/guides/agent-first-api) — structured hints for model selection, retries, and fallback handling
-- [API Formats](/guides/api-formats) — understand OpenAI, Anthropic, and Gemini-compatible request formats
-- [Error Handling](/guides/error-handling) — learn common failure modes and how to recover from them
-- [Models Overview](https://lemondata.cc/en/models) — browse available model IDs before wiring them into agents
+- [API Formats](/guides/api-formats) — understand the differences between OpenAI, Responses, Anthropic, and Gemini routes
+- [IDE / SDK Compatibility](/guides/ide-sdk-compatibility) — see when `/v1/responses` is the better fit
+- [Error Handling](/guides/error-handling) — learn common failure modes and recovery patterns
+- [Models Overview](https://lemondata.cc/en/models) — browse model IDs before wiring them into agents
 
 ---
 
@@ -4543,7 +4634,7 @@ After creating your bot, you can customize it with BotFather:
 
 ### Group Settings
 
-Configure group behavior in the **IM Integrations** settings of your LemonClaw WebUI:
+Configure group behavior in the **Channels** settings of your LemonClaw WebUI:
 
 | Setting | Options | Description |
 |---------|---------|-------------|
@@ -4594,7 +4685,7 @@ Connect Discord to your LemonClaw instance and chat with AI directly in your ser
 
 ### Group Settings
 
-Configure server (guild) behavior in the **IM Integrations** settings of your LemonClaw WebUI:
+Configure server (guild) behavior in the **Channels** settings of your LemonClaw WebUI:
 
 | Setting | Options | Description |
 |---------|---------|-------------|
@@ -4640,7 +4731,7 @@ Connect WhatsApp to your LemonClaw instance by scanning a QR code — just like 
 
 ## Group Settings
 
-WhatsApp groups are supported. Configure group behavior in the **IM Integrations** tab:
+WhatsApp groups are supported. Configure group behavior in the **Channels** section:
 
 | Setting | Options | Description |
 |---------|---------|-------------|
@@ -4680,7 +4771,7 @@ Add an AI assistant to your Slack workspace using Socket Mode — no public URL 
 
 ### Group Settings
 
-Configure channel access in the **IM Integrations** settings of your LemonClaw WebUI:
+Configure channel access in the **Channels** settings of your LemonClaw WebUI:
 
 | Setting | Options | Description |
 |---------|---------|-------------|
@@ -4721,7 +4812,7 @@ Connect Feishu (飞书) or Lark to your LemonClaw instance. This guide works for
 
 ## Group Settings
 
-Configure group chat behavior in the **IM Integrations** settings of your LemonClaw WebUI:
+Configure group chat behavior in the **Channels** settings of your LemonClaw WebUI:
 
 | Setting | Options | Description |
 |---------|---------|-------------|
