@@ -1,11 +1,11 @@
-# LemonData API Integration Skill for Claude Code
+# LemonData API Integration Skill
 
 <p align="center">
   <img src="https://lemondata.cc/logo.svg" alt="LemonData Logo" width="120">
 </p>
 
 <p align="center">
-  <strong>Quickly integrate hundreds of AI APIs with Claude Code</strong>
+  <strong>Quickly integrate hundreds of AI APIs with any coding agent that supports skills or rules files</strong>
 </p>
 
 <p align="center">
@@ -31,41 +31,26 @@ When you want to use AI features in your code (like GPT-4, image generation, spe
 
 ## 📦 Installation
 
-### Option 1: npx (Recommended)
+### Canonical Non-Interactive Install
 
 ```bash
-npx add-skill hedging8563/lemondata-api-skill -y
+npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata-api-integration -y
 ```
 
-This will automatically install the skill to all detected coding agents (Claude Code, Cursor, Copilot, etc.).
+This installs the shared `lemondata-api-integration` skill from the LemonData skills repository.
 
-### Option 2: Share GitHub URL
+### Generic Fallback
 
-1. Open **Claude Code**
-2. Paste this link in the chat:
-   ```
-   https://github.com/hedging8563/lemondata-api-skill
-   ```
-3. Claude Code will recognize it as a skill repository and help you install it
-
-### Option 3: Git Clone
-
-```bash
-# Personal installation (available in all projects)
-git clone https://github.com/hedging8563/lemondata-api-skill.git ~/.claude/skills/lemondata-api-integration
-
-# Or project-specific installation (shared with team via git)
-git clone https://github.com/hedging8563/lemondata-api-skill.git .claude/skills/lemondata-api-integration
-```
+If your tool does not support the installer, copy the `skills/lemondata-api-integration/` folder from the repository into your tool's shared skills or rules directory.
 
 ### Verify Installation
 
-Ask Claude Code:
+Ask your coding agent:
 ```
 What skills are available?
 ```
 
-If you see `lemondata-api-integration`, you're ready!
+If you see `lemondata-api-integration`, you're ready.
 
 ## 🚀 Quick Start
 
@@ -78,7 +63,7 @@ If you see `lemondata-api-integration`, you're ready!
 
 ### Start Using
 
-Just chat naturally with Claude Code:
+Just chat naturally with your coding agent:
 
 ```
 I want to use GPT-4 in my Python project
