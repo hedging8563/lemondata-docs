@@ -191,7 +191,7 @@ function generateLlmsFullTxt() {
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: ${new Date().toISOString()}
+Generated: ${new Date().toISOString().split('T')[0]}
 Source: https://docs.lemondata.cc
 
 ---
