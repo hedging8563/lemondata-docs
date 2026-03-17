@@ -140,7 +140,7 @@ curl https://api.lemondata.cc/v1/chat/completions \\
 ## Integrations
 
 - [Cursor](https://docs.lemondata.cc/integrations/cursor)
-- [Claude Code](https://docs.lemondata.cc/integrations/claude-code)
+- [Coding Agent Skill](https://docs.lemondata.cc/integrations/coding-agent-skill)
 - [OpenAI SDK](https://docs.lemondata.cc/integrations/openai-sdk)
 - [Anthropic SDK](https://docs.lemondata.cc/integrations/anthropic-sdk)
 - [LangChain](https://docs.lemondata.cc/integrations/langchain)

@@ -249,7 +249,7 @@ const navigationTabs = {
         group: 'IDE & CLI',
         pages: [
           'integrations/cursor',
-          'integrations/claude-code',
+          'integrations/coding-agent-skill',
           'integrations/codex-cli',
           'integrations/gemini-cli',
           'integrations/opencode'
@@ -400,6 +400,10 @@ function generateDocsJson() {
     "redirects": [
       {
         "source": "/integrations/claude-code-skill",
+        "destination": "/integrations/coding-agent-skill"
+      },
+      {
+        "source": "/integrations/claude-code",
         "destination": "/integrations/coding-agent-skill"
       }
     ],
