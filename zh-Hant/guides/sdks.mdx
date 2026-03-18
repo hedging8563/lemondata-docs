@@ -1,34 +1,35 @@
 ---
-title: "SDK 與函式庫"
-description: "LemonData 的官方與社群 SDK"
+title: "SDK 與程式庫"
+description: "用於 LemonData 整合的建議 SDK 與程式庫"
 ---
 
 ## 概覽
 
-LemonData **相容於 OpenAI**，這意味著您只需更改 base URL 即可使用任何 OpenAI SDK。我們也支援原生的 Anthropic 和 Google Gemini SDK。
+LemonData 最容易透過以下方式整合：
+- 用於 OpenAI 相容與 Responses 風格用法的官方 **OpenAI SDKs**
+- 用於 Claude 原生 `/v1/messages` 的官方 **Anthropic SDKs**
+- 當你明確需要 Gemini 原生請求格式時，使用官方 **Gemini / Google AI** 工具
 
-## 官方 SDK
-
-由於 LemonData 相容於 OpenAI，請使用官方的 OpenAI SDK：
+## 建議的 SDKs
 
 <CardGroup cols={2}>
-  <Card title="Python" icon="python" href="https://github.com/openai/openai-python">
+  <Card title="OpenAI Python" icon="python" href="https://github.com/openai/openai-python">
     `pip install openai`
   </Card>
-  <Card title="Node.js" icon="node-js" href="https://github.com/openai/openai-node">
+  <Card title="OpenAI Node" icon="node-js" href="https://github.com/openai/openai-node">
     `npm install openai`
   </Card>
-  <Card title="Go" icon="golang" href="https://github.com/sashabaranov/go-openai">
-    `go get github.com/sashabaranov/go-openai`
+  <Card title="OpenAI Go" icon="golang" href="https://github.com/openai/openai-go">
+    `go get github.com/openai/openai-go/v3`
   </Card>
-  <Card title=".NET" icon="microsoft" href="https://github.com/openai/openai-dotnet">
-    `dotnet add package OpenAI`
+  <Card title="Anthropic SDK" icon="robot" href="https://github.com/anthropics/anthropic-sdk-python">
+    原生支援 Claude Messages API
   </Card>
 </CardGroup>
 
-## 配置
+## OpenAI SDK 範例
 
-### Python
+將此作為新專案的預設起點：
 
 ```python
 from openai import OpenAI
@@ -38,115 +39,35 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-# 使用任何模型
-response = client.chat.completions.create(
-    model="gpt-4o",  # 或 claude-sonnet-4-5, gemini-2.5-flash 等
-    messages=[{"role": "user", "content": "Hello!"}]
+response = client.responses.create(
+    model="gpt-5.4",
+    input="Explain LemonData in one sentence."
 )
+
+print(response.output_text)
 ```
 
-### JavaScript / TypeScript
-
-```javascript
-import OpenAI from 'openai';
-
-const client = new OpenAI({
-  apiKey: 'sk-your-api-key',
-  baseURL: 'https://api.lemondata.cc/v1'
-});
-
-const response = await client.chat.completions.create({
-  model: 'gpt-4o',
-  messages: [{ role: 'user', content: 'Hello!' }]
-});
-```
-
-### Go
+## OpenAI Go 範例
 
 ```go
 package main
 
 import (
-    "context"
-    "fmt"
-    openai "github.com/sashabaranov/go-openai"
+    openai "github.com/openai/openai-go/v3"
+    "github.com/openai/openai-go/v3/option"
 )
 
 func main() {
-    config := openai.DefaultConfig("sk-your-api-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-
-    client := openai.NewClientWithConfig(config)
-
-    resp, err := client.CreateChatCompletion(
-        context.Background(),
-        openai.ChatCompletionRequest{
-            Model: "gpt-4o",
-            Messages: []openai.ChatCompletionMessage{
-                {Role: "user", Content: "Hello!"},
-            },
-        },
+    client := openai.NewClient(
+        option.WithAPIKey("sk-your-api-key"),
+        option.WithBaseURL("https://api.lemondata.cc/v1"),
     )
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(resp.Choices[0].Message.Content)
+
+    _ = client
 }
 ```
 
-### .NET / C#
-
-```csharp
-using OpenAI;
-
-var options = new OpenAIClientOptions
-{
-    Endpoint = new Uri("https://api.lemondata.cc/v1")
-};
-
-var client = new OpenAIClient("sk-your-api-key", options);
-
-var chat = client.GetChatClient("gpt-4o");
-var response = await chat.CompleteChatAsync("Hello!");
-
-Console.WriteLine(response.Value.Content[0].Text);
-```
-
-### cURL
-
-```bash
-curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-## 環境變數
-
-我們建議使用環境變數來管理 API 金鑰：
-
-```bash
-# .env 或 shell 設定檔
-export LEMONDATA_API_KEY="sk-your-api-key"
-export LEMONDATA_BASE_URL="https://api.lemondata.cc/v1"
-```
-
-```python
-import os
-from openai import OpenAI
-
-client = OpenAI(
-    api_key=os.environ.get("LEMONDATA_API_KEY"),
-    base_url=os.environ.get("LEMONDATA_BASE_URL")
-)
-```
-
-## Anthropic SDK
-
-對於 Anthropic 原生請求，請使用 Anthropic SDK：
+## Anthropic SDK 範例
 
 ```python
 from anthropic import Anthropic
@@ -157,12 +78,33 @@ client = Anthropic(
 )
 
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello!"}]
 )
 ```
 
-## LangChain 整合
+## 你應該使用哪個 SDK？
 
-請參閱 [LangChain 整合](/integrations/langchain) 指南以了解框架整合。
+| 目標 | 建議的 SDK |
+|------|------------------|
+| 新應用程式、一般預設 | OpenAI SDK |
+| Claude 原生功能 | Anthropic SDK |
+| Gemini 原生請求格式 | Gemini 原生 API / SDK |
+| LangChain / LlamaIndex / Vercel AI SDK | 使用專用的整合頁面 |
+
+## 最佳實務
+
+<AccordionGroup>
+  <Accordion title="新專案優先使用 Responses">
+    如果你的 SDK 同時支援 `responses` 與 `chat.completions`，請從 `responses` 開始。
+  </Accordion>
+
+  <Accordion title="明確指定 base URLs">
+    直接在你的 client 設定中傳入 LemonData base URLs，而不是依賴較舊的環境變數別名。
+  </Accordion>
+
+  <Accordion title="僅在原生功能很重要時使用原生 SDKs">
+    對於延伸 thinking 等 Claude 原生功能，請使用 Anthropic SDK；否則為了更廣泛的相容性，優先使用 OpenAI SDK。
+  </Accordion>
+</AccordionGroup>

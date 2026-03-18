@@ -1,48 +1,48 @@
 ---
 title: "Bonnes pratiques"
-description: "Optimisez votre utilisation de l'API LemonData pour le coût, la performance et la fiabilité"
+description: "Optimisez votre utilisation de l’API LemonData pour le coût, les performances et la fiabilité"
 ---
 
 ## Sélection du modèle
 
 Choisir le bon modèle peut avoir un impact significatif sur le coût et la qualité.
 
-### Recommandations par tâche
+### Recommandations par type de tâche
 
-| Tâche | Modèles recommandés | Raisonnement |
+| Tâche | Modèles recommandés | Justification |
 |------|-------------------|-----------|
-| **Questions-réponses simples** | `gpt-4o-mini`, `gemini-2.5-flash` | Rapide, économique, suffisant |
-| **Raisonnement complexe** | `o3`, `claude-opus-4-5`, `deepseek-r1` | Meilleure logique et planification |
-| **Codage** | `claude-sonnet-4-5`, `gpt-4o`, `deepseek-v3.2` | Optimisé pour le code |
-| **Écriture créative** | `claude-sonnet-4-5`, `gpt-4o` | Meilleure qualité de prose |
-| **Vision/Images** | `gpt-4o`, `claude-sonnet-4-5`, `gemini-2.5-flash` | Support natif de la vision |
-| **Contexte long** | `gemini-2.5-pro`, `claude-sonnet-4-5` | Fenêtres de plus de 1M de tokens |
-| **Sensible au coût** | `gpt-4o-mini`, `gemini-2.5-flash`, `deepseek-v3.2` | Meilleur rapport qualité-prix |
+| **Questions-réponses simples** | `gpt-5-mini`, `gemini-2.5-flash` | Rapide, peu coûteux, suffisant |
+| **Raisonnement complexe** | `gpt-5.4`, `claude-opus-4-6`, `deepseek-r1` | Meilleure logique et planification |
+| **Codage** | `claude-sonnet-4-6`, `gpt-4o`, `deepseek-v3.2` | Optimisé pour le code |
+| **Écriture créative** | `claude-sonnet-4-6`, `gpt-4o` | Meilleure qualité rédactionnelle |
+| **Vision/Images** | `gpt-4o`, `claude-sonnet-4-6`, `gemini-2.5-flash` | Prise en charge native de la vision |
+| **Contexte long** | `gemini-2.5-pro`, `claude-sonnet-4-6` | Fenêtres de 1M+ token |
+| **Sensible au coût** | `gpt-5-mini`, `gemini-2.5-flash`, `deepseek-v3.2` | Meilleur rapport qualité-prix |
 
 ### Niveaux de coût
 
 ```
-$$$$ Premium: o3, claude-opus-4-5, gpt-4o
-$$$  Standard: claude-sonnet-4-5, gpt-4o
-$$   Budget:   gpt-4o-mini, gemini-2.5-flash
+$$$$ Premium: gpt-5.4, claude-opus-4-6
+$$$  Standard: claude-sonnet-4-6, gpt-4o
+$$   Budget:   gpt-5-mini, gemini-2.5-flash
 $    Economy:  deepseek-v3.2, deepseek-r1
 ```
 
 ## Optimisation des coûts
 
-### 1. Utiliser d'abord des modèles plus petits
+### 1. Utilisez d’abord des modèles plus petits
 
 ```python
 def smart_query(question: str, complexity: str = "auto"):
     """Use cheaper models for simple tasks."""
 
     if complexity == "simple":
-        model = "gpt-4o-mini"
+        model = "gpt-5-mini"
     elif complexity == "complex":
         model = "gpt-4o"
     else:
         # Start cheap, escalate if needed
-        model = "gpt-4o-mini"
+        model = "gpt-5-mini"
 
     response = client.chat.completions.create(
         model=model,
@@ -51,29 +51,29 @@ def smart_query(question: str, complexity: str = "auto"):
     return response
 ```
 
-### 2. Définir max_tokens
+### 2. Définissez `max_tokens`
 
 Définissez toujours une limite `max_tokens` raisonnable :
 
 ```python
-# ❌ Mauvais : Aucune limite, pourrait générer des milliers de tokens
+# ❌ Bad: No limit, could generate thousands of tokens
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Summarize this article"}]
 )
 
-# ✅ Bon : Limiter la longueur de la réponse
+# ✅ Good: Limit response length
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Summarize this article"}],
-    max_tokens=500  # Limite raisonnable pour un résumé
+    max_tokens=500  # Reasonable limit for a summary
 )
 ```
 
-### 3. Optimiser les prompts
+### 3. Optimisez les prompts
 
 ```python
-# ❌ Prompt verbeux (plus de tokens d'entrée)
+# ❌ Verbose prompt (more input tokens)
 prompt = """
 I would like you to please help me by analyzing the following text
 and providing a comprehensive summary of the main points. Please be
@@ -81,34 +81,34 @@ thorough but also concise in your response. The text is as follows:
 {text}
 """
 
-# ✅ Prompt concis (moins de tokens)
+# ✅ Concise prompt (fewer tokens)
 prompt = "Summarize the key points:\n{text}"
 ```
 
-### 4. Activer la mise en cache
+### 4. Activez la mise en cache
 
-Profitez de la [mise en cache sémantique](/guides/caching) :
+Profitez du [semantic caching](/guides/caching) :
 
 ```python
-# Pour les requêtes similaires répétées, le cache permet des économies majeures
+# For repeated similar queries, caching provides major savings
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "What is machine learning?"}],
-    temperature=0  # Déterministe = meilleurs hits de cache
+    temperature=0  # Deterministic = better cache hits
 )
 ```
 
-### 5. Grouper les requêtes similaires
+### 5. Regroupez les requêtes similaires
 
 ```python
-# ❌ De nombreuses petites requêtes
+# ❌ Many small requests
 for question in questions:
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": question}]
     )
 
-# ✅ Moins de requêtes plus volumineuses
+# ✅ Fewer larger requests
 combined_prompt = "\n".join([f"{i+1}. {q}" for i, q in enumerate(questions)])
 response = client.chat.completions.create(
     model="gpt-4o",
@@ -116,11 +116,11 @@ response = client.chat.completions.create(
 )
 ```
 
-## Optimisation de la performance
+## Optimisation des performances
 
-### 1. Utiliser le streaming pour l'UX
+### 1. Utilisez le streaming pour l’UX
 
-Le streaming améliore la performance perçue :
+Le streaming améliore les performances perçues :
 
 ```python
 stream = client.chat.completions.create(
@@ -134,27 +134,27 @@ for chunk in stream:
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-### 2. Choisir des modèles rapides pour une utilisation interactive
+### 2. Choisissez des modèles rapides pour un usage interactif
 
-| Cas d'utilisation | Recommandé | Latence |
+| Cas d’usage | Recommandé | Latence |
 |----------|-------------|---------|
-| Interface de chat | `gpt-4o-mini`, `gemini-2.5-flash` | ~200ms premier token |
-| Complétion par tabulation | `claude-haiku-4-5` | ~150ms premier token |
-| Traitement en arrière-plan | `gpt-4o`, `claude-sonnet-4-5` | ~500ms premier token |
+| Interface de chat | `gpt-5-mini`, `gemini-2.5-flash` | ~200ms jusqu’au premier token |
+| Complétion d’onglet | `claude-haiku-4-5` | ~150ms jusqu’au premier token |
+| Traitement en arrière-plan | `gpt-4o`, `claude-sonnet-4-6` | ~500ms jusqu’au premier token |
 
-### 3. Définir des délais d'expiration (timeouts)
+### 3. Définissez des timeouts
 
 ```python
 client = OpenAI(
     api_key="sk-your-key",
     base_url="https://api.lemondata.cc/v1",
-    timeout=60.0  # Délai d'expiration de 60 secondes
+    timeout=60.0  # 60 second timeout
 )
 ```
 
 ## Fiabilité
 
-### 1. Implémenter des tentatives (retries)
+### 1. Implémentez des retries
 
 ```python
 import time
@@ -178,7 +178,7 @@ def chat_with_retry(messages, max_retries=3):
     raise Exception("Max retries exceeded")
 ```
 
-### 2. Gérer les erreurs avec élégance
+### 2. Gérez les erreurs proprement
 
 ```python
 from openai import APIError, AuthenticationError, RateLimitError
@@ -186,23 +186,23 @@ from openai import APIError, AuthenticationError, RateLimitError
 try:
     response = client.chat.completions.create(...)
 except AuthenticationError:
-    # Vérifier la clé API
+    # Check API key
     notify_admin("Invalid API key")
 except RateLimitError:
-    # Mettre en file d'attente pour plus tard ou utiliser un secours
+    # Queue for later or use backup
     add_to_queue(request)
 except APIError as e:
     if e.status_code == 402:
         notify_admin("Balance low")
     elif e.status_code >= 500:
-        # Erreur serveur, réessayer plus tard
+        # Server error, retry later
         schedule_retry(request)
 ```
 
-### 3. Utiliser des modèles de secours (fallback)
+### 3. Utilisez des modèles de secours
 
 ```python
-FALLBACK_CHAIN = ["gpt-4o", "claude-sonnet-4-5", "gemini-2.5-flash"]
+FALLBACK_CHAIN = ["gpt-4o", "claude-sonnet-4-6", "gemini-2.5-flash"]
 
 def chat_with_fallback(messages):
     for model in FALLBACK_CHAIN:
@@ -218,46 +218,46 @@ def chat_with_fallback(messages):
 
 ## Sécurité
 
-### 1. Protéger les clés API
+### 1. Protégez les clés API
 
 ```python
-# ❌ Ne jamais coder les clés en dur
+# ❌ Never hardcode keys
 client = OpenAI(api_key="sk-abc123...")
 
-# ✅ Utiliser des variables d'environnement
+# ✅ Use environment variables
 import os
 client = OpenAI(api_key=os.environ["LEMONDATA_API_KEY"])
 ```
 
-### 2. Valider les entrées utilisateur
+### 2. Validez les entrées utilisateur
 
 ```python
 def validate_message(content: str) -> bool:
     """Validate user input before sending to API."""
     if len(content) > 100000:
         raise ValueError("Message too long")
-    # Ajouter d'autres validations si nécessaire
+    # Add other validation as needed
     return True
 ```
 
-### 3. Définir des limites pour les clés API
+### 3. Définissez des limites pour les clés API
 
 Créez des clés API distinctes avec des limites de dépenses pour :
-- Le développement/test
-- La production
+- Développement/tests
+- Production
 - Différentes applications
 
-## Surveillance (Monitoring)
+## Monitoring
 
-### 1. Suivre l'utilisation
+### 1. Suivez l’utilisation
 
-Consultez régulièrement votre tableau de bord pour :
-- L'utilisation des tokens par modèle
+Vérifiez régulièrement votre tableau de bord pour :
+- L’utilisation des token par modèle
 - La répartition des coûts
-- Les taux de réussite du cache
-- Les taux d'erreur
+- Les taux de succès du cache
+- Les taux d’erreur
 
-### 2. Enregistrer les métriques importantes
+### 2. Journalisez les métriques importantes
 
 ```python
 import logging
@@ -272,37 +272,37 @@ logging.info({
 })
 ```
 
-### 3. Configurer des alertes
+### 3. Configurez des alertes
 
-Configurez des alertes de solde bas dans votre tableau de bord pour éviter toute interruption de service.
+Configurez des alertes de solde faible dans votre tableau de bord pour éviter toute interruption de service.
 
-## Liste de contrôle
+## Checklist
 
 <AccordionGroup>
   <Accordion title="Optimisation des coûts">
     - [ ] Utilisation du modèle approprié pour chaque tâche
-    - [ ] Définition des limites max_tokens
-    - [ ] Les prompts sont concis
-    - [ ] Mise en cache activée lorsque c'est approprié
-    - [ ] Groupement des requêtes similaires
+    - [ ] Définition de limites `max_tokens`
+    - [ ] Prompts concis
+    - [ ] Mise en cache activée lorsque pertinent
+    - [ ] Regroupement des requêtes similaires
   </Accordion>
 
-  <Accordion title="Performance">
-    - [ ] Streaming pour l'UX interactive
-    - [ ] Modèles rapides pour une utilisation en temps réel
+  <Accordion title="Performances">
+    - [ ] Streaming pour une UX interactive
+    - [ ] Modèles rapides pour un usage en temps réel
     - [ ] Timeouts configurés
   </Accordion>
 
   <Accordion title="Fiabilité">
-    - [ ] Logique de tentative (retry) implémentée
+    - [ ] Logique de retry implémentée
     - [ ] Gestion des erreurs en place
     - [ ] Modèles de secours configurés
   </Accordion>
 
   <Accordion title="Sécurité">
-    - [ ] Clés API dans les variables d'environnement
+    - [ ] Clés API dans des variables d’environnement
     - [ ] Validation des entrées
-    - [ ] Clés distinctes pour dev/prod
+    - [ ] Clés séparées pour dev/prod
     - [ ] Limites de dépenses définies
   </Accordion>
 </AccordionGroup>

@@ -1,7 +1,7 @@
 ---
 title: "Modelleri Listele"
 openapi: "GET /v1/models"
-description: "Tüm kullanılabilir modelleri listeler"
+description: "Mevcut tüm modelleri listeler"
 ---
 
 ## Yanıt
@@ -11,7 +11,7 @@ description: "Tüm kullanılabilir modelleri listeler"
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Model nesneleri dizisi.
+  Model nesnelerinden oluşan dizi.
 
   Her model şunları içerir:
   - `id` (string): Model tanımlayıcısı
@@ -59,22 +59,28 @@ for (const model of models.data) {
 package main
 
 import (
-    "context"
+    "encoding/json"
     "fmt"
-    "github.com/sashabaranov/go-openai"
+    "net/http"
 )
 
 func main() {
-    config := openai.DefaultConfig("sk-your-api-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
+    req, _ := http.NewRequest("GET", "https://api.lemondata.cc/v1/models", nil)
+    req.Header.Set("Authorization", "Bearer sk-your-api-key")
 
-    models, err := client.ListModels(context.Background())
-    if err != nil {
-        panic(err)
+    resp, _ := http.DefaultClient.Do(req)
+    defer resp.Body.Close()
+
+    var payload struct {
+        Data []struct {
+            ID      string `json:"id"`
+            OwnedBy string `json:"owned_by"`
+        } `json:"data"`
     }
 
-    for _, model := range models.Models {
+    json.NewDecoder(resp.Body).Decode(&payload)
+
+    for _, model := range payload.Data {
         fmt.Printf("%s (%s)\n", model.ID, model.OwnedBy)
     }
 }
@@ -107,13 +113,13 @@ foreach ($data['data'] as $model) {
   "object": "list",
   "data": [
     {
-      "id": "gpt-4o",
+      "id": "gpt-5.4",
       "object": "model",
       "created": 1706000000,
       "owned_by": "openai"
     },
     {
-      "id": "claude-sonnet-4-5",
+      "id": "claude-sonnet-4-6",
       "object": "model",
       "created": 1706000000,
       "owned_by": "anthropic"
@@ -132,10 +138,10 @@ foreach ($data['data'] as $model) {
 ## Sağlayıcıya Göre Filtreleme
 
 ```python
-# Tüm OpenAI modellerini al
+# Get all OpenAI models
 openai_models = [m for m in models.data if m.owned_by == "openai"]
 
-# Tüm Anthropic modellerini al
+# Get all Anthropic models
 anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 ```
 
@@ -143,8 +149,8 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 
 | Sağlayıcı | Örnek Modeller |
 |----------|----------------|
-| `openai` | gpt-5.2, gpt-5.3-codex, gpt-5-mini, gpt-4.1, gpt-4.1-mini, dall-e-3 |
-| `anthropic` | claude-opus-4-6, claude-sonnet-4-5, claude-haiku-4-5 |
+| `openai` | gpt-5.4, gpt-5.4-mini, gpt-5-mini, gpt-4o, dall-e-3 |
+| `anthropic` | claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5 |
 | `google` | gemini-3-pro-preview, gemini-3-flash-preview, gemini-2.5-pro |
 | `deepseek` | deepseek-r1, deepseek-v3-2 |
 | `xai` | grok-4.1 |

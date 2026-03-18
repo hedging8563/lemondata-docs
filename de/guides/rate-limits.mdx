@@ -1,57 +1,52 @@
 ---
-title: "Rate-Limits"
-description: "Verständnis und Handhabung von Rate-Limits"
+title: "Rate Limits"
+description: "Rate Limits verstehen und handhaben"
 ---
 
-## Übersicht
+## Überblick
 
-LemonData implementiert Rate-Limits, um eine faire Nutzung und Plattformstabilität zu gewährleisten. Die Limits variieren je nach Account-Stufe.
+LemonData implementiert Rate Limits, um eine faire Nutzung und die Stabilität der Plattform sicherzustellen. Die Limits variieren je nach Account-Tier.
 
-## Rate-Limit-Stufen
+## Rate-Limit-Tiers
 
-| Stufe | Anfragen/Min. | Beschreibung |
+| Tier | Anfragen/Min | Beschreibung |
 |------|-------------|-------------|
-| **User** | 60 | Standard-Stufe für alle Accounts |
-| **Partner** | 300 | Für Integrationspartner |
-| **VIP** | 1.000 | Nutzer mit hohem Volumen |
+| **User** | 1.000 | Standard-Tier für alle Accounts |
+| **Partner** | 3.000 | Für Integrationspartner |
+| **VIP** | 10.000 | Nutzer mit hohem Volumen |
 
 <Note>
-  Rate-Limits können sich ändern. Kontaktieren Sie support@lemondata.cc für individuelle Limits.
+  Rate Limits können sich ändern. Kontaktieren Sie support@lemondata.cc für benutzerdefinierte Limits.
 </Note>
 
-## Rate-Limit-Header
+## Rate-Limit-Antwort
 
-Jede API-Antwort enthält Informationen zum Rate-Limit:
+Wenn Sie das Rate Limit überschreiten, gibt die API einen `429`-Statuscode mit einem `Retry-After`-Header zurück, der angibt, wie lange vor einem erneuten Versuch gewartet werden muss.
 
-```
-X-RateLimit-Limit: 60          # Your limit per minute
-X-RateLimit-Remaining: 55      # Requests remaining
-X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
-```
-
-## Rate-Limit überschritten
+## Rate Limit überschritten
 
 Wenn Sie das Limit überschreiten, erhalten Sie eine `429`-Antwort:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
-    "type": "rate_limit_exceeded"
+    "message": "Rate limit exceeded. Please retry later.",
+    "type": "rate_limit_exceeded",
+    "code": "rate_limit_exceeded"
   }
 }
 ```
 
-Mit zusätzlichem Header:
+Die Antwort enthält einen `Retry-After`-Header:
 ```
 Retry-After: 60  # Seconds to wait before retrying
 ```
 
-## Handhabung von Rate-Limits
+## Umgang mit Rate Limits
 
 ### Exponential Backoff
 
-Implementieren Sie Exponential Backoff für automatische Wiederholungsversuche:
+Implementieren Sie Exponential Backoff für automatische Wiederholungen:
 
 ```python
 import time
@@ -78,9 +73,9 @@ def make_request_with_backoff(messages, max_retries=5):
             time.sleep(wait_time)
 ```
 
-### Request-Queuing
+### Request-Queueing
 
-Implementieren Sie für Anwendungen mit hohem Volumen eine Anfrage-Warteschlange (Request Queue):
+Für Anwendungen mit hohem Volumen implementieren Sie eine Request-Queue:
 
 ```python
 import asyncio
@@ -88,4 +83,72 @@ from collections import deque
 
 class RateLimitedClient:
     def __init__(self, requests_per_minute=60):
-        self.rpm
+        self.rpm = requests_per_minute
+        self.interval = 60 / requests_per_minute
+        self.last_request = 0
+
+    async def request(self, messages):
+        # Wait if needed to respect rate limit
+        now = asyncio.get_event_loop().time()
+        wait_time = max(0, self.last_request + self.interval - now)
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        self.last_request = asyncio.get_event_loop().time()
+        return await self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+```
+
+### Batch-Verarbeitung
+
+Für Bulk-Operationen verarbeiten Sie Daten in Batches mit Verzögerungen:
+
+```python
+def process_batch(items, batch_size=50, delay=1):
+    results = []
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i + batch_size]
+        for item in batch:
+            result = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": item}]
+            )
+            results.append(result)
+        time.sleep(delay)  # Pause between batches
+    return results
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Überwachen Sie Ihre Nutzung">
+    Verfolgen Sie Rate-Limit-Header, um proaktiv unter den Limits zu bleiben.
+  </Accordion>
+
+  <Accordion title="Caching implementieren">
+    Cachen Sie Antworten für identische Requests, um API-Aufrufe zu reduzieren.
+  </Accordion>
+
+  <Accordion title="Geeignete Modelle verwenden">
+    Schnellere Modelle (wie gpt-5-mini) ermöglichen mehr Durchsatz.
+  </Accordion>
+
+  <Accordion title="Kontaktieren Sie uns für höhere Limits">
+    Wenn Sie höhere Limits benötigen, kontaktieren Sie support@lemondata.cc.
+  </Accordion>
+</AccordionGroup>
+
+## Ihr Tier upgraden
+
+So beantragen Sie ein Tier-Upgrade:
+
+1. Melden Sie sich in Ihrem [Dashboard](https://lemondata.cc/dashboard) an
+2. Gehen Sie zu **Settings → Account**
+3. Kontaktieren Sie den Support mit Ihrem Anwendungsfall
+
+Oder senden Sie eine E-Mail an support@lemondata.cc mit:
+- Der E-Mail-Adresse Ihres Accounts
+- Dem erwarteten Anfragevolumen
+- Einer Beschreibung des Anwendungsfalls

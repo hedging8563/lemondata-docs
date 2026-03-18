@@ -1,31 +1,38 @@
 ---
 title: "Authentification"
-description: "Sécurisez vos requêtes API avec des clés API"
+description: "Sécurisez vos requêtes API LemonData avec des clés API"
 ---
 
 ## Clés API
 
-Toutes les requêtes API nécessitent une authentification à l'aide d'une clé API. Incluez votre clé dans l'en-tête `Authorization` :
+Toutes les requêtes API LemonData nécessitent une clé API.
+
+Pour les endpoints compatibles OpenAI, envoyez-la comme suit :
 
 ```bash
 Authorization: Bearer sk-your-api-key
 ```
 
+Pour les requêtes Anthropic-compatibles `/v1/messages`, vous pouvez également utiliser :
+
+```bash
+x-api-key: sk-your-api-key
+```
+
 ## Obtenir votre clé API
 
-1. Connectez-vous à votre [Tableau de bord LemonData](https://lemondata.cc/dashboard)
-2. Accédez à la section **API Keys**
-3. Cliquez sur **Create New Key**
-4. Donnez un nom descriptif à votre clé
-5. Copiez la clé immédiatement - elle ne s'affiche qu'une seule fois
+1. Connectez-vous à votre [LemonData Dashboard](https://lemondata.cc/dashboard)
+2. Ouvrez **API Keys**
+3. Créez une nouvelle clé
+4. Donnez-lui un nom descriptif
+5. Copiez-la immédiatement, car elle n’est affichée qu’une seule fois
 
 <Warning>
-  **Meilleures pratiques de sécurité :**
-  - N'exposez jamais les clés API dans le code côté client
-  - Ne validez pas les clés dans le contrôle de version
-  - Utilisez des variables d'environnement pour stocker les clés
-  - Effectuez une rotation périodique des clés
-  - Supprimez les clés inutilisées
+- N’exposez jamais les clés API dans le code côté client
+- Ne committez jamais de clés API dans le contrôle de version
+- Utilisez des variables d’environnement ou un gestionnaire de secrets
+- Effectuez une rotation des clés périodiquement
+- Supprimez les clés inutilisées
 </Warning>
 
 ## Utilisation des clés API
@@ -33,10 +40,13 @@ Authorization: Bearer sk-your-api-key
 <CodeGroup>
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
+curl https://api.lemondata.cc/v1/responses \
   -H "Authorization: Bearer $LEMONDATA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{
+    "model": "gpt-5.4",
+    "input": "Hello!"
+  }'
 ```
 
 ```python Python
@@ -58,55 +68,26 @@ const client = new OpenAI({
 });
 ```
 
-```go Go
-package main
-
-import "github.com/sashabaranov/go-openai"
-
-func main() {
-    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-}
-```
-
-```php PHP
-<?php
-$apiKey = getenv('LEMONDATA_API_KEY');
-
-$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer ' . $apiKey,
-        'Content-Type: application/json'
-    ]
-]);
-```
-
 </CodeGroup>
 
 ## Fonctionnalités des clés API
 
-### Limites d'utilisation
+### Limites d’utilisation
 
-Vous pouvez définir une limite d'utilisation sur chaque clé API pour contrôler les dépenses :
+Vous pouvez définir une limite d’utilisation sur chaque clé API :
 
 | Paramètre | Description |
 |---------|-------------|
-| **No Limit** | La clé utilise le solde de votre compte sans restrictions |
-| **Fixed Limit** | La clé cesse de fonctionner après avoir atteint le montant spécifié |
+| **Aucune limite** | La clé utilise le solde de votre compte sans restriction |
+| **Limite fixe** | La clé cesse de fonctionner après avoir atteint le montant spécifié |
 
 ### Préfixe de clé
 
-Toutes les clés API LemonData commencent par le préfixe `sk-`. Le format de la clé est :
+Toutes les clés API LemonData commencent par `sk-`.
 
-```
-sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+## Compatibilité Anthropic
 
-## Compatibilité avec l'API Anthropic
-
-Pour le point de terminaison `/v1/messages`, vous pouvez utiliser l'en-tête `x-api-key` (compatible avec le SDK Anthropic) :
+Pour l’endpoint `/v1/messages`, l’en-tête de style Anthropic fonctionne comme prévu :
 
 ```bash
 curl https://api.lemondata.cc/v1/messages \
@@ -114,26 +95,26 @@ curl https://api.lemondata.cc/v1/messages \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4-5",
+    "model": "claude-sonnet-4-6",
     "max_tokens": 1024,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
 <Note>
-  L'en-tête `x-api-key` est uniquement pris en charge sur les points de terminaison `/v1/messages` et `/v1/messages/count_tokens`. Les autres points de terminaison nécessitent l'en-tête `Authorization: Bearer`.
+Utilisez `Authorization: Bearer ...` pour les endpoints compatibles OpenAI tels que `/v1/responses`, `/v1/chat/completions`, `/v1/models` et la plupart des autres routes LemonData.
 </Note>
 
-## Réponses d'erreur
+## Réponses d’erreur
 
-| Code d'état | Type | Code | Description |
+| Code de statut | Type | Code | Description |
 |-------------|------|------|-------------|
 | 401 | `invalid_request_error` | `invalid_api_key` | Clé API manquante ou invalide |
 | 401 | `invalid_request_error` | `expired_api_key` | La clé API a été révoquée |
 | 402 | `insufficient_quota` | `insufficient_quota` | Le solde du compte est insuffisant |
-| 402 | `insufficient_quota` | `quota_exceeded` | Limite d'utilisation de la clé API atteinte |
+| 402 | `insufficient_quota` | `quota_exceeded` | La limite d’utilisation de la clé API a été atteinte |
 
-Exemple de réponse d'erreur :
+Exemple :
 
 ```json
 {

@@ -1,57 +1,52 @@
 ---
-title: "حدود المعدل (Rate Limits)"
-description: "فهم والتعامل مع حدود المعدل"
+title: "حدود المعدل"
+description: "فهم حدود المعدل وكيفية التعامل معها"
 ---
 
 ## نظرة عامة
 
-تطبق LemonData حدوداً للمعدل (Rate Limits) لضمان الاستخدام العادل واستقرار المنصة. تختلف الحدود حسب فئة الحساب.
+تُطبّق LemonData حدود المعدل لضمان الاستخدام العادل واستقرار المنصة. تختلف الحدود حسب فئة الحساب.
 
 ## فئات حدود المعدل
 
-| الفئة | الطلبات/الدقيقة | الوصف |
+| الفئة | الطلبات/دقيقة | الوصف |
 |------|-------------|-------------|
-| **User** | 60 | الفئة الافتراضية لجميع الحسابات |
-| **Partner** | 300 | لشركاء التكامل |
-| **VIP** | 1,000 | المستخدمون ذوو الأحجام العالية |
+| **User** | 1,000 | الفئة الافتراضية لجميع الحسابات |
+| **Partner** | 3,000 | لشركاء التكامل |
+| **VIP** | 10,000 | للمستخدمين ذوي الحجم المرتفع |
 
 <Note>
-  تخضع حدود المعدل للتغيير. تواصل مع support@lemondata.cc للحصول على حدود مخصصة.
+  حدود المعدل عرضة للتغيير. تواصل مع support@lemondata.cc للحصول على حدود مخصصة.
 </Note>
 
-## ترويسات حدود المعدل (Rate Limit Headers)
+## استجابة حدود المعدل
 
-يتضمن كل استجابة API معلومات حول حدود المعدل:
+عند تجاوز حد المعدل، يعيد الـ API رمز الحالة `429` مع ترويسة `Retry-After` التي تشير إلى المدة التي يجب انتظارها قبل إعادة المحاولة.
 
-```
-X-RateLimit-Limit: 60          # Your limit per minute
-X-RateLimit-Remaining: 55      # Requests remaining
-X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
-```
-
-## تجاوز حد المعدل
+## تم تجاوز حد المعدل
 
 عند تجاوز الحد، ستتلقى استجابة `429`:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
-    "type": "rate_limit_exceeded"
+    "message": "Rate limit exceeded. Please retry later.",
+    "type": "rate_limit_exceeded",
+    "code": "rate_limit_exceeded"
   }
 }
 ```
 
-مع ترويسة إضافية:
+تتضمن الاستجابة ترويسة `Retry-After`:
 ```
 Retry-After: 60  # Seconds to wait before retrying
 ```
 
 ## التعامل مع حدود المعدل
 
-### التراجع الأسي (Exponential Backoff)
+### التراجع الأُسّي
 
-قم بتنفيذ التراجع الأسي (Exponential Backoff) لإعادة المحاولة تلقائياً:
+نفّذ التراجع الأُسّي لإعادة المحاولة التلقائية:
 
 ```python
 import time
@@ -78,9 +73,9 @@ def make_request_with_backoff(messages, max_retries=5):
             time.sleep(wait_time)
 ```
 
-### جدولة الطلبات (Request Queuing)
+### وضع الطلبات في قائمة انتظار
 
-للتطبيقات ذات الأحجام العالية، قم بتنفيذ زمام طلبات (Request Queue):
+بالنسبة للتطبيقات ذات الحجم المرتفع، نفّذ قائمة انتظار للطلبات:
 
 ```python
 import asyncio
@@ -106,9 +101,9 @@ class RateLimitedClient:
         )
 ```
 
-### المعالجة بالدفعة (Batch Processing)
+### المعالجة على دفعات
 
-للعمليات الضخمة، قم بالمعالجة في دفعات مع فترات تأخير:
+بالنسبة للعمليات المجمعة، قم بالمعالجة على دفعات مع فواصل زمنية:
 
 ```python
 def process_batch(items, batch_size=50, delay=1):
@@ -129,15 +124,15 @@ def process_batch(items, batch_size=50, delay=1):
 
 <AccordionGroup>
   <Accordion title="راقب استخدامك">
-    تتبع ترويسات حدود المعدل للبقاء ضمن الحدود بشكل استباقي.
+    تتبّع ترويسات حدود المعدل للبقاء ضمن الحدود بشكل استباقي.
   </Accordion>
 
-  <Accordion title="قم بتنفيذ التخزين المؤقت (Caching)">
-    قم بتخزين الاستجابات للطلبات المتطابقة لتقليل استدعاءات API.
+  <Accordion title="نفّذ التخزين المؤقت">
+    خزّن الاستجابات مؤقتًا للطلبات المتطابقة لتقليل استدعاءات API.
   </Accordion>
 
   <Accordion title="استخدم النماذج المناسبة">
-    تسمح النماذج الأسرع (مثل gpt-4o-mini) بإنتاجية أعلى.
+    النماذج الأسرع (مثل gpt-5-mini) تتيح معدل تمرير أعلى.
   </Accordion>
 
   <Accordion title="تواصل معنا للحصول على حدود أعلى">
@@ -149,11 +144,11 @@ def process_batch(items, batch_size=50, delay=1):
 
 لطلب ترقية الفئة:
 
-1. قم بتسجيل الدخول إلى [لوحة التحكم (Dashboard)](https://lemondata.cc/dashboard)
-2. انتقل إلى **Settings ← Account**
-3. تواصل مع الدعم مع توضيح حالة الاستخدام الخاصة بك
+1. سجّل الدخول إلى [Dashboard](https://lemondata.cc/dashboard)
+2. انتقل إلى **Settings → Account**
+3. تواصل مع الدعم موضحًا حالة الاستخدام الخاصة بك
 
-أو أرسل بريداً إلكترونياً إلى support@lemondata.cc يتضمن:
-- بريد حسابك الإلكتروني
-- حجم الطلبات المتوقع
+أو أرسل بريدًا إلكترونيًا إلى support@lemondata.cc يتضمن:
+- البريد الإلكتروني لحسابك
+- الحجم المتوقع للطلبات
 - وصف حالة الاستخدام

@@ -1,11 +1,11 @@
 ---
 title: "エラーハンドリング"
-description: "APIエラーを適切に処理する"
+description: "API エラーを適切に処理する"
 ---
 
 ## エラーレスポンス形式
 
-すべてのエラーは一貫したJSON形式で返されます：
+すべてのエラーは、オプションの[Agent-First ヒント](/guides/agent-first-api)を含む一貫した JSON 形式で返されます:
 
 ```json
 {
@@ -13,35 +13,44 @@ description: "APIエラーを適切に処理する"
     "message": "Human-readable error description",
     "type": "error_type",
     "code": "error_code",
-    "param": "parameter_name"  // Optional, for validation errors
+    "param": "parameter_name",
+    "did_you_mean": "suggested_model",
+    "suggestions": [{"id": "model-id"}],
+    "hint": "Next step guidance",
+    "retryable": true,
+    "retry_after": 30
   }
 }
 ```
 
-## HTTPステータスコード
+基本フィールド（`message`, `type`, `code`, `param`）は常に存在します。ヒントフィールド（`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`）は、AI agent の自己修正のためのオプション拡張です。詳細は [Agent-First API ガイド](/guides/agent-first-api)を参照してください。
 
-| コード | 説明 |
+OpenAI 互換エンドポイントは、LemonData の安定した gateway エラータイプを使用します。Anthropic 互換および Gemini 互換エンドポイントは、それぞれ独自のネイティブなエラーファミリーとレスポンス形式を使用します。
+
+## HTTP ステータスコード
+
+| Code | Description |
 |------|-------------|
 | 400 | Bad Request - 無効なパラメータ |
-| 401 | Unauthorized - APIキーが無効または不足 |
+| 401 | Unauthorized - 無効または欠落した API key |
 | 402 | Payment Required - 残高不足 |
-| 403 | Forbidden - アクセス拒否またはモデルが許可されていない |
-| 404 | Not Found - モデルまたはリソースが見つからない |
+| 403 | Forbidden - アクセス拒否または許可されていない model |
+| 404 | Not Found - Model またはリソースが見つかりません |
 | 413 | Payload Too Large - 入力またはファイルサイズが上限を超過 |
-| 429 | Too Many Requests - レート制限を超過 |
+| 429 | Too Many Requests - rate limit 超過 |
 | 500 | Internal Server Error |
-| 502 | Bad Gateway - アップストリームプロバイダーのエラー |
-| 503 | Service Unavailable - すべてのチャネルが失敗 |
-| 504 | Gateway Timeout - リクエストがタイムアウト |
+| 502 | Bad Gateway - 上流 provider エラー |
+| 503 | Service Unavailable - サービスは一時的に利用できません |
+| 504 | Gateway Timeout - リクエストがタイムアウトしました |
 
 ## エラータイプ
 
 ### 認証エラー (401)
 
-| タイプ | コード | 説明 |
+| Type | Code | Description |
 |------|------|-------------|
-| `invalid_api_key` | `invalid_api_key` | APIキーが不足しているか無効です |
-| `expired_api_key` | `expired_api_key` | APIキーが失効しています |
+| `invalid_api_key` | `invalid_api_key` | API key が欠落しているか無効です |
+| `expired_api_key` | `expired_api_key` | API key は取り消されています |
 
 ```python
 from openai import OpenAI, AuthenticationError
@@ -54,11 +63,11 @@ except AuthenticationError as e:
 
 ### 支払いエラー (402)
 
-| タイプ | コード | 説明 |
+| Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | アカウント残高が不足しています（OpenAI互換エンドポイント） |
-| `insufficient_balance_error` | `insufficient_balance` | アカウント残高が不足しています（Anthropic互換エンドポイント） |
-| `quota_exceeded` | `quota_exceeded` | APIキーの使用制限に達しました |
+| `insufficient_balance` | `insufficient_balance` | アカウント残高が不足しています（OpenAI 互換エンドポイント） |
+| `insufficient_balance_error` | `insufficient_balance` | アカウント残高が不足しています（Anthropic 互換エンドポイント） |
+| `quota_exceeded` | `quota_exceeded` | API key の使用上限に達しました |
 
 ```python
 from openai import OpenAI, APIStatusError
@@ -72,10 +81,10 @@ except APIStatusError as e:
 
 ### アクセスエラー (403)
 
-| タイプ | コード | 説明 |
+| Type | Code | Description |
 |------|------|-------------|
 | `access_denied` | `access_denied` | リソースへのアクセスが拒否されました |
-| `access_denied` | `model_not_allowed` | このAPIキーではモデルの使用が許可されていません |
+| `access_denied` | `model_not_allowed` | この API key ではこの model は許可されていません |
 
 ```json
 {
@@ -89,11 +98,11 @@ except APIStatusError as e:
 
 ### バリデーションエラー (400)
 
-| タイプ | 説明 |
+| Type | Description |
 |------|-------------|
 | `invalid_request_error` | リクエストパラメータが無効です |
-| `context_length_exceeded` | 入力がモデルの制限に対して長すぎます |
-| `model_not_found` | リクエストされたモデルが存在しません |
+| `context_length_exceeded` | 入力が model に対して長すぎます |
+| `model_not_found` | 要求された model は存在しません |
 
 ```json
 {
@@ -102,23 +111,26 @@ except APIStatusError as e:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
-    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "did_you_mean": "gpt-5.4",
+    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
-### レート制限エラー (429)
+### Rate Limit エラー (429)
 
-レート制限を超えた場合：
+rate limit を超過した場合:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
+    "message": "Rate limit: 60 rpm exceeded",
     "type": "rate_limit_exceeded",
-    "code": "rate_limit_exceeded"
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
   }
 }
 ```
@@ -126,15 +138,14 @@ except APIStatusError as e:
 **含まれるヘッダー:**
 
 ```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1234567890
-Retry-After: 60
+Retry-After: 8
 ```
 
-### ペイロード過大 (413)
+`Retry-After` ヘッダーと `retry_after` フィールドは、再試行前に待機すべき正確な秒数を示します。
 
-入力またはファイルサイズが制限を超えた場合：
+### Payload Too Large (413)
+
+入力またはファイルサイズが上限を超えた場合:
 
 ```json
 {
@@ -146,20 +157,38 @@ Retry-After: 60
 }
 ```
 
-主な原因：
+一般的な原因:
 - 画像ファイルが大きすぎる（最大 20MB）
 - 音声ファイルが大きすぎる（最大 25MB）
-- 入力テキストがモデルのコンテキスト長を超えている
+- 入力テキストが model の context length を超過している
 
-### アップストリームエラー (502, 503)
+### 上流エラー (502, 503)
 
-| タイプ | 説明 |
+| Type | Description |
 |------|-------------|
-| `upstream_error` | プロバイダーがエラーを返しました |
-| `all_channels_failed` | 利用可能なプロバイダーがありません |
+| `upstream_error` | provider がエラーを返しました |
+| `all_channels_failed` | 利用可能な provider がありません |
 | `timeout_error` | リクエストがタイムアウトしました |
 
-## Pythonでのエラーハンドリング
+すべての channel が失敗した場合、レスポンスには代替 model が含まれます:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
+    ],
+    "hint": "Retry in 30s or switch to an available model."
+  }
+}
+```
+
+## Python でのエラー処理
 
 ```python
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
@@ -190,7 +219,7 @@ def chat_with_retry(messages, max_retries=3):
             raise
 ```
 
-## JavaScriptでのエラーハンドリング
+## JavaScript でのエラー処理
 
 ```javascript
 import OpenAI from 'openai';
@@ -223,29 +252,30 @@ async function chatWithRetry(messages, maxRetries = 3) {
 ## ベストプラクティス
 
 <AccordionGroup>
-  <Accordion title="エクスポネンシャルバックオフの実装">
-    レート制限が発生した際、リトライの間隔を段階的に長くします：
+  <Accordion title="指数バックオフを実装する">
+    rate limit が適用された場合は、再試行の間隔を段階的に長くしてください:
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="タイムアウトの設定">
-    リクエストのハングを避けるため、常に適切なタイムアウトを設定してください：
+  <Accordion title="タイムアウトを設定する">
+    リクエストが停止したままにならないよう、常に適切なタイムアウトを設定してください:
     ```python
     client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
-  <Accordion title="デバッグ用のエラーログ記録">
-    サポートのために、リクエストIDを含む完全なエラーレスポンスをログに記録します：
+  <Accordion title="デバッグ用にエラーをログに記録する">
+    サポートのために、request ID を含む完全なエラーレスポンスをログに記録してください:
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
     ```
   </Accordion>
 
-  <Accordion title="モデル固有のエラーの処理">
-    一部のモデルには特定の要件（最大トークン数、画像形式など）があります。リクエストを行う前に入力を検証してください。
+  <Accordion title="model 固有のエラーを処理する">
+    一部の model には固有の要件があります（例: max tokens、画像形式）。
+    リクエストを送信する前に入力を検証してください。
   </Accordion>
 </AccordionGroup>

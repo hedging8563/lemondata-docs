@@ -1,11 +1,11 @@
 ---
 title: "معالجة الأخطاء"
-description: "معالجة أخطاء API بسلاسة"
+description: "تعامل مع أخطاء API بسلاسة"
 ---
 
 ## تنسيق استجابة الخطأ
 
-تعيد جميع الأخطاء تنسيق JSON ثابتاً:
+تُرجع جميع الأخطاء تنسيق JSON متسقًا مع تلميحات [Agent-First](/guides/agent-first-api) اختيارية:
 
 ```json
 {
@@ -13,32 +13,41 @@ description: "معالجة أخطاء API بسلاسة"
     "message": "Human-readable error description",
     "type": "error_type",
     "code": "error_code",
-    "param": "parameter_name"  // اختياري، لأخطاء التحقق من الصحة
+    "param": "parameter_name",
+    "did_you_mean": "suggested_model",
+    "suggestions": [{"id": "model-id"}],
+    "hint": "Next step guidance",
+    "retryable": true,
+    "retry_after": 30
   }
 }
 ```
 
+تكون الحقول الأساسية (`message`, `type`, `code`, `param`) موجودة دائمًا. أما حقول التلميحات (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) فهي امتدادات اختيارية للتصحيح الذاتي لوكلاء AI. راجع [دليل Agent-First API](/guides/agent-first-api) للحصول على التفاصيل.
+
+تستخدم نقاط النهاية المتوافقة مع OpenAI أنواع أخطاء البوابة المستقرة الخاصة بـ LemonData. أما نقاط النهاية المتوافقة مع Anthropic والمتوافقة مع Gemini فتستخدم عائلات الأخطاء الأصلية وأشكال الاستجابة الخاصة بها.
+
 ## رموز حالة HTTP
 
-| الرمز | الوصف |
+| Code | Description |
 |------|-------------|
-| 400 | Bad Request - معلمات غير صالحة |
-| 401 | Unauthorized - مفتاح API غير صالح أو مفقود |
-| 402 | Payment Required - رصيد غير كافٍ |
-| 403 | Forbidden - تم رفض الوصول أو النموذج غير مسموح به |
-| 404 | Not Found - النموذج أو المورد غير موجود |
-| 413 | Payload Too Large - تم تجاوز حجم المدخلات أو الملف |
-| 429 | Too Many Requests - تم تجاوز حد المعدل (Rate limit) |
-| 500 | Internal Server Error |
-| 502 | Bad Gateway - خطأ من المزود الرئيسي (Upstream) |
-| 503 | Service Unavailable - فشلت جميع القنوات |
-| 504 | Gateway Timeout - انتهت مهلة الطلب |
+| 400 | طلب غير صالح - معلمات غير صالحة |
+| 401 | غير مخوّل - مفتاح API غير صالح أو مفقود |
+| 402 | الدفع مطلوب - الرصيد غير كافٍ |
+| 403 | محظور - تم رفض الوصول أو النموذج غير مسموح |
+| 404 | غير موجود - لم يتم العثور على النموذج أو المورد |
+| 413 | الحمولة كبيرة جدًا - تم تجاوز حجم الإدخال أو الملف |
+| 429 | طلبات كثيرة جدًا - تم تجاوز حد المعدل |
+| 500 | خطأ داخلي في الخادم |
+| 502 | بوابة غير صالحة - خطأ من المزوّد upstream |
+| 503 | الخدمة غير متاحة - الخدمة غير متاحة مؤقتًا |
+| 504 | انتهت مهلة البوابة - انتهت مهلة الطلب |
 
 ## أنواع الأخطاء
 
 ### أخطاء المصادقة (401)
 
-| النوع | الرمز | الوصف |
+| Type | Code | Description |
 |------|------|-------------|
 | `invalid_api_key` | `invalid_api_key` | مفتاح API مفقود أو غير صالح |
 | `expired_api_key` | `expired_api_key` | تم إلغاء مفتاح API |
@@ -54,10 +63,10 @@ except AuthenticationError as e:
 
 ### أخطاء الدفع (402)
 
-| النوع | الرمز | الوصف |
+| Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | رصيد الحساب غير كافٍ (لنقاط النهاية المتوافقة مع OpenAI) |
-| `insufficient_balance_error` | `insufficient_balance` | رصيد الحساب غير كافٍ (لنقاط النهاية المتوافقة مع Anthropic) |
+| `insufficient_balance` | `insufficient_balance` | رصيد الحساب منخفض جدًا (نقاط النهاية المتوافقة مع OpenAI) |
+| `insufficient_balance_error` | `insufficient_balance` | رصيد الحساب منخفض جدًا (نقاط النهاية المتوافقة مع Anthropic) |
 | `quota_exceeded` | `quota_exceeded` | تم الوصول إلى حد استخدام مفتاح API |
 
 ```python
@@ -72,10 +81,10 @@ except APIStatusError as e:
 
 ### أخطاء الوصول (403)
 
-| النوع | الرمز | الوصف |
+| Type | Code | Description |
 |------|------|-------------|
 | `access_denied` | `access_denied` | تم رفض الوصول إلى المورد |
-| `access_denied` | `model_not_allowed` | النموذج غير مسموح به لمفتاح API هذا |
+| `access_denied` | `model_not_allowed` | النموذج غير مسموح لهذا المفتاح API |
 
 ```json
 {
@@ -87,12 +96,12 @@ except APIStatusError as e:
 }
 ```
 
-### أخطاء التحقق من الصحة (400)
+### أخطاء التحقق (400)
 
-| النوع | الوصف |
+| Type | Description |
 |------|-------------|
 | `invalid_request_error` | معلمات الطلب غير صالحة |
-| `context_length_exceeded` | المدخلات طويلة جداً بالنسبة للنموذج |
+| `context_length_exceeded` | الإدخال طويل جدًا بالنسبة للنموذج |
 | `model_not_found` | النموذج المطلوب غير موجود |
 
 ```json
@@ -102,39 +111,41 @@ except APIStatusError as e:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
-    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "did_you_mean": "gpt-5.4",
+    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
 ### أخطاء حد المعدل (429)
 
-عندما تتجاوز حدود المعدل (rate limits):
+عند تجاوز حدود المعدل:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
+    "message": "Rate limit: 60 rpm exceeded",
     "type": "rate_limit_exceeded",
-    "code": "rate_limit_exceeded"
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
   }
 }
 ```
 
-**الرؤوس (Headers) المضمنة:**
+**الترويسات المضمنة:**
 
 ```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1234567890
-Retry-After: 60
+Retry-After: 8
 ```
 
-### الحمولة كبيرة جداً (413)
+يشير كل من ترويسة `Retry-After` والحقل `retry_after` إلى العدد الدقيق للثواني التي يجب انتظارها قبل إعادة المحاولة.
 
-عندما يتجاوز حجم المدخلات أو الملف الحدود المسموح بها:
+### الحمولة كبيرة جدًا (413)
+
+عندما يتجاوز الإدخال أو حجم الملف الحدود:
 
 ```json
 {
@@ -147,19 +158,37 @@ Retry-After: 60
 ```
 
 الأسباب الشائعة:
-- ملف الصورة كبير جداً (بحد أقصى 20 ميجابايت)
-- ملف الصوت كبير جداً (بحد أقصى 25 ميجابايت)
-- نص المدخلات يتجاوز طول سياق (context length) النموذج
+- ملف الصورة كبير جدًا (الحد الأقصى 20MB)
+- ملف الصوت كبير جدًا (الحد الأقصى 25MB)
+- نص الإدخال يتجاوز طول سياق النموذج
 
-### أخطاء المزود (502, 503)
+### أخطاء Upstream (502, 503)
 
-| النوع | الوصف |
+| Type | Description |
 |------|-------------|
-| `upstream_error` | أعاد المزود خطأً |
-| `all_channels_failed` | لا يوجد مزودون متاحون |
+| `upstream_error` | أعاد المزوّد خطأ |
+| `all_channels_failed` | لا توجد مزوّدات متاحة |
 | `timeout_error` | انتهت مهلة الطلب |
 
-## معالجة الأخطاء في Python
+عندما تفشل جميع القنوات، تتضمن الاستجابة نماذج بديلة:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
+    ],
+    "hint": "Retry in 30s or switch to an available model."
+  }
+}
+```
+
+## التعامل مع الأخطاء في Python
 
 ```python
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
@@ -190,7 +219,7 @@ def chat_with_retry(messages, max_retries=3):
             raise
 ```
 
-## معالجة الأخطاء في JavaScript
+## التعامل مع الأخطاء في JavaScript
 
 ```javascript
 import OpenAI from 'openai';
@@ -223,30 +252,30 @@ async function chatWithRetry(messages, maxRetries = 3) {
 ## أفضل الممارسات
 
 <AccordionGroup>
-  <Accordion title="تنفيذ التراجع الأسي (Exponential backoff)">
-    عند تقييد المعدل، انتظر لفترات أطول تدريجياً بين محاولات إعادة المحاولة:
+  <Accordion title="نفّذ exponential backoff">
+    عند الوصول إلى حد المعدل، انتظر لمدة أطول تدريجيًا بين كل إعادة محاولة:
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="تعيين مهلات زمنية (Timeouts)">
-    قم دائماً بتعيين مهلات زمنية معقولة لتجنب الطلبات المعلقة:
+  <Accordion title="اضبط المهلات الزمنية">
+    اضبط دائمًا مهلات زمنية معقولة لتجنب الطلبات المعلّقة:
     ```python
-    client = OpenAI(timeout=60.0)  # مهلة 60 ثانية
+    client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
-  <Accordion title="تسجيل الأخطاء لتصحيح الأخطاء (Debugging)">
-    قم بتسجيل استجابة الخطأ الكاملة بما في ذلك معرف الطلب (request ID) للدعم الفني:
+  <Accordion title="سجّل الأخطاء لأغراض التصحيح">
+    سجّل استجابة الخطأ الكاملة بما في ذلك معرّف الطلب لتسهيل الدعم:
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
     ```
   </Accordion>
 
-  <Accordion title="معالجة الأخطاء الخاصة بالنموذج">
-    بعض النماذج لها متطلبات محددة (مثل الحد الأقصى للرموز المميزة "tokens"، تنسيقات الصور).
-    تحقق من صحة المدخلات قبل إجراء الطلبات.
+  <Accordion title="تعامل مع الأخطاء الخاصة بالنموذج">
+    لبعض النماذج متطلبات محددة (مثل max tokens وتنسيقات الصور).
+    تحقّق من صحة المدخلات قبل إرسال الطلبات.
   </Accordion>
 </AccordionGroup>

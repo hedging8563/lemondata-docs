@@ -1,11 +1,11 @@
 ---
-title: "Manejo de Errores"
-description: "Maneje los errores de la API de forma adecuada"
+title: "Manejo de errores"
+description: "Maneja los errores de la API correctamente"
 ---
 
-## Formato de Respuesta de Error
+## Formato de respuesta de error
 
-Todos los errores devuelven un formato JSON consistente:
+Todos los errores devuelven un formato JSON consistente con [pistas Agent-First](/guides/agent-first-api) opcionales:
 
 ```json
 {
@@ -13,34 +13,43 @@ Todos los errores devuelven un formato JSON consistente:
     "message": "Human-readable error description",
     "type": "error_type",
     "code": "error_code",
-    "param": "parameter_name"  // Optional, for validation errors
+    "param": "parameter_name",
+    "did_you_mean": "suggested_model",
+    "suggestions": [{"id": "model-id"}],
+    "hint": "Next step guidance",
+    "retryable": true,
+    "retry_after": 30
   }
 }
 ```
 
-## Códigos de Estado HTTP
+Los campos base (`message`, `type`, `code`, `param`) siempre están presentes. Los campos de pistas (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) son extensiones opcionales para la autocorrección de agentes de IA. Consulta la [guía de la API Agent-First](/guides/agent-first-api) para más detalles.
 
-| Código | Descripción |
+Los endpoints compatibles con OpenAI usan los tipos de error estables del gateway de LemonData. Los endpoints compatibles con Anthropic y compatibles con Gemini usan sus propias familias de errores nativas y formatos de respuesta.
+
+## Códigos de estado HTTP
+
+| Code | Description |
 |------|-------------|
-| 400 | Bad Request - Parámetros inválidos |
-| 401 | Unauthorized - API key inválida o faltante |
-| 402 | Payment Required - Saldo insuficiente |
-| 403 | Forbidden - Acceso denegado o modelo no permitido |
-| 404 | Not Found - Modelo o recurso no encontrado |
-| 413 | Payload Too Large - Tamaño de entrada o archivo excedido |
-| 429 | Too Many Requests - Límite de tasa excedido |
-| 500 | Internal Server Error - Error interno del servidor |
-| 502 | Bad Gateway - Error del proveedor upstream |
-| 503 | Service Unavailable - Todos los canales fallaron |
-| 504 | Gateway Timeout - La solicitud agotó el tiempo de espera |
+| 400 | Solicitud incorrecta - Parámetros no válidos |
+| 401 | No autorizado - API key no válida o faltante |
+| 402 | Pago requerido - Saldo insuficiente |
+| 403 | Prohibido - Acceso denegado o modelo no permitido |
+| 404 | No encontrado - Modelo o recurso no encontrado |
+| 413 | Payload demasiado grande - Se excedió el tamaño de entrada o archivo |
+| 429 | Demasiadas solicitudes - Se excedió el límite de tasa |
+| 500 | Error interno del servidor |
+| 502 | Gateway incorrecto - Error del proveedor upstream |
+| 503 | Servicio no disponible - Servicio temporalmente no disponible |
+| 504 | Tiempo de espera agotado del gateway - La solicitud agotó el tiempo de espera |
 
-## Tipos de Error
+## Tipos de error
 
-### Errores de Autenticación (401)
+### Errores de autenticación (401)
 
-| Tipo | Código | Descripción |
+| Type | Code | Description |
 |------|------|-------------|
-| `invalid_api_key` | `invalid_api_key` | La API key falta o es inválida |
+| `invalid_api_key` | `invalid_api_key` | La API key falta o no es válida |
 | `expired_api_key` | `expired_api_key` | La API key ha sido revocada |
 
 ```python
@@ -52,13 +61,13 @@ except AuthenticationError as e:
     print(f"Authentication failed: {e.message}")
 ```
 
-### Errores de Pago (402)
+### Errores de pago (402)
 
-| Tipo | Código | Descripción |
+| Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | El saldo de la cuenta es insuficiente (endpoints compatibles con OpenAI) |
-| `insufficient_balance_error` | `insufficient_balance` | El saldo de la cuenta es insuficiente (endpoints compatibles con Anthropic) |
-| `quota_exceeded` | `quota_exceeded` | Se ha alcanzado el límite de uso de la API key |
+| `insufficient_balance` | `insufficient_balance` | El saldo de la cuenta es demasiado bajo (endpoints compatibles con OpenAI) |
+| `insufficient_balance_error` | `insufficient_balance` | El saldo de la cuenta es demasiado bajo (endpoints compatibles con Anthropic) |
+| `quota_exceeded` | `quota_exceeded` | Se alcanzó el límite de uso de la API key |
 
 ```python
 from openai import OpenAI, APIStatusError
@@ -70,9 +79,9 @@ except APIStatusError as e:
         print("Please top up your account balance")
 ```
 
-### Errores de Acceso (403)
+### Errores de acceso (403)
 
-| Tipo | Código | Descripción |
+| Type | Code | Description |
 |------|------|-------------|
 | `access_denied` | `access_denied` | Acceso al recurso denegado |
 | `access_denied` | `model_not_allowed` | Modelo no permitido para esta API key |
@@ -87,12 +96,12 @@ except APIStatusError as e:
 }
 ```
 
-### Errores de Validación (400)
+### Errores de validación (400)
 
-| Tipo | Descripción |
+| Type | Description |
 |------|-------------|
-| `invalid_request_error` | Los parámetros de la solicitud son inválidos |
-| `context_length_exceeded` | Entrada demasiado larga para el modelo |
+| `invalid_request_error` | Los parámetros de la solicitud no son válidos |
+| `context_length_exceeded` | La entrada es demasiado larga para el modelo |
 | `model_not_found` | El modelo solicitado no existe |
 
 ```json
@@ -102,23 +111,26 @@ except APIStatusError as e:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
-    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "did_you_mean": "gpt-5.4",
+    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
-### Errores de Límite de Tasa (429)
+### Errores de límite de tasa (429)
 
-Cuando excede los límites de tasa:
+Cuando excedes los límites de tasa:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
+    "message": "Rate limit: 60 rpm exceeded",
     "type": "rate_limit_exceeded",
-    "code": "rate_limit_exceeded"
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
   }
 }
 ```
@@ -126,15 +138,14 @@ Cuando excede los límites de tasa:
 **Encabezados incluidos:**
 
 ```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1234567890
-Retry-After: 60
+Retry-After: 8
 ```
 
-### Payload Too Large (413)
+Tanto el encabezado `Retry-After` como el campo `retry_after` indican los segundos exactos que se deben esperar antes de reintentar.
 
-Cuando el tamaño de la entrada o del archivo excede los límites:
+### Payload demasiado grande (413)
+
+Cuando la entrada o el tamaño del archivo exceden los límites:
 
 ```json
 {
@@ -151,15 +162,33 @@ Causas comunes:
 - Archivo de audio demasiado grande (máx. 25MB)
 - El texto de entrada excede la longitud de contexto del modelo
 
-### Errores de Upstream (502, 503)
+### Errores upstream (502, 503)
 
-| Tipo | Descripción |
+| Type | Description |
 |------|-------------|
 | `upstream_error` | El proveedor devolvió un error |
 | `all_channels_failed` | No hay proveedores disponibles |
 | `timeout_error` | La solicitud agotó el tiempo de espera |
 
-## Manejo de Errores en Python
+Cuando todos los canales fallan, la respuesta incluye modelos alternativos:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
+    ],
+    "hint": "Retry in 30s or switch to an available model."
+  }
+}
+```
+
+## Manejo de errores en Python
 
 ```python
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
@@ -190,7 +219,7 @@ def chat_with_retry(messages, max_retries=3):
             raise
 ```
 
-## Manejo de Errores en JavaScript
+## Manejo de errores en JavaScript
 
 ```javascript
 import OpenAI from 'openai';
@@ -220,25 +249,25 @@ async function chatWithRetry(messages, maxRetries = 3) {
 }
 ```
 
-## Mejores Prácticas
+## Mejores prácticas
 
 <AccordionGroup>
   <Accordion title="Implementar exponential backoff">
-    Cuando se aplique el límite de tasa, espere progresivamente más tiempo entre reintentos:
+    Cuando se aplica limitación de tasa, espera progresivamente más tiempo entre reintentos:
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="Establecer timeouts">
-    Establezca siempre timeouts razonables para evitar solicitudes colgadas:
+  <Accordion title="Configurar timeouts">
+    Configura siempre timeouts razonables para evitar solicitudes bloqueadas:
     ```python
     client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
   <Accordion title="Registrar errores para depuración">
-    Registre la respuesta de error completa, incluyendo el ID de la solicitud para soporte:
+    Registra la respuesta de error completa, incluido el ID de la solicitud, para soporte:
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
@@ -246,7 +275,7 @@ async function chatWithRetry(messages, maxRetries = 3) {
   </Accordion>
 
   <Accordion title="Manejar errores específicos del modelo">
-    Algunos modelos tienen requisitos específicos (por ejemplo, tokens máximos, formatos de imagen).
-    Valide las entradas antes de realizar solicitudes.
+    Algunos modelos tienen requisitos específicos (p. ej., max tokens, formatos de imagen).
+    Valida las entradas antes de realizar solicitudes.
   </Accordion>
 </AccordionGroup>

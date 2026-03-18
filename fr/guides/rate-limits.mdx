@@ -3,31 +3,25 @@ title: "Limites de débit"
 description: "Comprendre et gérer les limites de débit"
 ---
 
-## Aperçu
+## Vue d’ensemble
 
-LemonData implémente des limites de débit pour garantir une utilisation équitable et la stabilité de la plateforme. Les limites varient selon le niveau du compte.
+LemonData met en place des limites de débit afin de garantir une utilisation équitable et la stabilité de la plateforme. Les limites varient selon le niveau de compte.
 
 ## Niveaux de limites de débit
 
 | Niveau | Requêtes/min | Description |
 |------|-------------|-------------|
-| **Utilisateur** | 60 | Niveau par défaut pour tous les comptes |
-| **Partenaire** | 300 | Pour les partenaires d'intégration |
-| **VIP** | 1 000 | Utilisateurs à volume élevé |
+| **Utilisateur** | 1,000 | Niveau par défaut pour tous les comptes |
+| **Partenaire** | 3,000 | Pour les partenaires d’intégration |
+| **VIP** | 10,000 | Utilisateurs à fort volume |
 
 <Note>
-  Les limites de débit sont sujettes à modification. Contactez support@lemondata.cc pour des limites personnalisées.
+  Les limites de débit sont susceptibles d’être modifiées. Contactez support@lemondata.cc pour des limites personnalisées.
 </Note>
 
-## En-têtes de limite de débit
+## Réponse de limite de débit
 
-Chaque réponse API inclut des informations sur la limite de débit :
-
-```
-X-RateLimit-Limit: 60          # Votre limite par minute
-X-RateLimit-Remaining: 55      # Requêtes restantes
-X-RateLimit-Reset: 1234567890  # Horodatage Unix lors de la réinitialisation de la limite
-```
+Lorsque vous dépassez la limite de débit, l’API renvoie un code de statut `429` avec un header `Retry-After` indiquant combien de temps attendre avant de réessayer.
 
 ## Limite de débit dépassée
 
@@ -36,22 +30,23 @@ Lorsque vous dépassez la limite, vous recevrez une réponse `429` :
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
-    "type": "rate_limit_exceeded"
+    "message": "Rate limit exceeded. Please retry later.",
+    "type": "rate_limit_exceeded",
+    "code": "rate_limit_exceeded"
   }
 }
 ```
 
-Avec un en-tête supplémentaire :
+La réponse inclut un header `Retry-After` :
 ```
-Retry-After: 60  # Secondes à attendre avant de réessayer
+Retry-After: 60  # Seconds to wait before retrying
 ```
 
 ## Gestion des limites de débit
 
 ### Backoff exponentiel
 
-Implémentez un backoff exponentiel pour les tentatives automatiques :
+Implémentez un backoff exponentiel pour les nouvelles tentatives automatiques :
 
 ```python
 import time
@@ -73,14 +68,14 @@ def make_request_with_backoff(messages, max_retries=5):
             if attempt == max_retries - 1:
                 raise
 
-            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 secondes
-            print(f"Limite de débit atteinte. Attente de {wait_time}s...")
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+            print(f"Rate limited. Waiting {wait_time}s...")
             time.sleep(wait_time)
 ```
 
-### Mise en file d'attente des requêtes
+### Mise en file d’attente des requêtes
 
-Pour les applications à volume élevé, implémentez une file d'attente de requêtes :
+Pour les applications à fort volume, implémentez une file d’attente des requêtes :
 
 ```python
 import asyncio
@@ -93,7 +88,7 @@ class RateLimitedClient:
         self.last_request = 0
 
     async def request(self, messages):
-        # Attendre si nécessaire pour respecter la limite de débit
+        # Wait if needed to respect rate limit
         now = asyncio.get_event_loop().time()
         wait_time = max(0, self.last_request + self.interval - now)
         if wait_time > 0:
@@ -108,7 +103,7 @@ class RateLimitedClient:
 
 ### Traitement par lots
 
-Pour les opérations en masse, traitez par lots avec des délais :
+Pour les opérations en masse, effectuez le traitement par lots avec des délais :
 
 ```python
 def process_batch(items, batch_size=50, delay=1):
@@ -121,7 +116,7 @@ def process_batch(items, batch_size=50, delay=1):
                 messages=[{"role": "user", "content": item}]
             )
             results.append(result)
-        time.sleep(delay)  # Pause entre les lots
+        time.sleep(delay)  # Pause between batches
     return results
 ```
 
@@ -129,15 +124,15 @@ def process_batch(items, batch_size=50, delay=1):
 
 <AccordionGroup>
   <Accordion title="Surveillez votre utilisation">
-    Suivez les en-têtes de limite de débit pour rester proactivement en dessous des limites.
+    Suivez les headers de limite de débit pour rester de manière proactive sous les limites.
   </Accordion>
 
   <Accordion title="Implémentez la mise en cache">
-    Mettez en cache les réponses pour les requêtes identiques afin de réduire les appels API.
+    Mettez les réponses en cache pour les requêtes identiques afin de réduire les appels API.
   </Accordion>
 
   <Accordion title="Utilisez des modèles appropriés">
-    Les modèles plus rapides (comme gpt-4o-mini) permettent un débit plus élevé.
+    Les modèles plus rapides (comme gpt-5-mini) permettent un débit plus élevé.
   </Accordion>
 
   <Accordion title="Contactez-nous pour des limites plus élevées">
@@ -145,15 +140,15 @@ def process_batch(items, batch_size=50, delay=1):
   </Accordion>
 </AccordionGroup>
 
-## Mise à niveau de votre niveau
+## Mettre à niveau votre niveau
 
 Pour demander une mise à niveau de niveau :
 
-1. Connectez-vous à votre [Tableau de bord](https://lemondata.cc/dashboard)
-2. Allez dans **Paramètres → Compte**
-3. Contactez le support avec votre cas d'utilisation
+1. Connectez-vous à votre [Dashboard](https://lemondata.cc/dashboard)
+2. Allez dans **Settings → Account**
+3. Contactez le support avec votre cas d’usage
 
-Ou envoyez un e-mail à support@lemondata.cc avec :
-- L'e-mail de votre compte
+Ou envoyez un email à support@lemondata.cc avec :
+- L’email de votre compte
 - Le volume de requêtes attendu
-- La description du cas d'utilisation
+- Une description du cas d’usage

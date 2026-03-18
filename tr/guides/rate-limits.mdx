@@ -1,57 +1,52 @@
 ---
-title: "Hız Limitleri"
-description: "Hız limitlerini anlama ve yönetme"
+title: "Rate Limitleri"
+description: "Rate limitlerini anlama ve yönetme"
 ---
 
 ## Genel Bakış
 
-LemonData, adil kullanım ve platform kararlılığını sağlamak için hız limitleri uygular. Limitler hesap katmanına göre değişiklik gösterir.
+LemonData, adil kullanım ve platform kararlılığını sağlamak için rate limitleri uygular. Limitler hesap katmanına göre değişir.
 
-## Hız Limiti Katmanları
+## Rate Limit Katmanları
 
-| Katman | İstek/dak | Açıklama |
+| Katman | İstek/dakika | Açıklama |
 |------|-------------|-------------|
-| **User** | 60 | Tüm hesaplar için varsayılan katman |
-| **Partner** | 300 | Entegrasyon ortakları için |
-| **VIP** | 1,000 | Yüksek hacimli kullanıcılar |
+| **Kullanıcı** | 1,000 | Tüm hesaplar için varsayılan katman |
+| **İş Ortağı** | 3,000 | Entegrasyon iş ortakları için |
+| **VIP** | 10,000 | Yüksek hacimli kullanıcılar için |
 
 <Note>
-  Hız limitleri değişikliğe tabidir. Özel limitler için support@lemondata.cc ile iletişime geçin.
+  Rate limitleri değişikliğe tabidir. Özel limitler için support@lemondata.cc ile iletişime geçin.
 </Note>
 
-## Hız Limiti Başlıkları
+## Rate Limit Yanıtı
 
-Her API yanıtı hız limiti bilgilerini içerir:
+Rate limitini aştığınızda, API yeniden denemeden önce ne kadar beklemeniz gerektiğini belirten bir `Retry-After` header'ı ile birlikte `429` durum kodu döndürür.
 
-```
-X-RateLimit-Limit: 60          # Dakika başına limitiniz
-X-RateLimit-Remaining: 55      # Kalan istek sayısı
-X-RateLimit-Reset: 1234567890  # Limitin sıfırlanacağı Unix zaman damgası
-```
+## Rate Limit Aşıldı
 
-## Hız Limiti Aşıldı
-
-Limiti aştığınızda bir `429` yanıtı alırsınız:
+Limiti aştığınızda, bir `429` yanıtı alırsınız:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
-    "type": "rate_limit_exceeded"
+    "message": "Rate limit exceeded. Please retry later.",
+    "type": "rate_limit_exceeded",
+    "code": "rate_limit_exceeded"
   }
 }
 ```
 
-Ek başlık ile:
+Yanıt, bir `Retry-After` header'ı içerir:
 ```
-Retry-After: 60  # Yeniden denemeden önce beklenecek saniye
+Retry-After: 60  # Seconds to wait before retrying
 ```
 
-## Hız Limitlerini Yönetme
+## Rate Limitlerini Yönetme
 
-### Üstel Geri Çekilme (Exponential Backoff)
+### Exponential Backoff
 
-Otomatik yeniden denemeler için üstel geri çekilme uygulayın:
+Otomatik yeniden denemeler için exponential backoff uygulayın:
 
 ```python
 import time
@@ -73,7 +68,7 @@ def make_request_with_backoff(messages, max_retries=5):
             if attempt == max_retries - 1:
                 raise
 
-            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 saniye
+            wait_time = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
             print(f"Rate limited. Waiting {wait_time}s...")
             time.sleep(wait_time)
 ```
@@ -93,7 +88,7 @@ class RateLimitedClient:
         self.last_request = 0
 
     async def request(self, messages):
-        # Hız limitine uymak için gerekirse bekle
+        # Wait if needed to respect rate limit
         now = asyncio.get_event_loop().time()
         wait_time = max(0, self.last_request + self.interval - now)
         if wait_time > 0:
@@ -106,9 +101,9 @@ class RateLimitedClient:
         )
 ```
 
-### Toplu İşleme (Batch Processing)
+### Toplu İşleme
 
-Toplu işlemler için, gecikmelerle birlikte gruplar halinde işleyin:
+Toplu işlemler için, gecikmelerle birlikte batch'ler halinde işleyin:
 
 ```python
 def process_batch(items, batch_size=50, delay=1):
@@ -121,7 +116,7 @@ def process_batch(items, batch_size=50, delay=1):
                 messages=[{"role": "user", "content": item}]
             )
             results.append(result)
-        time.sleep(delay)  # Gruplar arasında duraklat
+        time.sleep(delay)  # Pause between batches
     return results
 ```
 
@@ -129,15 +124,15 @@ def process_batch(items, batch_size=50, delay=1):
 
 <AccordionGroup>
   <Accordion title="Kullanımınızı izleyin">
-    Limitlerin altında kalmak için hız limiti başlıklarını proaktif olarak takip edin.
+    Limitlerin altında proaktif şekilde kalmak için rate limit header'larını takip edin.
   </Accordion>
 
-  <Accordion title="Önbelleğe almayı uygulayın">
-    API çağrılarını azaltmak için aynı isteklerin yanıtlarını önbelleğe alın.
+  <Accordion title="Caching uygulayın">
+    API çağrılarını azaltmak için aynı isteklerin yanıtlarını cache'leyin.
   </Accordion>
 
-  <Accordion title="Uygun modelleri kullanın">
-    Daha hızlı modeller (gpt-4o-mini gibi) daha fazla işleme kapasitesi sağlar.
+  <Accordion title="Uygun modeller kullanın">
+    Daha hızlı modeller (örneğin gpt-5-mini) daha fazla throughput sağlar.
   </Accordion>
 
   <Accordion title="Daha yüksek limitler için bizimle iletişime geçin">
@@ -147,13 +142,13 @@ def process_batch(items, batch_size=50, delay=1):
 
 ## Katmanınızı Yükseltme
 
-Katman yükseltme talebinde bulunmak için:
+Bir katman yükseltmesi talep etmek için:
 
-1. [Panelinize](https://lemondata.cc/dashboard) giriş yapın
-2. **Ayarlar → Hesap** bölümüne gidin
-3. Kullanım durumunuzla birlikte destek ekibiyle iletişime geçin
+1. [Dashboard](https://lemondata.cc/dashboard) hesabınıza giriş yapın
+2. **Settings → Account** bölümüne gidin
+3. Kullanım senaryonuzla birlikte support ekibiyle iletişime geçin
 
-Veya şu bilgileri içeren bir e-postayı support@lemondata.cc adresine gönderin:
-- Hesap e-postanız
+Veya support@lemondata.cc adresine şu bilgilerle e-posta gönderin:
+- Hesap e-posta adresiniz
 - Beklenen istek hacmi
-- Kullanım durumu açıklaması
+- Kullanım senaryosu açıklaması

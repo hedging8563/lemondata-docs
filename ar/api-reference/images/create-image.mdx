@@ -1,13 +1,13 @@
 ---
 title: "إنشاء صورة"
 openapi: "POST /v1/images/generations"
-description: "إنشاء صورة بناءً على وصف نصي"
+description: "ينشئ صورة بناءً على prompt"
 ---
 
 ## جسم الطلب
 
 <ParamField body="model" type="string" default="dall-e-3">
-  النموذج المستخدم (مثل `dall-e-3`، `flux-pro`، `midjourney`).
+  النموذج المراد استخدامه (على سبيل المثال، `dall-e-3`، `flux-pro`، `midjourney`).
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -15,11 +15,11 @@ description: "إنشاء صورة بناءً على وصف نصي"
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  عدد الصور المراد إنشاؤها (1-4، يعتمد على النموذج).
+  عدد الصور المطلوب إنشاؤها (1-4، بحسب النموذج).
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  حجم الصورة. الخيارات تختلف حسب النموذج:
+  حجم الصورة. تختلف الخيارات حسب النموذج:
   - DALL-E 3: `1024x1024`، `1792x1024`، `1024x1792`
   - النماذج الأخرى: `512x512`، `1024x1024`، إلخ.
 </ParamField>
@@ -33,40 +33,40 @@ description: "إنشاء صورة بناءً على وصف نصي"
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
-  نمط DALL-E 3: `vivid` أو `natural`.
+  النمط لـ DALL-E 3: `vivid` أو `natural`.
 </ParamField>
 
 <ParamField body="user" type="string">
-  معرف فريد للمستخدم النهائي.
+  معرّف فريد للمستخدم النهائي.
 </ParamField>
 
 ## الاستجابة
 
-### استجابة متزامنة (DALL-E، Flux Schnell، إلخ.)
+### الاستجابة المتزامنة (DALL-E, Flux Schnell, إلخ.)
 
 <ResponseField name="created" type="integer">
-  الطابع الزمني Unix للإنشاء.
+  الطابع الزمني Unix لوقت الإنشاء.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  مصفوفة الصور المُنشأة.
+  مصفوفة من الصور المُنشأة.
 
-  كل عنصر يحتوي على:
-  - `url` (string): رابط الصورة المُنشأة
-  - `b64_json` (string): الصورة بترميز Base64 (إذا طُلب)
-  - `revised_prompt` (string): الوصف المستخدم (DALL-E 3)
+  يحتوي كل كائن على:
+  - `url` (string): عنوان URL للصورة المُنشأة
+  - `b64_json` (string): صورة مرمّزة بـ Base64 (إذا تم طلبها)
+  - `revised_prompt` (string): الـ prompt المستخدم (DALL-E 3)
 </ResponseField>
 
-### استجابة غير متزامنة (Midjourney، Flux Pro، Ideogram، إلخ.)
+### الاستجابة غير المتزامنة (Midjourney, Flux Pro, Ideogram, إلخ.)
 
-بعض النماذج تتطلب وقت معالجة أطول وتُرجع استجابة غير متزامنة:
+تتطلب بعض النماذج وقت معالجة أطول وتُرجع استجابة async:
 
 <ResponseField name="created" type="integer">
-  الطابع الزمني Unix للإنشاء.
+  الطابع الزمني Unix لوقت الإنشاء.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  معرف المهمة الفريد للاستعلام.
+  معرّف مهمة فريد من أجل polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -74,15 +74,15 @@ description: "إنشاء صورة بناءً على وصف نصي"
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  الرابط النسبي للاستعلام عن النتائج (مثل `/v1/images/generations/{task_id}`).
+  عنوان URL نسبي من أجل polling على النتائج (على سبيل المثال، `/v1/images/generations/{task_id}`).
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  مصفوفة ببيانات مؤقتة. `url` سيكون فارغاً حتى الاكتمال.
+  مصفوفة تحتوي على بيانات placeholder. سيكون `url` فارغًا حتى الاكتمال.
 </ResponseField>
 
 <Note>
-عند استلام `status: "pending"`، استخدم نقطة النهاية [الحصول على حالة الصورة](/ar/api-reference/images/get-image-status) للاستعلام عن النتيجة.
+عندما تتلقى `status: "pending"`، استخدم endpoint [Get Image Status](/api-reference/images/get-image-status) لإجراء polling على النتيجة.
 </Note>
 
 <RequestExample>
@@ -137,37 +137,6 @@ const response = await client.images.generate({
 console.log(response.data[0].url);
 ```
 
-```go Go
-package main
-
-import (
-    "context"
-    "fmt"
-    "github.com/sashabaranov/go-openai"
-)
-
-func main() {
-    config := openai.DefaultConfig("sk-your-api-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-
-    resp, err := client.CreateImage(
-        context.Background(),
-        openai.ImageRequest{
-            Model:   "dall-e-3",
-            Prompt:  "A white cat sitting on a windowsill watching rain",
-            Size:    openai.CreateImageSize1024x1024,
-            Quality: openai.CreateImageQualityStandard,
-            N:       1,
-        },
-    )
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(resp.Data[0].URL)
-}
-```
-
 ```php PHP
 <?php
 $ch = curl_init('https://api.lemondata.cc/v1/images/generations');
@@ -197,7 +166,7 @@ echo $data['data'][0]['url'];
 </RequestExample>
 
 <ResponseExample>
-```json استجابة متزامنة
+```json Synchronous Response
 {
   "created": 1706000000,
   "data": [
@@ -209,7 +178,7 @@ echo $data['data'][0]['url'];
 }
 ```
 
-```json استجابة غير متزامنة (Midjourney، Flux Pro، إلخ.)
+```json Asynchronous Response (Midjourney, Flux Pro, etc.)
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -227,23 +196,23 @@ echo $data['data'][0]['url'];
 
 ## النماذج المتاحة
 
-| النموذج | النوع | الميزات |
-|---------|-------|---------|
-| `dall-e-3` | متزامن | أفضل جودة، تحسين الوصف |
-| `dall-e-2` | متزامن | أسرع، أقل تكلفة |
-| `flux-pro` | **غير متزامن** | واقعي، جودة عالية |
-| `flux-schnell` | متزامن | سريع جداً |
+| Model | Type | Features |
+|-------|------|----------|
+| `dall-e-3` | متزامن | أفضل جودة، تحسين الـ prompt |
+| `dall-e-2` | متزامن | أسرع وأكثر توفيرًا |
+| `flux-pro` | **غير متزامن** | واقعي تصويريًا، جودة عالية |
+| `flux-schnell` | متزامن | سريع جدًا |
 | `midjourney` | **غير متزامن** | نمط فني |
 | `ideogram-v3` | **غير متزامن** | أفضل عرض للنصوص |
 | `stable-diffusion-3` | متزامن | مفتوح المصدر، قابل للتخصيص |
 
 <Tip>
-**النماذج غير المتزامنة** تُرجع `status: "pending"` وتتطلب الاستعلام. راجع [الحصول على حالة الصورة](/ar/api-reference/images/get-image-status) لمعرفة كيفية استرداد النتائج.
+**النماذج غير المتزامنة** تُرجع `status: "pending"` وتتطلب polling. راجع [Get Image Status](/api-reference/images/get-image-status) لمعرفة كيفية استرجاع النتائج.
 </Tip>
 
 ## التعامل مع الاستجابات غير المتزامنة
 
-للنماذج غير المتزامنة، تحقق مما إذا كانت الاستجابة تحتوي على `status: "pending"`:
+بالنسبة للنماذج غير المتزامنة، تحقّق مما إذا كانت الاستجابة تحتوي على `status: "pending"`:
 
 ```python
 import requests

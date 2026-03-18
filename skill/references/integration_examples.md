@@ -141,7 +141,7 @@ client = Anthropic(
 )
 
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello, Claude!"}]
 )
@@ -227,7 +227,7 @@ const client = new Anthropic({
 });
 
 const message = await client.messages.create({
-  model: 'claude-sonnet-4-5',
+  model: 'claude-sonnet-4-6',
   max_tokens: 1024,
   messages: [{ role: 'user', content: 'Hello, Claude!' }]
 });
@@ -247,23 +247,22 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/sashabaranov/go-openai"
+    openai "github.com/openai/openai-go/v3"
+    "github.com/openai/openai-go/v3/option"
 )
 
 func main() {
-    config := openai.DefaultConfig("sk-your-api-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-
-    resp, err := client.CreateChatCompletion(
-        context.Background(),
-        openai.ChatCompletionRequest{
-            Model: "gpt-4o",
-            Messages: []openai.ChatCompletionMessage{
-                {Role: openai.ChatMessageRoleUser, Content: "Hello!"},
-            },
-        },
+    client := openai.NewClient(
+        option.WithAPIKey("sk-your-api-key"),
+        option.WithBaseURL("https://api.lemondata.cc/v1"),
     )
+
+    resp, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
+        Model: openai.F("gpt-4o"),
+        Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+            openai.UserMessage("Hello!"),
+        }),
+    })
     if err != nil {
         panic(err)
     }
@@ -281,24 +280,22 @@ import (
     "context"
     "fmt"
     "io"
-    "github.com/sashabaranov/go-openai"
+    openai "github.com/openai/openai-go/v3"
+    "github.com/openai/openai-go/v3/option"
 )
 
 func main() {
-    config := openai.DefaultConfig("sk-your-api-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-
-    stream, err := client.CreateChatCompletionStream(
-        context.Background(),
-        openai.ChatCompletionRequest{
-            Model:  "gpt-4o",
-            Messages: []openai.ChatCompletionMessage{
-                {Role: openai.ChatMessageRoleUser, Content: "Tell me a story"},
-            },
-            Stream: true,
-        },
+    client := openai.NewClient(
+        option.WithAPIKey("sk-your-api-key"),
+        option.WithBaseURL("https://api.lemondata.cc/v1"),
     )
+
+    stream, err := client.Chat.Completions.NewStreaming(context.Background(), openai.ChatCompletionNewParams{
+        Model: openai.F("gpt-4o"),
+        Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+            openai.UserMessage("Tell me a story"),
+        }),
+    })
     if err != nil {
         panic(err)
     }

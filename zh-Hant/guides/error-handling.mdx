@@ -1,11 +1,11 @@
 ---
 title: "錯誤處理"
-description: "優雅地處理 API 錯誤"
+description: "以妥善方式處理 API 錯誤"
 ---
 
 ## 錯誤回應格式
 
-所有錯誤都會回傳一致的 JSON 格式：
+所有錯誤都會回傳一致的 JSON 格式，並可選擇包含 [Agent-First 提示](/guides/agent-first-api)：
 
 ```json
 {
@@ -13,32 +13,41 @@ description: "優雅地處理 API 錯誤"
     "message": "Human-readable error description",
     "type": "error_type",
     "code": "error_code",
-    "param": "parameter_name"  // 選填，用於驗證錯誤
+    "param": "parameter_name",
+    "did_you_mean": "suggested_model",
+    "suggestions": [{"id": "model-id"}],
+    "hint": "Next step guidance",
+    "retryable": true,
+    "retry_after": 30
   }
 }
 ```
 
+基礎欄位（`message`、`type`、`code`、`param`）一定會出現。提示欄位（`did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after`、`balance_usd`、`estimated_cost_usd`）是供 AI agent 自我修正使用的可選擴充欄位。詳情請參閱 [Agent-First API 指南](/guides/agent-first-api)。
+
+與 OpenAI 相容的端點使用 LemonData 穩定 gateway 的錯誤類型。與 Anthropic 相容及 Gemini 相容的端點則使用其各自原生的錯誤類別與回應格式。
+
 ## HTTP 狀態碼
 
-| 代碼 | 描述 |
+| Code | Description |
 |------|-------------|
-| 400 | Bad Request - 參數無效 |
-| 401 | Unauthorized - API key 無效或缺失 |
-| 402 | Payment Required - 餘額不足 |
-| 403 | Forbidden - 存取被拒絕或不允許使用該模型 |
-| 404 | Not Found - 找不到模型或資源 |
-| 413 | Payload Too Large - 輸入或檔案大小超過限制 |
-| 429 | Too Many Requests - 超過速率限制 |
-| 500 | Internal Server Error - 伺服器內部錯誤 |
-| 502 | Bad Gateway - 上游供應商錯誤 |
-| 503 | Service Unavailable - 所有管道皆失敗 |
-| 504 | Gateway Timeout - 請求逾時 |
+| 400 | 錯誤請求 - 無效參數 |
+| 401 | 未授權 - API key 無效或缺失 |
+| 402 | 需要付款 - 餘額不足 |
+| 403 | 已禁止 - 存取遭拒或模型不允許 |
+| 404 | 找不到 - 找不到模型或資源 |
+| 413 | Payload 過大 - 輸入或檔案大小超出限制 |
+| 429 | 請求過多 - 超出速率限制 |
+| 500 | 內部伺服器錯誤 |
+| 502 | 錯誤 gateway - 上游 provider 錯誤 |
+| 503 | 服務無法使用 - 服務暫時無法使用 |
+| 504 | Gateway 逾時 - 請求逾時 |
 
 ## 錯誤類型
 
-### 認證錯誤 (401)
+### 驗證錯誤 (401)
 
-| 類型 | 代碼 | 描述 |
+| Type | Code | Description |
 |------|------|-------------|
 | `invalid_api_key` | `invalid_api_key` | API key 缺失或無效 |
 | `expired_api_key` | `expired_api_key` | API key 已被撤銷 |
@@ -52,12 +61,12 @@ except AuthenticationError as e:
     print(f"Authentication failed: {e.message}")
 ```
 
-### 支付錯誤 (402)
+### 付款錯誤 (402)
 
-| 類型 | 代碼 | 描述 |
+| Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | 帳戶餘額過低（OpenAI 相容端點） |
-| `insufficient_balance_error` | `insufficient_balance` | 帳戶餘額過低（Anthropic 相容端點） |
+| `insufficient_balance` | `insufficient_balance` | 帳戶餘額過低（與 OpenAI 相容的端點） |
+| `insufficient_balance_error` | `insufficient_balance` | 帳戶餘額過低（與 Anthropic 相容的端點） |
 | `quota_exceeded` | `quota_exceeded` | 已達到 API key 使用限制 |
 
 ```python
@@ -72,9 +81,9 @@ except APIStatusError as e:
 
 ### 存取錯誤 (403)
 
-| 類型 | 代碼 | 描述 |
+| Type | Code | Description |
 |------|------|-------------|
-| `access_denied` | `access_denied` | 存取資源被拒絕 |
+| `access_denied` | `access_denied` | 資源存取遭拒 |
 | `access_denied` | `model_not_allowed` | 此 API key 不允許使用該模型 |
 
 ```json
@@ -89,11 +98,11 @@ except APIStatusError as e:
 
 ### 驗證錯誤 (400)
 
-| 類型 | 描述 |
+| Type | Description |
 |------|-------------|
 | `invalid_request_error` | 請求參數無效 |
-| `context_length_exceeded` | 輸入內容對模型而言過長 |
-| `model_not_found` | 請求的模型不存在 |
+| `context_length_exceeded` | 輸入對模型而言過長 |
+| `model_not_found` | 所請求的模型不存在 |
 
 ```json
 {
@@ -102,39 +111,41 @@ except APIStatusError as e:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
-    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "did_you_mean": "gpt-5.4",
+    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
 ### 速率限制錯誤 (429)
 
-當您超過速率限制時：
+當你超出速率限制時：
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
+    "message": "Rate limit: 60 rpm exceeded",
     "type": "rate_limit_exceeded",
-    "code": "rate_limit_exceeded"
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
   }
 }
 ```
 
-**包含的標頭 (Headers)：**
+**包含的標頭：**
 
 ```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1234567890
-Retry-After: 60
+Retry-After: 8
 ```
 
-### 內容過大 (413)
+`Retry-After` 標頭與 `retry_after` 欄位都表示在重試前應等待的確切秒數。
 
-當輸入或檔案大小超過限制時：
+### Payload 過大 (413)
+
+當輸入或檔案大小超出限制時：
 
 ```json
 {
@@ -147,17 +158,35 @@ Retry-After: 60
 ```
 
 常見原因：
-- 圖片檔案過大 (最大 20MB)
-- 音訊檔案過大 (最大 25MB)
-- 輸入文字超過模型上下文長度 (context length)
+- 圖片檔案過大（上限 20MB）
+- 音訊檔案過大（上限 25MB）
+- 輸入文字超出模型的 context 長度
 
 ### 上游錯誤 (502, 503)
 
-| 類型 | 描述 |
+| Type | Description |
 |------|-------------|
-| `upstream_error` | 供應商回傳錯誤 |
-| `all_channels_failed` | 無可用供應商 |
+| `upstream_error` | provider 回傳錯誤 |
+| `all_channels_failed` | 沒有可用的 provider |
 | `timeout_error` | 請求逾時 |
+
+當所有通道都失敗時，回應會包含替代模型：
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
+    ],
+    "hint": "Retry in 30s or switch to an available model."
+  }
+}
+```
 
 ## 在 Python 中處理錯誤
 
@@ -220,33 +249,33 @@ async function chatWithRetry(messages, maxRetries = 3) {
 }
 ```
 
-## 最佳實踐
+## 最佳實務
 
 <AccordionGroup>
-  <Accordion title="實作指數退避 (Exponential Backoff)">
-    當遇到速率限制時，在重試之間逐漸增加等待時間：
+  <Accordion title="實作指數退避">
+    當遇到速率限制時，應在每次重試之間逐步延長等待時間：
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="設定逾時時間 (Timeouts)">
-    務必設定合理的逾時時間，以避免請求掛起：
+  <Accordion title="設定逾時">
+    務必設定合理的逾時時間，以避免請求懸置：
     ```python
-    client = OpenAI(timeout=60.0)  # 60 秒逾時
+    client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
-  <Accordion title="記錄錯誤以供偵錯">
-    記錄完整的錯誤回應（包括 request ID）以便尋求支援：
+  <Accordion title="記錄錯誤以利除錯">
+    記錄完整的錯誤回應（包含 request ID），以便支援排查：
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
     ```
   </Accordion>
 
-  <Accordion title="處理特定模型的錯誤">
-    某些模型有特定要求（例如：最大 token 數、圖片格式）。
-    在發送請求前驗證輸入。
+  <Accordion title="處理模型特定錯誤">
+    某些模型有特定需求（例如最大 tokens、圖片格式）。
+    在發送請求前先驗證輸入。
   </Accordion>
 </AccordionGroup>

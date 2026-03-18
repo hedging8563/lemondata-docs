@@ -58,7 +58,7 @@ const LANG_DIR_NAMES = new Set(Object.values(TARGET_LANGUAGES).map(l => l.path))
 
 const SKIP_PATTERNS = [
   /^\./, /^scripts$/, /^node_modules$/, /\.json$/, /\.svg$/, /\.png$/, /\.jpg$/,
-  /^LICENSE$/, /^README\.md$/, /^skill$/, /^logo$/, /^images$/,
+  /^LICENSE$/, /^README\.md$/, /^skill$/, /^logo$/,
 ];
 
 const LEMONDATA_LINK_PATTERN = /https:\/\/lemondata\.cc\/en\//g;

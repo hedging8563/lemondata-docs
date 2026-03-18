@@ -1,11 +1,11 @@
 ---
 title: "오류 처리"
-description: "API 오류를 원활하게 처리하기"
+description: "API 오류를 우아하게 처리합니다"
 ---
 
 ## 오류 응답 형식
 
-모든 오류는 일관된 JSON 형식을 반환합니다:
+모든 오류는 선택적 [Agent-First 힌트](/guides/agent-first-api)와 함께 일관된 JSON 형식으로 반환됩니다:
 
 ```json
 {
@@ -13,35 +13,44 @@ description: "API 오류를 원활하게 처리하기"
     "message": "Human-readable error description",
     "type": "error_type",
     "code": "error_code",
-    "param": "parameter_name"  // Optional, for validation errors
+    "param": "parameter_name",
+    "did_you_mean": "suggested_model",
+    "suggestions": [{"id": "model-id"}],
+    "hint": "Next step guidance",
+    "retryable": true,
+    "retry_after": 30
   }
 }
 ```
 
+기본 필드(`message`, `type`, `code`, `param`)는 항상 존재합니다. 힌트 필드(`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`)는 AI agent의 자체 수정(self-correction)을 위한 선택적 확장 필드입니다. 자세한 내용은 [Agent-First API 가이드](/guides/agent-first-api)를 참조하세요.
+
+OpenAI-compatible endpoint는 LemonData의 안정적인 gateway 오류 타입을 사용합니다. Anthropic-compatible 및 Gemini-compatible endpoint는 각자의 고유한 native 오류 계열과 응답 형식을 사용합니다.
+
 ## HTTP 상태 코드
 
-| 코드 | 설명 |
+| Code | Description |
 |------|-------------|
 | 400 | Bad Request - 잘못된 파라미터 |
-| 401 | Unauthorized - 유효하지 않거나 누락된 API 키 |
+| 401 | Unauthorized - 유효하지 않거나 누락된 API key |
 | 402 | Payment Required - 잔액 부족 |
-| 403 | Forbidden - 액세스 거부 또는 허용되지 않은 모델 |
+| 403 | Forbidden - 접근 거부 또는 허용되지 않은 모델 |
 | 404 | Not Found - 모델 또는 리소스를 찾을 수 없음 |
 | 413 | Payload Too Large - 입력 또는 파일 크기 초과 |
-| 429 | Too Many Requests - 속도 제한 초과 |
+| 429 | Too Many Requests - rate limit 초과 |
 | 500 | Internal Server Error |
-| 502 | Bad Gateway - 업스트림 제공자 오류 |
-| 503 | Service Unavailable - 모든 채널 실패 |
+| 502 | Bad Gateway - upstream provider 오류 |
+| 503 | Service Unavailable - 서비스를 일시적으로 사용할 수 없음 |
 | 504 | Gateway Timeout - 요청 시간 초과 |
 
-## 오류 유형
+## 오류 타입
 
 ### 인증 오류 (401)
 
-| 유형 | 코드 | 설명 |
+| Type | Code | Description |
 |------|------|-------------|
-| `invalid_api_key` | `invalid_api_key` | API 키가 누락되었거나 유효하지 않음 |
-| `expired_api_key` | `expired_api_key` | API 키가 취소됨 |
+| `invalid_api_key` | `invalid_api_key` | API key가 누락되었거나 유효하지 않음 |
+| `expired_api_key` | `expired_api_key` | API key가 폐기됨 |
 
 ```python
 from openai import OpenAI, AuthenticationError
@@ -54,11 +63,11 @@ except AuthenticationError as e:
 
 ### 결제 오류 (402)
 
-| 유형 | 코드 | 설명 |
+| Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | 계정 잔액이 부족합니다 (OpenAI 호환 엔드포인트) |
-| `insufficient_balance_error` | `insufficient_balance` | 계정 잔액이 부족합니다 (Anthropic 호환 엔드포인트) |
-| `quota_exceeded` | `quota_exceeded` | API 키 사용량 한도 도달 |
+| `insufficient_balance` | `insufficient_balance` | 계정 잔액이 너무 낮음 (OpenAI-compatible endpoint) |
+| `insufficient_balance_error` | `insufficient_balance` | 계정 잔액이 너무 낮음 (Anthropic-compatible endpoint) |
+| `quota_exceeded` | `quota_exceeded` | API key 사용 한도 도달 |
 
 ```python
 from openai import OpenAI, APIStatusError
@@ -70,12 +79,12 @@ except APIStatusError as e:
         print("Please top up your account balance")
 ```
 
-### 액세스 오류 (403)
+### 접근 오류 (403)
 
-| 유형 | 코드 | 설명 |
+| Type | Code | Description |
 |------|------|-------------|
-| `access_denied` | `access_denied` | 리소스 액세스 거부됨 |
-| `access_denied` | `model_not_allowed` | 이 API 키에 허용되지 않은 모델 |
+| `access_denied` | `access_denied` | 리소스에 대한 접근이 거부됨 |
+| `access_denied` | `model_not_allowed` | 이 API key에 대해 허용되지 않은 모델 |
 
 ```json
 {
@@ -89,7 +98,7 @@ except APIStatusError as e:
 
 ### 유효성 검사 오류 (400)
 
-| 유형 | 설명 |
+| Type | Description |
 |------|-------------|
 | `invalid_request_error` | 요청 파라미터가 유효하지 않음 |
 | `context_length_exceeded` | 모델에 비해 입력이 너무 김 |
@@ -102,39 +111,41 @@ except APIStatusError as e:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
-    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "did_you_mean": "gpt-5.4",
+    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
-### 속도 제한 오류 (429)
+### Rate Limit 오류 (429)
 
-속도 제한을 초과한 경우:
+rate limit를 초과하면 다음과 같습니다:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
+    "message": "Rate limit: 60 rpm exceeded",
     "type": "rate_limit_exceeded",
-    "code": "rate_limit_exceeded"
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
   }
 }
 ```
 
-**포함된 헤더:**
+**포함되는 헤더:**
 
 ```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1234567890
-Retry-After: 60
+Retry-After: 8
 ```
 
-### 페이로드 너무 큼 (413)
+`Retry-After` 헤더와 `retry_after` 필드는 모두 재시도 전에 대기해야 하는 정확한 초 수를 나타냅니다.
 
-입력 또는 파일 크기가 제한을 초과한 경우:
+### Payload Too Large (413)
+
+입력 또는 파일 크기가 제한을 초과하는 경우:
 
 ```json
 {
@@ -149,15 +160,33 @@ Retry-After: 60
 일반적인 원인:
 - 이미지 파일이 너무 큼 (최대 20MB)
 - 오디오 파일이 너무 큼 (최대 25MB)
-- 입력 텍스트가 모델 컨텍스트 길이를 초과함
+- 입력 텍스트가 모델 context length를 초과함
 
-### 업스트림 오류 (502, 503)
+### Upstream 오류 (502, 503)
 
-| 유형 | 설명 |
+| Type | Description |
 |------|-------------|
-| `upstream_error` | 제공자가 오류를 반환함 |
-| `all_channels_failed` | 사용 가능한 제공자 없음 |
+| `upstream_error` | provider가 오류를 반환함 |
+| `all_channels_failed` | 사용 가능한 provider가 없음 |
 | `timeout_error` | 요청 시간 초과 |
+
+모든 채널이 실패하면 응답에는 대체 모델이 포함됩니다:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
+    ],
+    "hint": "Retry in 30s or switch to an available model."
+  }
+}
+```
 
 ## Python에서 오류 처리하기
 
@@ -220,25 +249,25 @@ async function chatWithRetry(messages, maxRetries = 3) {
 }
 ```
 
-## 권장 사항
+## 모범 사례
 
 <AccordionGroup>
   <Accordion title="지수 백오프 구현">
-    속도 제한이 발생하면 재시도 간격을 점진적으로 늘리십시오:
+    rate limit가 발생하면 재시도 간 대기 시간을 점진적으로 늘리세요:
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="타임아웃 설정">
-    요청이 중단되는 것을 방지하기 위해 항상 적절한 타임아웃을 설정하십시오:
+  <Accordion title="timeout 설정">
+    요청이 무기한 대기 상태에 빠지지 않도록 항상 적절한 timeout을 설정하세요:
     ```python
     client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
   <Accordion title="디버깅을 위한 오류 로깅">
-    지원을 받기 위해 요청 ID를 포함한 전체 오류 응답을 로깅하십시오:
+    지원 요청을 위해 request ID를 포함한 전체 오류 응답을 로그에 기록하세요:
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
@@ -246,7 +275,7 @@ async function chatWithRetry(messages, maxRetries = 3) {
   </Accordion>
 
   <Accordion title="모델별 오류 처리">
-    일부 모델에는 특정 요구 사항(예: 최대 토큰, 이미지 형식)이 있습니다.
-    요청을 보내기 전에 입력을 유효성 검사하십시오.
+    일부 모델에는 특정 요구 사항(예: max tokens, image formats)이 있습니다.
+    요청을 보내기 전에 입력을 검증하세요.
   </Accordion>
 </AccordionGroup>

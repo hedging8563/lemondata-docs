@@ -117,11 +117,15 @@ const client = new OpenAI({
 
 **OpenAI SDK Configuration (Go)**:
 ```go
-import "github.com/sashabaranov/go-openai"
+import (
+  openai "github.com/openai/openai-go/v3"
+  "github.com/openai/openai-go/v3/option"
+)
 
-config := openai.DefaultConfig("sk-your-api-key")
-config.BaseURL = "https://api.lemondata.cc/v1"
-client := openai.NewClientWithConfig(config)
+client := openai.NewClient(
+  option.WithAPIKey("sk-your-api-key"),
+  option.WithBaseURL("https://api.lemondata.cc/v1"),
+)
 ```
 
 ## Special API Formats
@@ -139,7 +143,7 @@ client = Anthropic(
 )
 
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello!"}]
 )

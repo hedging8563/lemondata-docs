@@ -1,13 +1,13 @@
 ---
-title: "✨ API Agent-First"
-description: "Pistas de error estructuradas para que los agentes de IA se autocorrijan en el primer reintento"
+title: "✨ API orientada a agentes"
+description: "Pistas de error estructuradas para que los agentes de AI se autocorrijan en el primer reintento"
 ---
 
-## Resumen
+## Descripción general
 
-La API Agent-First de LemonData enriquece las respuestas de error con pistas estructuradas que los agentes de IA pueden analizar y actuar de inmediato — sin búsquedas en la web, sin consultas de documentación y sin conjeturas.
+La API orientada a agentes de LemonData enriquece las respuestas de error con pistas estructuradas que los agentes de AI pueden analizar y sobre las que pueden actuar de inmediato — sin búsquedas web, sin consultar la documentación y sin conjeturas.
 
-Cada respuesta de error incluye campos opcionales como `did_you_mean`, `suggestions`, `hint`, `retryable` y `retry_after` dentro del objeto estándar `error`. Estos campos son compatibles con versiones anteriores — los clientes que no los utilizan no verán ninguna diferencia.
+Cada respuesta de error incluye campos opcionales como `did_you_mean`, `suggestions`, `hint`, `retryable` y `retry_after` dentro del objeto estándar `error`. Estos campos son retrocompatibles — los clientes que no los usan no notan ninguna diferencia.
 
 ## Campos de pistas de error
 
@@ -18,9 +18,9 @@ Todos los campos de pistas son extensiones opcionales dentro del objeto `error`:
 | `did_you_mean` | `string` | Nombre del modelo con la coincidencia más cercana |
 | `suggestions` | `array` | Modelos recomendados con metadatos |
 | `alternatives` | `array` | Modelos alternativos disponibles actualmente |
-| `hint` | `string` | Guía del siguiente paso legible por humanos/agentes |
+| `hint` | `string` | Guía legible por humanos/agentes sobre el siguiente paso |
 | `retryable` | `boolean` | Si reintentar la misma solicitud puede tener éxito |
-| `retry_after` | `number` | Segundos a esperar antes de reintentar |
+| `retry_after` | `number` | Segundos que se deben esperar antes de reintentar |
 | `balance_usd` | `number` | Saldo actual de la cuenta en USD |
 | `estimated_cost_usd` | `number` | Costo estimado de la solicitud fallida |
 
@@ -28,7 +28,7 @@ Todos los campos de pistas son extensiones opcionales dentro del objeto `error`:
 
 ### model_not_found (400)
 
-Cuando el nombre de un modelo no coincide con ningún modelo activo:
+Cuando un nombre de modelo no coincide con ningún modelo activo:
 
 ```json
 {
@@ -37,20 +37,20 @@ Cuando el nombre de un modelo no coincide con ningún modelo activo:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
+    "did_you_mean": "gpt-5.4",
     "suggestions": [
-      {"id": "gpt-4o"},
-      {"id": "gpt-4o-mini"},
-      {"id": "claude-sonnet-4-5"}
+      {"id": "gpt-5.4"},
+      {"id": "gpt-5-mini"},
+      {"id": "claude-sonnet-4-6"}
     ],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
-La resolución de `did_you_mean` utiliza:
-1. Mapeo de alias estáticos (a partir de datos de errores de producción)
-2. Coincidencia de cadenas normalizada (elimina guiones, no distingue entre mayúsculas y minúsculas)
+La resolución de `did_you_mean` usa:
+1. Mapeo estático de alias (a partir de datos de errores de producción)
+2. Coincidencia de cadenas normalizadas (elimina guiones, no distingue mayúsculas de minúsculas)
 3. Coincidencia por distancia de edición (umbral ≤ 3)
 
 ### insufficient_balance (402)
@@ -60,16 +60,16 @@ Cuando el saldo de la cuenta es demasiado bajo para el costo estimado:
 ```json
 {
   "error": {
-    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200.",
+    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-6, but balance is $0.1200.",
     "type": "insufficient_balance",
     "code": "insufficient_balance",
     "balance_usd": 0.12,
     "estimated_cost_usd": 0.35,
     "suggestions": [
-      {"id": "gpt-4o-mini"},
-      {"id": "deepseek-chat"}
+      {"id": "gpt-5-mini"},
+      {"id": "deepseek-v3-2"}
     ],
-    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
+    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-6, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
   }
 }
 ```
@@ -78,7 +78,7 @@ Cuando el saldo de la cuenta es demasiado bajo para el costo estimado:
 
 ### all_channels_failed (503)
 
-Cuando todos los canales ascendentes para un modelo no están disponibles:
+Cuando todos los canales upstream para un modelo no están disponibles:
 
 ```json
 {
@@ -88,8 +88,8 @@ Cuando todos los canales ascendentes para un modelo no están disponibles:
     "retryable": true,
     "retry_after": 30,
     "alternatives": [
-      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
-      {"id": "gpt-4o", "status": "available", "tags": []}
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
     ],
     "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
   }
@@ -97,7 +97,7 @@ Cuando todos los canales ascendentes para un modelo no están disponibles:
 ```
 
 <Note>
-`retryable` es `false` cuando el motivo es `no_channels` (no hay canales configurados para este modelo). Es `true` solo para fallos transitorios como activaciones del circuit breaker o agotamiento de cuota.
+`retryable` es `false` cuando la razón es `no_channels` (no hay canales configurados para este modelo). Es `true` solo para fallos transitorios como activaciones del circuit breaker o agotamiento de cuota.
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -115,15 +115,15 @@ Cuando todos los canales ascendentes para un modelo no están disponibles:
 }
 ```
 
-El valor de `retry_after` se calcula a partir del tiempo de reinicio de la ventana de límite de tasa real.
+El valor de `retry_after` se calcula a partir del tiempo real de restablecimiento de la ventana de rate limit.
 
 <Note>
-Los endpoints compatibles con OpenAI utilizan los tipos de error públicos estables de LemonData, como `rate_limit_exceeded`, `upstream_error` y `all_channels_failed`. Los endpoints compatibles con Anthropic y Gemini utilizan sus propias formas de respuesta nativas.
+Los endpoints compatibles con OpenAI usan los tipos de error públicos y estables de LemonData, como `rate_limit_exceeded`, `upstream_error` y `all_channels_failed`. Los endpoints compatibles con Anthropic y Gemini usan sus propias formas nativas de respuesta.
 </Note>
 
 ### context_length_exceeded (400)
 
-Cuando la entrada excede la ventana de contexto del modelo (error ascendente, enriquecido con pistas):
+Cuando la entrada supera la ventana de contexto del modelo (error upstream, enriquecido con pistas):
 
 ```json
 {
@@ -134,14 +134,14 @@ Cuando la entrada excede la ventana de contexto del modelo (error ascendente, en
     "retryable": false,
     "suggestions": [
       {"id": "gemini-2.5-pro"},
-      {"id": "claude-sonnet-4-5"}
+      {"id": "claude-sonnet-4-6"}
     ],
     "hint": "Reduce your input or switch to a model with a larger context window."
   }
 }
 ```
 
-## Encabezados de endpoints nativos
+## Encabezados de endpoint nativo
 
 Cuando llamas a `/v1/chat/completions` con un modelo que tiene un endpoint nativo (Anthropic o Gemini), la **respuesta exitosa** incluye encabezados de optimización:
 
@@ -150,13 +150,13 @@ X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/mess
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Proveedor de modelo | Endpoint sugerido | Beneficio |
+| Proveedor del modelo | Endpoint sugerido | Beneficio |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | Sin conversión de formato, pensamiento extendido, caché de prompts |
+| Anthropic (Claude) | `/v1/messages` | Sin conversión de formato, extended thinking, prompt caching |
 | Google (Gemini) | `/v1beta/gemini` | Sin conversión de formato, grounding, configuraciones de seguridad |
 | OpenAI | — | Chat completions ya es el formato nativo |
 
-Estos encabezados aparecen tanto en respuestas de streaming como en las que no son de streaming.
+Estos encabezados aparecen tanto en respuestas streaming como no streaming.
 
 ## Mejoras en /v1/models
 
@@ -164,7 +164,7 @@ Tres campos nuevos en la extensión `lemondata` de cada objeto de modelo:
 
 ```json
 {
-  "id": "gpt-4o",
+  "id": "gpt-5.4",
   "lemondata": {
     "category": "chat",
     "pricing_unit": "per_token",
@@ -181,36 +181,36 @@ Tres campos nuevos en la extensión `lemondata` de cada objeto de modelo:
 |-------|--------|-------------|
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Tipo de modelo |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Cómo se factura el modelo |
-| `cache_pricing` | objeto o `null` | Precios de caché de prompts ascendentes + descuento de caché semántica de la plataforma |
+| `cache_pricing` | object o `null` | Precios de caché de prompt upstream + descuento de caché semántica de la plataforma |
 
 ### Filtrado por categoría
 
 ```bash
-GET /v1/models?category=chat          # Solo modelos de chat
-GET /v1/models?category=image         # Modelos de generación de imágenes
-GET /v1/models?tag=coding&category=chat  # Modelos de chat optimizados para codificación
+GET /v1/models?category=chat          # Chat models only
+GET /v1/models?category=image         # Image generation models
+GET /v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
 
 ## llms.txt
 
-Un resumen de la API legible por máquina está disponible en:
+Hay disponible una descripción general de la API legible por máquina en:
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
 Incluye:
-- Plantilla de primera llamada con un ejemplo funcional
-- Nombres de modelos comunes (generados dinámicamente a partir de datos de uso)
+- Plantilla para la primera llamada con un ejemplo funcional
+- Nombres comunes de modelos (generados dinámicamente a partir de datos de uso)
 - Los 12 endpoints de la API
-- Parámetros de filtro para el descubrimiento de modelos
-- Guía de manejo de errores
+- Parámetros de filtrado para el descubrimiento de modelos
+- Guía para el manejo de errores
 
-Los agentes de IA que leen `llms.txt` antes de su primera llamada a la API suelen tener éxito en el primer intento.
+Los agentes de AI que leen `llms.txt` antes de su primera llamada a la API normalmente pueden tener éxito en el primer intento.
 
-## Uso en código de agentes
+## Uso en código de agente
 
-### Python (SDK de OpenAI)
+### Python (OpenAI SDK)
 
 ```python
 from openai import OpenAI, BadRequestError
@@ -227,7 +227,7 @@ def smart_chat(messages, model="gpt-4o"):
         )
     except BadRequestError as e:
         error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
-        # Usar did_you_mean para la autocorrección
+        # Use did_you_mean for auto-correction
         if error.get("code") == "model_not_found" and error.get("did_you_mean"):
             return client.chat.completions.create(
                 model=error["did_you_mean"], messages=messages
@@ -235,7 +235,7 @@ def smart_chat(messages, model="gpt-4o"):
         raise
 ```
 
-### JavaScript (SDK de OpenAI)
+### JavaScript (OpenAI SDK)
 
 ```javascript
 import OpenAI from 'openai';
@@ -263,16 +263,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## Principios de diseño
 
 <CardGroup cols={2}>
-  <Card title="Falla rápido, falla de manera informativa" icon="bolt">
-    Los errores regresan inmediatamente con todos los datos que un agente necesita para autocorregirse.
+  <Card title="Fallar rápido, fallar de forma informativa" icon="bolt">
+    Los errores se devuelven de inmediato con todos los datos que un agente necesita para autocorregirse.
   </Card>
-  <Card title="Sin enrutamiento automático" icon="route">
-    La API nunca sustituye silenciosamente un modelo diferente. El agente decide.
+  <Card title="Sin auto-routing" icon="route">
+    La API nunca sustituye silenciosamente un modelo por otro diferente. El agente decide.
   </Card>
   <Card title="Sugerencias basadas en datos" icon="database">
-    Todas las recomendaciones provienen de datos de producción, no de listas codificadas.
+    Todas las recomendaciones provienen de datos de producción, no de listas codificadas manualmente.
   </Card>
-  <Card title="Compatible con versiones anteriores" icon="plug">
-    Todos los campos de pistas son opcionales. Los clientes existentes no ven ninguna diferencia.
+  <Card title="Retrocompatible" icon="plug">
+    Todos los campos de pistas son opcionales. Los clientes existentes no notan ninguna diferencia.
   </Card>
 </CardGroup>

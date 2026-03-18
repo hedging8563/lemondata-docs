@@ -1,42 +1,52 @@
 ---
 title: "身份验证"
-description: "使用 API 密钥保护您的 API 请求"
+description: "使用 API key 保护你的 LemonData API 请求"
 ---
 
-## API 密钥
+## API key
 
-所有 API 请求都需要使用 API 密钥进行身份验证。请在 `Authorization` 请求头中包含您的密钥：
+所有 LemonData API 请求都需要 API key。
+
+对于兼容 OpenAI 的端点，请按如下方式发送：
 
 ```bash
 Authorization: Bearer sk-your-api-key
 ```
 
-## 获取您的 API 密钥
+对于兼容 Anthropic 的 `/v1/messages` 请求，你也可以使用：
 
-1. 登录您的 [LemonData Dashboard](https://lemondata.cc/dashboard)
-2. 导航至 **API Keys** 栏目
-3. 点击 **Create New Key**
-4. 为您的密钥起一个描述性的名称
-5. 立即复制该密钥 - 它仅会显示一次
+```bash
+x-api-key: sk-your-api-key
+```
+
+## 获取你的 API key
+
+1. 登录你的 [LemonData Dashboard](https://lemondata.cc/dashboard)
+2. 打开 **API Keys**
+3. 创建一个新 key
+4. 为其指定一个便于识别的名称
+5. 立即复制它，因为它只会显示一次
 
 <Warning>
-  **安全最佳实践：**
-  - 切勿在客户端代码中暴露 API 密钥
-  - 不要将密钥提交到版本控制系统
-  - 使用环境变量存储密钥
-  - 定期轮换密钥
-  - 删除未使用的密钥
+- 绝不要在客户端代码中暴露 API key
+- 绝不要将 API key 提交到版本控制
+- 使用环境变量或 secret manager
+- 定期轮换 key
+- 删除未使用的 key
 </Warning>
 
-## 使用 API 密钥
+## 使用 API key
 
 <CodeGroup>
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
+curl https://api.lemondata.cc/v1/responses \
   -H "Authorization: Bearer $LEMONDATA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{
+    "model": "gpt-5.4",
+    "input": "Hello!"
+  }'
 ```
 
 ```python Python
@@ -58,55 +68,26 @@ const client = new OpenAI({
 });
 ```
 
-```go Go
-package main
-
-import "github.com/sashabaranov/go-openai"
-
-func main() {
-    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-}
-```
-
-```php PHP
-<?php
-$apiKey = getenv('LEMONDATA_API_KEY');
-
-$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer ' . $apiKey,
-        'Content-Type: application/json'
-    ]
-]);
-```
-
 </CodeGroup>
 
-## API 密钥特性
+## API key 特性
 
 ### 使用限制
 
-您可以为每个 API 密钥设置使用限制，以控制支出：
+你可以为每个 API key 设置使用限制：
 
-| 设置 | 描述 |
+| Setting | Description |
 |---------|-------------|
-| **无限制** | 密钥可以无限制地使用您的账户余额 |
-| **固定限制** | 达到指定金额后，密钥将停止工作 |
+| **No Limit** | key 可无限制地使用你的账户余额 |
+| **Fixed Limit** | key 在达到指定金额后将停止工作 |
 
-### 密钥前缀
+### key 前缀
 
-所有 LemonData API 密钥都以 `sk-` 前缀开头。密钥格式为：
+所有 LemonData API key 都以 `sk-` 开头。
 
-```
-sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+## Anthropic 兼容性
 
-## Anthropic API 兼容性
-
-对于 `/v1/messages` 接口，您可以使用 `x-api-key` 请求头（兼容 Anthropic SDK）：
+对于 `/v1/messages` 端点，Anthropic 风格的请求头可按预期工作：
 
 ```bash
 curl https://api.lemondata.cc/v1/messages \
@@ -114,26 +95,26 @@ curl https://api.lemondata.cc/v1/messages \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4-5",
+    "model": "claude-sonnet-4-6",
     "max_tokens": 1024,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
 <Note>
-  `x-api-key` 请求头仅在 `/v1/messages` 和 `/v1/messages/count_tokens` 接口中受支持。其他接口需要使用 `Authorization: Bearer` 请求头。
+对于兼容 OpenAI 的端点，例如 `/v1/responses`、`/v1/chat/completions`、`/v1/models` 以及大多数其他 LemonData 路由，请使用 `Authorization: Bearer ...`。
 </Note>
 
 ## 错误响应
 
-| 状态码 | 类型 | 代码 | 描述 |
+| Status Code | Type | Code | Description |
 |-------------|------|------|-------------|
-| 401 | `invalid_request_error` | `invalid_api_key` | API 密钥缺失或无效 |
-| 401 | `invalid_request_error` | `expired_api_key` | API 密钥已被撤销 |
+| 401 | `invalid_request_error` | `invalid_api_key` | 缺少或无效的 API key |
+| 401 | `invalid_request_error` | `expired_api_key` | API key 已被撤销 |
 | 402 | `insufficient_quota` | `insufficient_quota` | 账户余额不足 |
-| 402 | `insufficient_quota` | `quota_exceeded` | 已达到 API 密钥使用限制 |
+| 402 | `insufficient_quota` | `quota_exceeded` | 已达到 API key 使用限制 |
 
-错误响应示例：
+示例：
 
 ```json
 {

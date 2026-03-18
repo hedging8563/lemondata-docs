@@ -1,53 +1,48 @@
 ---
-title: "Rate Limits"
-description: "Memahami dan menangani rate limits"
+title: "Batas Rate"
+description: "Memahami dan menangani batas rate"
 ---
 
-## Gambaran Umum
+## Ringkasan
 
-LemonData menerapkan rate limits untuk memastikan penggunaan yang adil dan stabilitas platform. Batasan bervariasi berdasarkan tingkatan akun.
+LemonData menerapkan batas rate untuk memastikan penggunaan yang adil dan stabilitas platform. Batas bervariasi berdasarkan tier akun.
 
-## Tingkatan Rate Limit
+## Tier Batas Rate
 
-| Tingkatan | Permintaan/menit | Deskripsi |
+| Tier | Requests/min | Deskripsi |
 |------|-------------|-------------|
-| **User** | 60 | Tingkatan default untuk semua akun |
-| **Partner** | 300 | Untuk mitra integrasi |
-| **VIP** | 1,000 | Pengguna bervolume tinggi |
+| **User** | 1,000 | Tier default untuk semua akun |
+| **Partner** | 3,000 | Untuk partner integrasi |
+| **VIP** | 10,000 | Pengguna dengan volume tinggi |
 
 <Note>
-  Rate limits dapat berubah sewaktu-waktu. Hubungi support@lemondata.cc untuk batasan khusus.
+  Batas rate dapat berubah. Hubungi support@lemondata.cc untuk batas kustom.
 </Note>
 
-## Header Rate Limit
+## Respons Batas Rate
 
-Setiap respons API menyertakan informasi rate limit:
+Ketika Anda melampaui batas rate, API mengembalikan status code `429` dengan header `Retry-After` yang menunjukkan berapa lama harus menunggu sebelum mencoba lagi.
 
-```
-X-RateLimit-Limit: 60          # Your limit per minute
-X-RateLimit-Remaining: 55      # Requests remaining
-X-RateLimit-Reset: 1234567890  # Unix timestamp when limit resets
-```
+## Batas Rate Terlampaui
 
-## Rate Limit Terlampaui
-
-Saat Anda melampaui batas, Anda akan menerima respons `429`:
+Ketika Anda melampaui batas, Anda akan menerima respons `429`:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
-    "type": "rate_limit_exceeded"
+    "message": "Rate limit exceeded. Please retry later.",
+    "type": "rate_limit_exceeded",
+    "code": "rate_limit_exceeded"
   }
 }
 ```
 
-Dengan header tambahan:
+Respons menyertakan header `Retry-After`:
 ```
 Retry-After: 60  # Seconds to wait before retrying
 ```
 
-## Menangani Rate Limits
+## Menangani Batas Rate
 
 ### Exponential Backoff
 
@@ -78,9 +73,9 @@ def make_request_with_backoff(messages, max_retries=5):
             time.sleep(wait_time)
 ```
 
-### Request Queuing
+### Antrean Request
 
-Untuk aplikasi bervolume tinggi, terapkan antrean permintaan (request queue):
+Untuk aplikasi dengan volume tinggi, terapkan antrean request:
 
 ```python
 import asyncio
@@ -106,7 +101,7 @@ class RateLimitedClient:
         )
 ```
 
-### Batch Processing
+### Pemrosesan Batch
 
 Untuk operasi massal, proses dalam batch dengan jeda:
 
@@ -129,31 +124,31 @@ def process_batch(items, batch_size=50, delay=1):
 
 <AccordionGroup>
   <Accordion title="Pantau penggunaan Anda">
-    Lacak header rate limit untuk tetap berada di bawah batasan secara proaktif.
+    Lacak header batas rate untuk tetap berada di bawah batas secara proaktif.
   </Accordion>
 
   <Accordion title="Terapkan caching">
-    Simpan respons dalam cache untuk permintaan yang identik guna mengurangi panggilan API.
+    Cache respons untuk request yang identik guna mengurangi panggilan API.
   </Accordion>
 
   <Accordion title="Gunakan model yang sesuai">
-    Model yang lebih cepat (seperti gpt-4o-mini) memungkinkan throughput yang lebih tinggi.
+    Model yang lebih cepat (seperti gpt-5-mini) memungkinkan throughput yang lebih tinggi.
   </Accordion>
 
-  <Accordion title="Hubungi kami untuk batasan yang lebih tinggi">
-    Jika Anda membutuhkan batasan yang lebih tinggi, hubungi support@lemondata.cc.
+  <Accordion title="Hubungi kami untuk batas yang lebih tinggi">
+    Jika Anda memerlukan batas yang lebih tinggi, hubungi support@lemondata.cc.
   </Accordion>
 </AccordionGroup>
 
-## Meningkatkan Tingkatan Anda
+## Meningkatkan Tier Anda
 
-Untuk meminta peningkatan tingkatan:
+Untuk mengajukan peningkatan tier:
 
 1. Masuk ke [Dashboard](https://lemondata.cc/dashboard) Anda
 2. Buka **Settings → Account**
-3. Hubungi dukungan dengan kasus penggunaan (use case) Anda
+3. Hubungi support dengan use case Anda
 
 Atau kirim email ke support@lemondata.cc dengan:
 - Email akun Anda
-- Volume permintaan yang diharapkan
-- Deskripsi kasus penggunaan (use case)
+- Perkiraan volume request
+- Deskripsi use case

@@ -5,7 +5,7 @@ description: "优雅地处理 API 错误"
 
 ## 错误响应格式
 
-所有错误都返回一致的 JSON 格式，并带有可选的 [Agent-First 提示](/guides/agent-first-api)：
+所有错误都会返回一致的 JSON 格式，并可选择包含 [Agent-First 提示](/guides/agent-first-api)：
 
 ```json
 {
@@ -23,32 +23,34 @@ description: "优雅地处理 API 错误"
 }
 ```
 
-基础字段（`message`、`type`、`code`、`param`）始终存在。提示字段（`did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after`、`balance_usd`、`estimated_cost_usd`）是用于 AI agent 自我修正的可选扩展。详情请参阅 [Agent-First API 指南](/guides/agent-first-api)。
+基础字段（`message`、`type`、`code`、`param`）始终存在。提示字段（`did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after`、`balance_usd`、`estimated_cost_usd`）是用于 AI agent 自我纠正的可选扩展。详情请参见 [Agent-First API 指南](/guides/agent-first-api)。
+
+兼容 OpenAI 的 endpoint 使用 LemonData 稳定网关的错误类型。兼容 Anthropic 和兼容 Gemini 的 endpoint 使用它们各自原生的错误族和响应结构。
 
 ## HTTP 状态码
 
-| 代码 | 描述 |
+| Code | Description |
 |------|-------------|
-| 400 | Bad Request - 参数无效 |
-| 401 | Unauthorized - API key 无效或缺失 |
-| 402 | Payment Required - 余额不足 |
-| 403 | Forbidden - 拒绝访问或模型不允许 |
-| 404 | Not Found - 未找到模型或资源 |
-| 413 | Payload Too Large - 输入或文件大小超出限制 |
-| 429 | Too Many Requests - 超出速率限制 |
-| 500 | Internal Server Error - 内部服务器错误 |
-| 502 | Bad Gateway - 上游供应商错误 |
-| 503 | Service Unavailable - 所有渠道均失败 |
-| 504 | Gateway Timeout - 请求超时 |
+| 400 | 错误请求 - 参数无效 |
+| 401 | 未授权 - API key 无效或缺失 |
+| 402 | 需要付款 - 余额不足 |
+| 403 | 禁止访问 - 访问被拒绝或模型不被允许 |
+| 404 | 未找到 - 模型或资源未找到 |
+| 413 | 负载过大 - 输入或文件大小超出限制 |
+| 429 | 请求过多 - 超出速率限制 |
+| 500 | 服务器内部错误 |
+| 502 | 错误网关 - 上游 provider 错误 |
+| 503 | 服务不可用 - 服务暂时不可用 |
+| 504 | 网关超时 - 请求超时 |
 
 ## 错误类型
 
-### 身份验证错误 (401)
+### 认证错误 (401)
 
-| 类型 | 代码 | 描述 |
+| Type | Code | Description |
 |------|------|-------------|
 | `invalid_api_key` | `invalid_api_key` | API key 缺失或无效 |
-| `expired_api_key` | `expired_api_key` | API key 已撤销 |
+| `expired_api_key` | `expired_api_key` | API key 已被撤销 |
 
 ```python
 from openai import OpenAI, AuthenticationError
@@ -61,10 +63,10 @@ except AuthenticationError as e:
 
 ### 支付错误 (402)
 
-| 类型 | 代码 | 描述 |
+| Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | 账户余额过低（OpenAI 兼容端点） |
-| `insufficient_balance_error` | `insufficient_balance` | 账户余额过低（Anthropic 兼容端点） |
+| `insufficient_balance` | `insufficient_balance` | 账户余额过低（兼容 OpenAI 的 endpoint） |
+| `insufficient_balance_error` | `insufficient_balance` | 账户余额过低（兼容 Anthropic 的 endpoint） |
 | `quota_exceeded` | `quota_exceeded` | 已达到 API key 使用限制 |
 
 ```python
@@ -79,9 +81,9 @@ except APIStatusError as e:
 
 ### 访问错误 (403)
 
-| 类型 | 代码 | 描述 |
+| Type | Code | Description |
 |------|------|-------------|
-| `access_denied` | `access_denied` | 拒绝访问资源 |
+| `access_denied` | `access_denied` | 对资源的访问被拒绝 |
 | `access_denied` | `model_not_allowed` | 此 API key 不允许使用该模型 |
 
 ```json
@@ -96,10 +98,10 @@ except APIStatusError as e:
 
 ### 验证错误 (400)
 
-| 类型 | 描述 |
+| Type | Description |
 |------|-------------|
 | `invalid_request_error` | 请求参数无效 |
-| `context_length_exceeded` | 输入内容对模型而言过长 |
+| `context_length_exceeded` | 输入对于模型来说过长 |
 | `model_not_found` | 请求的模型不存在 |
 
 ```json
@@ -109,16 +111,16 @@ except APIStatusError as e:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
-    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "did_you_mean": "gpt-5.4",
+    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
 ### 速率限制错误 (429)
 
-当您超出速率限制时：
+当你超出速率限制时：
 
 ```json
 {
@@ -139,9 +141,9 @@ except APIStatusError as e:
 Retry-After: 8
 ```
 
-`Retry-After` header 和 `retry_after` 字段都指示了重试前需要等待的确切秒数。
+`Retry-After` header 和 `retry_after` 字段都表示在重试前需要等待的精确秒数。
 
-### 有效负载过大 (413)
+### 负载过大 (413)
 
 当输入或文件大小超出限制时：
 
@@ -156,19 +158,19 @@ Retry-After: 8
 ```
 
 常见原因：
-- 图像文件过大（最大 20MB）
+- 图片文件过大（最大 20MB）
 - 音频文件过大（最大 25MB）
 - 输入文本超出模型上下文长度
 
 ### 上游错误 (502, 503)
 
-| 类型 | 描述 |
+| Type | Description |
 |------|-------------|
-| `upstream_error` | 供应商返回错误 |
-| `all_channels_failed` | 无可用供应商 |
+| `upstream_error` | provider 返回了错误 |
+| `all_channels_failed` | 没有可用的 provider |
 | `timeout_error` | 请求超时 |
 
-当所有渠道都失败时，响应将包含替代模型：
+当所有通道都失败时，响应会包含替代模型：
 
 ```json
 {
@@ -178,8 +180,8 @@ Retry-After: 8
     "retryable": true,
     "retry_after": 30,
     "alternatives": [
-      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
-      {"id": "gpt-4o", "status": "available", "tags": []}
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
     ],
     "hint": "Retry in 30s or switch to an available model."
   }
@@ -251,7 +253,7 @@ async function chatWithRetry(messages, maxRetries = 3) {
 
 <AccordionGroup>
   <Accordion title="实现指数退避">
-    当受到速率限制时，在重试之间逐渐延长等待时间：
+    当遇到速率限制时，在每次重试之间逐步延长等待时间：
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
@@ -265,7 +267,7 @@ async function chatWithRetry(messages, maxRetries = 3) {
   </Accordion>
 
   <Accordion title="记录错误以便调试">
-    记录完整的错误响应（包括用于支持的请求 ID）：
+    记录完整的错误响应，包括 request ID，以便获得支持：
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
@@ -273,6 +275,7 @@ async function chatWithRetry(messages, maxRetries = 3) {
   </Accordion>
 
   <Accordion title="处理特定于模型的错误">
-    某些模型有特定要求（例如最大 token 数、图像格式）。在发起请求前验证输入。
+    某些模型有特定要求（例如最大 token 数、图片格式）。
+    在发起请求之前先验证输入。
   </Accordion>
 </AccordionGroup>

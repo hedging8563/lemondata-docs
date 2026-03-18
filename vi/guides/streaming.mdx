@@ -1,25 +1,25 @@
 ---
 title: "Streaming"
-description: "Triển khai phản hồi streaming thời gian thực"
+description: "Triển khai phản hồi streaming theo thời gian thực"
 ---
 
 ## Tổng quan
 
-Streaming cho phép bạn nhận các phản hồi từng phần khi chúng được tạo ra, mang lại trải nghiệm người dùng tốt hơn cho các ứng dụng chat.
+Streaming cho phép bạn nhận đầu ra từng phần ngay khi nó được tạo ra, giúp cải thiện độ trễ cảm nhận và trải nghiệm người dùng.
 
-## Bật Streaming
+Đối với các tích hợp kiểu OpenAI mới, hãy ưu tiên **Responses streaming** trước. Nếu framework của bạn vẫn sử dụng Chat Completions streaming, LemonData cũng hỗ trợ lộ trình tương thích đó.
 
-Thiết lập `stream: true` trong request của bạn:
+## Khuyến nghị: Responses Streaming
 
 <CodeGroup>
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
+curl https://api.lemondata.cc/v1/responses \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Write a short poem"}],
+    "model": "gpt-5.4",
+    "input": "Write a short poem.",
     "stream": true
   }'
 ```
@@ -32,15 +32,15 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-stream = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Write a short poem"}],
+stream = client.responses.create(
+    model="gpt-5.4",
+    input="Write a short poem.",
     stream=True
 )
 
-for chunk in stream:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="", flush=True)
+for event in stream:
+    if event.type == "response.output_text.delta":
+        print(event.delta, end="", flush=True)
 ```
 
 ```javascript JavaScript
@@ -51,153 +51,47 @@ const client = new OpenAI({
   baseURL: 'https://api.lemondata.cc/v1'
 });
 
-const stream = await client.chat.completions.create({
-  model: 'gpt-4o',
-  messages: [{ role: 'user', content: 'Write a short poem' }],
+const stream = await client.responses.create({
+  model: 'gpt-5.4',
+  input: 'Write a short poem.',
   stream: true
 });
 
-for await (const chunk of stream) {
-  const content = chunk.choices[0]?.delta?.content;
-  if (content) {
-    process.stdout.write(content);
+for await (const event of stream) {
+  if (event.type === 'response.output_text.delta') {
+    process.stdout.write(event.delta);
   }
 }
 ```
 
-```go Go
-package main
-
-import (
-    "context"
-    "fmt"
-    "io"
-    "github.com/sashabaranov/go-openai"
-)
-
-func main() {
-    config := openai.DefaultConfig("sk-your-api-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-
-    stream, _ := client.CreateChatCompletionStream(
-        context.Background(),
-        openai.ChatCompletionRequest{
-            Model:  "gpt-4o",
-            Messages: []openai.ChatCompletionMessage{
-                {Role: openai.ChatMessageRoleUser, Content: "Write a short poem"},
-            },
-            Stream: true,
-        },
-    )
-    defer stream.Close()
-
-    for {
-        response, err := stream.Recv()
-        if err == io.EOF {
-            break
-        }
-        fmt.Print(response.Choices[0].Delta.Content)
-    }
-}
-```
-
-```php PHP
-<?php
-$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
-
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer sk-your-api-key'
-    ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'gpt-4o',
-        'messages' => [['role' => 'user', 'content' => 'Write a short poem']],
-        'stream' => true
-    ]),
-    CURLOPT_WRITEFUNCTION => function($ch, $data) {
-        echo $data;
-        return strlen($data);
-    }
-]);
-
-curl_exec($ch);
-curl_close($ch);
-```
-
 </CodeGroup>
 
-## Định dạng Phản hồi Stream
+## Chat Completions Streaming
 
-Mỗi chunk trong stream tuân theo định dạng sau:
-
-```
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
-
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":" world"},"finish_reason":null}]}
-
-data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
-
-data: [DONE]
-```
-
-## Xử lý Kết thúc Stream
-
-Stream kết thúc với:
-- `finish_reason: "stop"` - Hoàn thành bình thường
-- `finish_reason: "length"` - Chạm giới hạn `max_tokens`
-- `finish_reason: "tool_calls"` - Model muốn gọi một tool
-- `data: [DONE]` - Tin nhắn cuối cùng
-
-## Thu thập Phản hồi Đầy đủ
-
-Để thu thập phản hồi đầy đủ trong khi streaming:
+Nếu framework của bạn vẫn yêu cầu các chunk SSE từ `/v1/chat/completions`, cách này cũng hoạt động:
 
 ```python
-full_response = ""
+stream = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Write a short poem"}],
+    stream=True
+)
 
 for chunk in stream:
-    if chunk.choices[0].delta.content:
-        content = chunk.choices[0].delta.content
-        full_response += content
+    content = chunk.choices[0].delta.content
+    if content:
         print(content, end="", flush=True)
-
-print(f"\n\nFull response: {full_response}")
 ```
 
-## Streaming Bất đồng bộ (Async)
+## Điều kiện kết thúc stream
 
-Đối với các ứng dụng bất đồng bộ:
+Các điều kiện hoàn tất điển hình:
+- `response.completed` cho các stream của Responses API
+- `finish_reason: "stop"` cho các stream Chat Completions
+- `finish_reason: "length"` khi chạm đến giới hạn token
+- các sự kiện gọi tool/function khi model muốn sử dụng tools
 
-```python
-import asyncio
-from openai import AsyncOpenAI
-
-async def main():
-    client = AsyncOpenAI(
-        api_key="sk-your-api-key",
-        base_url="https://api.lemondata.cc/v1"
-    )
-
-    stream = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "Hello!"}],
-        stream=True
-    )
-
-    async for chunk in stream:
-        if chunk.choices[0].delta.content:
-            print(chunk.choices[0].delta.content, end="")
-
-asyncio.run(main())
-```
-
-## Ví dụ Ứng dụng Web
-
-Đối với một giao diện chat web:
+## Mẫu cho ứng dụng web
 
 ```javascript
 async function streamChat(message) {
@@ -222,19 +116,33 @@ async function streamChat(message) {
     if (done) break;
 
     const chunk = decoder.decode(value);
-    const lines = chunk.split('\n').filter(line => line.startsWith('data: '));
+    const lines = chunk.split('\\n').filter(line => line.startsWith('data: '));
 
     for (const line of lines) {
       const data = line.slice(6);
       if (data === '[DONE]') return;
-
       const parsed = JSON.parse(data);
-      const content = parsed.choices[0]?.delta?.content;
+      const content = parsed.choices?.[0]?.delta?.content;
       if (content) {
-        // Thêm vào giao diện người dùng của bạn
         document.getElementById('output').textContent += content;
       }
     }
   }
 }
 ```
+
+## Thực tiễn tốt nhất
+
+<AccordionGroup>
+  <Accordion title="Ưu tiên Responses streaming cho các bản dựng mới">
+    Sử dụng `/v1/responses` nếu SDK hoặc ứng dụng của bạn đã hỗ trợ. Giữ lại streaming `/v1/chat/completions` cho các tích hợp cần tương thích.
+  </Accordion>
+
+  <Accordion title="Flush đầu ra tăng dần">
+    Nối các chunk delta vào UI hoặc terminal ngay khi chúng đến thay vì chờ toàn bộ phản hồi hoàn tất.
+  </Accordion>
+
+  <Accordion title="Xử lý ngắt kết nối và thử lại">
+    Xem việc rớt mạng và ngắt kết nối từ upstream là các chế độ lỗi bình thường, và kết nối lại một cách cẩn thận cho các phiên chạy dài.
+  </Accordion>
+</AccordionGroup>

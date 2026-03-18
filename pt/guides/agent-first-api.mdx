@@ -1,26 +1,26 @@
 ---
 title: "✨ API Agent-First"
-description: "Dicas de erro estruturadas para que agentes de IA se autocorrijam na primeira tentativa"
+description: "Dicas estruturadas de erro para agentes de IA se autocorrigirem na primeira tentativa de retry"
 ---
 
-## Visão Geral
+## Visão geral
 
-A API Agent-First da LemonData enriquece as respostas de erro com dicas estruturadas que os agentes de IA podem analisar e processar imediatamente — sem buscas na web, sem consultas a documentos, sem adivinhações.
+A API Agent-First da LemonData enriquece respostas de erro com dicas estruturadas que agentes de IA podem analisar e executar imediatamente — sem buscas na web, sem consultar documentação, sem adivinhação.
 
-Cada resposta de erro inclui campos opcionais como `did_you_mean`, `suggestions`, `hint`, `retryable` e `retry_after` dentro do objeto `error` padrão. Esses campos são retrocompatíveis — clientes que não os utilizam não verão diferença.
+Toda resposta de erro inclui campos opcionais como `did_you_mean`, `suggestions`, `hint`, `retryable` e `retry_after` dentro do objeto padrão `error`. Esses campos são compatíveis com versões anteriores — clientes que não os utilizam não veem nenhuma diferença.
 
-## Campos de Dica de Erro
+## Campos de Dicas de Erro
 
 Todos os campos de dica são extensões opcionais dentro do objeto `error`:
 
 | Campo | Tipo | Descrição |
 |-------|------|-------------|
-| `did_you_mean` | `string` | Nome do modelo correspondente mais próximo |
-| `suggestions` | `array` | Modelos recomendados com metadados |
-| `alternatives` | `array` | Modelos alternativos disponíveis no momento |
-| `hint` | `string` | Orientação de próximo passo legível por humanos/agentes |
-| `retryable` | `boolean` | Se tentar a mesma requisição novamente pode ter sucesso |
-| `retry_after` | `number` | Segundos para aguardar antes de tentar novamente |
+| `did_you_mean` | `string` | Nome do model com correspondência mais próxima |
+| `suggestions` | `array` | Models recomendados com metadados |
+| `alternatives` | `array` | Models alternativos atualmente disponíveis |
+| `hint` | `string` | Orientação legível por humanos/agentes para o próximo passo |
+| `retryable` | `boolean` | Se repetir a mesma requisição pode ter sucesso |
+| `retry_after` | `number` | Segundos de espera antes de tentar novamente |
 | `balance_usd` | `number` | Saldo atual da conta em USD |
 | `estimated_cost_usd` | `number` | Custo estimado da requisição que falhou |
 
@@ -28,7 +28,7 @@ Todos os campos de dica são extensões opcionais dentro do objeto `error`:
 
 ### model_not_found (400)
 
-Quando o nome de um modelo não corresponde a nenhum modelo ativo:
+Quando um nome de model não corresponde a nenhum model ativo:
 
 ```json
 {
@@ -37,22 +37,242 @@ Quando o nome de um modelo não corresponde a nenhum modelo ativo:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
+    "did_you_mean": "gpt-5.4",
     "suggestions": [
-      {"id": "gpt-4o"},
-      {"id": "gpt-4o-mini"},
-      {"id": "claude-sonnet-4-5"}
+      {"id": "gpt-5.4"},
+      {"id": "gpt-5-mini"},
+      {"id": "claude-sonnet-4-6"}
     ],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
-A resolução de `did_you_mean` utiliza:
-1. Mapeamento de alias estático (de dados de erro de produção)
-2. Correspondência de string normalizada (remove hifens, insensível a maiúsculas/minúsculas)
+A resolução de `did_you_mean` usa:
+1. Mapeamento estático de aliases (a partir de dados de erro de produção)
+2. Correspondência de string normalizada (remove hífens, sem diferenciar maiúsculas de minúsculas)
 3. Correspondência por distância de edição (limite ≤ 3)
 
 ### insufficient_balance (402)
 
 Quando o saldo da conta é muito baixo para o custo estimado:
+
+```json
+{
+  "error": {
+    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-6, but balance is $0.1200.",
+    "type": "insufficient_balance",
+    "code": "insufficient_balance",
+    "balance_usd": 0.12,
+    "estimated_cost_usd": 0.35,
+    "suggestions": [
+      {"id": "gpt-5-mini"},
+      {"id": "deepseek-v3-2"}
+    ],
+    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-6, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
+  }
+}
+```
+
+`suggestions` contém models mais baratos do que o custo estimado para os quais o agente pode alternar.
+
+### all_channels_failed (503)
+
+Quando todos os canais upstream de um model estão indisponíveis:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
+    ],
+    "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
+  }
+}
+```
+
+<Note>
+`retryable` é `false` quando o motivo é `no_channels` (nenhum canal configurado para este model). É `true` apenas para falhas transitórias, como acionamentos de circuit breaker ou esgotamento de quota.
+</Note>
+
+### rate_limit_exceeded (429)
+
+```json
+{
+  "error": {
+    "message": "Rate limit: 60 rpm exceeded",
+    "type": "rate_limit_exceeded",
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
+  }
+}
+```
+
+O valor de `retry_after` é calculado a partir do tempo real de reset da janela de rate limit.
+
+<Note>
+Endpoints compatíveis com OpenAI usam os tipos de erro públicos estáveis da LemonData, como `rate_limit_exceeded`, `upstream_error` e `all_channels_failed`. Endpoints compatíveis com Anthropic e Gemini usam seus próprios formatos nativos de resposta.
+</Note>
+
+### context_length_exceeded (400)
+
+Quando a entrada excede a janela de contexto do model (erro upstream, enriquecido com dicas):
+
+```json
+{
+  "error": {
+    "message": "This model's maximum context length is 128000 tokens...",
+    "type": "invalid_request_error",
+    "code": "context_length_exceeded",
+    "retryable": false,
+    "suggestions": [
+      {"id": "gemini-2.5-pro"},
+      {"id": "claude-sonnet-4-6"}
+    ],
+    "hint": "Reduce your input or switch to a model with a larger context window."
+  }
+}
+```
+
+## Headers de Endpoint Nativo
+
+Quando você chama `/v1/chat/completions` com um model que possui um endpoint nativo (Anthropic ou Gemini), a **resposta de sucesso** inclui headers de otimização:
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+| Provedor de Model | Endpoint Sugerido | Benefício |
+|---------------|-------------------|---------|
+| Anthropic (Claude) | `/v1/messages` | Sem conversão de formato, pensamento estendido, prompt caching |
+| Google (Gemini) | `/v1beta/gemini` | Sem conversão de formato, grounding, configurações de segurança |
+| OpenAI | — | Chat completions já é o formato nativo |
+
+Esses headers aparecem tanto em respostas com streaming quanto sem streaming.
+
+## Melhorias em /v1/models
+
+Três novos campos na extensão `lemondata` de cada objeto de model:
+
+```json
+{
+  "id": "gpt-5.4",
+  "lemondata": {
+    "category": "chat",
+    "pricing_unit": "per_token",
+    "cache_pricing": {
+      "cache_read_per_1m": "1.25",
+      "cache_write_per_1m": "2.50",
+      "platform_cache_discount": 0.9
+    }
+  }
+}
+```
+
+| Campo | Valores | Descrição |
+|-------|--------|-------------|
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Tipo de model |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Como o model é cobrado |
+| `cache_pricing` | object ou `null` | Preços de prompt cache upstream + desconto de cache semântico da plataforma |
+
+### Filtragem por Categoria
+
+```bash
+GET /v1/models?category=chat          # Chat models only
+GET /v1/models?category=image         # Image generation models
+GET /v1/models?tag=coding&category=chat  # Coding-optimized chat models
+```
+
+## llms.txt
+
+Uma visão geral da API legível por máquina está disponível em:
+
+```
+GET https://api.lemondata.cc/llms.txt
+```
+
+Inclui:
+- Template de primeira chamada com um exemplo funcional
+- Nomes comuns de models (gerados dinamicamente a partir de dados de uso)
+- Todos os 12 endpoints da API
+- Parâmetros de filtro para descoberta de models
+- Orientações de tratamento de erro
+
+Agentes de IA que leem `llms.txt` antes da primeira chamada à API normalmente conseguem ter sucesso na primeira tentativa.
+
+## Uso em Código de Agente
+
+### Python (OpenAI SDK)
+
+```python
+from openai import OpenAI, BadRequestError
+
+client = OpenAI(
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+def smart_chat(messages, model="gpt-4o"):
+    try:
+        return client.chat.completions.create(
+            model=model, messages=messages
+        )
+    except BadRequestError as e:
+        error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
+        # Use did_you_mean for auto-correction
+        if error.get("code") == "model_not_found" and error.get("did_you_mean"):
+            return client.chat.completions.create(
+                model=error["did_you_mean"], messages=messages
+            )
+        raise
+```
+
+### JavaScript (OpenAI SDK)
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-your-key',
+  baseURL: 'https://api.lemondata.cc/v1'
+});
+
+async function smartChat(messages, model = 'gpt-4o') {
+  try {
+    return await client.chat.completions.create({ model, messages });
+  } catch (error) {
+    const err = error?.error;
+    if (err?.code === 'model_not_found' && err?.did_you_mean) {
+      return client.chat.completions.create({
+        model: err.did_you_mean, messages
+      });
+    }
+    throw error;
+  }
+}
+```
+
+## Princípios de Design
+
+<CardGroup cols={2}>
+  <Card title="Falhe rápido, falhe de forma informativa" icon="bolt">
+    Os erros retornam imediatamente com todos os dados de que um agente precisa para se autocorrigir.
+  </Card>
+  <Card title="Sem auto-routing" icon="route">
+    A API nunca substitui silenciosamente por um model diferente. O agente decide.
+  </Card>
+  <Card title="Sugestões orientadas por dados" icon="database">
+    Todas as recomendações vêm de dados de produção, não de listas hardcoded.
+  </Card>
+  <Card title="Compatível com versões anteriores" icon="plug">
+    Todos os campos de dica são opcionais. Clientes existentes não veem nenhuma diferença.
+  </Card>
+</CardGroup>

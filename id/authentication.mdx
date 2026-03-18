@@ -1,31 +1,38 @@
 ---
 title: "Autentikasi"
-description: "Amankan permintaan API Anda dengan API key"
+description: "Amankan permintaan API LemonData Anda dengan API key"
 ---
 
 ## API Key
 
-Semua permintaan API memerlukan autentikasi menggunakan API key. Sertakan key Anda dalam header `Authorization`:
+Semua permintaan API LemonData memerlukan API key.
+
+Untuk endpoint yang kompatibel dengan OpenAI, kirim sebagai:
 
 ```bash
 Authorization: Bearer sk-your-api-key
 ```
 
+Untuk permintaan `/v1/messages` yang kompatibel dengan Anthropic, Anda juga dapat menggunakan:
+
+```bash
+x-api-key: sk-your-api-key
+```
+
 ## Mendapatkan API Key Anda
 
 1. Masuk ke [LemonData Dashboard](https://lemondata.cc/dashboard) Anda
-2. Buka bagian **API Keys**
-3. Klik **Create New Key**
-4. Berikan nama deskriptif untuk key Anda
-5. Salin key tersebut segera - key hanya akan ditampilkan sekali
+2. Buka **API Keys**
+3. Buat key baru
+4. Beri nama yang deskriptif
+5. Salin segera karena hanya ditampilkan satu kali
 
 <Warning>
-  **Praktik Keamanan Terbaik:**
-  - Jangan pernah mengekspos API key dalam kode sisi klien (client-side)
-  - Jangan melakukan commit key ke version control
-  - Gunakan environment variables untuk menyimpan key
-  - Rotasi key secara berkala
-  - Hapus key yang tidak digunakan
+- Jangan pernah mengekspos API key dalam kode sisi klien
+- Jangan pernah melakukan commit API key ke version control
+- Gunakan environment variables atau secret manager
+- Rotasi key secara berkala
+- Hapus key yang tidak digunakan
 </Warning>
 
 ## Menggunakan API Key
@@ -33,10 +40,13 @@ Authorization: Bearer sk-your-api-key
 <CodeGroup>
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
+curl https://api.lemondata.cc/v1/responses \
   -H "Authorization: Bearer $LEMONDATA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
+  -d '{
+    "model": "gpt-5.4",
+    "input": "Hello!"
+  }'
 ```
 
 ```python Python
@@ -58,55 +68,26 @@ const client = new OpenAI({
 });
 ```
 
-```go Go
-package main
-
-import "github.com/sashabaranov/go-openai"
-
-func main() {
-    config := openai.DefaultConfig(os.Getenv("LEMONDATA_API_KEY"))
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-}
-```
-
-```php PHP
-<?php
-$apiKey = getenv('LEMONDATA_API_KEY');
-
-$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer ' . $apiKey,
-        'Content-Type: application/json'
-    ]
-]);
-```
-
 </CodeGroup>
 
 ## Fitur API Key
 
 ### Batas Penggunaan
 
-Anda dapat menetapkan batas penggunaan pada setiap API key untuk mengontrol pengeluaran:
+Anda dapat menetapkan batas penggunaan pada setiap API key:
 
-| Pengaturan | Deskripsi |
+| Setting | Description |
 |---------|-------------|
-| **Tanpa Batas** | Key menggunakan saldo akun Anda tanpa batasan |
-| **Batas Tetap** | Key berhenti berfungsi setelah mencapai jumlah yang ditentukan |
+| **No Limit** | Key menggunakan saldo akun Anda tanpa batasan |
+| **Fixed Limit** | Key berhenti berfungsi setelah mencapai jumlah yang ditentukan |
 
-### Prefiks Key
+### Prefix Key
 
-Semua API key LemonData dimulai dengan prefiks `sk-`. Format key adalah:
+Semua API key LemonData diawali dengan `sk-`.
 
-```
-sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+## Kompatibilitas Anthropic
 
-## Kompatibilitas API Anthropic
-
-Untuk endpoint `/v1/messages`, Anda dapat menggunakan header `x-api-key` (kompatibel dengan Anthropic SDK):
+Untuk endpoint `/v1/messages`, header bergaya Anthropic berfungsi sebagaimana mestinya:
 
 ```bash
 curl https://api.lemondata.cc/v1/messages \
@@ -114,26 +95,26 @@ curl https://api.lemondata.cc/v1/messages \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4-5",
+    "model": "claude-sonnet-4-6",
     "max_tokens": 1024,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
 <Note>
-  Header `x-api-key` hanya didukung pada endpoint `/v1/messages` dan `/v1/messages/count_tokens`. Endpoint lainnya memerlukan header `Authorization: Bearer`.
+Gunakan `Authorization: Bearer ...` untuk endpoint yang kompatibel dengan OpenAI seperti `/v1/responses`, `/v1/chat/completions`, `/v1/models`, dan sebagian besar route LemonData lainnya.
 </Note>
 
 ## Respons Error
 
-| Kode Status | Tipe | Kode | Deskripsi |
+| Status Code | Type | Code | Description |
 |-------------|------|------|-------------|
-| 401 | `invalid_request_error` | `invalid_api_key` | API key hilang atau tidak valid |
+| 401 | `invalid_request_error` | `invalid_api_key` | API key tidak ada atau tidak valid |
 | 401 | `invalid_request_error` | `expired_api_key` | API key telah dicabut |
 | 402 | `insufficient_quota` | `insufficient_quota` | Saldo akun tidak mencukupi |
 | 402 | `insufficient_quota` | `quota_exceeded` | Batas penggunaan API key tercapai |
 
-Contoh respons error:
+Contoh:
 
 ```json
 {

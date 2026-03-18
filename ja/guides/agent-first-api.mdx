@@ -1,34 +1,34 @@
 ---
 title: "✨ Agent-First API"
-description: "AIエージェントが初回のリトライで自己修正できるようにするための、構造化されたエラーヒント"
+description: "AI agent が最初の再試行で自己修正できるようにする構造化エラーヒント"
 ---
 
 ## 概要
 
-LemonDataのAgent-First APIは、AIエージェントが即座に解析して対応できる構造化されたヒントをエラーレスポンスに付加します。ウェブ検索やドキュメントの確認、推測は不要です。
+LemonData の Agent-First API は、AI agent が即座に解析して対応できる構造化ヒントでエラーレスポンスを拡張します — Web 検索も、ドキュメント確認も、推測も不要です。
 
-すべてのエラーレスポンスには、標準の `error` オブジェクト内に `did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after` などのオプションフィールドが含まれます。これらのフィールドは後方互換性があり、これらを使用しないクライアントには影響を与えません。
+すべてのエラーレスポンスには、標準の `error` object 内に `did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after` などの任意フィールドが含まれます。これらのフィールドは後方互換です — 利用しない client には違いはありません。
 
 ## エラーヒントフィールド
 
-すべてのヒントフィールドは、`error` オブジェクト内のオプションの拡張です。
+すべてのヒントフィールドは `error` object 内の任意拡張です:
 
-| フィールド | 型 | 説明 |
+| Field | Type | Description |
 |-------|------|-------------|
-| `did_you_mean` | `string` | 最も近い一致するモデル名 |
-| `suggestions` | `array` | メタデータ付きの推奨モデル |
-| `alternatives` | `array` | 現在利用可能な代替モデル |
-| `hint` | `string` | 人間またはエージェントが読み取り可能な次のステップのガイダンス |
-| `retryable` | `boolean` | 同じリクエストをリトライして成功する可能性があるかどうか |
-| `retry_after` | `number` | リトライ前に待機する秒数 |
-| `balance_usd` | `number` | 現在の米ドル（USD）建てのアカウント残高 |
-| `estimated_cost_usd` | `number` | 失敗したリクエストの推定コスト |
+| `did_you_mean` | `string` | 最も近い一致の model 名 |
+| `suggestions` | `array` | metadata 付きの推奨 model |
+| `alternatives` | `array` | 現在利用可能な代替 model |
+| `hint` | `string` | 人間/agent が読める次の手順のガイダンス |
+| `retryable` | `boolean` | 同じ request を再試行すると成功する可能性があるか |
+| `retry_after` | `number` | 再試行前に待機すべき秒数 |
+| `balance_usd` | `number` | 現在の account 残高（USD） |
+| `estimated_cost_usd` | `number` | 失敗した request の推定コスト |
 
 ## エラーコードの例
 
 ### model_not_found (400)
 
-モデル名がアクティブなモデルと一致しない場合:
+model 名がどのアクティブな model とも一致しない場合:
 
 ```json
 {
@@ -37,48 +37,48 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
+    "did_you_mean": "gpt-5.4",
     "suggestions": [
-      {"id": "gpt-4o"},
-      {"id": "gpt-4o-mini"},
-      {"id": "claude-sonnet-4-5"}
+      {"id": "gpt-5.4"},
+      {"id": "gpt-5-mini"},
+      {"id": "claude-sonnet-4-6"}
     ],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
-`did_you_mean` の解決には以下が使用されます:
-1. 静的エイリアスマッピング（本番環境のエラーデータから）
-2. 正規化された文字列マッチング（ハイフンの除去、大文字小文字を区別しない）
+`did_you_mean` の解決には以下を使用します:
+1. 静的 alias マッピング（本番エラーデータ由来）
+2. 正規化文字列マッチング（ハイフン除去、大文字小文字を区別しない）
 3. 編集距離マッチング（しきい値 ≤ 3）
 
 ### insufficient_balance (402)
 
-アカウント残高が推定コストに対して低すぎる場合:
+推定コストに対して account 残高が低すぎる場合:
 
 ```json
 {
   "error": {
-    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200.",
+    "message": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-6, but balance is $0.1200.",
     "type": "insufficient_balance",
     "code": "insufficient_balance",
     "balance_usd": 0.12,
     "estimated_cost_usd": 0.35,
     "suggestions": [
-      {"id": "gpt-4o-mini"},
-      {"id": "deepseek-chat"}
+      {"id": "gpt-5-mini"},
+      {"id": "deepseek-v3-2"}
     ],
-    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-5, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
+    "hint": "Insufficient balance: need ~$0.3500 for claude-sonnet-4-6, but balance is $0.1200. Try a cheaper model, or top up at https://lemondata.cc/dashboard/billing."
   }
 }
 ```
 
-`suggestions` には、エージェントが切り替え可能な、推定コストよりも安価なモデルが含まれます。
+`suggestions` には、推定コストより安価で、agent が切り替え可能な model が含まれます。
 
 ### all_channels_failed (503)
 
-モデルのすべてのアップストリームチャネルが利用できない場合:
+ある model のすべての upstream channel が利用不可の場合:
 
 ```json
 {
@@ -88,8 +88,8 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
     "retryable": true,
     "retry_after": 30,
     "alternatives": [
-      {"id": "claude-sonnet-4-5", "status": "available", "tags": []},
-      {"id": "gpt-4o", "status": "available", "tags": []}
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
     ],
     "hint": "All channels for 'claude-opus-4-6' are temporarily unavailable. Retry in 30s or try an alternative model."
   }
@@ -97,7 +97,7 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 ```
 
 <Note>
-`retryable` は、理由が `no_channels`（このモデルに設定されたチャネルがない）の場合は `false` になります。サーキットブレーカーの作動やクォータ不足などの一時的な失敗の場合のみ `true` になります。
+理由が `no_channels`（この model に設定された channel がない）の場合、`retryable` は `false` です。`true` になるのは、circuit breaker の発動や quota 枯渇のような一時的障害の場合のみです。
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -115,15 +115,15 @@ LemonDataのAgent-First APIは、AIエージェントが即座に解析して対
 }
 ```
 
-`retry_after` の値は、実際のレート制限ウィンドウのリセット時間から計算されます。
+`retry_after` の値は、実際の rate limit window のリセット時刻から計算されます。
 
 <Note>
-OpenAI互換のエンドポイントは、`rate_limit_exceeded`、`upstream_error`、`all_channels_failed` などのLemonDataの安定したパブリックエラータイプを使用します。Anthropic互換およびGemini互換のエンドポイントは、独自のネイティブレスポンス形式を使用します。
+OpenAI 互換 endpoint は、`rate_limit_exceeded`、`upstream_error`、`all_channels_failed` などの LemonData の安定した公開 error type を使用します。Anthropic 互換および Gemini 互換 endpoint は、それぞれ独自の native response 形式を使用します。
 </Note>
 
 ### context_length_exceeded (400)
 
-入力がモデルのコンテキストウィンドウを超えた場合（アップストリームエラー、ヒントで強化）:
+入力が model の context window を超えた場合（upstream error、ヒントで拡張済み）:
 
 ```json
 {
@@ -134,37 +134,37 @@ OpenAI互換のエンドポイントは、`rate_limit_exceeded`、`upstream_erro
     "retryable": false,
     "suggestions": [
       {"id": "gemini-2.5-pro"},
-      {"id": "claude-sonnet-4-5"}
+      {"id": "claude-sonnet-4-6"}
     ],
     "hint": "Reduce your input or switch to a model with a larger context window."
   }
 }
 ```
 
-## ネイティブエンドポイントヘッダー
+## Native Endpoint ヘッダー
 
-ネイティブエンドポイント（AnthropicまたはGemini）を持つモデルで `/v1/chat/completions` を呼び出すと、**成功レスポンス**に最適化ヘッダーが含まれます:
+`/v1/chat/completions` を native endpoint（Anthropic または Gemini）を持つ model で呼び出すと、**成功レスポンス** には最適化ヘッダーが含まれます:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| モデルプロバイダー | 推奨エンドポイント | メリット |
+| Model Provider | Suggested Endpoint | Benefit |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | フォーマット変換なし、extended thinking、プロンプトキャッシュ |
-| Google (Gemini) | `/v1beta/gemini` | フォーマット変換なし、グラウンディング、安全性設定 |
-| OpenAI | — | Chat completionsがすでにネイティブフォーマットです |
+| Anthropic (Claude) | `/v1/messages` | フォーマット変換なし、extended thinking、prompt caching |
+| Google (Gemini) | `/v1beta/gemini` | フォーマット変換なし、grounding、安全設定 |
+| OpenAI | — | Chat completions はすでに native format |
 
-これらのヘッダーは、ストリーミングと非ストリーミングの両方のレスポンスに表示されます。
+これらのヘッダーは streaming と non-streaming の両方のレスポンスに含まれます。
 
-## /v1/models の機能強化
+## /v1/models の拡張
 
-各モデルオブジェクトの `lemondata` 拡張に含まれる3つの新しいフィールド:
+各 model object の `lemondata` 拡張に 3 つの新しいフィールドが追加されています:
 
 ```json
 {
-  "id": "gpt-4o",
+  "id": "gpt-5.4",
   "lemondata": {
     "category": "chat",
     "pricing_unit": "per_token",
@@ -177,38 +177,38 @@ X-LemonData-Native-Endpoint: /v1/messages
 }
 ```
 
-| フィールド | 値 | 説明 |
+| Field | Values | Description |
 |-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | モデルのタイプ |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | モデルの課金方法 |
-| `cache_pricing` | オブジェクトまたは `null` | アップストリームのプロンプトキャッシュ価格 + プラットフォームのセマンティックキャッシュ割引 |
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | model のタイプ |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | model の課金単位 |
+| `cache_pricing` | object or `null` | upstream prompt cache の価格 + platform semantic cache 割引 |
 
-### カテゴリフィルタリング
+### Category フィルタリング
 
 ```bash
-GET /v1/models?category=chat          # チャットモデルのみ
-GET /v1/models?category=image         # 画像生成モデル
-GET /v1/models?tag=coding&category=chat  # コーディングに最適化されたチャットモデル
+GET /v1/models?category=chat          # Chat models only
+GET /v1/models?category=image         # Image generation models
+GET /v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
 
 ## llms.txt
 
-マシンリーダブルなAPI概要は以下で入手可能です:
+機械可読な API 概要は以下で利用できます:
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
-以下が含まれます:
-- 動作例を含む初回呼び出しテンプレート
-- 一般的なモデル名（使用状況データから動的に生成）
-- 全12個のAPIエンドポイント
-- モデル発見のためのフィルターパラメータ
+含まれる内容:
+- 動作する例を含む初回呼び出しテンプレート
+- 一般的な model 名（使用データから動的生成）
+- 12 個すべての API endpoint
+- model 検索用の filter parameter
 - エラーハンドリングのガイダンス
 
-最初のAPI呼び出しの前に `llms.txt` を読み取るAIエージェントは、通常、最初の試行で成功できます。
+最初の API 呼び出し前に `llms.txt` を読む AI agent は、通常、最初の試行で成功できます。
 
-## エージェントコードでの使用例
+## Agent コードでの利用
 
 ### Python (OpenAI SDK)
 
@@ -227,7 +227,7 @@ def smart_chat(messages, model="gpt-4o"):
         )
     except BadRequestError as e:
         error = e.body.get("error", {}) if isinstance(e.body, dict) else {}
-        # 自動修正に did_you_mean を使用する
+        # Use did_you_mean for auto-correction
         if error.get("code") == "model_not_found" and error.get("did_you_mean"):
             return client.chat.completions.create(
                 model=error["did_you_mean"], messages=messages
@@ -263,16 +263,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## 設計原則
 
 <CardGroup cols={2}>
-  <Card title="迅速に失敗し、有益な情報を返す" icon="bolt">
-    エージェントが自己修正するために必要なすべてのデータとともに、エラーを即座に返します。
+  <Card title="早く失敗し、情報豊富に失敗する" icon="bolt">
+    エラーは、agent が自己修正するために必要なすべてのデータを含めて即座に返されます。
   </Card>
   <Card title="自動ルーティングなし" icon="route">
-    APIが勝手に別のモデルに置き換えることはありません。エージェントが決定します。
+    API が別の model を黙って置き換えることはありません。判断するのは agent です。
   </Card>
-  <Card title="データ駆動型の提案" icon="database">
-    すべての推奨事項は、ハードコードされたリストではなく、本番環境のデータに基づいています。
+  <Card title="データ駆動の提案" icon="database">
+    すべての推奨は、ハードコードされたリストではなく、本番データに基づいています。
   </Card>
-  <Card title="後方互換性" icon="plug">
-    すべてのヒントフィールドはオプションです。既存のクライアントには影響ありません。
+  <Card title="後方互換" icon="plug">
+    すべてのヒントフィールドは任意です。既存の client に違いはありません。
   </Card>
 </CardGroup>

@@ -1,11 +1,11 @@
 ---
-title: "Penanganan Kesalahan"
-description: "Menangani kesalahan API dengan baik"
+title: "Penanganan Error"
+description: "Tangani error API dengan baik"
 ---
 
-## Format Respons Kesalahan
+## Format Respons Error
 
-Semua kesalahan mengembalikan format JSON yang konsisten:
+Semua error mengembalikan format JSON yang konsisten dengan [petunjuk Agent-First](/guides/agent-first-api) opsional:
 
 ```json
 {
@@ -13,34 +13,43 @@ Semua kesalahan mengembalikan format JSON yang konsisten:
     "message": "Human-readable error description",
     "type": "error_type",
     "code": "error_code",
-    "param": "parameter_name"  // Opsional, untuk kesalahan validasi
+    "param": "parameter_name",
+    "did_you_mean": "suggested_model",
+    "suggestions": [{"id": "model-id"}],
+    "hint": "Next step guidance",
+    "retryable": true,
+    "retry_after": 30
   }
 }
 ```
 
+Field dasar (`message`, `type`, `code`, `param`) selalu ada. Field petunjuk (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) adalah ekstensi opsional untuk koreksi mandiri AI agent. Lihat [panduan Agent-First API](/guides/agent-first-api) untuk detail.
+
+Endpoint yang kompatibel dengan OpenAI menggunakan tipe error gateway stabil milik LemonData. Endpoint yang kompatibel dengan Anthropic dan Gemini menggunakan kelompok error native mereka sendiri dan bentuk respons masing-masing.
+
 ## Kode Status HTTP
 
-| Kode | Deskripsi |
+| Code | Description |
 |------|-------------|
 | 400 | Bad Request - Parameter tidak valid |
-| 401 | Unauthorized - API key tidak valid atau hilang |
+| 401 | Unauthorized - API key tidak valid atau tidak ada |
 | 402 | Payment Required - Saldo tidak mencukupi |
 | 403 | Forbidden - Akses ditolak atau model tidak diizinkan |
-| 404 | Not Found - Model atau sumber daya tidak ditemukan |
-| 413 | Payload Too Large - Ukuran input atau file terlampaui |
-| 429 | Too Many Requests - Batas laju (rate limit) terlampaui |
+| 404 | Not Found - Model atau resource tidak ditemukan |
+| 413 | Payload Too Large - Ukuran input atau file melebihi batas |
+| 429 | Too Many Requests - Batas rate limit terlampaui |
 | 500 | Internal Server Error |
-| 502 | Bad Gateway - Kesalahan penyedia upstream |
-| 503 | Service Unavailable - Semua saluran gagal |
-| 504 | Gateway Timeout - Permintaan waktu habis (timed out) |
+| 502 | Bad Gateway - Error dari provider upstream |
+| 503 | Service Unavailable - Layanan sementara tidak tersedia |
+| 504 | Gateway Timeout - Permintaan melebihi batas waktu |
 
-## Tipe Kesalahan
+## Tipe Error
 
-### Kesalahan Autentikasi (401)
+### Error Autentikasi (401)
 
-| Tipe | Kode | Deskripsi |
+| Type | Code | Description |
 |------|------|-------------|
-| `invalid_api_key` | `invalid_api_key` | API key hilang atau tidak valid |
+| `invalid_api_key` | `invalid_api_key` | API key tidak ada atau tidak valid |
 | `expired_api_key` | `expired_api_key` | API key telah dicabut |
 
 ```python
@@ -52,12 +61,12 @@ except AuthenticationError as e:
     print(f"Authentication failed: {e.message}")
 ```
 
-### Kesalahan Pembayaran (402)
+### Error Pembayaran (402)
 
-| Tipe | Kode | Deskripsi |
+| Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | Saldo akun tidak mencukupi (endpoint kompatibel OpenAI) |
-| `insufficient_balance_error` | `insufficient_balance` | Saldo akun tidak mencukupi (endpoint kompatibel Anthropic) |
+| `insufficient_balance` | `insufficient_balance` | Saldo akun terlalu rendah (endpoint yang kompatibel dengan OpenAI) |
+| `insufficient_balance_error` | `insufficient_balance` | Saldo akun terlalu rendah (endpoint yang kompatibel dengan Anthropic) |
 | `quota_exceeded` | `quota_exceeded` | Batas penggunaan API key tercapai |
 
 ```python
@@ -70,11 +79,11 @@ except APIStatusError as e:
         print("Please top up your account balance")
 ```
 
-### Kesalahan Akses (403)
+### Error Akses (403)
 
-| Tipe | Kode | Deskripsi |
+| Type | Code | Description |
 |------|------|-------------|
-| `access_denied` | `access_denied` | Akses ke sumber daya ditolak |
+| `access_denied` | `access_denied` | Akses ke resource ditolak |
 | `access_denied` | `model_not_allowed` | Model tidak diizinkan untuk API key ini |
 
 ```json
@@ -87,9 +96,9 @@ except APIStatusError as e:
 }
 ```
 
-### Kesalahan Validasi (400)
+### Error Validasi (400)
 
-| Tipe | Deskripsi |
+| Type | Description |
 |------|-------------|
 | `invalid_request_error` | Parameter permintaan tidak valid |
 | `context_length_exceeded` | Input terlalu panjang untuk model |
@@ -102,23 +111,26 @@ except APIStatusError as e:
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
-    "did_you_mean": "gpt-4o",
-    "suggestions": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}],
-    "hint": "Did you mean 'gpt-4o'? Use GET /v1/models to list all available models."
+    "did_you_mean": "gpt-5.4",
+    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
+    "hint": "Did you mean 'gpt-5.4'? Use GET /v1/models to list all available models."
   }
 }
 ```
 
-### Kesalahan Batas Laju (429)
+### Error Rate Limit (429)
 
-Saat Anda melampaui batas laju (rate limits):
+Saat Anda melampaui rate limit:
 
 ```json
 {
   "error": {
-    "message": "Rate limit exceeded. Please slow down.",
+    "message": "Rate limit: 60 rpm exceeded",
     "type": "rate_limit_exceeded",
-    "code": "rate_limit_exceeded"
+    "code": "rate_limit_exceeded",
+    "retryable": true,
+    "retry_after": 8,
+    "hint": "Rate limited. Retry after 8s. Current limit: 60/min for user role."
   }
 }
 ```
@@ -126,15 +138,14 @@ Saat Anda melampaui batas laju (rate limits):
 **Header yang disertakan:**
 
 ```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1234567890
-Retry-After: 60
+Retry-After: 8
 ```
+
+Header `Retry-After` dan field `retry_after` keduanya menunjukkan jumlah detik yang tepat untuk menunggu sebelum mencoba lagi.
 
 ### Payload Terlalu Besar (413)
 
-Saat ukuran input atau file melampaui batas:
+Saat ukuran input atau file melebihi batas:
 
 ```json
 {
@@ -149,17 +160,35 @@ Saat ukuran input atau file melampaui batas:
 Penyebab umum:
 - File gambar terlalu besar (maks 20MB)
 - File audio terlalu besar (maks 25MB)
-- Teks input melampaui panjang konteks model
+- Teks input melebihi panjang konteks model
 
-### Kesalahan Upstream (502, 503)
+### Error Upstream (502, 503)
 
-| Tipe | Deskripsi |
+| Type | Description |
 |------|-------------|
-| `upstream_error` | Penyedia mengembalikan kesalahan |
-| `all_channels_failed` | Tidak ada penyedia yang tersedia |
-| `timeout_error` | Permintaan waktu habis (timed out) |
+| `upstream_error` | Provider mengembalikan error |
+| `all_channels_failed` | Tidak ada provider yang tersedia |
+| `timeout_error` | Permintaan melebihi batas waktu |
 
-## Menangani Kesalahan di Python
+Saat semua channel gagal, respons menyertakan model alternatif:
+
+```json
+{
+  "error": {
+    "message": "Model claude-opus-4-6 temporarily unavailable",
+    "code": "all_channels_failed",
+    "retryable": true,
+    "retry_after": 30,
+    "alternatives": [
+      {"id": "claude-sonnet-4-6", "status": "available", "tags": []},
+      {"id": "gpt-5-mini", "status": "available", "tags": []}
+    ],
+    "hint": "Retry in 30s or switch to an available model."
+  }
+}
+```
+
+## Menangani Error di Python
 
 ```python
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
@@ -190,7 +219,7 @@ def chat_with_retry(messages, max_retries=3):
             raise
 ```
 
-## Menangani Kesalahan di JavaScript
+## Menangani Error di JavaScript
 
 ```javascript
 import OpenAI from 'openai';
@@ -224,29 +253,29 @@ async function chatWithRetry(messages, maxRetries = 3) {
 
 <AccordionGroup>
   <Accordion title="Terapkan exponential backoff">
-    Saat terkena pembatasan laju (rate limited), tunggu lebih lama secara progresif di antara percobaan ulang:
+    Saat terkena rate limit, tunggu lebih lama secara bertahap di antara percobaan ulang:
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="Atur timeout">
-    Selalu atur timeout yang wajar untuk menghindari permintaan yang menggantung:
+  <Accordion title="Tetapkan timeout">
+    Selalu tetapkan timeout yang wajar untuk menghindari permintaan yang menggantung:
     ```python
-    client = OpenAI(timeout=60.0)  # Timeout 60 detik
+    client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
-  <Accordion title="Catat log kesalahan untuk debugging">
-    Catat log respons kesalahan lengkap termasuk ID permintaan untuk dukungan:
+  <Accordion title="Catat error untuk debugging">
+    Catat respons error lengkap termasuk request ID untuk dukungan:
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
     ```
   </Accordion>
 
-  <Accordion title="Tangani kesalahan spesifik model">
+  <Accordion title="Tangani error spesifik model">
     Beberapa model memiliki persyaratan khusus (misalnya, token maksimum, format gambar).
-    Validasi input sebelum membuat permintaan.
+    Validasikan input sebelum membuat permintaan.
   </Accordion>
 </AccordionGroup>
