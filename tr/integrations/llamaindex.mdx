@@ -1,65 +1,55 @@
 ---
 title: "LlamaIndex"
-description: "RAG uygulamaları için LemonData'yı LlamaIndex ile entegre edin"
+description: "OpenAI-compatible entegrasyonları kullanarak LemonData'yı LlamaIndex ile entegre edin"
 ---
 
 ## Genel Bakış
 
-LlamaIndex, LLM uygulamaları için bir veri çerçevesidir ve özellikle RAG (Retrieval Augmented Generation) sistemleri oluşturmak için oldukça güçlüdür. LemonData, LlamaIndex'in OpenAI entegrasyonu ile sorunsuz bir şekilde çalışır.
+LemonData için daha sağlam LlamaIndex kurulumu, yerleşik OpenAI sınıfları yerine **OpenAI-compatible entegrasyonlarını** kullanmaktır.
+
+Mevcut LlamaIndex dokümantasyonu, üçüncü taraf OpenAI-compatible endpoint'ler için açıkça `OpenAILike` kullanılmasını önerir; çünkü yerleşik OpenAI sınıfları meta verileri resmi model adlarından çıkarır.
 
 ## Kurulum
 
 ```bash
-pip install llama-index llama-index-llms-openai llama-index-embeddings-openai
+pip install llama-index-core \
+  llama-index-readers-file \
+  llama-index-llms-openai-like \
+  llama-index-embeddings-openai-like
 ```
 
 ## Temel Yapılandırma
 
 ```python
-from llama_index.llms.openai import OpenAI
 from llama_index.core import Settings
+from llama_index.llms.openai_like import OpenAILike
+from llama_index.embeddings.openai_like import OpenAILikeEmbedding
 
-# Configure LLM
-llm = OpenAI(
-    model="gpt-4o",
+llm = OpenAILike(
+    model="gpt-5.4",
+    api_base="https://api.lemondata.cc/v1",
     api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
+    is_chat_model=True,
 )
 
-# Set as default
-Settings.llm = llm
+embed_model = OpenAILikeEmbedding(
+    model_name="text-embedding-3-small",
+    api_base="https://api.lemondata.cc/v1",
+    api_key="sk-your-lemondata-key",
+)
 
-# Simple query
-response = llm.complete("What is LemonData?")
+Settings.llm = llm
+Settings.embed_model = embed_model
+```
+
+## Temel Kullanım
+
+```python
+response = llm.complete("Explain LemonData in one sentence.")
 print(response.text)
 ```
 
-## Farklı Modelleri Kullanma
-
-```python
-# OpenAI GPT-4o
-gpt4 = OpenAI(
-    model="gpt-4o",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Anthropic Claude (via OpenAI-compatible endpoint)
-claude = OpenAI(
-    model="claude-sonnet-4-5",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Google Gemini
-gemini = OpenAI(
-    model="gemini-2.5-flash",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-```
-
-## Sohbet Arayüzü
+## Sohbet
 
 ```python
 from llama_index.core.llms import ChatMessage
@@ -76,62 +66,35 @@ print(response.message.content)
 ## Streaming
 
 ```python
-# Streaming completion
-for chunk in llm.stream_complete("Write a poem about AI"):
-    print(chunk.delta, end="", flush=True)
-
-# Streaming chat
-for chunk in llm.stream_chat(messages):
+for chunk in llm.stream_complete("Write a short poem about AI."):
     print(chunk.delta, end="", flush=True)
 ```
 
-## Embeddings
+## Embedding'ler
 
 ```python
-from llama_index.embeddings.openai import OpenAIEmbedding
-
-embed_model = OpenAIEmbedding(
-    model="text-embedding-3-small",
-    api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Set as default
-Settings.embed_model = embed_model
-
-# Get embeddings
-embeddings = embed_model.get_text_embedding("Hello, world!")
-print(f"Embedding dimension: {len(embeddings)}")
+vector = embed_model.get_text_embedding("Hello, world!")
+print(vector[:5])
 ```
 
-## Belgelerle RAG
+## Dokümanlarla RAG
 
 ```python
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
 
-# Configure settings
-Settings.llm = llm
-Settings.embed_model = embed_model
-
-# Load documents
 documents = SimpleDirectoryReader("./data").load_data()
-
-# Create index
 index = VectorStoreIndex.from_documents(documents)
 
-# Query
 query_engine = index.as_query_engine()
 response = query_engine.query("What is in my documents?")
 print(response)
 ```
 
-## Sohbet Motoru (Chat Engine)
+## Chat Engine
 
 ```python
-# Create chat engine with memory
 chat_engine = index.as_chat_engine(chat_mode="condense_question")
 
-# Multi-turn conversation
 response = chat_engine.chat("What is LemonData?")
 print(response)
 
@@ -139,7 +102,7 @@ response = chat_engine.chat("How many models does it support?")
 print(response)
 ```
 
-## Asenkron Kullanım
+## Async Kullanım
 
 ```python
 import asyncio
@@ -151,34 +114,18 @@ async def main():
 asyncio.run(main())
 ```
 
-## Ortam Değişkenleri
-
-Daha temiz bir kod için ortam değişkenlerini kullanın:
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-export OPENAI_API_BASE="https://api.lemondata.cc/v1"
-```
-
-```python
-from llama_index.llms.openai import OpenAI
-
-# Will automatically use environment variables
-llm = OpenAI(model="gpt-4o")
-```
-
 ## En İyi Uygulamalar
 
 <AccordionGroup>
-  <Accordion title="Doğru modeli seçin">
-    Embedding ve özetleme görevleri için daha hızlı modelleri (GPT-4o-mini) kullanın, güçlü modelleri (GPT-4o, Claude) nihai yanıtlar için ayırın.
+  <Accordion title="LemonData için OpenAILike kullanın">
+    LemonData ve diğer üçüncü taraf OpenAI-compatible gateway'ler için `llama_index.llms.openai_like.OpenAILike` ve `llama_index.embeddings.openai_like.OpenAILikeEmbedding` kullanmayı tercih edin.
   </Accordion>
 
-  <Accordion title="Parça (chunk) boyutunu optimize edin">
-    Parça boyutunu belge türlerinize göre ayarlayın. Yoğun teknik belgeler için daha küçük parçalar, anlatı içerikleri için daha büyük parçalar kullanın.
+  <Accordion title="api_base değerini açıkça ayarlayın">
+    Eski OpenAI environment-variable adlarına güvenmek yerine `api_base="https://api.lemondata.cc/v1"` değerini doğrudan kod içinde geçin.
   </Accordion>
 
-  <Accordion title="Önbelleğe almayı kullanın">
-    Geliştirme sırasında gereksiz API çağrılarından kaçınmak için LlamaIndex önbelleğe alma (caching) özelliğini etkinleştirin.
+  <Accordion title="Model rollerini ayrı tutun">
+    Sentez için chat/reasoning modellerini, retrieval için ise `text-embedding-3-small` veya `text-embedding-3-large` kullanın.
   </Accordion>
 </AccordionGroup>

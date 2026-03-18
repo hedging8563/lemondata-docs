@@ -1,11 +1,15 @@
 ---
 title: "Anthropic SDK"
-description: "ClaudeモデルでAnthropic SDKとLemonDataを使用する"
+description: "Claude ネイティブな Messages API 互換性のために Anthropic SDK で LemonData を使用します"
 ---
 
 ## 概要
 
-LemonDataは、ネイティブのAnthropic Messages API形式をサポートしています。Claudeモデルにアクセスするには、LemonDataで公式のAnthropic SDKを使用してください。
+LemonData はネイティブな Anthropic **Messages API** パスをサポートしているため、Claude モデルに対して公式の Anthropic SDK を直接使用できます。
+
+<Note>
+Anthropic SDK では、base URL として `https://api.lemondata.cc` を使用し、`/v1` を自分で追加しないでください。
+</Note>
 
 ## インストール
 
@@ -15,13 +19,13 @@ LemonDataは、ネイティブのAnthropic Messages API形式をサポートし�
 pip install anthropic
 ```
 
-```bash Node.js
+```bash JavaScript
 npm install @anthropic-ai/sdk
 ```
 
 </CodeGroup>
 
-## 設定
+## クライアントの設定
 
 <CodeGroup>
 
@@ -30,7 +34,7 @@ from anthropic import Anthropic
 
 client = Anthropic(
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc"
+    base_url="https://api.lemondata.cc",
 )
 ```
 
@@ -39,63 +43,45 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic({
   apiKey: 'sk-your-lemondata-key',
-  baseURL: 'https://api.lemondata.cc'
+  baseURL: 'https://api.lemondata.cc',
 });
 ```
 
 </CodeGroup>
 
-<Note>
-  注意: Anthropic SDKの場合、ベースURLは `https://api.lemondata.cc` （`/v1` なし）となります。
-</Note>
-
 ## 基本的な使い方
 
 ```python
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
-        {"role": "user", "content": "Hello, Claude!"}
+        {"role": "user", "content": "Explain LemonData in one sentence."}
     ]
 )
 
 print(message.content[0].text)
 ```
 
-## システムプロンプトの使用
-
-```python
-message = client.messages.create(
-    model="claude-sonnet-4-5",
-    max_tokens=1024,
-    system="You are a helpful coding assistant.",
-    messages=[
-        {"role": "user", "content": "Write a Python function to reverse a string"}
-    ]
-)
-```
-
 ## ストリーミング
 
 ```python
 with client.messages.stream(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
-    messages=[{"role": "user", "content": "Tell me a story"}]
+    messages=[{"role": "user", "content": "Write a short poem about coding."}]
 ) as stream:
     for text in stream.text_stream:
         print(text, end="", flush=True)
 ```
 
-## ビジョン（画像認識）
+## Vision
 
 ```python
 import base64
 
-# URLから
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{
         "role": "user",
@@ -112,12 +98,11 @@ message = client.messages.create(
     }]
 )
 
-# base64から
 with open("image.png", "rb") as f:
     image_data = base64.b64encode(f.read()).decode()
 
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{
         "role": "user",
@@ -136,11 +121,11 @@ message = client.messages.create(
 )
 ```
 
-## ツール利用（Tool Use）
+## ツール使用
 
 ```python
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=[{
         "name": "get_weather",
@@ -148,7 +133,7 @@ message = client.messages.create(
         "input_schema": {
             "type": "object",
             "properties": {
-                "location": {"type": "string", "description": "City name"}
+                "location": {"type": "string"}
             },
             "required": ["location"]
         }
@@ -156,77 +141,56 @@ message = client.messages.create(
     messages=[{"role": "user", "content": "What's the weather in Tokyo?"}]
 )
 
-# ツール利用の確認
 for block in message.content:
     if block.type == "tool_use":
-        print(f"Tool: {block.name}")
-        print(f"Input: {block.input}")
+        print(block.name)
+        print(block.input)
 ```
 
-## 思考の拡張（Extended Thinking - Claude Opus 4.5）
-
-思考の拡張をサポートしているモデルの場合:
+## Extended Thinking
 
 ```python
 message = client.messages.create(
-    model="claude-opus-4-5",
+    model="claude-opus-4-6",
     max_tokens=16000,
     thinking={
         "type": "enabled",
         "budget_tokens": 10000
     },
-    messages=[{"role": "user", "content": "Solve this complex math problem..."}]
+    messages=[{"role": "user", "content": "Solve this complex problem step by step."}]
 )
 
-# 思考ブロックへのアクセス
 for block in message.content:
     if block.type == "thinking":
-        print(f"Thinking: {block.thinking}")
+        print(block.thinking)
     elif block.type == "text":
-        print(f"Response: {block.text}")
+        print(block.text)
 ```
 
-## 利用可能なClaudeモデル
+## 推奨 Claude モデル
 
-| モデル | 最適な用途 |
+| Model | 最適な用途 |
 |-------|----------|
-| `claude-opus-4-5` | 複雑な推論、思考の拡張 |
-| `claude-sonnet-4-5` | 汎用、コーディング |
-| `claude-haiku-4-5` | 高速なレスポンス |
+| `claude-opus-4-6` | 深い推論、長文の分析 |
+| `claude-sonnet-4-6` | コーディング、一般的なアシスタント業務 |
+| `claude-haiku-4-5` | 高速で軽量な応答 |
 
-## エラーハンドリング
+## トラブルシューティング
 
-```python
-from anthropic import APIError, APIStatusError, APIConnectionError
+<AccordionGroup>
+  <Accordion title="誤った Base URL">
+    - `https://api.lemondata.cc` を使用してください
+    - Anthropic SDK の設定時に `/v1` を手動で追加しないでください
+  </Accordion>
 
-try:
-    message = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": "Hello"}]
-    )
-except APIStatusError as e:
-    if e.status_code == 401:
-        print("Invalid API key")
-    elif e.status_code == 429:
-        print("Rate limit exceeded")
-    else:
-        print(f"API error: {e.status_code}")
-except APIConnectionError:
-    print("Connection error")
-except APIError as e:
-    print(f"Unexpected error: {e}")
-```
+  <Accordion title="認証に失敗しました">
+    - LemonData API key が `sk-` で始まっていることを確認してください
+    - キーが LemonData ダッシュボードで有効になっていることを確認してください
+    - カスタムヘッダーを手動で追加するのではなく、認証ヘッダーは Anthropic SDK に管理させてください
+  </Accordion>
 
-## 比較: OpenAI SDK vs Anthropic SDK
-
-どちらもClaudeモデルでLemonDataを使用できます:
-
-| 機能 | OpenAI SDK | Anthropic SDK |
-|---------|-----------|---------------|
-| ベースURL | `https://api.lemondata.cc/v1` | `https://api.lemondata.cc` |
-| エンドポイント | `/chat/completions` | `/v1/messages` |
-| システムプロンプト | `messages`配列内 | 個別の`system`パラメータ |
-| 思考の拡張（Extended Thinking） | 非対応 | 対応 |
-
-好みや既存のコードベースに基づいて選択してください。
+  <Accordion title="モデルが見つかりません">
+    - Claude モデル名が正確であることを確認してください
+    - LemonData のモデルカタログで現在の利用可否を確認してください
+  </Accordion>
+</AccordionGroup>

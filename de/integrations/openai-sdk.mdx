@@ -1,11 +1,17 @@
 ---
 title: "OpenAI SDK"
-description: "Nutzen Sie LemonData mit dem offiziellen OpenAI SDK"
+description: "Verwenden Sie LemonData mit offiziellen OpenAI SDKs und OpenAI-kompatiblen Clients"
 ---
 
-## Übersicht
+## Überblick
 
-LemonData ist vollständig kompatibel mit dem OpenAI SDK. Ändern Sie einfach die Basis-URL und Sie können auf über 300 Modelle zugreifen.
+LemonData funktioniert mit den offiziellen OpenAI SDKs, indem der Client auf `https://api.lemondata.cc/v1` verwiesen wird.
+
+Für neue Projekte sollten Sie die **Responses API** bevorzugen. Behalten Sie **Chat Completions** nur bei, wenn ein Framework, Plugin oder veralteter Codepfad dies weiterhin erwartet.
+
+<Note>
+Für Python, JavaScript und Go gibt es offizielle OpenAI SDKs. PHP funktioniert gut mit OpenAI-kompatiblen Community-Clients, ist jedoch kein offizielles OpenAI SDK.
+</Note>
 
 ## Installation
 
@@ -20,32 +26,21 @@ npm install openai
 ```
 
 ```bash Go
-go get github.com/sashabaranov/go-openai
-```
-
-```bash PHP
-composer require openai-php/client
+go get github.com/openai/openai-go/v3
 ```
 
 </CodeGroup>
 
-## Konfiguration
+## Den Client konfigurieren
 
 <CodeGroup>
-
-```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-lemondata-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
-```
 
 ```python Python
 from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 ```
 
@@ -54,129 +49,137 @@ import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: 'sk-your-lemondata-key',
-  baseURL: 'https://api.lemondata.cc/v1'
+  baseURL: 'https://api.lemondata.cc/v1',
 });
 ```
 
 ```go Go
 package main
 
-import "github.com/sashabaranov/go-openai"
+import (
+    openai "github.com/openai/openai-go/v3"
+    "github.com/openai/openai-go/v3/option"
+)
 
 func main() {
-    config := openai.DefaultConfig("sk-your-lemondata-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-}
-```
+    client := openai.NewClient(
+        option.WithAPIKey("sk-your-lemondata-key"),
+        option.WithBaseURL("https://api.lemondata.cc/v1"),
+    )
 
-```php PHP
-<?php
-$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer sk-your-lemondata-key'
-    ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'gpt-4o',
-        'messages' => [['role' => 'user', 'content' => 'Hello!']]
-    ])
-]);
+    _ = client
+}
 ```
 
 </CodeGroup>
 
-## Chat Completions
+## Empfohlen: Responses API
 
-Funktioniert genau wie die OpenAI API:
+<CodeGroup>
 
-```python
-response = client.chat.completions.create(
-    model="gpt-4o",  # Oder jedes andere LemonData-Modell
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello!"}
-    ],
-    temperature=0.7,
-    max_tokens=1000
+```python Python
+response = client.responses.create(
+    model="gpt-5.4",
+    input="Explain what LemonData does in one sentence."
 )
 
-print(response.choices[0].message.content)
+print(response.output_text)
 ```
 
-## Streaming
+```javascript JavaScript
+const response = await client.responses.create({
+  model: 'gpt-5.4',
+  input: 'Explain what LemonData does in one sentence.',
+});
 
-```python
-stream = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Tell me a story"}],
-    stream=True
+console.log(response.output_text);
+```
+
+```bash cURL
+curl https://api.lemondata.cc/v1/responses \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.4",
+    "input": "Explain what LemonData does in one sentence."
+  }'
+```
+
+</CodeGroup>
+
+## Streaming mit Responses
+
+<CodeGroup>
+
+```python Python
+stream = client.responses.create(
+    model="gpt-5.4",
+    input="Write a short poem about coding.",
+    stream=True,
 )
 
-for chunk in stream:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
+for event in stream:
+    if event.type == "response.output_text.delta":
+        print(event.delta, end="")
 ```
 
-## Function Calling / Tools
+```javascript JavaScript
+const stream = await client.responses.create({
+  model: 'gpt-5.4',
+  input: 'Write a short poem about coding.',
+  stream: true,
+});
+
+for await (const event of stream) {
+  if (event.type === 'response.output_text.delta') {
+    process.stdout.write(event.delta);
+  }
+}
+```
+
+</CodeGroup>
+
+## Tools / Function Calling
 
 ```python
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}],
+response = client.responses.create(
+    model="gpt-5.4",
+    input="What's the weather in Tokyo?",
     tools=[{
         "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "Get weather for a location",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {"type": "string"}
-                },
-                "required": ["location"]
-            }
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string"}
+            },
+            "required": ["location"]
         }
     }]
 )
 
-# Prüfen, ob das Modell eine Funktion aufrufen möchte
-if response.choices[0].message.tool_calls:
-    tool_call = response.choices[0].message.tool_calls[0]
-    print(f"Function: {tool_call.function.name}")
-    print(f"Arguments: {tool_call.function.arguments}")
+for item in response.output:
+    if item.type == "function_call":
+        print(item.name)
+        print(item.arguments)
 ```
 
-## Vision
+## Vision mit Responses
 
 ```python
-response = client.chat.completions.create(
-    model="gpt-4o",  # Oder claude-sonnet-4-5
-    messages=[{
+response = client.responses.create(
+    model="gpt-4o",
+    input=[{
         "role": "user",
         "content": [
-            {"type": "text", "text": "What's in this image?"},
-            {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+            {"type": "input_text", "text": "What's in this image?"},
+            {"type": "input_image", "image_url": "https://example.com/image.jpg"}
         ]
     }]
 )
-```
 
-## Bildgenerierung
-
-```python
-response = client.images.generate(
-    model="dall-e-3",
-    prompt="A white siamese cat",
-    size="1024x1024",
-    quality="standard",
-    n=1
-)
-
-print(response.data[0].url)
+print(response.output_text)
 ```
 
 ## Embeddings
@@ -187,65 +190,47 @@ response = client.embeddings.create(
     input="Hello world"
 )
 
-print(response.data[0].embedding[:5])  # Erste 5 Dimensionen
+print(response.data[0].embedding[:5])
 ```
 
-## Audio - Text to Speech
+## Chat-Completions-Kompatibilität
+
+Wenn Ihr Framework oder Plugin weiterhin Chat Completions erwartet, unterstützt LemonData auch den standardmäßigen OpenAI-kompatiblen Pfad:
 
 ```python
-response = client.audio.speech.create(
-    model="tts-1",
-    voice="alloy",
-    input="Hello, welcome to LemonData!"
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
 )
 
-response.stream_to_file("output.mp3")
+print(response.choices[0].message.content)
 ```
 
-## Audio - Transkription
+<Warning>
+Verwenden Sie Chat Completions nur für die Kompatibilität. Für neue Integrationen sollten Sie `client.responses.create(...)` bevorzugen.
+</Warning>
 
-```python
-with open("audio.mp3", "rb") as audio_file:
-    response = client.audio.transcriptions.create(
-        model="whisper-1",
-        file=audio_file
-    )
+## Fehlerbehebung
 
-print(response.text)
-```
+<AccordionGroup>
+  <Accordion title="Verbindungsfehler">
+    - Vergewissern Sie sich, dass die base URL exakt `https://api.lemondata.cc/v1` ist
+    - Prüfen Sie auf Proxy-Interferenzen oder benutzerdefinierte HTTP-Client-Überschreibungen
+    - Stellen Sie sicher, dass Ihre SDK-Version aktuell ist, bevor Sie das Provider-Verhalten debuggen
+  </Accordion>
 
-## Verwendung verschiedener Modelle
+  <Accordion title="Authentifizierung fehlgeschlagen">
+    - Prüfen Sie, dass Ihr API key mit `sk-` beginnt
+    - Vergewissern Sie sich, dass der key im LemonData-Dashboard aktiv ist
+    - Bestätigen Sie, dass das SDK `Authorization: Bearer ...` sendet
+  </Accordion>
 
-Der entscheidende Vorteil von LemonData ist der Zugriff auf mehrere Anbieter:
-
-```python
-# OpenAI
-response = client.chat.completions.create(model="gpt-4o", messages=messages)
-
-# Anthropic Claude
-response = client.chat.completions.create(model="claude-sonnet-4-5", messages=messages)
-
-# Google Gemini
-response = client.chat.completions.create(model="gemini-2.5-flash", messages=messages)
-
-# DeepSeek
-response = client.chat.completions.create(model="deepseek-r1", messages=messages)
-```
-
-## Fehlerbehandlung
-
-```python
-from openai import APIError, RateLimitError, AuthenticationError
-
-try:
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "Hello"}]
-    )
-except AuthenticationError:
-    print("Ungültiger API-Key")
-except RateLimitError:
-    print("Rate-Limit überschritten, bitte warten")
-except APIError as e:
-    print(f"API-Fehler: {e.status_code} - {e.message}")
-```
+  <Accordion title="Falscher API-Pfad">
+    - `responses.create(...)` sendet Anfragen an `/v1/responses`
+    - `chat.completions.create(...)` sendet Anfragen an `/v1/chat/completions`
+    - Wenn Ihre App heute nur Chat Completions unterstützt, belassen Sie sie auf diesem Kompatibilitätspfad
+  </Accordion>
+</AccordionGroup>

@@ -1,25 +1,26 @@
 ---
 title: "Vercel AI SDK"
-description: "将 LemonData 与适用于 React 和 Next.js 应用程序的 Vercel AI SDK 集成"
+description: "使用 OpenAI-compatible 或 Responses-native provider 将 LemonData 集成到 Vercel AI SDK"
 ---
 
-## 概览
+## 概述
 
-Vercel AI SDK 是一个用于使用 React、Next.js、Vue、Svelte 等构建 AI 驱动的流式应用程序的 TypeScript 工具包。LemonData 通过兼容 OpenAI 的提供程序实现无缝协作。
+对于 LemonData，在 Vercel AI SDK 中最稳定的默认选项是 **OpenAI-compatible provider**。
 
-## 安装
+如果你明确需要 **Responses-native** 行为，可以切换到 OpenAI provider，同时保留相同的 LemonData base URL。
+
+## 推荐默认方案：OpenAI-Compatible Provider
 
 ```bash
-npm install ai @ai-sdk/openai
+npm install ai @ai-sdk/openai-compatible
 ```
 
-## 基础配置
-
 ```typescript
-import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
-const lemondata = createOpenAI({
-  apiKey: 'sk-your-lemondata-key',
+export const lemondata = createOpenAICompatible({
+  name: 'lemondata',
+  apiKey: process.env.LEMONDATA_API_KEY,
   baseURL: 'https://api.lemondata.cc/v1',
 });
 ```
@@ -28,122 +29,29 @@ const lemondata = createOpenAI({
 
 ```typescript
 import { generateText } from 'ai';
+import { lemondata } from './lemondata';
 
 const { text } = await generateText({
-  model: lemondata('gpt-4o'),
-  prompt: 'What is LemonData?',
+  model: lemondata.chatModel('gpt-5.4'),
+  prompt: 'Explain LemonData in one sentence.',
 });
 
 console.log(text);
 ```
 
-## 流式传输文本
+## 流式输出文本
 
 ```typescript
 import { streamText } from 'ai';
+import { lemondata } from './lemondata';
 
 const result = await streamText({
-  model: lemondata('gpt-4o'),
-  prompt: 'Write a poem about AI.',
+  model: lemondata.chatModel('gpt-5.4'),
+  prompt: 'Write a short poem about coding.',
 });
 
 for await (const textPart of result.textStream) {
   process.stdout.write(textPart);
-}
-```
-
-## 聊天消息
-
-```typescript
-import { generateText } from 'ai';
-
-const { text } = await generateText({
-  model: lemondata('gpt-4o'),
-  messages: [
-    { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', content: 'What is the capital of France?' },
-  ],
-});
-```
-
-## 使用不同的模型
-
-```typescript
-// OpenAI GPT-4o
-const gpt4Response = await generateText({
-  model: lemondata('gpt-4o'),
-  prompt: 'Hello!',
-});
-
-// Anthropic Claude
-const claudeResponse = await generateText({
-  model: lemondata('claude-sonnet-4-5'),
-  prompt: 'Hello!',
-});
-
-// Google Gemini
-const geminiResponse = await generateText({
-  model: lemondata('gemini-2.5-flash'),
-  prompt: 'Hello!',
-});
-
-// DeepSeek
-const deepseekResponse = await generateText({
-  model: lemondata('deepseek-r1'),
-  prompt: 'Hello!',
-});
-```
-
-## Next.js API 路由
-
-```typescript
-// app/api/chat/route.ts
-import { createOpenAI } from '@ai-sdk/openai';
-import { streamText } from 'ai';
-
-const lemondata = createOpenAI({
-  apiKey: process.env.LEMONDATA_API_KEY,
-  baseURL: 'https://api.lemondata.cc/v1',
-});
-
-export async function POST(req: Request) {
-  const { messages } = await req.json();
-
-  const result = streamText({
-    model: lemondata('gpt-4o'),
-    messages,
-  });
-
-  return result.toDataStreamResponse();
-}
-```
-
-## React 聊天组件
-
-```tsx
-'use client';
-
-import { useChat } from 'ai/react';
-
-export default function Chat() {
-  const { messages, input, handleInputChange, handleSubmit } = useChat({
-    api: '/api/chat',
-  });
-
-  return (
-    <div>
-      {messages.map((m) => (
-        <div key={m.id}>
-          {m.role}: {m.content}
-        </div>
-      ))}
-
-      <form onSubmit={handleSubmit}>
-        <input value={input} onChange={handleInputChange} />
-        <button type="submit">Send</button>
-      </form>
-    </div>
-  );
 }
 ```
 
@@ -152,22 +60,27 @@ export default function Chat() {
 ```typescript
 import { generateText, tool } from 'ai';
 import { z } from 'zod';
+import { lemondata } from './lemondata';
 
-const { text, toolCalls } = await generateText({
-  model: lemondata('gpt-4o'),
+const result = await generateText({
+  model: lemondata.chatModel('gpt-5.4'),
+  prompt: 'What is the weather in San Francisco?',
   tools: {
     weather: tool({
-      description: 'Get the weather in a location',
+      description: 'Get weather in a location',
       parameters: z.object({
-        location: z.string().describe('The location to get weather for'),
+        location: z.string(),
       }),
-      execute: async ({ location }) => {
-        return { temperature: 72, condition: 'sunny' };
-      },
+      execute: async ({ location }) => ({
+        location,
+        temperature: 72,
+        condition: 'sunny',
+      }),
     }),
   },
-  prompt: 'What is the weather in San Francisco?',
 });
+
+console.log(result.text);
 ```
 
 ## 结构化输出
@@ -175,19 +88,48 @@ const { text, toolCalls } = await generateText({
 ```typescript
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { lemondata } from './lemondata';
 
 const { object } = await generateObject({
-  model: lemondata('gpt-4o'),
+  model: lemondata.chatModel('gpt-5.4'),
   schema: z.object({
     name: z.string(),
-    age: z.number(),
-    email: z.string().email(),
+    role: z.string(),
   }),
-  prompt: 'Generate a fake user profile.',
+  prompt: 'Generate a fake developer profile.',
 });
 
 console.log(object);
 ```
+
+## 如果你明确需要 Responses-Native 行为
+
+```bash
+npm install ai @ai-sdk/openai
+```
+
+```typescript
+import { createOpenAI } from '@ai-sdk/openai';
+
+export const lemondataResponses = createOpenAI({
+  apiKey: process.env.LEMONDATA_API_KEY,
+  baseURL: 'https://api.lemondata.cc/v1',
+});
+```
+
+```typescript
+import { generateText } from 'ai';
+import { lemondataResponses } from './lemondata-responses';
+
+const { text } = await generateText({
+  model: lemondataResponses('gpt-5.4'),
+  prompt: 'Explain LemonData in one sentence.',
+});
+```
+
+<Note>
+对于代理式集成，使用 `@ai-sdk/openai-compatible` 作为安全的默认选项。仅当你明确希望使用基于 `/v1/responses` 构建的 provider 路径时，才切换到 `@ai-sdk/openai`。
+</Note>
 
 ## 环境变量
 
@@ -196,25 +138,18 @@ console.log(object);
 LEMONDATA_API_KEY=sk-your-lemondata-key
 ```
 
-```typescript
-const lemondata = createOpenAI({
-  apiKey: process.env.LEMONDATA_API_KEY,
-  baseURL: 'https://api.lemondata.cc/v1',
-});
-```
-
 ## 最佳实践
 
 <AccordionGroup>
-  <Accordion title="使用流式传输以获得更好的用户体验">
-    始终在聊天应用程序中使用流式传输，以提供实时反馈。
+  <Accordion title="优先使用 openai-compatible">
+    对于第三方网关和代理后端，`@ai-sdk/openai-compatible` 通常是最稳妥、最不容易产生意外的起点。
   </Accordion>
 
-  <Accordion title="优雅地处理错误">
-    在 React 组件中实现适当的错误边界。
+  <Accordion title="仅在需要时切换到 Responses">
+    如果你需要与 `/v1/responses` 绑定的 provider 行为，请有意识地切换 provider package，而不是在同一个 client 中混用这两种模式。
   </Accordion>
 
-  <Accordion title="保护您的 API 密钥安全">
-    切勿在客户端代码中暴露您的 API 密钥。请始终使用服务器端 API 路由。
+  <Accordion title="在服务器端保存密钥">
+    不要在客户端代码中暴露你的 LemonData API key。请将 provider 设置放在服务器文件或 API 路由中。
   </Accordion>
 </AccordionGroup>

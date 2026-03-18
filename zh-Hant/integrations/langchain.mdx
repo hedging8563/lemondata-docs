@@ -1,68 +1,68 @@
 ---
 title: "LangChain"
-description: "將 LemonData 與 LangChain 整合"
+description: "使用標準 OpenAI 相容的 chat 與 embeddings 將 LemonData 整合至 LangChain"
 ---
 
 ## 概覽
 
-LangChain 是一個用於構建 LLM 應用程式的熱門框架。LemonData 可與 LangChain 的 OpenAI 整合無縫協作。
+當你使用標準 OpenAI 相容的 chat 與 embeddings 介面時，LemonData 能與 LangChain 的 `ChatOpenAI` 和 `OpenAIEmbeddings` 整合良好。
+
+<Note>
+目前的 LangChain 文件指出，`ChatOpenAI` 針對官方 OpenAI 相容的 request/response 格式。如果你需要供應商特有的非標準 response 欄位，請使用供應商專用的 LangChain 整合，而不是依賴 `ChatOpenAI`。
+</Note>
 
 ## 安裝
 
 ```bash
-pip install langchain langchain-openai
+pip install langchain langchain-openai langchain-community faiss-cpu
 ```
 
-## 基礎配置
+## 基本設定
 
 ```python
 from langchain_openai import ChatOpenAI
 
 llm = ChatOpenAI(
-    model="gpt-4o",
+    model="gpt-5.4",
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-response = llm.invoke("Hello, how are you?")
+response = llm.invoke("Explain LemonData in one sentence.")
 print(response.content)
 ```
 
-## 使用不同的模型
-
-存取任何 LemonData 模型：
+## 使用不同模型
 
 ```python
-# OpenAI GPT-4o
-gpt4 = ChatOpenAI(
-    model="gpt-4o",
+from langchain_openai import ChatOpenAI
+
+gpt = ChatOpenAI(
+    model="gpt-5.4",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# Anthropic Claude
 claude = ChatOpenAI(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# Google Gemini
 gemini = ChatOpenAI(
     model="gemini-2.5-flash",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# DeepSeek
 deepseek = ChatOpenAI(
     model="deepseek-r1",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 ```
 
-## 使用訊息紀錄進行對話
+## 訊息歷史
 
 ```python
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -76,47 +76,30 @@ response = llm.invoke(messages)
 print(response.content)
 ```
 
-## 串流 (Streaming)
+## 串流
 
 ```python
-for chunk in llm.stream("Write a poem about coding"):
-    print(chunk.content, end="", flush=True)
+for chunk in llm.stream("Write a short poem about coding."):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
 ```
 
-## 非同步用法
+## Embeddings
 
 ```python
-import asyncio
+from langchain_openai import OpenAIEmbeddings
 
-async def main():
-    response = await llm.ainvoke("Hello!")
-    print(response.content)
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+)
 
-asyncio.run(main())
+vector = embeddings.embed_query("Hello world")
+print(vector[:5])
 ```
 
-## 鏈 (Chains)
-
-```python
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful assistant that translates {input_language} to {output_language}."),
-    ("human", "{text}")
-])
-
-chain = prompt | llm | StrOutputParser()
-
-result = chain.invoke({
-    "input_language": "English",
-    "output_language": "French",
-    "text": "Hello, how are you?"
-})
-print(result)
-```
-
-## RAG (檢索增強生成)
+## 簡單的 RAG 範例
 
 ```python
 from langchain_openai import OpenAIEmbeddings
@@ -124,25 +107,23 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
-# Embeddings
 embeddings = OpenAIEmbeddings(
     model="text-embedding-3-small",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# Create vector store
-texts = ["LemonData supports 300+ AI models", "API is OpenAI compatible"]
+texts = [
+    "LemonData provides one API for many AI models.",
+    "LemonData supports OpenAI-compatible integrations."
+]
+
 vectorstore = FAISS.from_texts(texts, embeddings)
 retriever = vectorstore.as_retriever()
 
-# RAG chain
-template = """Answer based on context:
-{context}
-
-Question: {question}
-"""
-prompt = ChatPromptTemplate.from_template(template)
+prompt = ChatPromptTemplate.from_template(
+    "Answer using the context below.\\n\\nContext:\\n{context}\\n\\nQuestion:\\n{question}"
+)
 
 rag_chain = (
     {"context": retriever, "question": RunnablePassthrough()}
@@ -150,14 +131,14 @@ rag_chain = (
     | llm
 )
 
-response = rag_chain.invoke("How many models does LemonData support?")
+response = rag_chain.invoke("What does LemonData provide?")
 print(response.content)
 ```
 
-## 代理 (Agents)
+## Agents
 
 <Note>
-  LangChain 中的 agent API 正在不斷演進。對於新專案，請考慮使用 [LangGraph](https://python.langchain.com/docs/langgraph) 以獲得更靈活的代理架構。
+對於新的 agentic 專案，LangChain 建議考慮使用 LangGraph，以便對長時間執行與使用工具的工作流程進行更明確的控制。
 </Note>
 
 ```python
@@ -185,47 +166,18 @@ result = executor.invoke({"input": "Search for LemonData pricing"})
 print(result["output"])
 ```
 
-## 環境變數
-
-為了使程式碼更簡潔，請使用環境變數：
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-export OPENAI_API_BASE="https://api.lemondata.cc/v1"
-```
-
-```python
-from langchain_openai import ChatOpenAI
-
-# Will automatically use environment variables
-llm = ChatOpenAI(model="gpt-4o")
-```
-
-## 回呼 (Callbacks) 與追蹤
-
-```python
-from langchain_core.callbacks import StdOutCallbackHandler
-
-llm = ChatOpenAI(
-    model="gpt-4o",
-    api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1",
-    callbacks=[StdOutCallbackHandler()]
-)
-```
-
-## 最佳實踐
+## 最佳實務
 
 <AccordionGroup>
-  <Accordion title="根據成本選擇合適的模型">
-    在鏈中使用較便宜的模型 (GPT-4o-mini) 處理簡單任務。
+  <Accordion title="明確傳入 base_url">
+    最可靠的 LemonData 設定方式，是直接將 `base_url="https://api.lemondata.cc/v1"` 傳給 `ChatOpenAI` 和 `OpenAIEmbeddings`，而不是依賴較舊的環境變數別名。
   </Accordion>
 
-  <Accordion title="實作重試機制">
-    LangChain 針對暫時性錯誤內建了重試邏輯。
+  <Accordion title="在此使用標準功能">
+    請在 `ChatOpenAI` 上使用標準的 chat、tool calling、streaming 與 embeddings 功能。如果你需要供應商原生的額外功能，請切換到該供應商自己的 LangChain 整合。
   </Accordion>
 
-  <Accordion title="監控 token 使用量">
-    使用回呼 (callbacks) 來追蹤 token 消耗。
+  <Accordion title="檢索使用較便宜的模型">
+    在檢索階段使用像 `text-embedding-3-small` 這樣的 embedding 模型，並將更強大的 chat 模型保留給最終回答步驟。
   </Accordion>
 </AccordionGroup>

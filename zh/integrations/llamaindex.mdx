@@ -1,65 +1,55 @@
 ---
 title: "LlamaIndex"
-description: "将 LemonData 与 LlamaIndex 集成以构建 RAG 应用"
+description: "使用 OpenAI-compatible 集成将 LemonData 与 LlamaIndex 集成"
 ---
 
-## 概览
+## 概述
 
-LlamaIndex 是一个用于 LLM 应用的数据框架，在构建 RAG（检索增强生成）系统方面功能尤为强大。LemonData 可以与 LlamaIndex 的 OpenAI 集成无缝协作。
+对于 LemonData，更稳健的 LlamaIndex 配置方式是使用 **OpenAI-compatible 集成**，而不是内置的 OpenAI 类。
+
+当前的 LlamaIndex 文档明确推荐针对第三方 OpenAI-compatible 端点使用 `OpenAILike`，因为内置的 OpenAI 类会根据官方模型名称推断元数据。
 
 ## 安装
 
 ```bash
-pip install llama-index llama-index-llms-openai llama-index-embeddings-openai
+pip install llama-index-core \
+  llama-index-readers-file \
+  llama-index-llms-openai-like \
+  llama-index-embeddings-openai-like
 ```
 
 ## 基础配置
 
 ```python
-from llama_index.llms.openai import OpenAI
 from llama_index.core import Settings
+from llama_index.llms.openai_like import OpenAILike
+from llama_index.embeddings.openai_like import OpenAILikeEmbedding
 
-# Configure LLM
-llm = OpenAI(
-    model="gpt-4o",
+llm = OpenAILike(
+    model="gpt-5.4",
+    api_base="https://api.lemondata.cc/v1",
     api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
+    is_chat_model=True,
 )
 
-# Set as default
-Settings.llm = llm
+embed_model = OpenAILikeEmbedding(
+    model_name="text-embedding-3-small",
+    api_base="https://api.lemondata.cc/v1",
+    api_key="sk-your-lemondata-key",
+)
 
-# Simple query
-response = llm.complete("What is LemonData?")
+Settings.llm = llm
+Settings.embed_model = embed_model
+```
+
+## 基本用法
+
+```python
+response = llm.complete("Explain LemonData in one sentence.")
 print(response.text)
 ```
 
-## 使用不同模型
-
-```python
-# OpenAI GPT-4o
-gpt4 = OpenAI(
-    model="gpt-4o",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Anthropic Claude (via OpenAI-compatible endpoint)
-claude = OpenAI(
-    model="claude-sonnet-4-5",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Google Gemini
-gemini = OpenAI(
-    model="gemini-2.5-flash",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-```
-
-## 对话接口
+## 聊天
 
 ```python
 from llama_index.core.llms import ChatMessage
@@ -73,65 +63,38 @@ response = llm.chat(messages)
 print(response.message.content)
 ```
 
-## 流式传输
+## 流式输出
 
 ```python
-# Streaming completion
-for chunk in llm.stream_complete("Write a poem about AI"):
-    print(chunk.delta, end="", flush=True)
-
-# Streaming chat
-for chunk in llm.stream_chat(messages):
+for chunk in llm.stream_complete("Write a short poem about AI."):
     print(chunk.delta, end="", flush=True)
 ```
 
 ## Embeddings
 
 ```python
-from llama_index.embeddings.openai import OpenAIEmbedding
-
-embed_model = OpenAIEmbedding(
-    model="text-embedding-3-small",
-    api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Set as default
-Settings.embed_model = embed_model
-
-# Get embeddings
-embeddings = embed_model.get_text_embedding("Hello, world!")
-print(f"Embedding dimension: {len(embeddings)}")
+vector = embed_model.get_text_embedding("Hello, world!")
+print(vector[:5])
 ```
 
-## 使用文档构建 RAG
+## 使用文档进行 RAG
 
 ```python
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
 
-# Configure settings
-Settings.llm = llm
-Settings.embed_model = embed_model
-
-# Load documents
 documents = SimpleDirectoryReader("./data").load_data()
-
-# Create index
 index = VectorStoreIndex.from_documents(documents)
 
-# Query
 query_engine = index.as_query_engine()
 response = query_engine.query("What is in my documents?")
 print(response)
 ```
 
-## 对话引擎
+## 聊天引擎
 
 ```python
-# Create chat engine with memory
 chat_engine = index.as_chat_engine(chat_mode="condense_question")
 
-# Multi-turn conversation
 response = chat_engine.chat("What is LemonData?")
 print(response)
 
@@ -151,34 +114,18 @@ async def main():
 asyncio.run(main())
 ```
 
-## 环境变量
-
-为了使代码更整洁，请使用环境变量：
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-export OPENAI_API_BASE="https://api.lemondata.cc/v1"
-```
-
-```python
-from llama_index.llms.openai import OpenAI
-
-# Will automatically use environment variables
-llm = OpenAI(model="gpt-4o")
-```
-
 ## 最佳实践
 
 <AccordionGroup>
-  <Accordion title="选择合适的模型">
-    对于嵌入和摘要任务，请使用速度更快的模型 (GPT-4o-mini)；对于最终回答，请保留性能更强大的模型 (GPT-4o, Claude)。
+  <Accordion title="对 LemonData 使用 OpenAILike">
+    对于 LemonData 和其他第三方 OpenAI-compatible 网关，优先使用 `llama_index.llms.openai_like.OpenAILike` 和 `llama_index.embeddings.openai_like.OpenAILikeEmbedding`。
   </Accordion>
 
-  <Accordion title="优化分块大小">
-    根据您的文档类型调整分块大小。对于密集的技术文档，使用较小的分块；对于叙述性内容，使用较大的分块。
+  <Accordion title="显式设置 api_base">
+    直接在代码中传入 `api_base="https://api.lemondata.cc/v1"`，而不要依赖较旧的 OpenAI 环境变量名称。
   </Accordion>
 
-  <Accordion title="使用缓存">
-    启用 LlamaIndex 缓存，以避免在开发过程中产生冗余的 API 调用。
+  <Accordion title="区分不同模型角色">
+    使用聊天/推理模型进行综合生成，使用 `text-embedding-3-small` 或 `text-embedding-3-large` 进行检索。
   </Accordion>
 </AccordionGroup>

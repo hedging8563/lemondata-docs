@@ -1,11 +1,15 @@
 ---
-title: "Anthropic SDK"
-description: "Use o LemonData com o Anthropic SDK para modelos Claude"
+title: "SDK da Anthropic"
+description: "Use o LemonData com o SDK da Anthropic para compatibilidade nativa com a Messages API do Claude"
 ---
 
-## Visão Geral
+## Visão geral
 
-O LemonData suporta o formato nativo da Anthropic Messages API. Use o Anthropic SDK oficial com o LemonData para acessar os modelos Claude.
+O LemonData oferece suporte ao caminho nativo da **Messages API** da Anthropic, para que você possa usar diretamente o SDK oficial da Anthropic para modelos Claude.
+
+<Note>
+Para o SDK da Anthropic, use `https://api.lemondata.cc` como base URL, sem adicionar `/v1` manualmente.
+</Note>
 
 ## Instalação
 
@@ -15,13 +19,13 @@ O LemonData suporta o formato nativo da Anthropic Messages API. Use o Anthropic 
 pip install anthropic
 ```
 
-```bash Node.js
+```bash JavaScript
 npm install @anthropic-ai/sdk
 ```
 
 </CodeGroup>
 
-## Configuração
+## Configure o cliente
 
 <CodeGroup>
 
@@ -30,7 +34,7 @@ from anthropic import Anthropic
 
 client = Anthropic(
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc"
+    base_url="https://api.lemondata.cc",
 )
 ```
 
@@ -39,50 +43,33 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic({
   apiKey: 'sk-your-lemondata-key',
-  baseURL: 'https://api.lemondata.cc'
+  baseURL: 'https://api.lemondata.cc',
 });
 ```
 
 </CodeGroup>
 
-<Note>
-  Nota: A URL base é `https://api.lemondata.cc` (sem `/v1`) para o Anthropic SDK.
-</Note>
-
-## Uso Básico
+## Uso básico
 
 ```python
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
-        {"role": "user", "content": "Hello, Claude!"}
+        {"role": "user", "content": "Explain LemonData in one sentence."}
     ]
 )
 
 print(message.content[0].text)
 ```
 
-## Com System Prompt
-
-```python
-message = client.messages.create(
-    model="claude-sonnet-4-5",
-    max_tokens=1024,
-    system="You are a helpful coding assistant.",
-    messages=[
-        {"role": "user", "content": "Write a Python function to reverse a string"}
-    ]
-)
-```
-
 ## Streaming
 
 ```python
 with client.messages.stream(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
-    messages=[{"role": "user", "content": "Tell me a story"}]
+    messages=[{"role": "user", "content": "Write a short poem about coding."}]
 ) as stream:
     for text in stream.text_stream:
         print(text, end="", flush=True)
@@ -93,9 +80,8 @@ with client.messages.stream(
 ```python
 import base64
 
-# From URL
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{
         "role": "user",
@@ -106,3 +92,105 @@ message = client.messages.create(
                 "source": {
                     "type": "url",
                     "url": "https://example.com/image.jpg"
+                }
+            }
+        ]
+    }]
+)
+
+with open("image.png", "rb") as f:
+    image_data = base64.b64encode(f.read()).decode()
+
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Describe this image"},
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": image_data
+                }
+            }
+        ]
+    }]
+)
+```
+
+## Uso de ferramentas
+
+```python
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=[{
+        "name": "get_weather",
+        "description": "Get the weather for a location",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string"}
+            },
+            "required": ["location"]
+        }
+    }],
+    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}]
+)
+
+for block in message.content:
+    if block.type == "tool_use":
+        print(block.name)
+        print(block.input)
+```
+
+## Raciocínio estendido
+
+```python
+message = client.messages.create(
+    model="claude-opus-4-6",
+    max_tokens=16000,
+    thinking={
+        "type": "enabled",
+        "budget_tokens": 10000
+    },
+    messages=[{"role": "user", "content": "Solve this complex problem step by step."}]
+)
+
+for block in message.content:
+    if block.type == "thinking":
+        print(block.thinking)
+    elif block.type == "text":
+        print(block.text)
+```
+
+## Modelos Claude recomendados
+
+| Model | Melhor para |
+|-------|----------|
+| `claude-opus-4-6` | Raciocínio profundo, análise de longo formato |
+| `claude-sonnet-4-6` | Programação, tarefas gerais de assistente |
+| `claude-haiku-4-5` | Respostas rápidas e leves |
+
+## Solução de problemas
+
+<AccordionGroup>
+  <Accordion title="Base URL incorreta">
+    - Use `https://api.lemondata.cc`
+    - Não adicione `/v1` manualmente ao configurar o SDK da Anthropic
+  </Accordion>
+
+  <Accordion title="Falha na autenticação">
+    - Verifique se sua chave de API do LemonData começa com `sk-`
+    - Confirme que a chave está ativa no dashboard do LemonData
+    - Deixe o SDK da Anthropic gerenciar o cabeçalho de autenticação em vez de adicionar headers personalizados manualmente
+  </Accordion>
+
+  <Accordion title="Modelo não encontrado">
+    - Verifique o nome do modelo Claude exatamente
+    - Confira a disponibilidade atual no catálogo de modelos do LemonData
+  </Accordion>
+</AccordionGroup>

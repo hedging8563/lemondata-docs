@@ -1,11 +1,15 @@
 ---
 title: "Anthropic SDK"
-description: "在 Claude 模型中通过 Anthropic SDK 使用 LemonData"
+description: "使用 LemonData 配合 Anthropic SDK，以获得与 Claude 原生 Messages API 的兼容性"
 ---
 
-## 概览
+## 概述
 
-LemonData 支持原生的 Anthropic Messages API 格式。通过 LemonData 使用官方 Anthropic SDK 即可访问 Claude 模型。
+LemonData 支持原生 Anthropic **Messages API** 路径，因此你可以直接使用官方 Anthropic SDK 来调用 Claude 模型。
+
+<Note>
+对于 Anthropic SDK，请使用 `https://api.lemondata.cc` 作为 base URL，不要自行追加 `/v1`。
+</Note>
 
 ## 安装
 
@@ -15,13 +19,13 @@ LemonData 支持原生的 Anthropic Messages API 格式。通过 LemonData 使�
 pip install anthropic
 ```
 
-```bash Node.js
+```bash JavaScript
 npm install @anthropic-ai/sdk
 ```
 
 </CodeGroup>
 
-## 配置
+## 配置客户端
 
 <CodeGroup>
 
@@ -30,7 +34,7 @@ from anthropic import Anthropic
 
 client = Anthropic(
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc"
+    base_url="https://api.lemondata.cc",
 )
 ```
 
@@ -39,63 +43,45 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic({
   apiKey: 'sk-your-lemondata-key',
-  baseURL: 'https://api.lemondata.cc'
+  baseURL: 'https://api.lemondata.cc',
 });
 ```
 
 </CodeGroup>
 
-<Note>
-  注意：对于 Anthropic SDK，base URL 为 `https://api.lemondata.cc`（不包含 `/v1`）。
-</Note>
-
-## 基础用法
+## 基本用法
 
 ```python
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[
-        {"role": "user", "content": "Hello, Claude!"}
+        {"role": "user", "content": "Explain LemonData in one sentence."}
     ]
 )
 
 print(message.content[0].text)
 ```
 
-## 使用 System Prompt
-
-```python
-message = client.messages.create(
-    model="claude-sonnet-4-5",
-    max_tokens=1024,
-    system="You are a helpful coding assistant.",
-    messages=[
-        {"role": "user", "content": "Write a Python function to reverse a string"}
-    ]
-)
-```
-
 ## 流式传输
 
 ```python
 with client.messages.stream(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
-    messages=[{"role": "user", "content": "Tell me a story"}]
+    messages=[{"role": "user", "content": "Write a short poem about coding."}]
 ) as stream:
     for text in stream.text_stream:
         print(text, end="", flush=True)
 ```
 
-## 视觉 (Vision)
+## 视觉
 
 ```python
 import base64
 
-# 来自 URL
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{
         "role": "user",
@@ -112,12 +98,11 @@ message = client.messages.create(
     }]
 )
 
-# 来自 base64
 with open("image.png", "rb") as f:
     image_data = base64.b64encode(f.read()).decode()
 
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{
         "role": "user",
@@ -136,11 +121,11 @@ message = client.messages.create(
 )
 ```
 
-## 工具调用 (Tool Use)
+## 工具使用
 
 ```python
 message = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     tools=[{
         "name": "get_weather",
@@ -148,7 +133,7 @@ message = client.messages.create(
         "input_schema": {
             "type": "object",
             "properties": {
-                "location": {"type": "string", "description": "City name"}
+                "location": {"type": "string"}
             },
             "required": ["location"]
         }
@@ -156,77 +141,56 @@ message = client.messages.create(
     messages=[{"role": "user", "content": "What's the weather in Tokyo?"}]
 )
 
-# 检查工具调用
 for block in message.content:
     if block.type == "tool_use":
-        print(f"Tool: {block.name}")
-        print(f"Input: {block.input}")
+        print(block.name)
+        print(block.input)
 ```
 
-## 深度思考 (Extended Thinking) (Claude Opus 4.5)
-
-对于支持深度思考的模型：
+## 扩展思考
 
 ```python
 message = client.messages.create(
-    model="claude-opus-4-5",
+    model="claude-opus-4-6",
     max_tokens=16000,
     thinking={
         "type": "enabled",
         "budget_tokens": 10000
     },
-    messages=[{"role": "user", "content": "Solve this complex math problem..."}]
+    messages=[{"role": "user", "content": "Solve this complex problem step by step."}]
 )
 
-# 访问思考区块
 for block in message.content:
     if block.type == "thinking":
-        print(f"Thinking: {block.thinking}")
+        print(block.thinking)
     elif block.type == "text":
-        print(f"Response: {block.text}")
+        print(block.text)
 ```
 
-## 可用的 Claude 模型
+## 推荐的 Claude 模型
 
-| 模型 | 最适用于 |
+| Model | 最适合 |
 |-------|----------|
-| `claude-opus-4-5` | 复杂推理，深度思考 |
-| `claude-sonnet-4-5` | 通用场景，编程 |
-| `claude-haiku-4-5` | 快速响应 |
+| `claude-opus-4-6` | 深度推理、长篇分析 |
+| `claude-sonnet-4-6` | 编码、通用助手任务 |
+| `claude-haiku-4-5` | 快速、轻量级响应 |
 
-## 错误处理
+## 故障排查
 
-```python
-from anthropic import APIError, APIStatusError, APIConnectionError
+<AccordionGroup>
+  <Accordion title="错误的 Base URL">
+    - 使用 `https://api.lemondata.cc`
+    - 在配置 Anthropic SDK 时，不要手动追加 `/v1`
+  </Accordion>
 
-try:
-    message = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": "Hello"}]
-    )
-except APIStatusError as e:
-    if e.status_code == 401:
-        print("Invalid API key")
-    elif e.status_code == 429:
-        print("Rate limit exceeded")
-    else:
-        print(f"API error: {e.status_code}")
-except APIConnectionError:
-    print("Connection error")
-except APIError as e:
-    print(f"Unexpected error: {e}")
-```
+  <Accordion title="身份验证失败">
+    - 检查你的 LemonData API key 是否以 `sk-` 开头
+    - 确认该 key 已在 LemonData dashboard 中启用
+    - 让 Anthropic SDK 管理 auth header，而不是手动添加自定义 headers
+  </Accordion>
 
-## 对比：OpenAI SDK vs Anthropic SDK
-
-两者均可配合 LemonData 用于 Claude 模型：
-
-| 特性 | OpenAI SDK | Anthropic SDK |
-|---------|-----------|---------------|
-| Base URL | `https://api.lemondata.cc/v1` | `https://api.lemondata.cc` |
-| Endpoint | `/chat/completions` | `/v1/messages` |
-| System prompt | 在 `messages` 数组中 | 独立的 `system` 参数 |
-| 深度思考 (Extended thinking) | 不支持 | 支持 |
-
-请根据您的偏好或现有代码库进行选择。
+  <Accordion title="未找到模型">
+    - 精确核对 Claude 模型名称
+    - 在 LemonData 模型目录中检查当前可用性
+  </Accordion>
+</AccordionGroup>

@@ -1,11 +1,17 @@
 ---
 title: "SDK OpenAI"
-description: "Utilisez LemonData avec le SDK OpenAI officiel"
+description: "Utilisez LemonData avec les SDK OpenAI officiels et les clients compatibles OpenAI"
 ---
 
-## Aperçu
+## Vue d’ensemble
 
-LemonData est entièrement compatible avec le SDK OpenAI. Il suffit de modifier l'URL de base pour accéder à plus de 300 modèles.
+LemonData fonctionne avec les SDK OpenAI officiels en pointant le client vers `https://api.lemondata.cc/v1`.
+
+Pour les nouveaux projets, privilégiez l’**API Responses**. Conservez **Chat Completions** uniquement lorsqu’un framework, plugin ou chemin de code hérité l’attend encore.
+
+<Note>
+Python, JavaScript et Go disposent de SDK OpenAI officiels. PHP fonctionne bien avec des clients communautaires compatibles OpenAI, mais il ne s’agit pas d’un SDK OpenAI officiel.
+</Note>
 
 ## Installation
 
@@ -20,32 +26,21 @@ npm install openai
 ```
 
 ```bash Go
-go get github.com/sashabaranov/go-openai
-```
-
-```bash PHP
-composer require openai-php/client
+go get github.com/openai/openai-go/v3
 ```
 
 </CodeGroup>
 
-## Configuration
+## Configurer le client
 
 <CodeGroup>
-
-```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-lemondata-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
-```
 
 ```python Python
 from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 ```
 
@@ -54,48 +49,188 @@ import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: 'sk-your-lemondata-key',
-  baseURL: 'https://api.lemondata.cc/v1'
+  baseURL: 'https://api.lemondata.cc/v1',
 });
 ```
 
 ```go Go
 package main
 
-import "github.com/sashabaranov/go-openai"
+import (
+    openai "github.com/openai/openai-go/v3"
+    "github.com/openai/openai-go/v3/option"
+)
 
 func main() {
-    config := openai.DefaultConfig("sk-your-lemondata-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-}
-```
+    client := openai.NewClient(
+        option.WithAPIKey("sk-your-lemondata-key"),
+        option.WithBaseURL("https://api.lemondata.cc/v1"),
+    )
 
-```php PHP
-<?php
-$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer sk-your-lemondata-key'
-    ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'gpt-4o',
-        'messages' => [['role' => 'user', 'content' => 'Hello!']]
-    ])
-]);
+    _ = client
+}
 ```
 
 </CodeGroup>
 
-## Chat Completions
+## Recommandé : API Responses
 
-Fonctionne exactement comme l'API OpenAI :
+<CodeGroup>
+
+```python Python
+response = client.responses.create(
+    model="gpt-5.4",
+    input="Explain what LemonData does in one sentence."
+)
+
+print(response.output_text)
+```
+
+```javascript JavaScript
+const response = await client.responses.create({
+  model: 'gpt-5.4',
+  input: 'Explain what LemonData does in one sentence.',
+});
+
+console.log(response.output_text);
+```
+
+```bash cURL
+curl https://api.lemondata.cc/v1/responses \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.4",
+    "input": "Explain what LemonData does in one sentence."
+  }'
+```
+
+</CodeGroup>
+
+## Streaming avec Responses
+
+<CodeGroup>
+
+```python Python
+stream = client.responses.create(
+    model="gpt-5.4",
+    input="Write a short poem about coding.",
+    stream=True,
+)
+
+for event in stream:
+    if event.type == "response.output_text.delta":
+        print(event.delta, end="")
+```
+
+```javascript JavaScript
+const stream = await client.responses.create({
+  model: 'gpt-5.4',
+  input: 'Write a short poem about coding.',
+  stream: true,
+});
+
+for await (const event of stream) {
+  if (event.type === 'response.output_text.delta') {
+    process.stdout.write(event.delta);
+  }
+}
+```
+
+</CodeGroup>
+
+## Outils / Appel de fonction
+
+```python
+response = client.responses.create(
+    model="gpt-5.4",
+    input="What's the weather in Tokyo?",
+    tools=[{
+        "type": "function",
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string"}
+            },
+            "required": ["location"]
+        }
+    }]
+)
+
+for item in response.output:
+    if item.type == "function_call":
+        print(item.name)
+        print(item.arguments)
+```
+
+## Vision avec Responses
+
+```python
+response = client.responses.create(
+    model="gpt-4o",
+    input=[{
+        "role": "user",
+        "content": [
+            {"type": "input_text", "text": "What's in this image?"},
+            {"type": "input_image", "image_url": "https://example.com/image.jpg"}
+        ]
+    }]
+)
+
+print(response.output_text)
+```
+
+## Embeddings
+
+```python
+response = client.embeddings.create(
+    model="text-embedding-3-small",
+    input="Hello world"
+)
+
+print(response.data[0].embedding[:5])
+```
+
+## Compatibilité Chat Completions
+
+Si votre framework ou plugin attend encore Chat Completions, LemonData prend également en charge le chemin standard compatible OpenAI :
 
 ```python
 response = client.chat.completions.create(
-    model="gpt-4o",  # Or any LemonData model
+    model="gpt-4o",
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user",
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+
+print(response.choices[0].message.content)
+```
+
+<Warning>
+Utilisez Chat Completions uniquement pour la compatibilité. Pour les nouvelles intégrations, privilégiez `client.responses.create(...)`.
+</Warning>
+
+## Dépannage
+
+<AccordionGroup>
+  <Accordion title="Erreur de connexion">
+    - Vérifiez que l’URL de base est exactement `https://api.lemondata.cc/v1`
+    - Vérifiez qu’il n’y a pas d’interférence d’un proxy ou de surcharge personnalisée du client HTTP
+    - Assurez-vous que votre version du SDK est à jour avant d’analyser le comportement du fournisseur
+  </Accordion>
+
+  <Accordion title="Échec de l’authentification">
+    - Vérifiez que votre clé API commence par `sk-`
+    - Vérifiez que la clé est active dans le tableau de bord LemonData
+    - Confirmez que le SDK envoie bien `Authorization: Bearer ...`
+  </Accordion>
+
+  <Accordion title="Chemin d’API incorrect">
+    - `responses.create(...)` envoie les requêtes vers `/v1/responses`
+    - `chat.completions.create(...)` envoie les requêtes vers `/v1/chat/completions`
+    - Si votre application ne prend en charge que Chat Completions aujourd’hui, conservez ce chemin de compatibilité
+  </Accordion>
+</AccordionGroup>

@@ -1,11 +1,17 @@
 ---
 title: "OpenAI SDK"
-description: "公式の OpenAI SDK で LemonData を使用する"
+description: "公式 OpenAI SDK と OpenAI 互換クライアントで LemonData を使用します"
 ---
 
 ## 概要
 
-LemonData は OpenAI SDK と完全に互換性があります。ベース URL を変更するだけで、300 以上のモデルにアクセスできます。
+LemonData は、クライアントの向き先を `https://api.lemondata.cc/v1` に設定することで、公式 OpenAI SDK と連携して動作します。
+
+新しいプロジェクトでは、**Responses API** を優先してください。フレームワーク、plugin、またはレガシーコードパスが引き続き必要としている場合にのみ、**Chat Completions** を使用してください。
+
+<Note>
+Python、JavaScript、Go には公式 OpenAI SDK があります。PHP は OpenAI 互換のコミュニティクライアントで問題なく動作しますが、公式 OpenAI SDK ではありません。
+</Note>
 
 ## インストール
 
@@ -20,32 +26,21 @@ npm install openai
 ```
 
 ```bash Go
-go get github.com/sashabaranov/go-openai
-```
-
-```bash PHP
-composer require openai-php/client
+go get github.com/openai/openai-go/v3
 ```
 
 </CodeGroup>
 
-## 設定
+## クライアントの設定
 
 <CodeGroup>
-
-```bash cURL
-curl https://api.lemondata.cc/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-lemondata-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello!"}]}'
-```
 
 ```python Python
 from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 ```
 
@@ -54,132 +49,140 @@ import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: 'sk-your-lemondata-key',
-  baseURL: 'https://api.lemondata.cc/v1'
+  baseURL: 'https://api.lemondata.cc/v1',
 });
 ```
 
 ```go Go
 package main
 
-import "github.com/sashabaranov/go-openai"
+import (
+    openai "github.com/openai/openai-go/v3"
+    "github.com/openai/openai-go/v3/option"
+)
 
 func main() {
-    config := openai.DefaultConfig("sk-your-lemondata-key")
-    config.BaseURL = "https://api.lemondata.cc/v1"
-    client := openai.NewClientWithConfig(config)
-}
-```
+    client := openai.NewClient(
+        option.WithAPIKey("sk-your-lemondata-key"),
+        option.WithBaseURL("https://api.lemondata.cc/v1"),
+    )
 
-```php PHP
-<?php
-$ch = curl_init('https://api.lemondata.cc/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer sk-your-lemondata-key'
-    ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'gpt-4o',
-        'messages' => [['role' => 'user', 'content' => 'Hello!']]
-    ])
-]);
+    _ = client
+}
 ```
 
 </CodeGroup>
 
-## チャットコンプリーション
+## 推奨: Responses API
 
-OpenAI API とまったく同じように動作します：
+<CodeGroup>
 
-```python
-response = client.chat.completions.create(
-    model="gpt-4o",  # または任意の LemonData モデル
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello!"}
-    ],
-    temperature=0.7,
-    max_tokens=1000
+```python Python
+response = client.responses.create(
+    model="gpt-5.4",
+    input="Explain what LemonData does in one sentence."
 )
 
-print(response.choices[0].message.content)
+print(response.output_text)
 ```
 
-## ストリーミング
+```javascript JavaScript
+const response = await client.responses.create({
+  model: 'gpt-5.4',
+  input: 'Explain what LemonData does in one sentence.',
+});
 
-```python
-stream = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Tell me a story"}],
-    stream=True
+console.log(response.output_text);
+```
+
+```bash cURL
+curl https://api.lemondata.cc/v1/responses \
+  -H "Authorization: Bearer sk-your-lemondata-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.4",
+    "input": "Explain what LemonData does in one sentence."
+  }'
+```
+
+</CodeGroup>
+
+## Responses でのストリーミング
+
+<CodeGroup>
+
+```python Python
+stream = client.responses.create(
+    model="gpt-5.4",
+    input="Write a short poem about coding.",
+    stream=True,
 )
 
-for chunk in stream:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
+for event in stream:
+    if event.type == "response.output_text.delta":
+        print(event.delta, end="")
 ```
 
-## 関数呼び出し / ツール
+```javascript JavaScript
+const stream = await client.responses.create({
+  model: 'gpt-5.4',
+  input: 'Write a short poem about coding.',
+  stream: true,
+});
+
+for await (const event of stream) {
+  if (event.type === 'response.output_text.delta') {
+    process.stdout.write(event.delta);
+  }
+}
+```
+
+</CodeGroup>
+
+## Tools / Function Calling
 
 ```python
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}],
+response = client.responses.create(
+    model="gpt-5.4",
+    input="What's the weather in Tokyo?",
     tools=[{
         "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "Get weather for a location",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {"type": "string"}
-                },
-                "required": ["location"]
-            }
+        "name": "get_weather",
+        "description": "Get weather for a location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string"}
+            },
+            "required": ["location"]
         }
     }]
 )
 
-# モデルが関数を呼び出したいか確認
-if response.choices[0].message.tool_calls:
-    tool_call = response.choices[0].message.tool_calls[0]
-    print(f"Function: {tool_call.function.name}")
-    print(f"Arguments: {tool_call.function.arguments}")
+for item in response.output:
+    if item.type == "function_call":
+        print(item.name)
+        print(item.arguments)
 ```
 
-## Vision
+## Responses での Vision
 
 ```python
-response = client.chat.completions.create(
-    model="gpt-4o",  # または claude-sonnet-4-5
-    messages=[{
+response = client.responses.create(
+    model="gpt-4o",
+    input=[{
         "role": "user",
         "content": [
-            {"type": "text", "text": "What's in this image?"},
-            {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+            {"type": "input_text", "text": "What's in this image?"},
+            {"type": "input_image", "image_url": "https://example.com/image.jpg"}
         ]
     }]
 )
+
+print(response.output_text)
 ```
 
-## 画像生成
-
-```python
-response = client.images.generate(
-    model="dall-e-3",
-    prompt="A white siamese cat",
-    size="1024x1024",
-    quality="standard",
-    n=1
-)
-
-print(response.data[0].url)
-```
-
-## エンベディング
+## Embeddings
 
 ```python
 response = client.embeddings.create(
@@ -187,65 +190,47 @@ response = client.embeddings.create(
     input="Hello world"
 )
 
-print(response.data[0].embedding[:5])  # 最初の 5 次元
+print(response.data[0].embedding[:5])
 ```
 
-## オーディオ - テキスト読み上げ
+## Chat Completions 互換性
+
+お使いのフレームワークまたは plugin が引き続き Chat Completions を必要とする場合、LemonData は標準の OpenAI 互換パスもサポートしています。
 
 ```python
-response = client.audio.speech.create(
-    model="tts-1",
-    voice="alloy",
-    input="Hello, welcome to LemonData!"
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
 )
 
-response.stream_to_file("output.mp3")
+print(response.choices[0].message.content)
 ```
 
-## オーディオ - 文字起こし
+<Warning>
+互換性のためにのみ Chat Completions を使用してください。新しい統合では、`client.responses.create(...)` を優先してください。
+</Warning>
 
-```python
-with open("audio.mp3", "rb") as audio_file:
-    response = client.audio.transcriptions.create(
-        model="whisper-1",
-        file=audio_file
-    )
+## トラブルシューティング
 
-print(response.text)
-```
+<AccordionGroup>
+  <Accordion title="接続エラー">
+    - base URL が正確に `https://api.lemondata.cc/v1` であることを確認してください
+    - proxy の干渉やカスタム HTTP クライアントのオーバーライドを確認してください
+    - プロバイダーの動作をデバッグする前に、SDK のバージョンが最新であることを確認してください
+  </Accordion>
 
-## 異なるモデルの使用
+  <Accordion title="認証失敗">
+    - API キーが `sk-` で始まっていることを確認してください
+    - LemonData ダッシュボードでキーが有効になっていることを確認してください
+    - SDK が `Authorization: Bearer ...` を送信していることを確認してください
+  </Accordion>
 
-LemonData の主な利点は、複数のプロバイダーにアクセスできることです：
-
-```python
-# OpenAI
-response = client.chat.completions.create(model="gpt-4o", messages=messages)
-
-# Anthropic Claude
-response = client.chat.completions.create(model="claude-sonnet-4-5", messages=messages)
-
-# Google Gemini
-response = client.chat.completions.create(model="gemini-2.5-flash", messages=messages)
-
-# DeepSeek
-response = client.chat.completions.create(model="deepseek-r1", messages=messages)
-```
-
-## エラーハンドリング
-
-```python
-from openai import APIError, RateLimitError, AuthenticationError
-
-try:
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "Hello"}]
-    )
-except AuthenticationError:
-    print("Invalid API key")
-except RateLimitError:
-    print("Rate limit exceeded, please wait")
-except APIError as e:
-    print(f"API error: {e.status_code} - {e.message}")
-```
+  <Accordion title="誤った API パス">
+    - `responses.create(...)` は `/v1/responses` にリクエストを送信します
+    - `chat.completions.create(...)` は `/v1/chat/completions` にリクエストを送信します
+    - 現時点でアプリが Chat Completions のみをサポートしている場合は、その互換パスを使用し続けてください
+  </Accordion>
+</AccordionGroup>

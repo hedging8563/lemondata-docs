@@ -1,65 +1,55 @@
 ---
 title: "LlamaIndex"
-description: "RAG 애플리케이션을 위해 LemonData를 LlamaIndex와 통합하기"
+description: "OpenAI-compatible 통합을 사용하여 LemonData를 LlamaIndex와 통합합니다"
 ---
 
 ## 개요
 
-LlamaIndex는 LLM 애플리케이션을 위한 데이터 프레임워크로, 특히 RAG(Retrieval Augmented Generation) 시스템 구축에 강력합니다. LemonData는 LlamaIndex의 OpenAI 통합과 원활하게 작동합니다.
+LemonData의 경우, 더 안정적인 LlamaIndex 설정 방법은 내장 OpenAI 클래스 대신 **OpenAI-compatible 통합**을 사용하는 것입니다.
+
+현재 LlamaIndex 문서는 공식 모델 이름에서 메타데이터를 추론하는 내장 OpenAI 클래스 대신, 서드파티 OpenAI-compatible endpoint에 대해 `OpenAILike` 사용을 명시적으로 권장합니다.
 
 ## 설치
 
 ```bash
-pip install llama-index llama-index-llms-openai llama-index-embeddings-openai
+pip install llama-index-core \
+  llama-index-readers-file \
+  llama-index-llms-openai-like \
+  llama-index-embeddings-openai-like
 ```
 
-## 기본 설정
+## 기본 구성
 
 ```python
-from llama_index.llms.openai import OpenAI
 from llama_index.core import Settings
+from llama_index.llms.openai_like import OpenAILike
+from llama_index.embeddings.openai_like import OpenAILikeEmbedding
 
-# Configure LLM
-llm = OpenAI(
-    model="gpt-4o",
+llm = OpenAILike(
+    model="gpt-5.4",
+    api_base="https://api.lemondata.cc/v1",
     api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
+    is_chat_model=True,
 )
 
-# Set as default
-Settings.llm = llm
+embed_model = OpenAILikeEmbedding(
+    model_name="text-embedding-3-small",
+    api_base="https://api.lemondata.cc/v1",
+    api_key="sk-your-lemondata-key",
+)
 
-# Simple query
-response = llm.complete("What is LemonData?")
+Settings.llm = llm
+Settings.embed_model = embed_model
+```
+
+## 기본 사용법
+
+```python
+response = llm.complete("Explain LemonData in one sentence.")
 print(response.text)
 ```
 
-## 다양한 모델 사용하기
-
-```python
-# OpenAI GPT-4o
-gpt4 = OpenAI(
-    model="gpt-4o",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Anthropic Claude (via OpenAI-compatible endpoint)
-claude = OpenAI(
-    model="claude-sonnet-4-5",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Google Gemini
-gemini = OpenAI(
-    model="gemini-2.5-flash",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-```
-
-## 채팅 인터페이스
+## 채팅
 
 ```python
 from llama_index.core.llms import ChatMessage
@@ -76,62 +66,35 @@ print(response.message.content)
 ## 스트리밍
 
 ```python
-# Streaming completion
-for chunk in llm.stream_complete("Write a poem about AI"):
-    print(chunk.delta, end="", flush=True)
-
-# Streaming chat
-for chunk in llm.stream_chat(messages):
+for chunk in llm.stream_complete("Write a short poem about AI."):
     print(chunk.delta, end="", flush=True)
 ```
 
-## 임베딩
+## Embedding
 
 ```python
-from llama_index.embeddings.openai import OpenAIEmbedding
-
-embed_model = OpenAIEmbedding(
-    model="text-embedding-3-small",
-    api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Set as default
-Settings.embed_model = embed_model
-
-# Get embeddings
-embeddings = embed_model.get_text_embedding("Hello, world!")
-print(f"Embedding dimension: {len(embeddings)}")
+vector = embed_model.get_text_embedding("Hello, world!")
+print(vector[:5])
 ```
 
-## 문서를 활용한 RAG
+## 문서를 사용한 RAG
 
 ```python
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
 
-# Configure settings
-Settings.llm = llm
-Settings.embed_model = embed_model
-
-# Load documents
 documents = SimpleDirectoryReader("./data").load_data()
-
-# Create index
 index = VectorStoreIndex.from_documents(documents)
 
-# Query
 query_engine = index.as_query_engine()
 response = query_engine.query("What is in my documents?")
 print(response)
 ```
 
-## 채팅 엔진
+## Chat Engine
 
 ```python
-# Create chat engine with memory
 chat_engine = index.as_chat_engine(chat_mode="condense_question")
 
-# Multi-turn conversation
 response = chat_engine.chat("What is LemonData?")
 print(response)
 
@@ -151,34 +114,18 @@ async def main():
 asyncio.run(main())
 ```
 
-## 환경 변수
-
-더 깔끔한 코드를 위해 환경 변수를 사용하세요:
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-export OPENAI_API_BASE="https://api.lemondata.cc/v1"
-```
-
-```python
-from llama_index.llms.openai import OpenAI
-
-# Will automatically use environment variables
-llm = OpenAI(model="gpt-4o")
-```
-
-## 권장 사항
+## 모범 사례
 
 <AccordionGroup>
-  <Accordion title="적절한 모델 선택하기">
-    임베딩 및 요약 작업에는 더 빠른 모델(GPT-4o-mini)을 사용하고, 최종 응답에는 강력한 모델(GPT-4o, Claude)을 할당하세요.
+  <Accordion title="LemonData에는 OpenAILike를 사용하세요">
+    LemonData 및 기타 서드파티 OpenAI-compatible gateway에는 `llama_index.llms.openai_like.OpenAILike`와 `llama_index.embeddings.openai_like.OpenAILikeEmbedding` 사용을 권장합니다.
   </Accordion>
 
-  <Accordion title="청크 크기 최적화">
-    문서 유형에 따라 청크 크기를 조정하세요. 조밀한 기술 문서에는 작은 청크를, 서사적인 콘텐츠에는 큰 청크를 사용하세요.
+  <Accordion title="api_base를 명시적으로 설정하세요">
+    이전 OpenAI 환경 변수 이름에 의존하지 말고, 코드에서 `api_base="https://api.lemondata.cc/v1"`를 직접 전달하세요.
   </Accordion>
 
-  <Accordion title="캐싱 사용">
-    개발 중 불필요한 API 호출을 방지하려면 LlamaIndex 캐싱을 활성화하세요.
+  <Accordion title="모델 역할을 분리해서 유지하세요">
+    synthesis에는 chat/reasoning 모델을 사용하고, retrieval에는 `text-embedding-3-small` 또는 `text-embedding-3-large`를 사용하세요.
   </Accordion>
 </AccordionGroup>

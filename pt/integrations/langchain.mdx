@@ -1,68 +1,68 @@
 ---
 title: "LangChain"
-description: "Integre o LemonData com o LangChain"
+description: "Integre o LemonData com LangChain usando chat e embeddings padrão compatíveis com OpenAI"
 ---
 
-## Visão Geral
+## Visão geral
 
-O LangChain é um framework popular para a construção de aplicações de LLM. O LemonData funciona perfeitamente com a integração OpenAI do LangChain.
+O LemonData funciona bem com as integrações `ChatOpenAI` e `OpenAIEmbeddings` do LangChain quando você permanece na superfície padrão de chat e embeddings compatível com OpenAI.
+
+<Note>
+A documentação atual do LangChain observa que `ChatOpenAI` é voltado para formatos oficiais de requisição/resposta compatíveis com OpenAI. Se você precisar de campos de resposta específicos do provedor e fora do padrão, use uma integração específica do provedor no LangChain em vez de depender de `ChatOpenAI`.
+</Note>
 
 ## Instalação
 
 ```bash
-pip install langchain langchain-openai
+pip install langchain langchain-openai langchain-community faiss-cpu
 ```
 
-## Configuração Básica
+## Configuração básica
 
 ```python
 from langchain_openai import ChatOpenAI
 
 llm = ChatOpenAI(
-    model="gpt-4o",
+    model="gpt-5.4",
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-response = llm.invoke("Hello, how are you?")
+response = llm.invoke("Explain LemonData in one sentence.")
 print(response.content)
 ```
 
-## Usando Diferentes Modelos
-
-Acesse qualquer modelo do LemonData:
+## Usando modelos diferentes
 
 ```python
-# OpenAI GPT-4o
-gpt4 = ChatOpenAI(
-    model="gpt-4o",
+from langchain_openai import ChatOpenAI
+
+gpt = ChatOpenAI(
+    model="gpt-5.4",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# Anthropic Claude
 claude = ChatOpenAI(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# Google Gemini
 gemini = ChatOpenAI(
     model="gemini-2.5-flash",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# DeepSeek
 deepseek = ChatOpenAI(
     model="deepseek-r1",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 ```
 
-## Chat com Histórico de Mensagens
+## Histórico de mensagens
 
 ```python
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -79,28 +79,105 @@ print(response.content)
 ## Streaming
 
 ```python
-for chunk in llm.stream("Write a poem about coding"):
-    print(chunk.content, end="", flush=True)
+for chunk in llm.stream("Write a short poem about coding."):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
 ```
 
-## Uso Assíncrono
+## Embeddings
 
 ```python
-import asyncio
+from langchain_openai import OpenAIEmbeddings
 
-async def main():
-    response = await llm.ainvoke("Hello!")
-    print(response.content)
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+)
 
-asyncio.run(main())
+vector = embeddings.embed_query("Hello world")
+print(vector[:5])
 ```
 
-## Chains
+## Exemplo simples de RAG
 
 ```python
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+)
+
+texts = [
+    "LemonData provides one API for many AI models.",
+    "LemonData supports OpenAI-compatible integrations."
+]
+
+vectorstore = FAISS.from_texts(texts, embeddings)
+retriever = vectorstore.as_retriever()
+
+prompt = ChatPromptTemplate.from_template(
+    "Answer using the context below.\\n\\nContext:\\n{context}\\n\\nQuestion:\\n{question}"
+)
+
+rag_chain = (
+    {"context": retriever, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+)
+
+response = rag_chain.invoke("What does LemonData provide?")
+print(response.content)
+```
+
+## Agents
+
+<Note>
+Para novos projetos agentic, o LangChain recomenda considerar o LangGraph para um controle mais explícito sobre workflows de longa duração e com uso de ferramentas.
+</Note>
+
+```python
+from langchain.agents import create_openai_tools_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import tool
+
+@tool
+def search(query: str) -> str:
+    """Search for information."""
+    return f"Search results for: {query}"
+
+tools = [search]
 
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful assistant that translates {input_language} to {output_language}."),
-    ("
+    ("system", "You are a helpful assistant with access to tools."),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}")
+])
+
+agent = create_openai_tools_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools)
+
+result = executor.invoke({"input": "Search for LemonData pricing"})
+print(result["output"])
+```
+
+## Boas práticas
+
+<AccordionGroup>
+  <Accordion title="Passe `base_url` explicitamente">
+    A configuração mais confiável do LemonData é passar `base_url="https://api.lemondata.cc/v1"` diretamente para `ChatOpenAI` e `OpenAIEmbeddings`, em vez de depender de aliases antigos de variáveis de ambiente.
+  </Accordion>
+
+  <Accordion title="Use recursos padrão aqui">
+    Limite-se a chat padrão, tool calling, streaming e embeddings no `ChatOpenAI`. Se você precisar de extras nativos do fornecedor, mude para a integração própria do fornecedor no LangChain.
+  </Accordion>
+
+  <Accordion title="Use modelos mais baratos para retrieval">
+    Use modelos de embedding como `text-embedding-3-small` para retrieval e reserve modelos de chat mais avançados para a etapa final de resposta.
+  </Accordion>
+</AccordionGroup>

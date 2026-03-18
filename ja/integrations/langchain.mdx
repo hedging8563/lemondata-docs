@@ -1,16 +1,20 @@
 ---
 title: "LangChain"
-description: "LemonDataをLangChainと統合する"
+description: "標準の OpenAI互換 chat および embeddings を使用して LemonData を LangChain に統合します"
 ---
 
 ## 概要
 
-LangChainは、LLMアプリケーションを構築するための人気のあるフレームワークです。LemonDataは、LangChainのOpenAI統合とシームレスに動作します。
+LemonData は、標準の OpenAI互換 chat および embeddings のインターフェースを使用する場合、LangChain の `ChatOpenAI` および `OpenAIEmbeddings` 統合と適切に連携します。
+
+<Note>
+現在の LangChain のドキュメントでは、`ChatOpenAI` は公式の OpenAI互換の request/response 形式を対象としていると記載されています。provider 固有の非標準 response フィールドが必要な場合は、`ChatOpenAI` に依存するのではなく、provider 固有の LangChain 統合を使用してください。
+</Note>
 
 ## インストール
 
 ```bash
-pip install langchain langchain-openai
+pip install langchain langchain-openai langchain-community faiss-cpu
 ```
 
 ## 基本設定
@@ -19,50 +23,46 @@ pip install langchain langchain-openai
 from langchain_openai import ChatOpenAI
 
 llm = ChatOpenAI(
-    model="gpt-4o",
+    model="gpt-5.4",
     api_key="sk-your-lemondata-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-response = llm.invoke("Hello, how are you?")
+response = llm.invoke("Explain LemonData in one sentence.")
 print(response.content)
 ```
 
 ## 異なるモデルの使用
 
-任意のLemonDataモデルにアクセスします：
-
 ```python
-# OpenAI GPT-4o
-gpt4 = ChatOpenAI(
-    model="gpt-4o",
+from langchain_openai import ChatOpenAI
+
+gpt = ChatOpenAI(
+    model="gpt-5.4",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# Anthropic Claude
 claude = ChatOpenAI(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# Google Gemini
 gemini = ChatOpenAI(
     model="gemini-2.5-flash",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# DeepSeek
 deepseek = ChatOpenAI(
     model="deepseek-r1",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 ```
 
-## メッセージ履歴を使用したチャット
+## メッセージ履歴
 
 ```python
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -79,44 +79,27 @@ print(response.content)
 ## ストリーミング
 
 ```python
-for chunk in llm.stream("Write a poem about coding"):
-    print(chunk.content, end="", flush=True)
+for chunk in llm.stream("Write a short poem about coding."):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
 ```
 
-## 非同期の使用
+## Embeddings
 
 ```python
-import asyncio
+from langchain_openai import OpenAIEmbeddings
 
-async def main():
-    response = await llm.ainvoke("Hello!")
-    print(response.content)
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small",
+    api_key="sk-your-key",
+    base_url="https://api.lemondata.cc/v1",
+)
 
-asyncio.run(main())
+vector = embeddings.embed_query("Hello world")
+print(vector[:5])
 ```
 
-## チェーン
-
-```python
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a helpful assistant that translates {input_language} to {output_language}."),
-    ("human", "{text}")
-])
-
-chain = prompt | llm | StrOutputParser()
-
-result = chain.invoke({
-    "input_language": "English",
-    "output_language": "French",
-    "text": "Hello, how are you?"
-})
-print(result)
-```
-
-## RAG (検索拡張生成)
+## シンプルな RAG の例
 
 ```python
 from langchain_openai import OpenAIEmbeddings
@@ -124,25 +107,23 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
-# 埋め込み
 embeddings = OpenAIEmbeddings(
     model="text-embedding-3-small",
     api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1"
+    base_url="https://api.lemondata.cc/v1",
 )
 
-# ベクトルストアの作成
-texts = ["LemonData supports 300+ AI models", "API is OpenAI compatible"]
+texts = [
+    "LemonData provides one API for many AI models.",
+    "LemonData supports OpenAI-compatible integrations."
+]
+
 vectorstore = FAISS.from_texts(texts, embeddings)
 retriever = vectorstore.as_retriever()
 
-# RAGチェーン
-template = """Answer based on context:
-{context}
-
-Question: {question}
-"""
-prompt = ChatPromptTemplate.from_template(template)
+prompt = ChatPromptTemplate.from_template(
+    "Answer using the context below.\\n\\nContext:\\n{context}\\n\\nQuestion:\\n{question}"
+)
 
 rag_chain = (
     {"context": retriever, "question": RunnablePassthrough()}
@@ -150,14 +131,14 @@ rag_chain = (
     | llm
 )
 
-response = rag_chain.invoke("How many models does LemonData support?")
+response = rag_chain.invoke("What does LemonData provide?")
 print(response.content)
 ```
 
-## エージェント
+## Agents
 
 <Note>
-  LangChainのエージェントAPIは進化を続けています。新しいプロジェクトでは、より柔軟なエージェントアーキテクチャのために[LangGraph](https://python.langchain.com/docs/langgraph)の使用を検討してください。
+新しい agentic プロジェクトでは、LangChain は長時間実行されるワークフローや tool を使用するワークフローをより明示的に制御するために、LangGraph の検討を推奨しています。
 </Note>
 
 ```python
@@ -185,47 +166,18 @@ result = executor.invoke({"input": "Search for LemonData pricing"})
 print(result["output"])
 ```
 
-## 環境変数
-
-コードをよりクリーンにするために、環境変数を使用します：
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-export OPENAI_API_BASE="https://api.lemondata.cc/v1"
-```
-
-```python
-from langchain_openai import ChatOpenAI
-
-# 自動的に環境変数が使用されます
-llm = ChatOpenAI(model="gpt-4o")
-```
-
-## コールバックとトレース
-
-```python
-from langchain_core.callbacks import StdOutCallbackHandler
-
-llm = ChatOpenAI(
-    model="gpt-4o",
-    api_key="sk-your-key",
-    base_url="https://api.lemondata.cc/v1",
-    callbacks=[StdOutCallbackHandler()]
-)
-```
-
 ## ベストプラクティス
 
 <AccordionGroup>
-  <Accordion title="コストに適したモデルの使用">
-    チェーン内の単純なタスクには、より安価なモデル（GPT-4o-mini）を使用してください。
+  <Accordion title="`base_url` を明示的に渡す">
+    最も信頼性の高い LemonData の設定は、古い environment-variable aliases に依存するのではなく、`base_url="https://api.lemondata.cc/v1"` を `ChatOpenAI` と `OpenAIEmbeddings` に直接渡すことです。
   </Accordion>
 
-  <Accordion title="リトライの実装">
-    LangChainには、一時的なエラーのためのリトライロジックが組み込まれています。
+  <Accordion title="ここでは標準機能を使用する">
+    `ChatOpenAI` では、標準の chat、tool calling、streaming、および embeddings を使用してください。vendor ネイティブの追加機能が必要な場合は、その vendor 独自の LangChain 統合に切り替えてください。
   </Accordion>
 
-  <Accordion title="トークン使用量の監視">
-    コールバックを使用してトークンの消費を追跡します。
+  <Accordion title="retrieval にはより安価なモデルを使う">
+    retrieval には `text-embedding-3-small` のような embedding モデルを使用し、より高性能な chat モデルは最終的な回答ステップのために確保してください。
   </Accordion>
 </AccordionGroup>

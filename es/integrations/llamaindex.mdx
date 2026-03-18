@@ -1,65 +1,55 @@
 ---
 title: "LlamaIndex"
-description: "Integra LemonData con LlamaIndex para aplicaciones RAG"
+description: "Integra LemonData con LlamaIndex usando integraciones compatibles con OpenAI"
 ---
 
-## Descripción general
+## Resumen
 
-LlamaIndex es un framework de datos para aplicaciones de LLM, especialmente potente para construir sistemas RAG (Retrieval Augmented Generation). LemonData funciona a la perfección con la integración de OpenAI de LlamaIndex.
+Para LemonData, la configuración más sólida de LlamaIndex es usar **integraciones compatibles con OpenAI** en lugar de las clases integradas de OpenAI.
+
+La documentación actual de LlamaIndex recomienda explícitamente `OpenAILike` para endpoints de terceros compatibles con OpenAI, porque las clases integradas de OpenAI infieren metadatos a partir de los nombres oficiales de los modelos.
 
 ## Instalación
 
 ```bash
-pip install llama-index llama-index-llms-openai llama-index-embeddings-openai
+pip install llama-index-core \
+  llama-index-readers-file \
+  llama-index-llms-openai-like \
+  llama-index-embeddings-openai-like
 ```
 
 ## Configuración básica
 
 ```python
-from llama_index.llms.openai import OpenAI
 from llama_index.core import Settings
+from llama_index.llms.openai_like import OpenAILike
+from llama_index.embeddings.openai_like import OpenAILikeEmbedding
 
-# Configure LLM
-llm = OpenAI(
-    model="gpt-4o",
+llm = OpenAILike(
+    model="gpt-5.4",
+    api_base="https://api.lemondata.cc/v1",
     api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
+    is_chat_model=True,
 )
 
-# Set as default
-Settings.llm = llm
+embed_model = OpenAILikeEmbedding(
+    model_name="text-embedding-3-small",
+    api_base="https://api.lemondata.cc/v1",
+    api_key="sk-your-lemondata-key",
+)
 
-# Simple query
-response = llm.complete("What is LemonData?")
+Settings.llm = llm
+Settings.embed_model = embed_model
+```
+
+## Uso básico
+
+```python
+response = llm.complete("Explain LemonData in one sentence.")
 print(response.text)
 ```
 
-## Uso de diferentes modelos
-
-```python
-# OpenAI GPT-4o
-gpt4 = OpenAI(
-    model="gpt-4o",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Anthropic Claude (via OpenAI-compatible endpoint)
-claude = OpenAI(
-    model="claude-sonnet-4-5",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Google Gemini
-gemini = OpenAI(
-    model="gemini-2.5-flash",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-```
-
-## Interfaz de chat
+## Chat
 
 ```python
 from llama_index.core.llms import ChatMessage
@@ -76,25 +66,66 @@ print(response.message.content)
 ## Streaming
 
 ```python
-# Streaming completion
-for chunk in llm.stream_complete("Write a poem about AI"):
-    print(chunk.delta, end="", flush=True)
-
-# Streaming chat
-for chunk in llm.stream_chat(messages):
+for chunk in llm.stream_complete("Write a short poem about AI."):
     print(chunk.delta, end="", flush=True)
 ```
 
 ## Embeddings
 
 ```python
-from llama_index.embeddings.openai import OpenAIEmbedding
+vector = embed_model.get_text_embedding("Hello, world!")
+print(vector[:5])
+```
 
-embed_model = OpenAIEmbedding(
-    model="text-embedding-3-small",
-    api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
-)
+## RAG con documentos
 
-# Set as default
-Settings.embed_model =
+```python
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
+
+documents = SimpleDirectoryReader("./data").load_data()
+index = VectorStoreIndex.from_documents(documents)
+
+query_engine = index.as_query_engine()
+response = query_engine.query("What is in my documents?")
+print(response)
+```
+
+## Motor de chat
+
+```python
+chat_engine = index.as_chat_engine(chat_mode="condense_question")
+
+response = chat_engine.chat("What is LemonData?")
+print(response)
+
+response = chat_engine.chat("How many models does it support?")
+print(response)
+```
+
+## Uso asíncrono
+
+```python
+import asyncio
+
+async def main():
+    response = await llm.acomplete("Hello!")
+    print(response.text)
+
+asyncio.run(main())
+```
+
+## Mejores prácticas
+
+<AccordionGroup>
+  <Accordion title="Usa OpenAILike para LemonData">
+    Prefiere `llama_index.llms.openai_like.OpenAILike` y `llama_index.embeddings.openai_like.OpenAILikeEmbedding` para LemonData y otros gateways de terceros compatibles con OpenAI.
+  </Accordion>
+
+  <Accordion title="Configura api_base explícitamente">
+    Pasa `api_base="https://api.lemondata.cc/v1"` directamente en el código en lugar de depender de nombres antiguos de variables de entorno de OpenAI.
+  </Accordion>
+
+  <Accordion title="Mantén separados los roles de los modelos">
+    Usa modelos de chat/razonamiento para la síntesis y `text-embedding-3-small` o `text-embedding-3-large` para la recuperación.
+  </Accordion>
+</AccordionGroup>

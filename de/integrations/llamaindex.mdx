@@ -1,65 +1,55 @@
 ---
 title: "LlamaIndex"
-description: "Integrieren Sie LemonData mit LlamaIndex für RAG-Anwendungen"
+description: "Integrieren Sie LemonData mit LlamaIndex mithilfe OpenAI-kompatibler Integrationen"
 ---
 
-## Übersicht
+## Überblick
 
-LlamaIndex ist ein Daten-Framework für LLM-Anwendungen, das besonders leistungsstark für die Erstellung von RAG-Systemen (Retrieval Augmented Generation) ist. LemonData arbeitet nahtlos mit der OpenAI-Integration von LlamaIndex zusammen.
+Für LemonData ist die robustere LlamaIndex-Einrichtung, **OpenAI-kompatible Integrationen** anstelle der integrierten OpenAI-Klassen zu verwenden.
+
+Die aktuelle LlamaIndex-Dokumentation empfiehlt ausdrücklich `OpenAILike` für OpenAI-kompatible Endpunkte von Drittanbietern, da die integrierten OpenAI-Klassen Metadaten aus offiziellen Modellnamen ableiten.
 
 ## Installation
 
 ```bash
-pip install llama-index llama-index-llms-openai llama-index-embeddings-openai
+pip install llama-index-core \
+  llama-index-readers-file \
+  llama-index-llms-openai-like \
+  llama-index-embeddings-openai-like
 ```
 
-## Basiskonfiguration
+## Grundkonfiguration
 
 ```python
-from llama_index.llms.openai import OpenAI
 from llama_index.core import Settings
+from llama_index.llms.openai_like import OpenAILike
+from llama_index.embeddings.openai_like import OpenAILikeEmbedding
 
-# Configure LLM
-llm = OpenAI(
-    model="gpt-4o",
+llm = OpenAILike(
+    model="gpt-5.4",
+    api_base="https://api.lemondata.cc/v1",
     api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
+    is_chat_model=True,
 )
 
-# Set as default
-Settings.llm = llm
+embed_model = OpenAILikeEmbedding(
+    model_name="text-embedding-3-small",
+    api_base="https://api.lemondata.cc/v1",
+    api_key="sk-your-lemondata-key",
+)
 
-# Simple query
-response = llm.complete("What is LemonData?")
+Settings.llm = llm
+Settings.embed_model = embed_model
+```
+
+## Grundlegende Verwendung
+
+```python
+response = llm.complete("Explain LemonData in one sentence.")
 print(response.text)
 ```
 
-## Verwendung verschiedener Modelle
-
-```python
-# OpenAI GPT-4o
-gpt4 = OpenAI(
-    model="gpt-4o",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Anthropic Claude (via OpenAI-compatible endpoint)
-claude = OpenAI(
-    model="claude-sonnet-4-5",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Google Gemini
-gemini = OpenAI(
-    model="gemini-2.5-flash",
-    api_key="sk-your-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-```
-
-## Chat-Schnittstelle
+## Chat
 
 ```python
 from llama_index.core.llms import ChatMessage
@@ -76,50 +66,25 @@ print(response.message.content)
 ## Streaming
 
 ```python
-# Streaming completion
-for chunk in llm.stream_complete("Write a poem about AI"):
-    print(chunk.delta, end="", flush=True)
-
-# Streaming chat
-for chunk in llm.stream_chat(messages):
+for chunk in llm.stream_complete("Write a short poem about AI."):
     print(chunk.delta, end="", flush=True)
 ```
 
 ## Embeddings
 
 ```python
-from llama_index.embeddings.openai import OpenAIEmbedding
-
-embed_model = OpenAIEmbedding(
-    model="text-embedding-3-small",
-    api_key="sk-your-lemondata-key",
-    api_base="https://api.lemondata.cc/v1"
-)
-
-# Set as default
-Settings.embed_model = embed_model
-
-# Get embeddings
-embeddings = embed_model.get_text_embedding("Hello, world!")
-print(f"Embedding dimension: {len(embeddings)}")
+vector = embed_model.get_text_embedding("Hello, world!")
+print(vector[:5])
 ```
 
 ## RAG mit Dokumenten
 
 ```python
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
 
-# Configure settings
-Settings.llm = llm
-Settings.embed_model = embed_model
-
-# Load documents
 documents = SimpleDirectoryReader("./data").load_data()
-
-# Create index
 index = VectorStoreIndex.from_documents(documents)
 
-# Query
 query_engine = index.as_query_engine()
 response = query_engine.query("What is in my documents?")
 print(response)
@@ -128,10 +93,8 @@ print(response)
 ## Chat-Engine
 
 ```python
-# Create chat engine with memory
 chat_engine = index.as_chat_engine(chat_mode="condense_question")
 
-# Multi-turn conversation
 response = chat_engine.chat("What is LemonData?")
 print(response)
 
@@ -139,7 +102,7 @@ response = chat_engine.chat("How many models does it support?")
 print(response)
 ```
 
-## Asynchrone Nutzung
+## Asynchrone Verwendung
 
 ```python
 import asyncio
@@ -151,34 +114,18 @@ async def main():
 asyncio.run(main())
 ```
 
-## Umgebungsvariablen
-
-Für saubereren Code verwenden Sie Umgebungsvariablen:
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-export OPENAI_API_BASE="https://api.lemondata.cc/v1"
-```
-
-```python
-from llama_index.llms.openai import OpenAI
-
-# Will automatically use environment variables
-llm = OpenAI(model="gpt-4o")
-```
-
 ## Best Practices
 
 <AccordionGroup>
-  <Accordion title="Wählen Sie das richtige Modell">
-    Verwenden Sie schnellere Modelle (GPT-4o-mini) für Embedding- und Zusammenfassungsaufgaben, reservieren Sie leistungsstarke Modelle (GPT-4o, Claude) für die finalen Antworten.
+  <Accordion title="Verwenden Sie OpenAILike für LemonData">
+    Bevorzugen Sie `llama_index.llms.openai_like.OpenAILike` und `llama_index.embeddings.openai_like.OpenAILikeEmbedding` für LemonData und andere OpenAI-kompatible Gateways von Drittanbietern.
   </Accordion>
 
-  <Accordion title="Chunk-Größe optimieren">
-    Passen Sie die Chunk-Größe basierend auf Ihren Dokumenttypen an. Kleinere Chunks für dichte technische Dokumente, größere für erzählende Inhalte.
+  <Accordion title="Setzen Sie api_base explizit">
+    Übergeben Sie `api_base="https://api.lemondata.cc/v1"` direkt im Code, anstatt sich auf ältere OpenAI-Namen für Umgebungsvariablen zu verlassen.
   </Accordion>
 
-  <Accordion title="Caching verwenden">
-    Aktivieren Sie das LlamaIndex-Caching, um redundante API-Aufrufe während der Entwicklung zu vermeiden.
+  <Accordion title="Halten Sie Modellrollen getrennt">
+    Verwenden Sie Chat-/Reasoning-Modelle für die Synthese und `text-embedding-3-small` oder `text-embedding-3-large` für das Retrieval.
   </Accordion>
 </AccordionGroup>
