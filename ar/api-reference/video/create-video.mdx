@@ -1,29 +1,33 @@
 ---
 title: "إنشاء فيديو"
 openapi: "POST /v1/videos/generations"
-description: "إنشاء مهمة توليد فيديو"
+description: "ينشئ مهمة توليد فيديو"
 ---
 
 ## نظرة عامة
 
-عملية توليد الفيديو غير متزامنة. تقوم بإرسال طلب وتتلقى معرف مهمة (task ID)، ثم تقوم بالاستعلام عن النتيجة.
+توليد الفيديو يتم بشكل غير متزامن. تقوم بإرسال طلب، وتتلقى معرّف مهمة و `poll_url`، ثم تجري polling للحصول على النتيجة.
 
-## جسم الطلب (Request Body)
+<Info>
+للحصول على سلوك polling الأكثر موثوقية، اتبع `poll_url` المُعاد من طلب الإنشاء بشكل مطابق.
+</Info>
+
+## جسم الطلب
 
 <ParamField body="model" type="string" default="sora-2">
-  معرف نموذج الفيديو. راجع [دليل توليد الفيديو](/guides/video-generation) للحصول على قائمة كاملة تضم أكثر من 80 نموذجاً عبر 11 مزوداً.
+  معرّف نموذج الفيديو. القيمة الافتراضية في API هي `sora-2`. راجع [دليل توليد الفيديو](/guides/video-generation) لمعرفة مصفوفة النماذج الحالية والقدرات المدعومة.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  وصف نصي للفيديو المراد توليده.
+  وصف نصي للفيديو المطلوب توليده.
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  رابط (URL) الصورة البدائية لتوليد فيديو من صورة (I2V).
+  URL متاح للوصول العام لصورة البداية من أجل توليد image-to-video (I2V). لتحقيق أفضل توافق بين النماذج، يُفضّل استخدام `image_url`.
 </ParamField>
 
 <ParamField body="image" type="string">
-  صورة مبرمجة بنظام Base64 مع بادئة data URL (مثال: `data:image/jpeg;base64,...`). بديل لـ `image_url` لتوليد I2V.
+  صورة مضمنة بصيغة data URL (على سبيل المثال، `data:image/jpeg;base64,...`). مدعومة من النماذج المتوافقة، لكن `image_url` يوفّر أوسع توافق عبر نماذج الفيديو.
 </ParamField>
 
 <ParamField body="duration" type="integer">
@@ -31,11 +35,11 @@ description: "إنشاء مهمة توليد فيديو"
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  نسبة العرض إلى الارتفاع (مثال: `16:9`, `9:16`, `1:1`).
+  نسبة الأبعاد (مثلًا، `16:9`، `9:16`، `1:1`).
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  دقة الفيديو (مثال: `1080p`, `720p`).
+  دقة الفيديو (مثلًا، `1080p`، `720p`).
 </ParamField>
 
 <ParamField body="fps" type="integer">
@@ -43,27 +47,274 @@ description: "إنشاء مهمة توليد فيديو"
 </ParamField>
 
 <ParamField body="negative_prompt" type="string">
-  ما يجب تجنبه في توليد الفيديو.
+  ما الذي يجب تجنبه في توليد الفيديو.
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  بذرة عشوائية (seed) لتوليد نتائج قابلة للتكرار.
+  seed عشوائي لتوليد قابل لإعادة الإنتاج.
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
-  مقياس التوجيه الخالي من المصنف (0-20).
+  مقياس التوجيه بدون مصنّف (0-20).
 </ParamField>
 
 <ParamField body="motion_strength" type="number">
-  كثافة الحركة (0-1).
+  شدة الحركة (0-1).
 </ParamField>
 
 <ParamField body="start_image" type="string">
-  رابط (URL) صورة الإطار الأول.
+  URL لصورة الإطار الابتدائي.
 </ParamField>
 
 <ParamField body="end_image" type="string">
-  رابط (URL) صورة الإطار الأخير.
+  URL لصورة الإطار النهائي.
 </ParamField>
 
-<ParamField body="user
+<ParamField body="user" type="string">
+  معرّف فريد للمستخدم النهائي.
+</ParamField>
+
+## الاستجابة
+
+<ResponseField name="task_id" type="string">
+  معرّف مهمة فريد لاستخدامه في polling.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  URL polling الموصى به لهذه المهمة. استخدم هذا المسار المطابق عند التحقق من الحالة.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  الحالة الأولية: `pending`.
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  النموذج المستخدم.
+</ResponseField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "https://api.lemondata.cc/v1/videos/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "sora-2",
+    "prompt": "A cat walking through a garden, cinematic lighting",
+    "duration": 5
+  }'
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={
+        "Authorization": "Bearer sk-your-api-key",
+        "Content-Type": "application/json"
+    },
+    json={
+        "model": "sora-2",
+        "prompt": "A cat walking through a garden, cinematic lighting",
+        "duration": 5
+    }
+)
+
+data = response.json()
+task_id = data["task_id"]
+print(f"Poll URL: {data['poll_url']}")
+print(f"Task ID: {task_id}")
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer sk-your-api-key',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    model: 'sora-2',
+    prompt: 'A cat walking through a garden, cinematic lighting',
+    duration: 5
+  })
+});
+
+const data = await response.json();
+console.log(`Poll URL: ${data.poll_url}`);
+console.log(`Task ID: ${data.task_id}`);
+```
+
+```go Go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+func main() {
+    payload := map[string]interface{}{
+        "model":    "kling-v2.6-pro",
+        "prompt":   "A cat walking through a garden, cinematic lighting",
+        "duration": 5,
+    }
+    body, _ := json.Marshal(payload)
+
+    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/videos/generations", bytes.NewBuffer(body))
+    req.Header.Set("Authorization", "Bearer sk-your-api-key")
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, _ := client.Do(req)
+    defer resp.Body.Close()
+
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Printf("Poll URL: %s\n", result["poll_url"])
+    fmt.Printf("Task ID: %s\n", result["task_id"])
+}
+```
+
+```php PHP
+<?php
+$ch = curl_init('https://api.lemondata.cc/v1/videos/generations');
+
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_POST => true,
+    CURLOPT_HTTPHEADER => [
+        'Content-Type: application/json',
+        'Authorization: Bearer sk-your-api-key'
+    ],
+    CURLOPT_POSTFIELDS => json_encode([
+        'model' => 'kling-v2.6-pro',
+        'prompt' => 'A cat walking through a garden, cinematic lighting',
+        'duration' => 5
+    ])
+]);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$data = json_decode($response, true);
+echo "Poll URL: " . $data['poll_url'] . "\n";
+echo "Task ID: " . $data['task_id'];
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
+  "status": "pending",
+  "model": "sora-2",
+  "created_at": 1706000000
+}
+```
+</ResponseExample>
+
+## من صورة إلى فيديو
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "wan2.6-i2v",
+        "prompt": "The person starts walking forward",
+        "image_url": "https://example.com/image.jpg"
+    }
+)
+```
+
+## التحكم في الإطارات المفتاحية
+
+استخدم `start_image` و `end_image` للتحكم في الإطارين الأول والأخير (مدعوم بواسطة Seedance 2.0):
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "seedance-2-0",
+        "prompt": "Smooth transition from day to night",
+        "start_image": "https://example.com/day.jpg",
+        "end_image": "https://example.com/night.jpg",
+        "duration": 5
+    }
+)
+```
+
+## النماذج المتاحة
+
+<Info>
+يتم تحديث قائمة النماذج بشكل متكرر. للاطلاع على أحدث النماذج المتاحة والأسعار، زر [صفحة النماذج](https://lemondata.cc/ar/models).
+</Info>
+
+للاطلاع على دليل كامل يتضمن مقارنة القدرات وأمثلة الاستخدام، راجع [دليل توليد الفيديو](/guides/video-generation).
+
+### Sora (OpenAI)
+
+| Model | Capabilities |
+|-------|-------------|
+| `sora-2` | T2V (افتراضي) |
+| `sora-2-pro` | T2V، جودة أعلى |
+| `sora-2-characters` | T2V، تركيز على الشخصيات |
+
+### Kling (Kuaishou)
+
+| Model | Capabilities |
+|-------|-------------|
+| `kling-v2.6-pro` | T2V، الجيل الأحدث |
+| `kling-v2.6-std` | T2V، سريع |
+| `kling-v2.5-turbo-std` | T2V، فئة turbo |
+| `kling-v2.1-master` | T2V، I2V، جودة master |
+| `kling-v2.1-pro` | T2V، I2V |
+| `kling-video` | T2V، I2V |
+| `kling-video-extend` | تمديد الفيديو |
+| `kling-video-o1-pro` | T2V، استدلال O1 |
+| `kling-effects` | مؤثرات بصرية |
+
+### Veo (Google)
+
+| Model | Capabilities |
+|-------|-------------|
+| `veo2` | T2V |
+| `veo3.1` | T2V |
+| `veo3.1-pro` | T2V، احترافي |
+| `veo3.1-4k` | T2V، إخراج 4K |
+| `veo3.1-fast` | T2V، سريع |
+| `veo3` | T2V، الجيل السابق |
+
+### Seedance (ByteDance)
+
+| Model | Capabilities |
+|-------|-------------|
+| `seedance-2-0` | T2V، I2V، إطار مفتاحي، تمديد، تحرير |
+| `seedance-1-5-pro` | T2V، I2V |
+| `seedance-1-0-pro` | T2V، I2V |
+| `seedance-1-0-lite-t2v` | T2V، خفيف الوزن |
+| `seedance-1-0-lite-i2v` | I2V، خفيف الوزن |
+
+### مزودون آخرون
+
+| Model | Provider | Capabilities |
+|-------|----------|-------------|
+| `hailuo-2.3` | MiniMax | T2V، I2V |
+| `hailuo-2.3-pro` | MiniMax | T2V، I2V، جودة أعلى |
+| `hailuo-2.3-fast` | MiniMax | T2V، I2V، فئة سريعة |
+| `wan-2.6` | Alibaba | T2V |
+| `wan2.6-i2v` | Alibaba | I2V |
+| `runwayml-gen4-turbo-5` | Runway | T2V، I2V (5s) |
+| `runwayml-gen4-turbo-10` | Runway | T2V، I2V (10s) |
+| `luma-video-api` | Luma | T2V |
+| `luma-video-extend-api` | Luma | تمديد الفيديو |
+| `viduq3-pro` | Shengshu | T2V، I2V |
+| `viduq3-turbo` | Shengshu | T2V، I2V، فئة turbo |
+| `viduq2-pro` | Shengshu | T2V، I2V |
+| `grok-video-3` | xAI | T2V |
+| `higgsfield-turbo` | Higgsfield | T2V |

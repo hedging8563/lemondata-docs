@@ -1,14 +1,14 @@
 ---
-title: "إنشاء الفيديو"
-description: "قم بإنشاء مقاطع فيديو باستخدام أكثر من 80 نموذجاً عبر 11 مزوداً — تحويل النص إلى فيديو، وتحويل الصورة إلى فيديو، والتحكم في الإطارات الرئيسية، وتمديد الفيديو، والتحرير"
+title: "توليد الفيديو"
+description: "أنشئ مقاطع فيديو باستخدام نماذج عبر 11 مزودًا — من النص إلى الفيديو، ومن الصورة إلى الفيديو، والتحكم بإطارات المفاتيح، وتمديد الفيديو، والتحرير"
 ---
 
 ## نظرة عامة
 
-توفر LemonData إمكانية الوصول إلى **أكثر من 69 نموذجاً لإنشاء الفيديو** من 11 مزوداً من خلال API موحد واحد. عملية إنشاء الفيديو **غير متزامنة (asynchronous)** — حيث تقوم بإرسال طلب وتتلقى معرف مهمة `task_id`، ثم تقوم بالاستعلام عن النتيجة.
+توفر LemonData إمكانية الوصول إلى نماذج توليد الفيديو من 11 مزودًا من خلال API موحد واحد. توليد الفيديو **غير متزامن** — تقوم بإرسال طلب، وتستلم معرّف مهمة و`poll_url`، ثم تقوم بالاستعلام الدوري للحصول على النتيجة.
 
 <Info>
-يتم تحديث قائمة النماذج بشكل متكرر. للحصول على أحدث النماذج المتاحة والأسعار، قم بزيارة [صفحة النماذج](https://lemondata.cc/ar/models) أو استخدم [Models API](/api-reference/models/list-models).
+يتم تحديث قائمة النماذج بشكل متكرر. للاطلاع على أحدث النماذج المتاحة والأسعار، قم بزيارة [صفحة النماذج](https://lemondata.cc/ar/models) أو استخدم [Models API](/api-reference/models/list-models).
 </Info>
 
 ### سير العمل غير المتزامن
@@ -22,10 +22,10 @@ sequenceDiagram
     Client->>LemonData: POST /v1/videos/generations
     LemonData->>Provider: Forward request
     Provider-->>LemonData: task_id + pending
-    LemonData-->>Client: { task_id, status: "pending" }
+    LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
-    loop الاستعلام كل 5-10 ثوانٍ
-        Client->>LemonData: GET /v1/videos/generations/{task_id}
+    loop Poll every 5-10s
+        Client->>LemonData: GET poll_url
         LemonData->>Provider: Query status
         Provider-->>LemonData: Status update
         LemonData-->>Client: { status, video_url? }
@@ -52,11 +52,13 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-task_id = resp.json()["task_id"]
+create_data = resp.json()
+task_id = create_data["task_id"]
+poll_url = create_data["poll_url"]
 
 # Step 2: Poll for result
 while True:
-    status = requests.get(f"{BASE}/videos/generations/{task_id}", headers=headers).json()
+    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
     if status["status"] in ("completed", "succeeded"):
         print(f"Video URL: {status['video_url']}")
         break
@@ -72,7 +74,7 @@ const BASE = 'https://api.lemondata.cc/v1';
 const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
 
 // Step 1: Submit
-const { task_id } = await fetch(`${BASE}/videos/generations`, {
+const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
   method: 'POST', headers,
   body: JSON.stringify({
     model: 'kling-v2.6-pro',
@@ -84,7 +86,7 @@ const { task_id } = await fetch(`${BASE}/videos/generations`, {
 
 // Step 2: Poll
 const poll = setInterval(async () => {
-  const status = await fetch(`${BASE}/videos/generations/${task_id}`, { headers }).then(r => r.json());
+  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
   if (['completed', 'succeeded'].includes(status.status)) {
     console.log('Video URL:', status.video_url);
     clearInterval(poll);
@@ -101,9 +103,9 @@ const poll = setInterval(async () => {
 
 تتفوق النماذج المختلفة في مهام مختلفة. استخدم هذه المصفوفة لاختيار النموذج المناسب لحالة الاستخدام الخاصة بك.
 
-**مفتاح الرموز**: ✅ مدعوم | ❌ غير مدعوم
+**المفتاح**: ✅ مدعوم | ❌ غير مدعوم
 
-| السلسلة | المزود | T2V | I2V | Keyframe | Extension | Editing | أقصى مدة |
+| Series | Provider | T2V | I2V | Keyframe | Extension | Editing | Max Duration |
 |--------|----------|-----|-----|----------|-----------|---------|-------------|
 | **Sora** | OpenAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~20s |
 | **Kling** | Kuaishou | ✅ | ✅ | ❌ | ✅ | ❌ | 10s |
@@ -119,139 +121,141 @@ const poll = setInterval(async () => {
 
 ### تعريفات القدرات
 
-- **T2V (Text-to-Video)**: إنشاء فيديو من وصف نصي.
-- **I2V (Image-to-Video)**: تحريك صورة ثابتة إلى فيديو باستخدام `image_url` أو `image`.
-- **Keyframe**: التحكم في إطارات البداية والنهاية باستخدام `start_image` + `end_image`.
-- **Extension**: تمديد مدة فيديو موجود.
-- **Editing**: تعديل جوانب محددة من فيديو موجود.
+- **T2V (Text-to-Video)**: أنشئ فيديو من مطالبة نصية
+- **I2V (Image-to-Video)**: حرّك صورة ثابتة إلى فيديو. ولتحقيق أوسع توافق، وفّر `image_url` عامًا.
+- **Keyframe**: التحكم في إطاري البداية والنهاية باستخدام `start_image` + `end_image`
+- **Extension**: تمديد مدة فيديو موجود
+- **Editing**: تعديل جوانب محددة من فيديو موجود
 
 ## النماذج المتاحة حسب السلسلة
 
 ### Sora (OpenAI)
 
-| النموذج | الجودة | ملاحظات |
+| Model | Quality | Notes |
 |-------|---------|-------|
-| `sora-2` | Standard | النموذج الافتراضي، توازن جيد بين الجودة والسرعة |
-| `sora-2-pro` | High | جودة أعلى، وقت إنشاء أطول |
-| `sora-2-characters` | Standard | إنشاء يركز على الشخصيات |
+| `sora-2` | قياسي | نموذج المثال الافتراضي |
+| `sora-2-pro` | عالٍ | جودة أعلى، ووقت توليد أطول |
+| `sora-2-characters` | قياسي | توليد يركز على الشخصيات |
 
 ### Kling (Kuaishou)
 
-| النموذج | القدرة | ملاحظات |
+| Model | Capability | Notes |
 |-------|-----------|-------|
 | `kling-v2.6-pro` | T2V | أحدث جيل، جودة احترافية |
 | `kling-v2.6-std` | T2V | أحدث جيل، سريع |
-| `kling-v2.5-turbo-pro` | T2V | سرعة فائقة (Turbo)، جودة احترافية |
+| `kling-v2.5-turbo-std` | T2V | فئة Turbo |
+| `kling-v2.5-turbo-pro` | T2V | سرعة Turbo، جودة Pro |
 | `kling-v2.1-master` | T2V/I2V | جودة Master |
 | `kling-v2.1-pro` | T2V/I2V | جودة احترافية |
 | `kling-v2.1-standard` | T2V/I2V | جودة قياسية |
 | `kling-video` | T2V/I2V | النموذج الأساسي |
 | `kling-video-extend` | Extension | تمديد مقاطع الفيديو الموجودة |
-| `kling-video-o1-pro` | T2V | استنتاج O1، جودة احترافية |
-| `kling-video-o1-std` | T2V | استنتاج O1، جودة قياسية |
-| `kling-effects` | Effects | تطبيق تأثيرات بصرية |
+| `kling-video-o1-pro` | T2V | استدلال O1، جودة Pro |
+| `kling-video-o1-std` | T2V | استدلال O1، قياسي |
+| `kling-effects` | Effects | تطبيق مؤثرات بصرية |
 | `kling-omni-video` | T2V | نموذج Omni |
-| `kling-motion-control` | T2V | إنشاء مع التحكم في الحركة |
+| `kling-motion-control` | T2V | توليد مع التحكم في الحركة |
 
 ### Veo (Google)
 
-| النموذج | الجودة | ملاحظات |
+| Model | Quality | Notes |
 |-------|---------|-------|
-| `veo3.1` | Standard | أحدث نموذج فيديو من Google |
-| `veo3.1-pro` | High | جودة احترافية |
-| `veo3.1-4k` | Ultra | مخرجات بدقة 4K |
-| `veo3.1-fast` | Fast | إنشاء أسرع |
-| `veo3.1-fast-4k` | Fast + 4K | إنشاء سريع مع مخرجات 4K |
-| `veo3.1-components` | Standard | إنشاء يعتمد على المكونات |
-| `veo3` | Standard | الجيل السابق |
-| `veo3-pro` | High | الجيل السابق، احترافي |
-| `veo3-fast` | Fast | الجيل السابق، سريع |
+| `veo2` | قياسي | نموذج من سلسلة Veo 2 |
+| `veo3.1` | قياسي | أحدث نموذج فيديو من Google |
+| `veo3.1-pro` | عالٍ | جودة احترافية |
+| `veo3.1-4k` | فائق | مخرجات بدقة 4K |
+| `veo3.1-fast` | سريع | توليد أسرع |
+| `veo3.1-fast-4k` | سريع + 4K | توليد سريع مع مخرجات 4K |
+| `veo3.1-components` | قياسي | توليد قائم على المكونات |
+| `veo3` | قياسي | الجيل السابق |
+| `veo3-pro` | عالٍ | الجيل السابق، احترافي |
+| `veo3-fast` | سريع | الجيل السابق، سريع |
 
 ### Seedance (ByteDance)
 
-| النموذج | القدرة | ملاحظات |
+| Model | Capability | Notes |
 |-------|-----------|-------|
 | `seedance-2-0` | T2V/I2V/Keyframe/Extension/Editing | الأحدث والأكثر قدرة |
 | `seedance-1-5-pro` | T2V/I2V | الجيل السابق، جودة احترافية |
-| `seedance-1-0-pro` | T2V/I2V | الجيل الأول، احترافي |
+| `seedance-1-0-pro` | T2V/I2V | الجيل الأول، Pro |
 | `seedance-1-0-pro-fast` | T2V/I2V | الجيل الأول، سريع |
-| `seedance-1-0-lite-t2v` | T2V | تحويل النص إلى فيديو خفيف الوزن |
-| `seedance-1-0-lite-i2v` | I2V | تحويل الصورة إلى فيديو خفيف الوزن |
+| `seedance-1-0-lite-t2v` | T2V | تحويل خفيف من النص إلى الفيديو |
+| `seedance-1-0-lite-i2v` | I2V | تحويل خفيف من الصورة إلى الفيديو |
 
 <Note>
-يدعم Seedance 2.0 أوسع مجموعة من القدرات بما في ذلك تحويل الوسائط المتعددة إلى فيديو، وتمديد الفيديو، وتحرير الفيديو — كل ذلك من خلال نفس نقطة نهاية API.
+يدعم Seedance 2.0 أوسع نطاق من القدرات بما في ذلك التحويل متعدد الوسائط إلى فيديو، وتمديد الفيديو، وتحرير الفيديو — وكل ذلك من خلال نفس نقطة نهاية API.
 </Note>
 
 ### Hailuo (MiniMax)
 
-| النموذج | الجودة | ملاحظات |
+| Model | Quality | Notes |
 |-------|---------|-------|
-| `hailuo-2.3` | Standard | جودة جيدة |
-| `hailuo-2.3-pro` | High | مخرجات بجودة أعلى |
-| `hailuo-2.3-fast` | Fast | إنشاء أسرع |
-| `hailuo-2.3-standard` | Standard | الفئة القياسية |
-| `video-01` | Standard | MiniMax video-01 |
-| `video-01-live` | Standard | إنشاء بأسلوب البث المباشر |
+| `hailuo-2.3` | قياسي | جودة جيدة |
+| `hailuo-2.3-pro` | عالٍ | مخرجات بجودة أعلى |
+| `hailuo-2.3-fast` | سريع | توليد أسرع |
+| `hailuo-2.3-standard` | قياسي | الفئة القياسية |
+| `video-01` | قياسي | MiniMax video-01 |
+| `video-01-live` | قياسي | توليد بأسلوب البث المباشر |
 
 ### Wan (Alibaba)
 
-| النموذج | القدرة | ملاحظات |
+| Model | Capability | Notes |
 |-------|-----------|-------|
-| `wan-2.6` | T2V | أحدث تحويل للنص إلى فيديو |
-| `wan2.6-i2v` | I2V | أحدث تحويل للصورة إلى فيديو |
+| `wan-2.6` | T2V | أحدث تحويل من النص إلى الفيديو |
+| `wan2.6-i2v` | I2V | أحدث تحويل من الصورة إلى الفيديو |
 | `wan-2.5` | T2V | الجيل السابق |
-| `wan2.5-i2v-preview` | I2V | الجيل السابق I2V |
+| `wan2.5-i2v-preview` | I2V | I2V من الجيل السابق |
 | `wan-2.2-plus` | T2V | جيل أقدم |
-| `vace-14b` | T2V | معمارية VACE |
+| `vace-14b` | T2V | بنية VACE |
 
 ### Runway
 
-| النموذج | المدة | ملاحظات |
+| Model | Duration | Notes |
 |-------|----------|-------|
-| `runwayml-gen4-turbo-5` | 5s | إنشاء سريع |
+| `runwayml-gen4-turbo-5` | 5s | توليد سريع |
 | `runwayml-gen4-turbo-10` | 10s | مقاطع أطول |
 
 ### Luma
 
-| النموذج | القدرة | ملاحظات |
+| Model | Capability | Notes |
 |-------|-----------|-------|
-| `luma-video-api` | T2V | تحويل النص إلى فيديو |
+| `luma-video-api` | T2V | من النص إلى الفيديو |
 | `luma-video-extend-api` | Extension | تمديد مقاطع الفيديو الموجودة |
 
 ### Vidu (Shengshu)
 
-| النموذج | الجودة | ملاحظات |
+| Model | Quality | Notes |
 |-------|---------|-------|
-| `viduq3-pro` | High | أحدث جيل |
-| `viduq2-pro` | High | الجيل السابق، احترافي |
-| `viduq2-pro-fast` | Fast | الجيل السابق، احترافي سريع |
-| `viduq2` | Standard | الجيل السابق، قياسي |
-| `viduq2-turbo` | Fast | سرعة فائقة (Turbo) |
-| `vidu2.0` | Standard | النموذج الأساسي |
+| `viduq3-turbo` | سريع | فئة Turbo |
+| `viduq3-pro` | عالٍ | أحدث جيل |
+| `viduq2-pro` | عالٍ | الجيل السابق، Pro |
+| `viduq2-pro-fast` | سريع | الجيل السابق، Pro سريع |
+| `viduq2` | قياسي | الجيل السابق، قياسي |
+| `viduq2-turbo` | سريع | سرعة Turbo |
+| `vidu2.0` | قياسي | النموذج الأساسي |
 
 ### Grok (xAI)
 
-| النموذج | ملاحظات |
+| Model | Notes |
 |-------|-------|
-| `grok-video-3` | نموذج إنشاء الفيديو من xAI |
-| `grok-video-3-10s` | نسخة بمدة 10 ثوانٍ |
+| `grok-video-3` | نموذج توليد الفيديو من xAI |
+| `grok-video-3-10s` | إصدار لمدة 10 ثوانٍ |
 
 ### Higgsfield
 
-| النموذج | ملاحظات |
+| Model | Notes |
 |-------|-------|
-| `higgsfield-turbo` | الأسرع، تكلفة أقل |
+| `higgsfield-turbo` | الأسرع والأقل تكلفة |
 | `higgsfield-standard` | جودة قياسية |
 | `higgsfield-lite` | خفيف الوزن |
 
-## أمثلة على الاستخدام
+## أمثلة الاستخدام
 
-### تحويل النص إلى فيديو (T2V)
+### من النص إلى الفيديو (T2V)
 
-حالة الاستخدام الأكثر شيوعاً. تدعم جميع النماذج هذه الميزة.
+هذه هي حالة الاستخدام الأكثر شيوعًا. جميع النماذج تدعم ذلك.
 
 ```python
-# مثال على تحويل النص إلى فيديو
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
@@ -264,12 +268,12 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-### تحويل الصورة إلى فيديو (I2V)
+### من الصورة إلى الفيديو (I2V)
 
-تحريك صورة ثابتة. استخدم `image_url` لرابط أو `image` لبيانات base64.
+حرّك صورة ثابتة. ولتحقيق أوسع توافق عبر نماذج الفيديو، استضف الصورة المصدر ومرّر `image_url`.
 
 ```python
-# استخدام رابط الصورة
+# Using image URL
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
@@ -279,24 +283,11 @@ response = requests.post(f"{BASE}/videos/generations",
     }
 )
 
-# استخدام صورة base64
-import base64
-with open("photo.jpg", "rb") as f:
-    image_b64 = base64.b64encode(f.read()).decode()
-
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "kling-v2.1-master",
-        "prompt": "Gentle wind blows through the scene",
-        "image": f"data:image/jpeg;base64,{image_b64}"
-    }
-)
 ```
 
-### التحكم في الإطارات الرئيسية (صورة البداية + النهاية)
+### التحكم بإطارات المفاتيح (صورة البداية + صورة النهاية)
 
-التحكم في كل من الإطارات الأولى والأخيرة لانتقالات دقيقة. مدعوم حالياً بواسطة Seedance 2.0.
+تحكم في كل من الإطار الأول والأخير للحصول على انتقالات دقيقة. هذا مدعوم حاليًا بواسطة Seedance 2.0.
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
@@ -313,7 +304,7 @@ response = requests.post(f"{BASE}/videos/generations",
 
 ### تمديد الفيديو
 
-تمديد مدة فيديو موجود. استخدم النماذج التي تدعم قدرة التمديد.
+قم بتمديد مدة فيديو موجود. استخدم النماذج التي تدعم قدرة التمديد.
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
@@ -328,46 +319,46 @@ response = requests.post(f"{BASE}/videos/generations",
 
 ## مرجع المعلمات
 
-| المعلمة | النوع | الوصف |
+| Parameter | Type | Description |
 |-----------|------|-------------|
-| `model` | string | معرف النموذج (الافتراضي: `sora-2`) |
+| `model` | string | معرّف النموذج (الافتراضي: `sora-2`) |
 | `prompt` | string | **مطلوب.** وصف نصي للفيديو |
-| `image_url` | string | رابط صورة البداية (لتحويل I2V) |
-| `image` | string | صورة مبرمجة بترميز Base64 مع بادئة data URL (لتحويل I2V) |
-| `duration` | integer | مدة الفيديو بالثواني (1-60، يعتمد على النموذج) |
-| `aspect_ratio` | string | `16:9`, `9:16`, `1:1`, إلخ. |
+| `image_url` | string | URL لصورة البداية (لـ I2V) |
+| `image` | string | صورة مضمنة كـ data URL. مدعومة بواسطة النماذج المتوافقة، لكن `image_url` يوفر أوسع توافق. |
+| `duration` | integer | مدة الفيديو بالثواني (1-60، بحسب النموذج) |
+| `aspect_ratio` | string | `16:9`, `9:16`, `1:1`، إلخ. |
 | `resolution` | string | `1080p`, `720p`, `4k` |
 | `fps` | integer | عدد الإطارات في الثانية (1-120) |
-| `negative_prompt` | string | ما يجب تجنبه في الإنشاء |
-| `seed` | integer | بذرة عشوائية لإعادة إنتاج النتائج |
+| `negative_prompt` | string | ما يجب تجنبه أثناء التوليد |
+| `seed` | integer | قيمة seed عشوائية لإمكانية إعادة الإنتاج |
 | `cfg_scale` | number | مقياس التوجيه (0-20) |
-| `motion_strength` | number | كثافة الحركة (0-1) |
-| `start_image` | string | رابط إطار البداية الرئيسي |
-| `end_image` | string | رابط إطار النهاية الرئيسي |
+| `motion_strength` | number | شدة الحركة (0-1) |
+| `start_image` | string | URL لإطار المفتاح الابتدائي |
+| `end_image` | string | URL لإطار المفتاح النهائي |
 
 <Warning>
-ليست كل المعلمات مدعومة من قبل كل نموذج. يتم تجاهل المعلمات غير المدعومة تلقائياً. تحقق من وثائق النموذج لمعرفة المعلمات المدعومة.
+ليست كل المعلمات مدعومة من كل نموذج. يتم تجاهل المعلمات غير المدعومة بصمت. راجع وثائق النموذج للاطلاع على المعلمات المدعومة.
 </Warning>
 
 ## دليل اختيار النموذج
 
 <CardGroup cols={2}>
   <Card title="أفضل جودة" icon="crown">
-    **Seedance 2.0** أو **Kling v2.6 Pro** — جودة سينمائية، تفاصيل غنية، وحركة طبيعية.
+    **Seedance 2.0** أو **Kling v2.6 Pro** — جودة سينمائية، تفاصيل غنية، وحركة طبيعية
   </Card>
-  <Card title="أسرع إنشاء" icon="bolt">
-    **Higgsfield Turbo** أو **Hailuo 2.3** — نتائج سريعة للنماذج الأولية والتكرار.
+  <Card title="أسرع توليد" icon="bolt">
+    **Higgsfield Turbo** أو **Hailuo 2.3** — نتائج سريعة للنمذجة الأولية والتكرار
   </Card>
-  <Card title="الأكثر تنوعاً" icon="wand-magic-sparkles">
-    **Seedance 2.0** — يدعم T2V، I2V، الإطارات الرئيسية، التمديد، والتحرير في نموذج واحد.
+  <Card title="الأكثر تنوعًا" icon="wand-magic-sparkles">
+    **Seedance 2.0** — يدعم T2V وI2V وإطارات المفاتيح والتمديد والتحرير في نموذج واحد
   </Card>
   <Card title="أفضل قيمة" icon="coins">
-    **Wan 2.6** أو **Hailuo 2.3** — جودة تنافسية بتكلفة أقل لكل عملية إنشاء.
+    **Wan 2.6** أو **Hailuo 2.3** — جودة تنافسية بتكلفة أقل لكل عملية توليد
   </Card>
 </CardGroup>
 
 ## الفوترة
 
-يستخدم إنشاء الفيديو **تسعيراً ثابتاً لكل عملية إنشاء**. يتم محاسبتك مرة واحدة عند إرسال المهمة، بغض النظر عن مدة الفيديو. إذا فشلت عملية الإنشاء، يتم استرداد المبلغ تلقائياً.
+يستخدم توليد الفيديو **تسعيرًا ثابتًا لكل عملية توليد**. يتم تحصيل الرسوم مرة واحدة عند إرسال المهمة، بغض النظر عن مدة الفيديو. إذا فشل التوليد، يتم استرداد الرسوم تلقائيًا.
 
 تحقق من الأسعار الحالية في [صفحة النماذج](https://lemondata.cc/ar/models) أو عبر [Pricing API](/api-reference/pricing/get-pricing).

@@ -6,12 +6,16 @@ description: "비디오 생성 작업을 생성합니다"
 
 ## 개요
 
-비디오 생성은 비동기 방식으로 이루어집니다. 요청을 제출하고 작업 ID(`task_id`)를 받은 후, 결과를 확인하기 위해 폴링(poll)을 수행합니다.
+비디오 생성은 비동기 방식입니다. 요청을 제출하면 작업 ID와 `poll_url`을 받은 다음, 결과를 polling합니다.
+
+<Info>
+가장 안정적인 polling 동작을 위해 생성 요청에서 반환된 정확한 `poll_url`을 따르세요.
+</Info>
 
 ## 요청 본문
 
 <ParamField body="model" type="string" default="sora-2">
-  비디오 모델 ID입니다. 11개 제공업체의 80개 이상의 모델 전체 목록은 [Video Generation Guide](/guides/video-generation)를 참조하세요.
+  비디오 모델 ID입니다. API 기본값은 `sora-2`입니다. 현재 모델 매트릭스와 지원 기능은 [Video Generation Guide](/guides/video-generation)를 참조하세요.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -19,43 +23,43 @@ description: "비디오 생성 작업을 생성합니다"
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  이미지 투 비디오(I2V) 생성을 위한 시작 이미지의 URL입니다.
+  image-to-video (I2V) 생성에 사용할 시작 이미지의 공개적으로 접근 가능한 URL입니다. 모델 간 호환성을 최대화하려면 `image_url` 사용을 권장합니다.
 </ParamField>
 
 <ParamField body="image" type="string">
-  데이터 URL 접두사가 포함된 Base64 인코딩 이미지입니다(예: `data:image/jpeg;base64,...`). I2V 생성을 위한 `image_url`의 대안으로 사용됩니다.
+  data URL 형식의 인라인 이미지입니다(예: `data:image/jpeg;base64,...`). 호환되는 모델에서 지원되지만, `image_url`이 비디오 모델 전반에서 가장 넓은 호환성을 제공합니다.
 </ParamField>
 
 <ParamField body="duration" type="integer">
-  비디오 재생 시간(초)입니다(모델에 따라 다름).
+  비디오 길이(초)입니다(모델에 따라 다름).
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  종횡비(예: `16:9`, `9:16`, `1:1`).
+  화면 비율입니다(예: `16:9`, `9:16`, `1:1`).
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  비디오 해상도(예: `1080p`, `720p`).
+  비디오 해상도입니다(예: `1080p`, `720p`).
 </ParamField>
 
 <ParamField body="fps" type="integer">
-  초당 프레임 수(1-120).
+  초당 프레임 수입니다(1-120).
 </ParamField>
 
 <ParamField body="negative_prompt" type="string">
-  비디오 생성 시 제외할 내용입니다.
+  비디오 생성에서 피하고 싶은 요소입니다.
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  재현 가능한 생성을 위한 랜덤 시드(seed) 값입니다.
+  재현 가능한 생성을 위한 랜덤 seed입니다.
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
-  Classifier-free guidance 스케일(0-20)입니다.
+  classifier-free guidance scale입니다(0-20).
 </ParamField>
 
 <ParamField body="motion_strength" type="number">
-  모션 강도(0-1)입니다.
+  움직임 강도입니다(0-1).
 </ParamField>
 
 <ParamField body="start_image" type="string">
@@ -73,7 +77,11 @@ description: "비디오 생성 작업을 생성합니다"
 ## 응답
 
 <ResponseField name="task_id" type="string">
-  폴링을 위한 고유 작업 식별자입니다.
+  polling에 사용할 고유 작업 식별자입니다.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  이 작업에 권장되는 polling URL입니다. 상태를 확인할 때 이 정확한 경로를 사용하세요.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -114,6 +122,7 @@ response = requests.post(
 
 data = response.json()
 task_id = data["task_id"]
+print(f"Poll URL: {data['poll_url']}")
 print(f"Task ID: {task_id}")
 ```
 
@@ -132,6 +141,7 @@ const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
 });
 
 const data = await response.json();
+console.log(`Poll URL: ${data.poll_url}`);
 console.log(`Task ID: ${data.task_id}`);
 ```
 
@@ -163,6 +173,7 @@ func main() {
 
     var result map[string]interface{}
     json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Printf("Poll URL: %s\n", result["poll_url"])
     fmt.Printf("Task ID: %s\n", result["task_id"])
 }
 ```
@@ -189,6 +200,7 @@ $response = curl_exec($ch);
 curl_close($ch);
 
 $data = json_decode($response, true);
+echo "Poll URL: " . $data['poll_url'] . "\n";
 echo "Task ID: " . $data['task_id'];
 ```
 </RequestExample>
@@ -197,6 +209,7 @@ echo "Task ID: " . $data['task_id'];
 ```json Response
 {
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "pending",
   "model": "sora-2",
   "created_at": 1706000000
@@ -204,7 +217,7 @@ echo "Task ID: " . $data['task_id'];
 ```
 </ResponseExample>
 
-## 이미지 투 비디오 (Image to Video)
+## 이미지에서 비디오로
 
 ```python
 response = requests.post(
@@ -220,7 +233,7 @@ response = requests.post(
 
 ## 키프레임 제어
 
-`start_image`와 `end_image`를 사용하여 첫 번째 프레임과 마지막 프레임을 제어할 수 있습니다(Seedance 2.0에서 지원):
+첫 번째 프레임과 마지막 프레임을 제어하려면 `start_image`와 `end_image`를 사용하세요(Seedance 2.0에서 지원):
 
 ```python
 response = requests.post(
@@ -239,26 +252,27 @@ response = requests.post(
 ## 사용 가능한 모델
 
 <Info>
-모델 목록은 수시로 업데이트됩니다. 최신 사용 가능 모델 및 가격 정보는 [Models page](https://lemondata.cc/ko/models)를 방문하여 확인하세요.
+모델 목록은 자주 업데이트됩니다. 최신 사용 가능 모델과 가격은 [Models page](https://lemondata.cc/ko/models)에서 확인하세요.
 </Info>
 
-기능 비교 및 사용 예시가 포함된 전체 가이드는 [Video Generation Guide](/guides/video-generation)를 참조하세요.
+기능 비교와 사용 예제를 포함한 전체 가이드는 [Video Generation Guide](/guides/video-generation)를 참조하세요.
 
 ### Sora (OpenAI)
 
-| 모델 | 기능 |
+| Model | Capabilities |
 |-------|-------------|
 | `sora-2` | T2V (기본값) |
-| `sora-2-pro` | T2V, 고화질 |
+| `sora-2-pro` | T2V, 더 높은 품질 |
 | `sora-2-characters` | T2V, 캐릭터 중심 |
 
 ### Kling (Kuaishou)
 
-| 모델 | 기능 |
+| Model | Capabilities |
 |-------|-------------|
 | `kling-v2.6-pro` | T2V, 최신 세대 |
 | `kling-v2.6-std` | T2V, 빠름 |
-| `kling-v2.1-master` | T2V, I2V, 마스터 품질 |
+| `kling-v2.5-turbo-std` | T2V, turbo tier |
+| `kling-v2.1-master` | T2V, I2V, master 품질 |
 | `kling-v2.1-pro` | T2V, I2V |
 | `kling-video` | T2V, I2V |
 | `kling-video-extend` | 비디오 확장 |
@@ -267,8 +281,9 @@ response = requests.post(
 
 ### Veo (Google)
 
-| 모델 | 기능 |
+| Model | Capabilities |
 |-------|-------------|
+| `veo2` | T2V |
 | `veo3.1` | T2V |
 | `veo3.1-pro` | T2V, 전문가용 |
 | `veo3.1-4k` | T2V, 4K 출력 |
@@ -277,7 +292,7 @@ response = requests.post(
 
 ### Seedance (ByteDance)
 
-| 모델 | 기능 |
+| Model | Capabilities |
 |-------|-------------|
 | `seedance-2-0` | T2V, I2V, 키프레임, 확장, 편집 |
 | `seedance-1-5-pro` | T2V, I2V |
@@ -287,10 +302,11 @@ response = requests.post(
 
 ### 기타 제공업체
 
-| 모델 | 제공업체 | 기능 |
+| Model | Provider | Capabilities |
 |-------|----------|-------------|
 | `hailuo-2.3` | MiniMax | T2V, I2V |
-| `hailuo-2.3-pro` | MiniMax | T2V, I2V, 고화질 |
+| `hailuo-2.3-pro` | MiniMax | T2V, I2V, 더 높은 품질 |
+| `hailuo-2.3-fast` | MiniMax | T2V, I2V, fast tier |
 | `wan-2.6` | Alibaba | T2V |
 | `wan2.6-i2v` | Alibaba | I2V |
 | `runwayml-gen4-turbo-5` | Runway | T2V, I2V (5초) |
@@ -298,6 +314,7 @@ response = requests.post(
 | `luma-video-api` | Luma | T2V |
 | `luma-video-extend-api` | Luma | 비디오 확장 |
 | `viduq3-pro` | Shengshu | T2V, I2V |
+| `viduq3-turbo` | Shengshu | T2V, I2V, turbo tier |
 | `viduq2-pro` | Shengshu | T2V, I2V |
 | `grok-video-3` | xAI | T2V |
 | `higgsfield-turbo` | Higgsfield | T2V |

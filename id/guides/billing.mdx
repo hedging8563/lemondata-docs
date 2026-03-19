@@ -1,16 +1,16 @@
 ---
 title: "Penagihan & Harga"
-description: "Pahami harga pay-as-you-go dari LemonData"
+description: "Pahami harga pay-as-you-go LemonData"
 ---
 
-## Ringkasan
+## Ikhtisar
 
-LemonData menggunakan **harga pay-as-you-go**. Anda hanya membayar untuk apa yang Anda gunakan, tanpa langganan atau komitmen minimum.
+LemonData menggunakan **harga pay-as-you-go**. Anda hanya membayar sesuai penggunaan, tanpa langganan atau komitmen minimum.
 
 ## Cara Kerja Penagihan
 
 1. **Tambahkan kredit** ke akun Anda
-2. **Gunakan API** - biaya dipotong per permintaan
+2. **Gunakan API** - biaya dipotong per request
 3. **Pantau penggunaan** di dashboard Anda
 4. **Isi ulang** saat saldo Anda rendah
 
@@ -18,9 +18,9 @@ LemonData menggunakan **harga pay-as-you-go**. Anda hanya membayar untuk apa yan
 
 ### Harga Per-Token
 
-Sebagian besar model pembuatan teks dikenakan harga per juta token:
+Sebagian besar model generasi teks dikenakan harga per satu juta token:
 
-| Model | Input (per 1M token) | Output (per 1M token) |
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
 |-------|----------------------|------------------------|
 | GPT-4o | $1.75 | $7.00 |
 | GPT-4o-mini | $0.105 | $0.42 |
@@ -33,14 +33,14 @@ Sebagian besar model pembuatan teks dikenakan harga per juta token:
 | DeepSeek V3.2 | $0.196 | $0.294 |
 
 <Note>
-  Harga yang ditampilkan adalah harga platform yang didiskon. Harga aktual mungkin bervariasi. Periksa [halaman harga](https://lemondata.cc/id/pricing) untuk tarif saat ini.
+  Harga yang ditampilkan adalah harga platform yang telah didiskon. Harga aktual dapat bervariasi. Periksa [halaman harga](https://lemondata.cc/id/pricing) untuk tarif terbaru.
 </Note>
 
-### Harga Per-Permintaan
+### Harga Per-Request
 
-Model gambar, video, dan audio dikenakan harga per permintaan:
+Model gambar, video, dan audio dikenakan harga per request:
 
-| Model | Harga per Permintaan |
+| Model | Harga per Request |
 |-------|-------------------|
 | DALL-E 3 (1024x1024) | $0.04 |
 | Midjourney | $0.05 |
@@ -48,15 +48,41 @@ Model gambar, video, dan audio dikenakan harga per permintaan:
 | Whisper (per menit) | $0.006 |
 | TTS-1 | $0.015 |
 
+### Penagihan Tugas Async (Video/Musik/3D)
+
+<Warning>
+  **Penting**: Tugas generasi video, musik, dan 3D **ditagihkan pada saat pengiriman**, bukan saat selesai.
+</Warning>
+
+Untuk tugas generasi async (video, musik, model 3D):
+
+1. **Penagihan terjadi segera** saat Anda mengirimkan tugas
+2. Anda akan menerima `task_id` untuk memeriksa status
+3. **Tidak ada pengembalian dana otomatis** jika tugas gagal
+
+Hal ini karena penyedia upstream menagih kami saat tugas dikirimkan, terlepas dari hasilnya. Jika Anda mengalami kegagalan tugas, silakan hubungi support@lemondata.cc untuk bantuan.
+
+```python
+# Example: Video generation billing
+response = client.post("/v1/videos/generations", json={
+    "model": "sora-2",
+    "prompt": "A sunset over the ocean"
+})
+# ⚠️ You are billed NOW, not when the video is ready
+
+task_id = response.json()["task_id"]
+# Poll for status...
+```
+
 ## Penghitungan Token
 
 Token adalah unit dasar pemrosesan teks:
 
-- ~4 karakter = 1 token (Inggris)
-- ~1-2 karakter = 1 token (Mandarin)
+- ~4 karakter = 1 token (Bahasa Inggris)
+- ~1-2 karakter = 1 token (Bahasa Mandarin)
 - 1 gambar = bervariasi berdasarkan ukuran dan detail
 
-### Mengestimasi Token
+### Memperkirakan Token
 
 ```python
 # Rough estimation
@@ -65,4 +91,103 @@ def estimate_tokens(text):
 
 # Actual count (for OpenAI models)
 import tiktoken
-encoder
+encoder = tiktoken.encoding_for_model("gpt-4o")
+tokens = encoder.encode("Your text here")
+print(f"Token count: {len(tokens)}")
+```
+
+## Pelacakan Penggunaan
+
+### Dashboard
+
+Pantau penggunaan Anda di [Dashboard](https://lemondata.cc/dashboard):
+
+- Saldo real-time
+- Riwayat penggunaan berdasarkan model
+- Rincian biaya
+- Penggunaan API key
+
+### Respons API
+
+Setiap respons menyertakan informasi penggunaan:
+
+```json
+{
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 100,
+    "total_tokens": 150
+  }
+}
+```
+
+## Optimisasi Biaya
+
+<AccordionGroup>
+  <Accordion title="Gunakan model yang sesuai">
+    Gunakan model yang lebih kecil (GPT-4o-mini, Gemini Flash) untuk tugas sederhana.
+  </Accordion>
+
+  <Accordion title="Implementasikan caching">
+    Cache respons untuk request identik yang berulang.
+  </Accordion>
+
+  <Accordion title="Optimalkan prompt">
+    Jaga prompt tetap ringkas sambil mempertahankan kejelasan.
+  </Accordion>
+
+  <Accordion title="Setel max_tokens">
+    Batasi panjang respons saat respons penuh tidak diperlukan.
+  </Accordion>
+
+  <Accordion title="Gunakan streaming untuk respons panjang">
+    Streaming tidak menambah biaya tetapi meningkatkan performa yang dirasakan.
+  </Accordion>
+</AccordionGroup>
+
+## Peringatan Saldo Rendah
+
+Konfigurasikan peringatan saat saldo Anda menurun:
+
+1. Buka **Dashboard → Settings → Notifications**
+2. Tetapkan jumlah ambang batas Anda
+3. Terima notifikasi email
+
+## Menambahkan Kredit
+
+### Metode Pembayaran
+
+- Alipay (支付宝)
+- WeChat Pay (微信支付)
+- Stripe (Visa, Mastercard)
+
+### Langkah-langkah
+
+1. Masuk ke [Dashboard](https://lemondata.cc/dashboard)
+2. Klik **Add Credits**
+3. Pilih jumlah dan metode pembayaran
+4. Selesaikan pembayaran
+
+Kredit ditambahkan secara instan setelah konfirmasi pembayaran.
+
+## Batas API Key
+
+Anda dapat menetapkan batas pengeluaran pada masing-masing API key:
+
+1. Buka **Dashboard → API Keys**
+2. Klik key untuk mengedit
+3. Setel **Usage Limit**
+
+Saat batas tercapai, request dengan key tersebut akan mengembalikan `402 Payment Required`.
+
+## Faktur
+
+Untuk akun bisnis, faktur tersedia:
+
+1. Buka **Dashboard → Billing**
+2. Lihat riwayat transaksi
+3. Unduh faktur sebagai PDF
+
+## Pertanyaan?
+
+Hubungi support@lemondata.cc untuk pertanyaan terkait penagihan.

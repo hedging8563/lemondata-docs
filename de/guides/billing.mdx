@@ -1,27 +1,27 @@
 ---
 title: "Abrechnung & Preise"
-description: "Verstehen Sie das Pay-as-you-go-Preismodell von LemonData"
+description: "Verstehen Sie LemonDatas nutzungsbasierte Preisgestaltung"
 ---
 
-## Übersicht
+## Überblick
 
-LemonData nutzt ein **Pay-as-you-go-Preismodell**. Sie zahlen nur für das, was Sie tatsächlich nutzen, ohne Abonnements oder Mindestverpflichtungen.
+LemonData verwendet eine **nutzungsbasierte Preisgestaltung**. Sie zahlen nur für das, was Sie nutzen, ohne Abonnements oder Mindestverpflichtungen.
 
 ## So funktioniert die Abrechnung
 
-1. **Guthaben hinzufügen** zu Ihrem Konto
-2. **Die API nutzen** – Kosten werden pro Anfrage abgezogen
-3. **Nutzung überwachen** in Ihrem Dashboard
-4. **Guthaben aufladen**, wenn Ihr Saldo niedrig ist
+1. **Fügen Sie Ihrem Konto Guthaben hinzu**
+2. **Nutzen Sie die API** – die Kosten werden pro Anfrage abgezogen
+3. **Überwachen Sie die Nutzung** in Ihrem Dashboard
+4. **Laden Sie Guthaben nach**, wenn Ihr Kontostand niedrig ist
 
 ## Preismodelle
 
 ### Preisgestaltung pro Token
 
-Die meisten Textgenerierungsmodelle werden pro Million Token abgerechnet:
+Die meisten Textgenerierungsmodelle werden pro einer Million Token berechnet:
 
-| Modell | Input (pro 1 Mio. Token) | Output (pro 1 Mio. Token) |
-|-------|----------------------|------------------------|
+| Modell | Eingabe (pro 1 Mio. Token) | Ausgabe (pro 1 Mio. Token) |
+|-------|----------------------------|-----------------------------|
 | GPT-4o | $1.75 | $7.00 |
 | GPT-4o-mini | $0.105 | $0.42 |
 | Claude Opus 4.5 | $3.50 | $17.50 |
@@ -33,12 +33,12 @@ Die meisten Textgenerierungsmodelle werden pro Million Token abgerechnet:
 | DeepSeek V3.2 | $0.196 | $0.294 |
 
 <Note>
-  Die angezeigten Preise sind ermäßigte Plattformpreise. Die tatsächlichen Preise können variieren. Aktuelle Tarife finden Sie auf der [Preisseite](https://lemondata.cc/de/pricing).
+  Die angezeigten Preise sind rabattierte Plattformpreise. Die tatsächlichen Preise können abweichen. Prüfen Sie die [Preisseite](https://lemondata.cc/de/pricing) auf aktuelle Tarife.
 </Note>
 
 ### Preisgestaltung pro Anfrage
 
-Bild-, Video- und Audiomodelle werden pro Anfrage abgerechnet:
+Bild-, Video- und Audiomodelle werden pro Anfrage berechnet:
 
 | Modell | Preis pro Anfrage |
 |-------|-------------------|
@@ -48,16 +48,146 @@ Bild-, Video- und Audiomodelle werden pro Anfrage abgerechnet:
 | Whisper (pro Minute) | $0.006 |
 | TTS-1 | $0.015 |
 
+### Abrechnung asynchroner Aufgaben (Video/Musik/3D)
+
+<Warning>
+  **Wichtig**: Video-, Musik- und 3D-Generierungsaufgaben werden **zum Zeitpunkt der Übermittlung** abgerechnet, nicht nach Abschluss.
+</Warning>
+
+Für asynchrone Generierungsaufgaben (Video, Musik, 3D-Modelle):
+
+1. **Die Abrechnung erfolgt sofort**, wenn Sie die Aufgabe übermitteln
+2. Sie erhalten eine `task_id`, um den Status abzufragen
+3. **Keine automatischen Rückerstattungen**, wenn die Aufgabe fehlschlägt
+
+Das liegt daran, dass Upstream-Anbieter uns berechnen, sobald die Aufgabe übermittelt wird, unabhängig vom Ergebnis. Wenn bei Ihnen Aufgaben fehlschlagen, kontaktieren Sie bitte support@lemondata.cc für Unterstützung.
+
+```python
+# Example: Video generation billing
+response = client.post("/v1/videos/generations", json={
+    "model": "sora-2",
+    "prompt": "A sunset over the ocean"
+})
+# ⚠️ You are billed NOW, not when the video is ready
+
+task_id = response.json()["task_id"]
+# Poll for status...
+```
+
 ## Token-Zählung
 
-Token sind die Basiseinheiten der Textverarbeitung:
+Token sind die Grundeinheiten der Textverarbeitung:
 
 - ~4 Zeichen = 1 Token (Englisch)
-- ~1-2 Zeichen = 1 Token (Chinesisch)
+- ~1–2 Zeichen = 1 Token (Chinesisch)
 - 1 Bild = variiert je nach Größe und Detailgrad
 
-### Token-Schätzung
+### Token schätzen
 
 ```python
 # Rough estimation
-def estimate_tokens(
+def estimate_tokens(text):
+    return len(text) / 4  # Approximate for English
+
+# Actual count (for OpenAI models)
+import tiktoken
+encoder = tiktoken.encoding_for_model("gpt-4o")
+tokens = encoder.encode("Your text here")
+print(f"Token count: {len(tokens)}")
+```
+
+## Nutzungsverfolgung
+
+### Dashboard
+
+Überwachen Sie Ihre Nutzung im [Dashboard](https://lemondata.cc/dashboard):
+
+- Kontostand in Echtzeit
+- Nutzungsverlauf nach Modell
+- Kostenaufschlüsselung
+- API-Schlüssel-Nutzung
+
+### API-Antwort
+
+Jede Antwort enthält Nutzungsinformationen:
+
+```json
+{
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 100,
+    "total_tokens": 150
+  }
+}
+```
+
+## Kostenoptimierung
+
+<AccordionGroup>
+  <Accordion title="Geeignete Modelle verwenden">
+    Verwenden Sie kleinere Modelle (GPT-4o-mini, Gemini Flash) für einfache Aufgaben.
+  </Accordion>
+
+  <Accordion title="Caching implementieren">
+    Cachen Sie Antworten für wiederholte identische Anfragen.
+  </Accordion>
+
+  <Accordion title="Prompts optimieren">
+    Halten Sie Prompts knapp und dennoch klar.
+  </Accordion>
+
+  <Accordion title="`max_tokens` festlegen">
+    Begrenzen Sie die Antwortlänge, wenn vollständige Antworten nicht erforderlich sind.
+  </Accordion>
+
+  <Accordion title="Streaming für lange Antworten verwenden">
+    Streaming verursacht keine zusätzlichen Kosten, verbessert aber die wahrgenommene Performance.
+  </Accordion>
+</AccordionGroup>
+
+## Warnungen bei niedrigem Kontostand
+
+Konfigurieren Sie Benachrichtigungen, wenn Ihr Kontostand sinkt:
+
+1. Gehen Sie zu **Dashboard → Settings → Notifications**
+2. Legen Sie Ihren Schwellenwert fest
+3. Erhalten Sie E-Mail-Benachrichtigungen
+
+## Guthaben hinzufügen
+
+### Zahlungsmethoden
+
+- Alipay (支付宝)
+- WeChat Pay (微信支付)
+- Stripe (Visa, Mastercard)
+
+### Schritte
+
+1. Melden Sie sich im [Dashboard](https://lemondata.cc/dashboard) an
+2. Klicken Sie auf **Add Credits**
+3. Wählen Sie Betrag und Zahlungsmethode aus
+4. Schließen Sie die Zahlung ab
+
+Das Guthaben wird unmittelbar nach der Zahlungsbestätigung hinzugefügt.
+
+## API-Schlüssel-Limits
+
+Sie können Ausgabenlimits für einzelne API-Schlüssel festlegen:
+
+1. Gehen Sie zu **Dashboard → API Keys**
+2. Klicken Sie auf einen Schlüssel, um ihn zu bearbeiten
+3. Legen Sie **Usage Limit** fest
+
+Wenn das Limit erreicht ist, geben Anfragen mit diesem Schlüssel `402 Payment Required` zurück.
+
+## Rechnungen
+
+Für Geschäftskonten sind Rechnungen verfügbar:
+
+1. Gehen Sie zu **Dashboard → Billing**
+2. Sehen Sie den Transaktionsverlauf ein
+3. Laden Sie Rechnungen als PDF herunter
+
+## Fragen?
+
+Kontaktieren Sie support@lemondata.cc bei Fragen zur Abrechnung.

@@ -1,33 +1,37 @@
 ---
 title: "Tạo Video"
 openapi: "POST /v1/videos/generations"
-description: "Tạo một tác vụ tạo video"
+description: "Tạo một tác vụ sinh video"
 ---
 
 ## Tổng quan
 
-Quá trình tạo video diễn ra bất đồng bộ. Bạn gửi một yêu cầu và nhận được một task ID, sau đó thực hiện poll để lấy kết quả.
+Việc sinh video là bất đồng bộ. Bạn gửi một request, nhận được task ID và `poll_url`, sau đó polling để lấy kết quả.
+
+<Info>
+Để có hành vi polling đáng tin cậy nhất, hãy làm theo chính xác `poll_url` được trả về từ request tạo.
+</Info>
 
 ## Request Body
 
 <ParamField body="model" type="string" default="sora-2">
-  ID của model video. Xem [Video Generation Guide](/guides/video-generation) để biết danh sách đầy đủ hơn 80 model từ 11 nhà cung cấp.
+  ID model video. Mặc định của API là `sora-2`. Xem [Hướng dẫn Sinh Video](/guides/video-generation) để biết ma trận model hiện tại và các khả năng được hỗ trợ.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  Mô tả bằng văn bản cho video cần tạo.
+  Mô tả văn bản của video cần tạo.
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  URL của hình ảnh bắt đầu cho quá trình tạo image-to-video (I2V).
+  URL có thể truy cập công khai của ảnh khởi đầu cho việc sinh image-to-video (I2V). Để có khả năng tương thích tốt nhất giữa các model, nên ưu tiên `image_url`.
 </ParamField>
 
 <ParamField body="image" type="string">
-  Hình ảnh được mã hóa Base64 với tiền tố data URL (ví dụ: `data:image/jpeg;base64,...`). Phương thức thay thế cho `image_url` để tạo I2V.
+  Ảnh inline dưới dạng data URL (ví dụ: `data:image/jpeg;base64,...`). Được hỗ trợ bởi các model tương thích, nhưng `image_url` mang lại khả năng tương thích rộng nhất trên các model video.
 </ParamField>
 
 <ParamField body="duration" type="integer">
-  Thời lượng video tính bằng giây (tùy thuộc vào model).
+  Thời lượng video tính bằng giây (phụ thuộc vào model).
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
@@ -43,15 +47,15 @@ Quá trình tạo video diễn ra bất đồng bộ. Bạn gửi một yêu c�
 </ParamField>
 
 <ParamField body="negative_prompt" type="string">
-  Những gì cần tránh trong quá trình tạo video.
+  Những gì cần tránh trong quá trình sinh video.
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  Seed ngẫu nhiên để tái tạo kết quả tạo video.
+  Seed ngẫu nhiên để tái tạo kết quả sinh.
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
-  Thang đo classifier-free guidance (0-20).
+  Thang hướng dẫn classifier-free (0-20).
 </ParamField>
 
 <ParamField body="motion_strength" type="number">
@@ -59,21 +63,25 @@ Quá trình tạo video diễn ra bất đồng bộ. Bạn gửi một yêu c�
 </ParamField>
 
 <ParamField body="start_image" type="string">
-  URL của hình ảnh khung hình bắt đầu.
+  URL của ảnh khung hình bắt đầu.
 </ParamField>
 
 <ParamField body="end_image" type="string">
-  URL của hình ảnh khung hình kết thúc.
+  URL của ảnh khung hình kết thúc.
 </ParamField>
 
 <ParamField body="user" type="string">
-  Một mã định danh duy nhất cho người dùng cuối.
+  Một định danh duy nhất cho người dùng cuối.
 </ParamField>
 
 ## Response
 
 <ResponseField name="task_id" type="string">
-  Mã định danh tác vụ duy nhất để thực hiện poll.
+  Định danh tác vụ duy nhất để polling.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  URL polling được khuyến nghị cho tác vụ này. Sử dụng chính xác đường dẫn này khi kiểm tra trạng thái.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -114,6 +122,7 @@ response = requests.post(
 
 data = response.json()
 task_id = data["task_id"]
+print(f"Poll URL: {data['poll_url']}")
 print(f"Task ID: {task_id}")
 ```
 
@@ -132,6 +141,7 @@ const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
 });
 
 const data = await response.json();
+console.log(`Poll URL: ${data.poll_url}`);
 console.log(`Task ID: ${data.task_id}`);
 ```
 
@@ -163,6 +173,7 @@ func main() {
 
     var result map[string]interface{}
     json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Printf("Poll URL: %s\n", result["poll_url"])
     fmt.Printf("Task ID: %s\n", result["task_id"])
 }
 ```
@@ -189,6 +200,7 @@ $response = curl_exec($ch);
 curl_close($ch);
 
 $data = json_decode($response, true);
+echo "Poll URL: " . $data['poll_url'] . "\n";
 echo "Task ID: " . $data['task_id'];
 ```
 </RequestExample>
@@ -197,6 +209,7 @@ echo "Task ID: " . $data['task_id'];
 ```json Response
 {
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "pending",
   "model": "sora-2",
   "created_at": 1706000000
@@ -204,7 +217,7 @@ echo "Task ID: " . $data['task_id'];
 ```
 </ResponseExample>
 
-## Image to Video
+## Image sang Video
 
 ```python
 response = requests.post(
@@ -218,9 +231,9 @@ response = requests.post(
 )
 ```
 
-## Kiểm soát Keyframe
+## Điều khiển Keyframe
 
-Sử dụng `start_image` và `end_image` để kiểm soát các khung hình đầu tiên và cuối cùng (được hỗ trợ bởi Seedance 2.0):
+Sử dụng `start_image` và `end_image` để điều khiển khung hình đầu tiên và cuối cùng (được hỗ trợ bởi Seedance 2.0):
 
 ```python
 response = requests.post(
@@ -236,13 +249,13 @@ response = requests.post(
 )
 ```
 
-## Các Model hiện có
+## Các Model Khả Dụng
 
 <Info>
-Danh sách model được cập nhật thường xuyên. Để biết các model mới nhất và giá cả, hãy truy cập [Models page](https://lemondata.cc/vi/models).
+Danh sách model được cập nhật thường xuyên. Để xem các model và mức giá mới nhất hiện có, hãy truy cập [trang Models](https://lemondata.cc/vi/models).
 </Info>
 
-Để xem hướng dẫn đầy đủ với các so sánh tính năng và ví dụ sử dụng, hãy xem [Video Generation Guide](/guides/video-generation).
+Để xem hướng dẫn đầy đủ với so sánh khả năng và ví dụ sử dụng, hãy xem [Hướng dẫn Sinh Video](/guides/video-generation).
 
 ### Sora (OpenAI)
 
@@ -258,6 +271,7 @@ Danh sách model được cập nhật thường xuyên. Để biết các model
 |-------|-------------|
 | `kling-v2.6-pro` | T2V, thế hệ mới nhất |
 | `kling-v2.6-std` | T2V, nhanh |
+| `kling-v2.5-turbo-std` | T2V, tầng turbo |
 | `kling-v2.1-master` | T2V, I2V, chất lượng master |
 | `kling-v2.1-pro` | T2V, I2V |
 | `kling-video` | T2V, I2V |
@@ -269,6 +283,7 @@ Danh sách model được cập nhật thường xuyên. Để biết các model
 
 | Model | Khả năng |
 |-------|-------------|
+| `veo2` | T2V |
 | `veo3.1` | T2V |
 | `veo3.1-pro` | T2V, chuyên nghiệp |
 | `veo3.1-4k` | T2V, đầu ra 4K |
@@ -285,12 +300,13 @@ Danh sách model được cập nhật thường xuyên. Để biết các model
 | `seedance-1-0-lite-t2v` | T2V, nhẹ |
 | `seedance-1-0-lite-i2v` | I2V, nhẹ |
 
-### Các nhà cung cấp khác
+### Nhà Cung Cấp Khác
 
 | Model | Nhà cung cấp | Khả năng |
 |-------|----------|-------------|
 | `hailuo-2.3` | MiniMax | T2V, I2V |
 | `hailuo-2.3-pro` | MiniMax | T2V, I2V, chất lượng cao hơn |
+| `hailuo-2.3-fast` | MiniMax | T2V, I2V, tầng nhanh |
 | `wan-2.6` | Alibaba | T2V |
 | `wan2.6-i2v` | Alibaba | I2V |
 | `runwayml-gen4-turbo-5` | Runway | T2V, I2V (5s) |
@@ -298,6 +314,7 @@ Danh sách model được cập nhật thường xuyên. Để biết các model
 | `luma-video-api` | Luma | T2V |
 | `luma-video-extend-api` | Luma | Mở rộng video |
 | `viduq3-pro` | Shengshu | T2V, I2V |
+| `viduq3-turbo` | Shengshu | T2V, I2V, tầng turbo |
 | `viduq2-pro` | Shengshu | T2V, I2V |
 | `grok-video-3` | xAI | T2V |
 | `higgsfield-turbo` | Higgsfield | T2V |

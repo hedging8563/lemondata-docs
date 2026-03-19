@@ -6,12 +6,16 @@ description: "Bir video oluşturma görevi oluşturur"
 
 ## Genel Bakış
 
-Video oluşturma işlemi asenkrondur. Bir istek gönderirsiniz ve bir görev kimliği (`task_id`) alırsınız, ardından sonucu almak için sorgulama (poll) yaparsınız.
+Video oluşturma asenkron olarak çalışır. Bir istek gönderirsiniz, bir görev kimliği ve `poll_url` alırsınız, ardından sonuç için polling yaparsınız.
+
+<Info>
+En güvenilir polling davranışı için, oluşturma isteği tarafından döndürülen tam `poll_url` değerini izleyin.
+</Info>
 
 ## İstek Gövdesi
 
 <ParamField body="model" type="string" default="sora-2">
-  Video model kimliği. 11 sağlayıcıdaki 80'den fazla modelin tam listesi için [Video Generation Guide](/guides/video-generation) sayfasına bakın.
+  Video model kimliği. API varsayılanı `sora-2`'dir. Güncel model matrisi ve desteklenen yetenekler için [Video Oluşturma Kılavuzu](/guides/video-generation) sayfasına bakın.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -19,11 +23,11 @@ Video oluşturma işlemi asenkrondur. Bir istek gönderirsiniz ve bir görev kim
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  Görüntüden videoya (I2V) oluşturma için başlangıç görüntüsünün URL'si.
+  Image-to-video (I2V) oluşturma için başlangıç görselinin herkese açık olarak erişilebilir URL'si. Modeller arası en iyi uyumluluk için `image_url` tercih edin.
 </ParamField>
 
 <ParamField body="image" type="string">
-  Veri URL'si önekiyle Base64 kodlu görüntü (örneğin, `data:image/jpeg;base64,...`). I2V oluşturma için `image_url` parametresine alternatiftir.
+  Data URL olarak satır içi görsel (örneğin, `data:image/jpeg;base64,...`). Uyumlu modeller tarafından desteklenir, ancak `image_url` video modelleri arasında en geniş uyumluluğu sağlar.
 </ParamField>
 
 <ParamField body="duration" type="integer">
@@ -31,11 +35,11 @@ Video oluşturma işlemi asenkrondur. Bir istek gönderirsiniz ve bir görev kim
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  En boy oranı (örneğin, `16:9`, `9:16`, `1:1`).
+  En-boy oranı (ör. `16:9`, `9:16`, `1:1`).
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  Video çözünürlüğü (örneğin, `1080p`, `720p`).
+  Video çözünürlüğü (ör. `1080p`, `720p`).
 </ParamField>
 
 <ParamField body="fps" type="integer">
@@ -43,15 +47,15 @@ Video oluşturma işlemi asenkrondur. Bir istek gönderirsiniz ve bir görev kim
 </ParamField>
 
 <ParamField body="negative_prompt" type="string">
-  Video oluşturma sırasında nelerin önleneceği.
+  Video oluşturma sırasında kaçınılması gerekenler.
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  Tekrar üretilebilir oluşturma için rastgele tohum (seed).
+  Tekrarlanabilir oluşturma için rastgele seed.
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
-  Sınıflandırıcı içermeyen rehberlik ölçeği (0-20).
+  Classifier-free guidance ölçeği (0-20).
 </ParamField>
 
 <ParamField body="motion_strength" type="number">
@@ -59,11 +63,11 @@ Video oluşturma işlemi asenkrondur. Bir istek gönderirsiniz ve bir görev kim
 </ParamField>
 
 <ParamField body="start_image" type="string">
-  Başlangıç karesi görüntüsünün URL'si.
+  Başlangıç karesi görselinin URL'si.
 </ParamField>
 
 <ParamField body="end_image" type="string">
-  Bitiş karesi görüntüsünün URL'si.
+  Bitiş karesi görselinin URL'si.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -73,7 +77,11 @@ Video oluşturma işlemi asenkrondur. Bir istek gönderirsiniz ve bir görev kim
 ## Yanıt
 
 <ResponseField name="task_id" type="string">
-  Sorgulama için benzersiz görev tanımlayıcı.
+  Polling için benzersiz görev tanımlayıcısı.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  Bu görev için önerilen polling URL'si. Durumu kontrol ederken bu tam yolu kullanın.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -114,6 +122,7 @@ response = requests.post(
 
 data = response.json()
 task_id = data["task_id"]
+print(f"Poll URL: {data['poll_url']}")
 print(f"Task ID: {task_id}")
 ```
 
@@ -132,6 +141,7 @@ const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
 });
 
 const data = await response.json();
+console.log(`Poll URL: ${data.poll_url}`);
 console.log(`Task ID: ${data.task_id}`);
 ```
 
@@ -163,6 +173,7 @@ func main() {
 
     var result map[string]interface{}
     json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Printf("Poll URL: %s\n", result["poll_url"])
     fmt.Printf("Task ID: %s\n", result["task_id"])
 }
 ```
@@ -189,6 +200,7 @@ $response = curl_exec($ch);
 curl_close($ch);
 
 $data = json_decode($response, true);
+echo "Poll URL: " . $data['poll_url'] . "\n";
 echo "Task ID: " . $data['task_id'];
 ```
 </RequestExample>
@@ -197,6 +209,7 @@ echo "Task ID: " . $data['task_id'];
 ```json Response
 {
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "pending",
   "model": "sora-2",
   "created_at": 1706000000
@@ -204,7 +217,7 @@ echo "Task ID: " . $data['task_id'];
 ```
 </ResponseExample>
 
-## Görüntüden Videoya
+## Image to Video
 
 ```python
 response = requests.post(
@@ -218,9 +231,9 @@ response = requests.post(
 )
 ```
 
-## Anahtar Kare (Keyframe) Kontrolü
+## Keyframe Kontrolü
 
-İlk ve son kareleri kontrol etmek için `start_image` ve `end_image` parametrelerini kullanın (Seedance 2.0 tarafından desteklenir):
+İlk ve son kareleri kontrol etmek için `start_image` ve `end_image` kullanın (Seedance 2.0 tarafından desteklenir):
 
 ```python
 response = requests.post(
@@ -236,13 +249,13 @@ response = requests.post(
 )
 ```
 
-## Mevcut Modeller
+## Kullanılabilir Modeller
 
 <Info>
-Model listesi sık sık güncellenmektedir. Mevcut en son modeller ve fiyatlandırma için [Models page](https://lemondata.cc/tr/models) sayfasını ziyaret edin.
+Model listesi sık sık güncellenir. En son kullanılabilir modeller ve fiyatlandırma için [Models page](https://lemondata.cc/tr/models) sayfasını ziyaret edin.
 </Info>
 
-Yetenek karşılaştırmaları ve kullanım örneklerini içeren eksiksiz bir kılavuz için [Video Generation Guide](/guides/video-generation) sayfasına bakın.
+Yetenek karşılaştırmaları ve kullanım örnekleri içeren eksiksiz bir kılavuz için [Video Oluşturma Kılavuzu](/guides/video-generation) sayfasına bakın.
 
 ### Sora (OpenAI)
 
@@ -256,19 +269,21 @@ Yetenek karşılaştırmaları ve kullanım örneklerini içeren eksiksiz bir k�
 
 | Model | Yetenekler |
 |-------|-------------|
-| `kling-v2.6-pro` | T2V, en son nesil |
+| `kling-v2.6-pro` | T2V, en yeni nesil |
 | `kling-v2.6-std` | T2V, hızlı |
+| `kling-v2.5-turbo-std` | T2V, turbo katmanı |
 | `kling-v2.1-master` | T2V, I2V, master kalitesi |
 | `kling-v2.1-pro` | T2V, I2V |
 | `kling-video` | T2V, I2V |
 | `kling-video-extend` | Video uzatma |
-| `kling-video-o1-pro` | T2V, O1 akıl yürütme |
+| `kling-video-o1-pro` | T2V, O1 muhakemesi |
 | `kling-effects` | Görsel efektler |
 
 ### Veo (Google)
 
 | Model | Yetenekler |
 |-------|-------------|
+| `veo2` | T2V |
 | `veo3.1` | T2V |
 | `veo3.1-pro` | T2V, profesyonel |
 | `veo3.1-4k` | T2V, 4K çıktı |
@@ -279,7 +294,7 @@ Yetenek karşılaştırmaları ve kullanım örneklerini içeren eksiksiz bir k�
 
 | Model | Yetenekler |
 |-------|-------------|
-| `seedance-2-0` | T2V, I2V, anahtar kare, uzatma, düzenleme |
+| `seedance-2-0` | T2V, I2V, keyframe, uzatma, düzenleme |
 | `seedance-1-5-pro` | T2V, I2V |
 | `seedance-1-0-pro` | T2V, I2V |
 | `seedance-1-0-lite-t2v` | T2V, hafif |
@@ -291,6 +306,7 @@ Yetenek karşılaştırmaları ve kullanım örneklerini içeren eksiksiz bir k�
 |-------|----------|-------------|
 | `hailuo-2.3` | MiniMax | T2V, I2V |
 | `hailuo-2.3-pro` | MiniMax | T2V, I2V, daha yüksek kalite |
+| `hailuo-2.3-fast` | MiniMax | T2V, I2V, hızlı katman |
 | `wan-2.6` | Alibaba | T2V |
 | `wan2.6-i2v` | Alibaba | I2V |
 | `runwayml-gen4-turbo-5` | Runway | T2V, I2V (5s) |
@@ -298,6 +314,7 @@ Yetenek karşılaştırmaları ve kullanım örneklerini içeren eksiksiz bir k�
 | `luma-video-api` | Luma | T2V |
 | `luma-video-extend-api` | Luma | Video uzatma |
 | `viduq3-pro` | Shengshu | T2V, I2V |
+| `viduq3-turbo` | Shengshu | T2V, I2V, turbo katmanı |
 | `viduq2-pro` | Shengshu | T2V, I2V |
 | `grok-video-3` | xAI | T2V |
 | `higgsfield-turbo` | Higgsfield | T2V |

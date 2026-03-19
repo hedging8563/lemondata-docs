@@ -1,17 +1,17 @@
 ---
 title: "Geração de Vídeo"
-description: "Gere vídeos com mais de 80 modelos em 11 provedores — text-to-video, image-to-video, controle de keyframe, extensão de vídeo e edição"
+description: "Gere vídeos com modelos de 11 provedores — text-to-video, image-to-video, controle por keyframe, extensão de vídeo e edição"
 ---
 
-## Visão Geral
+## Visão geral
 
-A LemonData fornece acesso a **mais de 69 modelos de geração de vídeo** de 11 provedores por meio de uma única API unificada. A geração de vídeo é **assíncrona** — você envia uma solicitação e recebe um ID de tarefa (task ID) e, em seguida, realiza a consulta (poll) pelo resultado.
+A LemonData fornece acesso a modelos de geração de vídeo de 11 provedores por meio de uma única API unificada. A geração de vídeo é **assíncrona** — você envia uma solicitação, recebe um ID de tarefa e `poll_url`, e então faz polling para obter o resultado.
 
 <Info>
-A lista de modelos é atualizada frequentemente. Para os modelos e preços mais recentes disponíveis, visite a [Models page](https://lemondata.cc/pt/models) ou use a [Models API](/api-reference/models/list-models).
+A lista de modelos é atualizada com frequência. Para ver os modelos disponíveis mais recentes e os preços, visite a [página de Modelos](https://lemondata.cc/pt/models) ou use a [API de Modelos](/api-reference/models/list-models).
 </Info>
 
-### Fluxo de Trabalho Assíncrono
+### Fluxo assíncrono
 
 ```mermaid
 sequenceDiagram
@@ -22,10 +22,10 @@ sequenceDiagram
     Client->>LemonData: POST /v1/videos/generations
     LemonData->>Provider: Forward request
     Provider-->>LemonData: task_id + pending
-    LemonData-->>Client: { task_id, status: "pending" }
+    LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
     loop Poll every 5-10s
-        Client->>LemonData: GET /v1/videos/generations/{task_id}
+        Client->>LemonData: GET poll_url
         LemonData->>Provider: Query status
         Provider-->>LemonData: Status update
         LemonData-->>Client: { status, video_url? }
@@ -42,7 +42,7 @@ API_KEY = "sk-your-api-key"
 BASE = "https://api.lemondata.cc/v1"
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
-# Passo 1: Enviar solicitação de geração
+# Step 1: Submit generation request
 resp = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
@@ -52,11 +52,13 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-task_id = resp.json()["task_id"]
+create_data = resp.json()
+task_id = create_data["task_id"]
+poll_url = create_data["poll_url"]
 
-# Passo 2: Consultar o resultado
+# Step 2: Poll for result
 while True:
-    status = requests.get(f"{BASE}/videos/generations/{task_id}", headers=headers).json()
+    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
     if status["status"] in ("completed", "succeeded"):
         print(f"Video URL: {status['video_url']}")
         break
@@ -71,8 +73,8 @@ const API_KEY = 'sk-your-api-key';
 const BASE = 'https://api.lemondata.cc/v1';
 const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
 
-// Passo 1: Enviar
-const { task_id } = await fetch(`${BASE}/videos/generations`, {
+// Step 1: Submit
+const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
   method: 'POST', headers,
   body: JSON.stringify({
     model: 'kling-v2.6-pro',
@@ -82,9 +84,9 @@ const { task_id } = await fetch(`${BASE}/videos/generations`, {
   })
 }).then(r => r.json());
 
-// Passo 2: Consultar
+// Step 2: Poll
 const poll = setInterval(async () => {
-  const status = await fetch(`${BASE}/videos/generations/${task_id}`, { headers }).then(r => r.json());
+  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
   if (['completed', 'succeeded'].includes(status.status)) {
     console.log('Video URL:', status.video_url);
     clearInterval(poll);
@@ -97,13 +99,13 @@ const poll = setInterval(async () => {
 
 </CodeGroup>
 
-## Matriz de Capacidades dos Modelos
+## Matriz de capacidades dos modelos
 
 Diferentes modelos se destacam em diferentes tarefas. Use esta matriz para escolher o modelo certo para o seu caso de uso.
 
-**Legenda**: ✅ Suportado | ❌ Não suportado
+**Legenda**: ✅ Compatível | ❌ Não compatível
 
-| Série | Provedor | T2V | I2V | Keyframe | Extensão | Edição | Duração Máxima |
+| Series | Provider | T2V | I2V | Keyframe | Extension | Editing | Max Duration |
 |--------|----------|-----|-----|----------|-----------|---------|-------------|
 | **Sora** | OpenAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~20s |
 | **Kling** | Kuaishou | ✅ | ✅ | ❌ | ✅ | ❌ | 10s |
@@ -117,85 +119,87 @@ Diferentes modelos se destacam em diferentes tarefas. Use esta matriz para escol
 | **Grok** | xAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~10s |
 | **Higgsfield** | Higgsfield | ✅ | ❌ | ❌ | ❌ | ❌ | ~5s |
 
-### Definições de Capacidades
+### Definições de capacidade
 
-- **T2V (Text-to-Video)**: Gerar vídeo a partir de um prompt de texto
-- **I2V (Image-to-Video)**: Animar uma imagem estática em vídeo usando `image_url` ou `image`
-- **Keyframe**: Controlar os quadros inicial e final com `start_image` + `end_image`
-- **Extensão**: Estender a duração de um vídeo existente
-- **Edição**: Modificar aspectos específicos de um vídeo existente
+- **T2V (Text-to-Video)**: Gera vídeo a partir de um prompt de texto
+- **I2V (Image-to-Video)**: Anima uma imagem estática em vídeo. Para a compatibilidade mais ampla, forneça um `image_url` público.
+- **Keyframe**: Controla os quadros inicial e final com `start_image` + `end_image`
+- **Extension**: Estende a duração de um vídeo existente
+- **Editing**: Modifica aspectos específicos de um vídeo existente
 
-## Modelos Disponíveis por Série
+## Modelos disponíveis por série
 
 ### Sora (OpenAI)
 
-| Modelo | Qualidade | Notas |
+| Model | Quality | Notes |
 |-------|---------|-------|
-| `sora-2` | Padrão | Modelo padrão, bom equilíbrio entre qualidade e velocidade |
-| `sora-2-pro` | Alta | Qualidade superior, tempo de geração mais longo |
+| `sora-2` | Padrão | Modelo de exemplo padrão |
+| `sora-2-pro` | Alta | Qualidade superior, maior tempo de geração |
 | `sora-2-characters` | Padrão | Geração focada em personagens |
 
 ### Kling (Kuaishou)
 
-| Modelo | Capacidade | Notas |
+| Model | Capability | Notes |
 |-------|-----------|-------|
 | `kling-v2.6-pro` | T2V | Geração mais recente, qualidade profissional |
 | `kling-v2.6-std` | T2V | Geração mais recente, rápido |
-| `kling-v2.5-turbo-pro` | T2V | Velocidade turbo, qualidade pro |
-| `kling-v2.1-master` | T2V/I2V | Qualidade master |
+| `kling-v2.5-turbo-std` | T2V | Nível Turbo |
+| `kling-v2.5-turbo-pro` | T2V | Velocidade Turbo, qualidade pro |
+| `kling-v2.1-master` | T2V/I2V | Qualidade Master |
 | `kling-v2.1-pro` | T2V/I2V | Qualidade profissional |
 | `kling-v2.1-standard` | T2V/I2V | Qualidade padrão |
 | `kling-video` | T2V/I2V | Modelo base |
-| `kling-video-extend` | Extensão | Estender vídeos existentes |
+| `kling-video-extend` | Extension | Estende vídeos existentes |
 | `kling-video-o1-pro` | T2V | Raciocínio O1, qualidade pro |
 | `kling-video-o1-std` | T2V | Raciocínio O1, padrão |
-| `kling-effects` | Efeitos | Aplicar efeitos visuais |
+| `kling-effects` | Effects | Aplica efeitos visuais |
 | `kling-omni-video` | T2V | Modelo Omni |
 | `kling-motion-control` | T2V | Geração com controle de movimento |
 
 ### Veo (Google)
 
-| Modelo | Qualidade | Notas |
+| Model | Quality | Notes |
 |-------|---------|-------|
+| `veo2` | Padrão | Modelo da série Veo 2 |
 | `veo3.1` | Padrão | Modelo de vídeo mais recente do Google |
 | `veo3.1-pro` | Alta | Qualidade profissional |
 | `veo3.1-4k` | Ultra | Saída em resolução 4K |
 | `veo3.1-fast` | Rápido | Geração mais rápida |
-| `veo3.1-fast-4k` | Rápido + 4K | Geração rápida com saída em 4K |
+| `veo3.1-fast-4k` | Rápido + 4K | Geração rápida com saída 4K |
 | `veo3.1-components` | Padrão | Geração baseada em componentes |
 | `veo3` | Padrão | Geração anterior |
 | `veo3-pro` | Alta | Geração anterior, profissional |
-| `veo3-fast` | Rápido | Geração anterior, rápida |
+| `veo3-fast` | Rápido | Geração anterior, rápido |
 
 ### Seedance (ByteDance)
 
-| Modelo | Capacidade | Notas |
+| Model | Capability | Notes |
 |-------|-----------|-------|
-| `seedance-2-0` | T2V/I2V/Keyframe/Extensão/Edição | Mais recente, mais capaz |
+| `seedance-2-0` | T2V/I2V/Keyframe/Extension/Editing | Mais recente, mais capaz |
 | `seedance-1-5-pro` | T2V/I2V | Geração anterior, qualidade pro |
 | `seedance-1-0-pro` | T2V/I2V | Primeira geração, pro |
-| `seedance-1-0-pro-fast` | T2V/I2V | Primeira geração, rápida |
+| `seedance-1-0-pro-fast` | T2V/I2V | Primeira geração, rápido |
 | `seedance-1-0-lite-t2v` | T2V | Text-to-video leve |
 | `seedance-1-0-lite-i2v` | I2V | Image-to-video leve |
 
 <Note>
-O Seedance 2.0 suporta a mais ampla gama de capacidades, incluindo multimodal-to-video, extensão de vídeo e edição de vídeo — tudo através do mesmo endpoint de API.
+O Seedance 2.0 suporta a maior variedade de capacidades, incluindo multimodal-to-video, extensão de vídeo e edição de vídeo — tudo por meio do mesmo endpoint da API.
 </Note>
 
 ### Hailuo (MiniMax)
 
-| Modelo | Qualidade | Notas |
+| Model | Quality | Notes |
 |-------|---------|-------|
 | `hailuo-2.3` | Padrão | Boa qualidade |
-| `hailuo-2.3-pro` | Alta | Saída de qualidade superior |
+| `hailuo-2.3-pro` | Alta | Saída de maior qualidade |
 | `hailuo-2.3-fast` | Rápido | Geração mais rápida |
 | `hailuo-2.3-standard` | Padrão | Nível padrão |
 | `video-01` | Padrão | MiniMax video-01 |
-| `video-01-live` | Padrão | Geração em estilo live |
+| `video-01-live` | Padrão | Geração em estilo ao vivo |
 
 ### Wan (Alibaba)
 
-| Modelo | Capacidade | Notas |
+| Model | Capability | Notes |
 |-------|-----------|-------|
 | `wan-2.6` | T2V | Text-to-video mais recente |
 | `wan2.6-i2v` | I2V | Image-to-video mais recente |
@@ -206,45 +210,46 @@ O Seedance 2.0 suporta a mais ampla gama de capacidades, incluindo multimodal-to
 
 ### Runway
 
-| Modelo | Duração | Notas |
+| Model | Duration | Notes |
 |-------|----------|-------|
 | `runwayml-gen4-turbo-5` | 5s | Geração rápida |
 | `runwayml-gen4-turbo-10` | 10s | Clipes mais longos |
 
 ### Luma
 
-| Modelo | Capacidade | Notas |
+| Model | Capability | Notes |
 |-------|-----------|-------|
 | `luma-video-api` | T2V | Text-to-video |
-| `luma-video-extend-api` | Extensão | Estender vídeos existentes |
+| `luma-video-extend-api` | Extension | Estende vídeos existentes |
 
 ### Vidu (Shengshu)
 
-| Modelo | Qualidade | Notas |
+| Model | Quality | Notes |
 |-------|---------|-------|
+| `viduq3-turbo` | Rápido | Nível Turbo |
 | `viduq3-pro` | Alta | Geração mais recente |
 | `viduq2-pro` | Alta | Geração anterior, pro |
-| `viduq2-pro-fast` | Rápido | Geração anterior, pro rápida |
+| `viduq2-pro-fast` | Rápido | Geração anterior, fast pro |
 | `viduq2` | Padrão | Geração anterior, padrão |
-| `viduq2-turbo` | Rápido | Velocidade turbo |
+| `viduq2-turbo` | Rápido | Velocidade Turbo |
 | `vidu2.0` | Padrão | Modelo base |
 
 ### Grok (xAI)
 
-| Modelo | Notas |
+| Model | Notes |
 |-------|-------|
 | `grok-video-3` | Modelo de geração de vídeo da xAI |
 | `grok-video-3-10s` | Variante de 10 segundos |
 
 ### Higgsfield
 
-| Modelo | Notas |
+| Model | Notes |
 |-------|-------|
-| `higgsfield-turbo` | Mais rápido, custo menor |
+| `higgsfield-turbo` | Mais rápido, menor custo |
 | `higgsfield-standard` | Qualidade padrão |
-| `higgsfield-lite` | Versão leve |
+| `higgsfield-lite` | Leve |
 
-## Exemplos de Uso
+## Exemplos de uso
 
 ### Text-to-Video (T2V)
 
@@ -265,10 +270,10 @@ response = requests.post(f"{BASE}/videos/generations",
 
 ### Image-to-Video (I2V)
 
-Animar uma imagem estática. Use `image_url` para uma URL ou `image` para dados em base64.
+Anime uma imagem estática. Para a compatibilidade mais ampla entre os modelos de vídeo, hospede a imagem de origem e passe `image_url`.
 
 ```python
-# Usando URL da imagem
+# Using image URL
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
@@ -278,22 +283,9 @@ response = requests.post(f"{BASE}/videos/generations",
     }
 )
 
-# Usando imagem em base64
-import base64
-with open("photo.jpg", "rb") as f:
-    image_b64 = base64.b64encode(f.read()).decode()
-
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "kling-v2.1-master",
-        "prompt": "Gentle wind blows through the scene",
-        "image": f"data:image/jpeg;base64,{image_b64}"
-    }
-)
 ```
 
-### Controle de Keyframe (Imagem Inicial + Final)
+### Controle por keyframe (imagem inicial + final)
 
 Controle tanto o primeiro quanto o último quadro para transições precisas. Atualmente suportado pelo Seedance 2.0.
 
@@ -310,9 +302,9 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-### Extensão de Vídeo
+### Extensão de vídeo
 
-Estender a duração de um vídeo existente. Use modelos com capacidade de extensão.
+Estenda a duração de um vídeo existente. Use modelos com capacidade de extensão.
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
@@ -325,22 +317,22 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-## Referência de Parâmetros
+## Referência de parâmetros
 
-| Parâmetro | Tipo | Descrição |
+| Parameter | Type | Description |
 |-----------|------|-------------|
 | `model` | string | ID do modelo (padrão: `sora-2`) |
 | `prompt` | string | **Obrigatório.** Descrição em texto do vídeo |
 | `image_url` | string | URL da imagem inicial (para I2V) |
-| `image` | string | Imagem codificada em base64 com prefixo de URL de dados (para I2V) |
-| `duration` | integer | Duração do vídeo em segundos (1-60, dependente do modelo) |
+| `image` | string | Imagem inline como um data URL. Suportada por modelos compatíveis, mas `image_url` oferece a compatibilidade mais ampla. |
+| `duration` | integer | Duração do vídeo em segundos (1-60, depende do modelo) |
 | `aspect_ratio` | string | `16:9`, `9:16`, `1:1`, etc. |
 | `resolution` | string | `1080p`, `720p`, `4k` |
 | `fps` | integer | Quadros por segundo (1-120) |
 | `negative_prompt` | string | O que evitar na geração |
-| `seed` | integer | Semente aleatória para reprodutibilidade |
-| `cfg_scale` | number | Escala de orientação (0-20) |
-| `motion_strength` | number | Intensidade do movimento (0-1) |
+| `seed` | integer | Seed aleatória para reprodutibilidade |
+| `cfg_scale` | number | Escala de guidance (0-20) |
+| `motion_strength` | number | Intensidade de movimento (0-1) |
 | `start_image` | string | URL do keyframe inicial |
 | `end_image` | string | URL do keyframe final |
 
@@ -348,25 +340,25 @@ response = requests.post(f"{BASE}/videos/generations",
 Nem todos os parâmetros são suportados por todos os modelos. Parâmetros não suportados são ignorados silenciosamente. Verifique a documentação do modelo para os parâmetros suportados.
 </Warning>
 
-## Guia de Seleção de Modelo
+## Guia de seleção de modelos
 
 <CardGroup cols={2}>
-  <Card title="Melhor Qualidade" icon="crown">
+  <Card title="Melhor qualidade" icon="crown">
     **Seedance 2.0** ou **Kling v2.6 Pro** — qualidade cinematográfica, detalhes ricos, movimento natural
   </Card>
-  <Card title="Geração Mais Rápida" icon="bolt">
+  <Card title="Geração mais rápida" icon="bolt">
     **Higgsfield Turbo** ou **Hailuo 2.3** — resultados rápidos para prototipagem e iteração
   </Card>
-  <Card title="Mais Versátil" icon="wand-magic-sparkles">
+  <Card title="Mais versátil" icon="wand-magic-sparkles">
     **Seedance 2.0** — suporta T2V, I2V, keyframe, extensão e edição em um único modelo
   </Card>
-  <Card title="Melhor Custo-benefício" icon="coins">
-    **Wan 2.6** ou **Hailuo 2.3** — qualidade competitiva a um custo menor por geração
+  <Card title="Melhor custo-benefício" icon="coins">
+    **Wan 2.6** ou **Hailuo 2.3** — qualidade competitiva com menor custo por geração
   </Card>
 </CardGroup>
 
-## Faturamento
+## Cobrança
 
-A geração de vídeo utiliza um **preço fixo por geração**. Você é cobrado uma vez quando a tarefa é enviada, independentemente da duração do vídeo. Se a geração falhar, a cobrança é reembolsada automaticamente.
+A geração de vídeo usa **preço fixo por geração**. Você é cobrado uma vez quando a tarefa é enviada, independentemente da duração do vídeo. Se a geração falhar, a cobrança é reembolsada automaticamente.
 
-Verifique os preços atuais na [Models page](https://lemondata.cc/pt/models) ou através da [Pricing API](/api-reference/pricing/get-pricing).
+Verifique os preços atuais na [página de Modelos](https://lemondata.cc/pt/models) ou por meio da [API de Preços](/api-reference/pricing/get-pricing).

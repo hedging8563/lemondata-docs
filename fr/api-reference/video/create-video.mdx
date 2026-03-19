@@ -4,14 +4,18 @@ openapi: "POST /v1/videos/generations"
 description: "Crée une tâche de génération de vidéo"
 ---
 
-## Aperçu
+## Vue d’ensemble
 
-La génération de vidéo est asynchrone. Vous soumettez une requête et recevez un identifiant de tâche (`task_id`), puis vous effectuez un polling pour obtenir le résultat.
+La génération de vidéo est asynchrone. Vous soumettez une requête, recevez un ID de tâche et une `poll_url`, puis interrogez régulièrement pour obtenir le résultat.
+
+<Info>
+Pour un comportement de polling le plus fiable possible, suivez exactement la `poll_url` renvoyée par la requête de création.
+</Info>
 
 ## Corps de la requête
 
 <ParamField body="model" type="string" default="sora-2">
-  ID du modèle vidéo. Consultez le [Video Generation Guide](/guides/video-generation) pour une liste complète de plus de 80 modèles répartis sur 11 fournisseurs.
+  ID du modèle vidéo. La valeur par défaut de l’API est `sora-2`. Consultez le [Guide de génération vidéo](/guides/video-generation) pour la matrice actuelle des modèles et les capacités prises en charge.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -19,11 +23,11 @@ La génération de vidéo est asynchrone. Vous soumettez une requête et recevez
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  URL de l'image de départ pour la génération image-vers-vidéo (I2V).
+  URL publiquement accessible de l’image de départ pour la génération image-vers-vidéo (I2V). Pour une compatibilité optimale entre modèles, privilégiez `image_url`.
 </ParamField>
 
 <ParamField body="image" type="string">
-  Image encodée en Base64 avec préfixe d'URL de données (ex : `data:image/jpeg;base64,...`). Alternative à `image_url` pour la génération I2V.
+  Image inline sous forme d’URL de données (par exemple, `data:image/jpeg;base64,...`). Pris en charge par les modèles compatibles, mais `image_url` offre la compatibilité la plus large entre les modèles vidéo.
 </ParamField>
 
 <ParamField body="duration" type="integer">
@@ -31,11 +35,11 @@ La génération de vidéo est asynchrone. Vous soumettez une requête et recevez
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  Format d'image (ex : `16:9`, `9:16`, `1:1`).
+  Ratio d’aspect (par ex., `16:9`, `9:16`, `1:1`).
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  Résolution vidéo (ex : `1080p`, `720p`).
+  Résolution vidéo (par ex., `1080p`, `720p`).
 </ParamField>
 
 <ParamField body="fps" type="integer">
@@ -43,15 +47,15 @@ La génération de vidéo est asynchrone. Vous soumettez une requête et recevez
 </ParamField>
 
 <ParamField body="negative_prompt" type="string">
-  Ce qu'il faut éviter dans la génération de la vidéo.
+  Ce qu’il faut éviter dans la génération vidéo.
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  Graine aléatoire (seed) pour une génération reproductible.
+  Graine aléatoire pour une génération reproductible.
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
-  Échelle de guidage sans classificateur (CFG scale) (0-20).
+  Échelle de guidance sans classifieur (0-20).
 </ParamField>
 
 <ParamField body="motion_strength" type="number">
@@ -59,25 +63,29 @@ La génération de vidéo est asynchrone. Vous soumettez une requête et recevez
 </ParamField>
 
 <ParamField body="start_image" type="string">
-  URL de l'image de la première image (frame).
+  URL de l’image de l’image-clé de départ.
 </ParamField>
 
 <ParamField body="end_image" type="string">
-  URL de l'image de la dernière image (frame).
+  URL de l’image de l’image-clé de fin.
 </ParamField>
 
 <ParamField body="user" type="string">
-  Un identifiant unique pour l'utilisateur final.
+  Un identifiant unique pour l’utilisateur final.
 </ParamField>
 
 ## Réponse
 
 <ResponseField name="task_id" type="string">
-  Identifiant de tâche unique pour le polling.
+  Identifiant unique de tâche pour le polling.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  URL de polling recommandée pour cette tâche. Utilisez ce chemin exact lors de la vérification du statut.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Statut initial : `pending`.
+  Statut initial : `pending`.
 </ResponseField>
 
 <ResponseField name="model" type="string">
@@ -114,6 +122,7 @@ response = requests.post(
 
 data = response.json()
 task_id = data["task_id"]
+print(f"Poll URL: {data['poll_url']}")
 print(f"Task ID: {task_id}")
 ```
 
@@ -132,6 +141,7 @@ const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
 });
 
 const data = await response.json();
+console.log(`Poll URL: ${data.poll_url}`);
 console.log(`Task ID: ${data.task_id}`);
 ```
 
@@ -163,6 +173,7 @@ func main() {
 
     var result map[string]interface{}
     json.NewDecoder(resp.Body).Decode(&result)
+    fmt.Printf("Poll URL: %s\n", result["poll_url"])
     fmt.Printf("Task ID: %s\n", result["task_id"])
 }
 ```
@@ -189,6 +200,7 @@ $response = curl_exec($ch);
 curl_close($ch);
 
 $data = json_decode($response, true);
+echo "Poll URL: " . $data['poll_url'] . "\n";
 echo "Task ID: " . $data['task_id'];
 ```
 </RequestExample>
@@ -197,6 +209,7 @@ echo "Task ID: " . $data['task_id'];
 ```json Response
 {
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "pending",
   "model": "sora-2",
   "created_at": 1706000000
@@ -204,7 +217,7 @@ echo "Task ID: " . $data['task_id'];
 ```
 </ResponseExample>
 
-## Image vers Vidéo
+## Image vers vidéo
 
 ```python
 response = requests.post(
@@ -218,9 +231,9 @@ response = requests.post(
 )
 ```
 
-## Contrôle des images clés (Keyframes)
+## Contrôle par images-clés
 
-Utilisez `start_image` et `end_image` pour contrôler la première et la dernière image (pris en charge par Seedance 2.0) :
+Utilisez `start_image` et `end_image` pour contrôler les premières et dernières images (pris en charge par Seedance 2.0) :
 
 ```python
 response = requests.post(
@@ -239,10 +252,10 @@ response = requests.post(
 ## Modèles disponibles
 
 <Info>
-La liste des modèles est mise à jour fréquemment. Pour les derniers modèles disponibles et les tarifs, visitez la [page des Modèles](https://lemondata.cc/fr/models).
+La liste des modèles est mise à jour fréquemment. Pour les derniers modèles disponibles et les tarifs, consultez la [page des modèles](https://lemondata.cc/fr/models).
 </Info>
 
-Pour un guide complet avec des comparaisons de capacités et des exemples d'utilisation, consultez le [Video Generation Guide](/guides/video-generation).
+Pour un guide complet avec des comparaisons de capacités et des exemples d’utilisation, consultez le [Guide de génération vidéo](/guides/video-generation).
 
 ### Sora (OpenAI)
 
@@ -250,7 +263,7 @@ Pour un guide complet avec des comparaisons de capacités et des exemples d'util
 |-------|-------------|
 | `sora-2` | T2V (par défaut) |
 | `sora-2-pro` | T2V, qualité supérieure |
-| `sora-2-characters` | T2V, axé sur les personnages |
+| `sora-2-characters` | T2V, centré sur les personnages |
 
 ### Kling (Kuaishou)
 
@@ -258,6 +271,7 @@ Pour un guide complet avec des comparaisons de capacités et des exemples d'util
 |-------|-------------|
 | `kling-v2.6-pro` | T2V, dernière génération |
 | `kling-v2.6-std` | T2V, rapide |
+| `kling-v2.5-turbo-std` | T2V, niveau turbo |
 | `kling-v2.1-master` | T2V, I2V, qualité master |
 | `kling-v2.1-pro` | T2V, I2V |
 | `kling-video` | T2V, I2V |
@@ -269,6 +283,7 @@ Pour un guide complet avec des comparaisons de capacités et des exemples d'util
 
 | Modèle | Capacités |
 |-------|-------------|
+| `veo2` | T2V |
 | `veo3.1` | T2V |
 | `veo3.1-pro` | T2V, professionnel |
 | `veo3.1-4k` | T2V, sortie 4K |
@@ -279,7 +294,7 @@ Pour un guide complet avec des comparaisons de capacités et des exemples d'util
 
 | Modèle | Capacités |
 |-------|-------------|
-| `seedance-2-0` | T2V, I2V, image clé, extension, édition |
+| `seedance-2-0` | T2V, I2V, image-clé, extension, édition |
 | `seedance-1-5-pro` | T2V, I2V |
 | `seedance-1-0-pro` | T2V, I2V |
 | `seedance-1-0-lite-t2v` | T2V, léger |
@@ -291,6 +306,7 @@ Pour un guide complet avec des comparaisons de capacités et des exemples d'util
 |-------|----------|-------------|
 | `hailuo-2.3` | MiniMax | T2V, I2V |
 | `hailuo-2.3-pro` | MiniMax | T2V, I2V, qualité supérieure |
+| `hailuo-2.3-fast` | MiniMax | T2V, I2V, niveau rapide |
 | `wan-2.6` | Alibaba | T2V |
 | `wan2.6-i2v` | Alibaba | I2V |
 | `runwayml-gen4-turbo-5` | Runway | T2V, I2V (5s) |
@@ -298,6 +314,7 @@ Pour un guide complet avec des comparaisons de capacités et des exemples d'util
 | `luma-video-api` | Luma | T2V |
 | `luma-video-extend-api` | Luma | Extension de vidéo |
 | `viduq3-pro` | Shengshu | T2V, I2V |
+| `viduq3-turbo` | Shengshu | T2V, I2V, niveau turbo |
 | `viduq2-pro` | Shengshu | T2V, I2V |
 | `grok-video-3` | xAI | T2V |
 | `higgsfield-turbo` | Higgsfield | T2V |
