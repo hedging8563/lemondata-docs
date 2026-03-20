@@ -6,6 +6,62 @@
   'use strict';
 
   const AUTH_STORAGE_KEY = 'lemondata-api-key';
+  const DOC_LOCALES = new Set([
+    'en', 'zh', 'zh-Hant', 'ja', 'ko', 'de', 'fr', 'es', 'pt', 'ar', 'vi', 'id', 'tr'
+  ]);
+  const RTL_LOCALES = new Set(['ar']);
+
+  function syncDocumentLang() {
+    const path = window.location.pathname.replace(/^\/+/, '');
+    const locale = path.split('/')[0];
+    const resolvedLocale = DOC_LOCALES.has(locale) ? locale : 'en';
+    document.documentElement.lang = resolvedLocale;
+    document.documentElement.dir = RTL_LOCALES.has(resolvedLocale) ? 'rtl' : 'ltr';
+  }
+
+  function redirectApiShadowPaths() {
+    const { pathname, search, hash } = window.location;
+    if (
+      pathname === '/v1' ||
+      pathname.startsWith('/v1/') ||
+      pathname === '/v1beta' ||
+      pathname.startsWith('/v1beta/')
+    ) {
+      window.location.replace(`https://api.lemondata.cc${pathname}${search}${hash}`);
+      return true;
+    }
+    return false;
+  }
+
+  function attachRouteObservers() {
+    const wrapHistory = (methodName) => {
+      const original = history[methodName];
+      history[methodName] = function(...args) {
+        const result = original.apply(this, args);
+        setTimeout(() => {
+          if (!redirectApiShadowPaths()) {
+            syncDocumentLang();
+          }
+        }, 0);
+        return result;
+      };
+    };
+
+    wrapHistory('pushState');
+    wrapHistory('replaceState');
+    window.addEventListener('popstate', () => {
+      if (!redirectApiShadowPaths()) {
+        syncDocumentLang();
+      }
+    });
+  }
+
+  if (redirectApiShadowPaths()) {
+    return;
+  }
+
+  syncDocumentLang();
+  attachRouteObservers();
 
   // 从 localStorage 读取保存的 API Key
   function getSavedApiKey() {
