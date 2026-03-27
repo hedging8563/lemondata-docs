@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: 2026-03-20
+Generated: 2026-03-27
 Source: https://docs.lemondata.cc
 
 ---
@@ -162,6 +162,18 @@ For Anthropic-compatible `/v1/messages` requests, you can also use:
 ```bash
 x-api-key: sk-your-api-key
 ```
+
+## Management Tokens
+
+Management API endpoints use a separate token type:
+
+```bash
+Authorization: Bearer mt-your-management-token
+```
+
+Use management tokens only with `/v1/management/*` endpoints. They are created from the **Settings** page in your Dashboard and are shown in full only once when generated or rotated.
+
+> Note: Management tokens cannot be used for model inference, and standard `sk-...` API keys cannot be used for the Management API.
 
 ## Getting Your API Key
 
@@ -1170,6 +1182,222 @@ Yes! When using your own API keys (BYOK), provider caching works the same way. T
     2. Structure prompts with static content first
     3. Keep system prompts consistent across requests
     4. Send related requests in quick succession
+
+---
+
+### ✨ LemonData API Integration Skill
+
+> Install the shared LemonData API integration skill for any coding agent, with Agent-First error recovery.
+
+URL: https://docs.lemondata.cc/integrations/coding-agent-skill
+
+> Note: This skill teaches your coding agent how to integrate LemonData's **300+ AI APIs** just by describing what you need. It is packaged as one shared agent-first skill and works with any coding agent that supports skill or rules files.
+
+The API is **[Agent-First](/guides/agent-first-api)** — even if the agent guesses a model name wrong, the error response tells it exactly how to fix it.
+
+## How It Works
+
+1. **You describe what you need** — "I want to use GPT-4 in my Python project"
+2. **The agent calls the API** — it may guess a model name or endpoint
+3. **If anything goes wrong** — the API returns structured hints (`did_you_mean`, `suggestions`, `retry_after`)
+4. **The agent self-corrects** — reads the hints and retries with the right parameters
+5. **You get working code** — typically on the first or second attempt
+
+## Install
+
+> Note: Use the canonical non-interactive install command:
+
+```bash
+npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata-api-integration -y
+```
+
+This installs the shared `lemondata-api-integration` skill from the LemonData skills repository.
+
+If your tool does not support the installer, copy the `skills/lemondata-api-integration/` folder from the repository into your tool's shared skills or rules directory.
+
+### Verify Installation
+
+Ask your coding agent:
+```
+What skills are available?
+```
+
+If you see `lemondata-api-integration`, the installation was successful.
+
+## Get Your API Key
+
+  
+#### Visit LemonData
+
+Go to [lemondata.cc](https://lemondata.cc)
+
+  
+#### Sign In
+
+Create an account or log in
+
+  
+#### Get API Key
+
+Navigate to [Dashboard → API Keys](https://lemondata.cc/dashboard/api) and create a new key
+
+  
+#### Copy the Key
+
+Your key starts with `sk-...` — save it securely
+
+> Tip: You don't need to configure the API Key in advance. When you use the skill, the agent will ask for your key and include it in the generated code.
+
+## Examples
+
+### Chat Completion
+
+**You say:**
+```
+I want to use GPT-4 in my Python project
+```
+
+**The agent generates:**
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-5.4",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.choices[0].message.content)
+```
+
+If the agent guesses a wrong model name (e.g. `gpt5`), the API returns:
+```json
+{
+  "error": {
+    "code": "model_not_found",
+    "did_you_mean": "gpt-5.4",
+    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
+    "hint": "Did you mean 'gpt-5.4'? Use GET https://api.lemondata.cc/v1/models to list all available models."
+  }
+}
+```
+
+The agent reads `did_you_mean`, corrects the model name, and retries — all automatically.
+
+### Image Generation
+
+**You say:**
+```
+Generate images with Flux in Node.js
+```
+
+The agent calls the image API, handles errors, and generates complete code with download and save logic.
+
+### Speech Recognition
+
+**You say:**
+```
+Integrate speech-to-text in my app
+```
+
+The agent generates code with the correct `/v1/audio/transcriptions` endpoint and audio file handling.
+
+## Agent-First Error Recovery
+
+Every error response includes structured hints that any coding agent can parse. See the [full Agent-First API reference](/guides/agent-first-api) for details.
+
+| Error | What the API Returns | What the Agent Does |
+|-------|---------------------|---------------------|
+| Wrong model name | `did_you_mean` + `suggestions` | Auto-corrects and retries |
+| Insufficient balance | `balance_usd` + cheaper `suggestions` | Switches to affordable model |
+| Model unavailable | `alternatives` + `retry_after` | Switches to available model |
+| Rate limited | `retry_after` (exact seconds) | Waits and retries |
+| Context too long | `suggestions` with larger models | Switches to bigger context model |
+
+### Native Endpoint Optimization
+
+When you call `/v1/chat/completions` with a Claude or Gemini model, the API returns optimization headers:
+
+```
+X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance.
+X-LemonData-Native-Endpoint: /v1/messages
+```
+
+The agent automatically switches to the native endpoint for better performance (no format conversion, extended thinking, prompt caching).
+
+### Model Discovery
+
+No need to search documentation:
+
+```bash
+# Machine-readable API overview
+curl https://lemondata.cc/llms.txt
+
+# List models by category
+curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
+
+# Filter by capability
+curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
+```
+
+## Supported Capabilities
+
+| Type | Examples |
+|------|----------|
+| Chat | GPT-5.4, Claude, Gemini, DeepSeek |
+| Image Generation | Midjourney, Flux, Stable Diffusion |
+| Video Generation | Sora, Runway, Kling, Luma AI |
+| Music Generation | Suno |
+| 3D Models | Tripo3D |
+| Audio | Text-to-Speech, Speech-to-Text |
+| Embeddings | text-embedding-3 |
+| Rerank | bce-reranker, qwen3-rerank |
+
+## Best Practices
+
+  
+  
+  
+
+## FAQ
+
+#### Skill not triggering automatically?
+
+Try mentioning "LemonData" or "LemonData API" in your request:
+    ```
+    Use LemonData to integrate GPT-4 in my project
+    ```
+
+  
+#### How does the API help the agent find the right model?
+
+LemonData's [Agent-First API](/guides/agent-first-api) returns structured error hints. If the agent guesses a wrong model name, the error includes `did_you_mean` with the correct name and `suggestions` with alternatives. The agent reads these and auto-corrects on the next attempt.
+
+  
+#### Which coding agents are supported?
+
+Any coding agent that supports shared skill or rules directories. When the installer is supported, `npx skills add` places the shared `lemondata-api-integration` skill in the detected location automatically.
+
+  
+#### How to update the skill?
+
+Re-run the installer:
+    ```bash
+    npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata-api-integration -y
+    ```
+
+## Resources
+
+  
+  
+  
+
+> Info: **Have questions?** Check our [GitHub Issues](https://github.com/hedging8563/lemondata-skills/issues) or contact [support@lemondata.cc](mailto:support@lemondata.cc)
 
 ---
 
@@ -2211,6 +2439,8 @@ LemonData provides access to video generation models from 11 providers through a
 
 > Info: The model list is updated frequently. For the latest available models and pricing, visit the [Models page](https://lemondata.cc/en/models) or use the [Models API](/api-reference/models/list-models).
 
+> Warning: Audio behavior is model-dependent. In LemonData, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some models are silent by default or silent-only. For passthrough-governed models, pass `output_audio=true` to make a best-effort upstream audio request.
+
 ### Async Workflow
 
 ```mermaid
@@ -2322,7 +2552,7 @@ Different models excel at different tasks. Use this matrix to choose the right m
 | `kling-video-o1-std` | T2V | O1 reasoning, standard |
 | `kling-effects` | Effects | Apply visual effects |
 | `kling-omni-video` | T2V | Omni model |
-| `kling-motion-control` | T2V | Motion-controlled generation |
+| `kling-3.0-motion-control` | Motion Control | Subject image + motion reference video |
 
 ### Veo (Google)
 
@@ -2521,6 +2751,360 @@ response = requests.post(f"{BASE}/videos/generations",
 Video generation uses **fixed per-generation pricing**. You are charged once when the task is submitted, regardless of video duration. If generation fails, the charge is automatically refunded.
 
 Check current pricing on the [Models page](https://lemondata.cc/en/models) or via the [Pricing API](/api-reference/pricing/get-pricing).
+
+---
+
+
+## Coding Agents
+
+### Coding Agents
+
+> Cut coding agent costs by up to 90% with smart routing, caching, and model selection
+
+URL: https://docs.lemondata.cc/guides/coding-agents
+
+## Why Coding Agents Are Expensive
+
+Coding agents like Claude Code, Cursor, and Codex CLI are powerful — but they consume tokens at a rate that surprises most teams.
+
+**Long context per request.** Every call includes a system prompt, project files, and conversation history — often 10,000–100,000+ tokens before the model even starts thinking.
+
+**High-frequency calls.** A single coding session triggers dozens of API calls: code generation, search, review, autocomplete, and tool use. A 1-hour session can easily hit 200+ requests.
+
+**Conversation accumulation.** Each turn resends the full message history. By turn 20, you're paying for the same context 20 times over.
+
+> Info: A typical 1-hour Claude Code session can consume 2–5M tokens. At direct API rates, that's $6–30+ per hour depending on the model.
+
+## How LemonData Helps
+
+  
+  
+  
+
+## Supported Coding Tools
+
+  
+  
+  
+  
+  
+
+## Go Deeper
+
+---
+
+### Coding Agent Cost Optimization
+
+> Practical strategies to reduce coding agent API costs by 60-90%
+
+URL: https://docs.lemondata.cc/guides/coding-agent-cost
+
+## The Cost Problem
+
+A typical coding agent session burns through tokens fast:
+
+| Activity | Tokens per call | Calls per hour | Hourly tokens |
+|----------|----------------|----------------|---------------|
+| Code generation | 5,000–50,000 | 10–30 | 150K–1.5M |
+| Codebase search | 2,000–20,000 | 20–50 | 100K–1M |
+| Code review | 10,000–80,000 | 5–10 | 100K–800K |
+| Autocomplete | 500–3,000 | 50–200 | 50K–600K |
+| **Total** | | | **400K–4M+** |
+
+At premium model rates, that's $3–30/hour per developer. For a team of 10, that's $500–5,000/month.
+
+## Smart Model Selection
+
+Not every coding task needs the most expensive model. Match the task to the right tier:
+
+| Task | Recommended | Cost Tier | Why |
+|------|-------------|-----------|-----|
+| Architecture design | `claude-opus-4-6`, `gpt-5.4` | $$$$ Premium | Complex reasoning needed |
+| Code generation | `claude-sonnet-4-6`, `gemini-3-pro-preview` | $$$ Standard | Best quality/cost balance |
+| Code review | `claude-sonnet-4-6`, `deepseek-r1` | $$–$$$ | Pattern matching, less creativity |
+| Bug fixing | `claude-sonnet-4-6`, `gpt-5-mini` | $$–$$$ | Focused, well-defined tasks |
+| Tab completion | `gpt-5-mini`, `gemini-3-flash-preview` | $$ Budget | Speed matters more than depth |
+| Boilerplate | `deepseek-v3.2`, `gpt-5-mini` | $ Economy | Simple, repetitive patterns |
+
+> Tip: See [Model Selection Guide](/guides/coding-agent-models) for detailed model comparisons and per-tool configuration.
+
+## Caching Strategies
+
+Coding agents are ideal for caching because they repeat similar patterns constantly.
+
+### Semantic Cache
+
+LemonData's [semantic cache](/guides/caching) matches requests by meaning, not exact text. This is powerful for coding agents because:
+
+- **Repeated questions**: "What does this function do?" asked about similar code → cache hit
+- **Common patterns**: Boilerplate generation, import statements, error handling → cache hit
+- **Team sharing**: Multiple developers asking similar questions → shared cache hits
+
+Cache hits cost **90% less** than fresh requests.
+
+### Prompt Cache (Provider-Level)
+
+[Upstream prompt caching](/guides/prompt-cache) is automatic through LemonData. Long system prompts — which coding agents always include — get cached at the provider level:
+
+| Provider | Cache Discount | Min Tokens |
+|----------|---------------|------------|
+| Anthropic | 90% off reads | 1,024 |
+| OpenAI | 50% off reads | 1,024 |
+| DeepSeek | 90% off reads | 64 |
+
+Since coding agents send the same system prompt + project context on every call, prompt cache hit rates are typically **70–90%**.
+
+### Combined Savings Example
+
+For a request with 50,000 input tokens (typical coding agent call):
+
+```
+Direct API (no caching):
+  50,000 tokens × $3.00/1M = $0.150
+
+With prompt cache (40,000 cached + 10,000 new):
+  Cached:  40,000 × $0.30/1M = $0.012
+  New:     10,000 × $3.00/1M = $0.030
+  Total: $0.042 (72% savings)
+
+With semantic cache hit:
+  50,000 tokens × $0.30/1M = $0.015 (90% savings)
+```
+
+## Real Cost Comparison
+
+Estimated costs for a typical 1-hour coding session (~3M tokens):
+
+| Setup | Hourly Cost | Monthly (160h) |
+|-------|-------------|----------------|
+| Direct API (premium model) | ~$15–25 | ~$2,400–4,000 |
+| LemonData (smart routing) | ~$10–18 | ~$1,600–2,900 |
+| LemonData + prompt cache | ~$4–8 | ~$640–1,280 |
+| LemonData + both caches | ~$2–5 | ~$320–800 |
+
+> Warning: These are illustrative estimates. Actual costs depend on your model choice, usage patterns, and cache hit rates. Check [real-time pricing](/api-reference/pricing/get-pricing) for current rates.
+
+## Token Management Tips
+
+### Set max_tokens
+
+Prevent runaway generation:
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "max_tokens": 4096,
+  "messages": [...]
+}
+```
+
+Most coding tasks need 1,000–4,000 output tokens. Setting a limit prevents the model from generating unnecessarily long responses.
+
+### Use Auto-Compact
+
+Most coding agents support context compaction — summarizing old conversation turns to reduce token count. Enable it:
+
+- **Claude Code**: Built-in auto-compact triggers at context limits
+- **Cursor**: Automatic context management
+- **Codex CLI**: Use `--max-context` flag
+
+### Avoid Context Bloat
+
+- Don't paste entire files when a function is enough
+- Use `.gitignore`-style patterns to exclude irrelevant files from agent context
+- Clear conversation history when switching tasks
+
+## Quick Configuration
+
+Each tool needs just a few lines to connect through LemonData:
+
+#### Claude Code
+
+```bash
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    ```
+    [Full setup guide →](/integrations/claude-code)
+
+  
+#### Cursor
+
+Settings → Models → OpenAI API Key: `sk-your-key`, Base URL: `https://api.lemondata.cc/v1`
+
+    [Full setup guide →](/integrations/cursor)
+
+  
+#### Codex CLI
+
+```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_BASE_URL="https://api.lemondata.cc/v1"
+    ```
+    [Full setup guide →](/integrations/codex-cli)
+
+  
+#### Gemini CLI
+
+```bash
+    export GEMINI_API_KEY="sk-your-lemondata-key"
+    export GEMINI_API_BASE_URL="https://api.lemondata.cc/v1beta"
+    ```
+    [Full setup guide →](/integrations/gemini-cli)
+
+---
+
+### Coding Agent Model Selection
+
+> Choose the right model for each coding task — comparison table, recommendations, and configuration
+
+URL: https://docs.lemondata.cc/guides/coding-agent-models
+
+## Model Comparison for Coding
+
+| Model | Speed | Code Quality | Cost | Context Window | Best For |
+|-------|-------|-------------|------|----------------|----------|
+| `claude-opus-4-6` | Moderate | Excellent | $$$$ | 200K | Architecture, complex refactoring |
+| `gpt-5.4` | Moderate | Excellent | $$$$ | 200K | Complex reasoning, planning |
+| `claude-sonnet-4-6` | Fast | Very Good | $$$ | 200K | General coding, reviews |
+| `gemini-3-pro-preview` | Fast | Very Good | $$$ | 1M | Large codebase analysis |
+| `gpt-5-mini` | Very Fast | Good | $$ | 128K | Quick edits, completions |
+| `gemini-3-flash-preview` | Very Fast | Good | $$ | 1M | Fast iteration, search |
+| `deepseek-r1` | Moderate | Very Good | $ | 64K | Reasoning-heavy tasks |
+| `deepseek-v3.2` | Fast | Good | $ | 128K | Bulk generation, boilerplate |
+
+## Task-Specific Recommendations
+
+#### Code Generation / Scaffolding
+
+**Recommended**: `claude-sonnet-4-6`, `gemini-3-pro-preview`
+
+    These models produce clean, well-structured code with good naming conventions. For complex multi-file scaffolding, consider `claude-opus-4-6`.
+
+    Budget alternative: `deepseek-v3.2` handles boilerplate well at a fraction of the cost.
+
+  
+#### Code Review / Refactoring
+
+**Recommended**: `claude-sonnet-4-6`, `deepseek-r1`
+
+    Code review benefits from reasoning ability. `deepseek-r1` is particularly cost-effective here — its chain-of-thought approach catches subtle issues.
+
+    For security-focused reviews: `claude-opus-4-6` or `gpt-5.4`.
+
+  
+#### Bug Fixing / Debugging
+
+**Recommended**: `claude-sonnet-4-6`, `gpt-5-mini`
+
+    Bug fixing is usually well-scoped — you know what's broken. Standard-tier models handle this well. Use premium models only for complex, multi-file bugs.
+
+  
+#### Architecture Design
+
+**Recommended**: `claude-opus-4-6`, `gpt-5.4`
+
+    Architecture decisions benefit from the strongest reasoning. Worth the premium cost since these decisions are infrequent but high-impact.
+
+  
+#### Quick Edits / Tab Completion
+
+**Recommended**: `gpt-5-mini`, `gemini-3-flash-preview`
+
+    Speed is critical for interactive use. Budget models with fast response times provide the best experience. Don't waste premium tokens on autocomplete.
+
+## How LemonData Routing Works
+
+LemonData routes your requests to the best available provider automatically.
+
+### Routing Strategies
+
+| Strategy | Behavior | Best For |
+|----------|----------|----------|
+| **PRIORITY** | Routes to highest-priority available provider | Reliability-focused |
+| **COST** | Routes to cheapest available provider | Cost-focused |
+
+You can set your preferred strategy in the dashboard.
+
+### Automatic Fallback
+
+If a provider is unavailable or returns an error, LemonData automatically retries with the next provider:
+
+```
+Request: claude-sonnet-4-6
+  → Provider A (primary): 503 error
+  → Provider B (fallback): ✓ Success
+```
+
+This happens transparently — your coding agent sees a normal response.
+
+### Native Format Routing
+
+LemonData routes each model through its native API format for best compatibility:
+
+| Model Family | API Format | Base URL |
+|-------------|------------|----------|
+| Claude | Anthropic Messages | `https://api.lemondata.cc` |
+| GPT | OpenAI Responses | `https://api.lemondata.cc/v1` |
+| Gemini | Gemini Native | `https://api.lemondata.cc/v1beta` |
+| DeepSeek | OpenAI Chat | `https://api.lemondata.cc/v1` |
+
+This means Claude Code talks Anthropic-native, Gemini CLI talks Gemini-native — no format translation overhead.
+
+## Configuration per Tool
+
+#### Claude Code
+
+```bash
+    export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+    export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+    ```
+
+    Select model: `claude --model claude-sonnet-4-6`
+
+    [Full guide →](/integrations/claude-code)
+
+  
+#### Cursor
+
+In Settings → Models:
+    - API Key: `sk-your-lemondata-key`
+    - Base URL: `https://api.lemondata.cc/v1`
+    - Model: `claude-sonnet-4-6` or `gpt-5-mini`
+
+    [Full guide →](/integrations/cursor)
+
+  
+#### Codex CLI
+
+```bash
+    export OPENAI_API_KEY="sk-your-lemondata-key"
+    export OPENAI_BASE_URL="https://api.lemondata.cc/v1"
+    ```
+
+    [Full guide →](/integrations/codex-cli)
+
+  
+#### Gemini CLI
+
+```bash
+    export GEMINI_API_KEY="sk-your-lemondata-key"
+    export GEMINI_API_BASE_URL="https://api.lemondata.cc/v1beta"
+    ```
+
+    [Full guide →](/integrations/gemini-cli)
+
+  
+#### OpenCode
+
+```json
+    {
+      "provider": "openai",
+      "apiKey": "sk-your-lemondata-key",
+      "baseURL": "https://api.lemondata.cc/v1"
+    }
+    ```
+
+    [Full guide →](/integrations/opencode)
 
 ---
 
@@ -3510,6 +4094,8 @@ Video generation is asynchronous. You submit a request, receive a task ID and `p
 
 > Info: For the most reliable polling behavior, follow the exact `poll_url` returned by the create request.
 
+> Warning: Audio output is model-dependent. In LemonData, Veo 3 family requests default to audio-on when `output_audio` is omitted. When a model supports audio control, use `output_audio` to explicitly toggle it. The camelCase alias `outputAudio` is also accepted for compatibility.
+
 ## Request Body
 
 ## Response
@@ -3548,6 +4134,25 @@ response = requests.post(
         "duration": 5,
         "resolution": "720p",
         "aspect_ratio": "16:9"
+    }
+)
+```
+
+## Motion Control
+
+Use `operation=motion-control` when the model expects both a subject image and a motion reference video. LemonData maps the public `image_url` + `video_url` request shape to the upstream motion-control contract.
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject identity stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
     }
 )
 ```
@@ -3831,6 +4436,181 @@ Same as [Generate Content](/api-reference/gemini/generate-content).
 ## Response
 
 Returns a stream of JSON objects, each containing a partial response.
+
+---
+
+
+## Management
+
+### Management API
+
+> Manage organization API keys and retrieve key-level usage and billing with a management token.
+
+URL: https://docs.lemondata.cc/api-reference/management/introduction
+
+## Overview
+
+The Management API lets you automate **organization API key lifecycle** and **key-level reporting** without using a standard inference API key.
+
+Use a **management token** from your Dashboard Settings page:
+
+```bash
+Authorization: Bearer mt-your-management-token
+```
+
+> Warning: Management tokens are different from standard `sk-...` inference API keys.
+
+- Use `mt-...` for `/v1/management/*`
+- Use `sk-...` for model inference endpoints such as `/v1/responses`
+
+## Available Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/management/api-keys` | GET | List user-managed API keys in the organization |
+| `/v1/management/api-keys` | POST | Create a new user API key |
+| `/v1/management/api-keys/{keyId}` | PATCH | Update name, limit, models, expiry, or status |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Retrieve paginated key-level usage details |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Retrieve aggregated key-level billing breakdowns |
+
+## Safe Response Contract
+
+Management API responses expose only **public billing and reporting fields** such as:
+
+- logical model
+- public model vendor
+- scene
+- access channel (`platform` or `byok`)
+- usage unit and quantity
+- cache metrics
+- cost and timestamps
+
+They do **not** expose internal routing or physical channel fields such as:
+
+- `physicalModel`
+- `channelId`
+- `channelName`
+- internal route provider
+- routing strategy / retry metadata
+
+## Notes
+
+- Management API does **not** support hard-deleting API keys in v1.
+- Use `PATCH` with a revoked status to disable a key.
+- Key-level billing is consumption-only and does not include recharge or invoice records.
+
+---
+
+### List API Keys
+
+> Lists user-managed API keys for the current organization management token.
+
+URL: https://docs.lemondata.cc/api-reference/management/list-api-keys
+
+## Overview
+
+Returns user API keys in the organization associated with the current management token.
+
+System-managed keys such as Playground and Claw keys are excluded.
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema.
+
+---
+
+### Create API Key
+
+> Creates a new user API key for the current organization.
+
+URL: https://docs.lemondata.cc/api-reference/management/create-api-key
+
+## Overview
+
+Creates a new `type=user` API key in the organization associated with the current management token.
+
+The full key is shown **only once** in the response.
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema.
+
+---
+
+### Update API Key
+
+> Updates an existing user API key for the current organization.
+
+URL: https://docs.lemondata.cc/api-reference/management/update-api-key
+
+## Overview
+
+Use this endpoint to update:
+
+- name
+- usage limit
+- allowed models
+- expiry
+- status (`active`, `inactive`, `revoked`)
+
+Hard delete is intentionally not supported in the Management API v1.
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema.
+
+---
+
+### Get API Key Usage
+
+> Returns paginated usage details for a user API key.
+
+URL: https://docs.lemondata.cc/api-reference/management/get-api-key-usage
+
+## Overview
+
+This endpoint returns key-level usage details with filters for:
+
+- time range
+- logical model
+- public model vendor
+- scene
+- access channel (`platform` / `byok`)
+
+## Notes
+
+- The response includes public billing fields only.
+- Internal routing and physical channel metadata are intentionally hidden.
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema.
+
+---
+
+### Get API Key Billing
+
+> Returns aggregated billing breakdowns for a user API key.
+
+URL: https://docs.lemondata.cc/api-reference/management/get-api-key-billing
+
+## Overview
+
+This endpoint returns consumption-only billing aggregates for the selected API key.
+
+It includes:
+
+- total cost
+- total requests
+- usage unit breakdown
+- breakdowns by logical model, vendor, scene, access channel, and cache class
+- daily cost trend
+
+Recharge, invoices, and other organization-level financial records are intentionally excluded.
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema.
 
 ---
 
@@ -5406,7 +6186,7 @@ OpenAI Codex is an open-source command-line tool (CLI) that serves as a lightwei
 ## Installation
 
 ```bash
-sudo npm install -g @openai/codex
+npm install -g @openai/codex
 ```
 
 Verify installation:
@@ -5885,222 +6665,6 @@ Use faster models (`gpt-5-mini`) for simple tasks and stronger models (`gpt-5.4`
 #### Review generated code
 
 Always review AI-generated code before applying changes to your project.
-
----
-
-### ✨ LemonData API Integration Skill
-
-> Install the shared LemonData API integration skill for any coding agent, with Agent-First error recovery.
-
-URL: https://docs.lemondata.cc/integrations/coding-agent-skill
-
-> Note: This skill teaches your coding agent how to integrate LemonData's **300+ AI APIs** just by describing what you need. It is packaged as one shared agent-first skill and works with any coding agent that supports skill or rules files.
-
-The API is **[Agent-First](/guides/agent-first-api)** — even if the agent guesses a model name wrong, the error response tells it exactly how to fix it.
-
-## How It Works
-
-1. **You describe what you need** — "I want to use GPT-4 in my Python project"
-2. **The agent calls the API** — it may guess a model name or endpoint
-3. **If anything goes wrong** — the API returns structured hints (`did_you_mean`, `suggestions`, `retry_after`)
-4. **The agent self-corrects** — reads the hints and retries with the right parameters
-5. **You get working code** — typically on the first or second attempt
-
-## Install
-
-> Note: Use the canonical non-interactive install command:
-
-```bash
-npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata-api-integration -y
-```
-
-This installs the shared `lemondata-api-integration` skill from the LemonData skills repository.
-
-If your tool does not support the installer, copy the `skills/lemondata-api-integration/` folder from the repository into your tool's shared skills or rules directory.
-
-### Verify Installation
-
-Ask your coding agent:
-```
-What skills are available?
-```
-
-If you see `lemondata-api-integration`, the installation was successful.
-
-## Get Your API Key
-
-  
-#### Visit LemonData
-
-Go to [lemondata.cc](https://lemondata.cc)
-
-  
-#### Sign In
-
-Create an account or log in
-
-  
-#### Get API Key
-
-Navigate to [Dashboard → API Keys](https://lemondata.cc/dashboard/api) and create a new key
-
-  
-#### Copy the Key
-
-Your key starts with `sk-...` — save it securely
-
-> Tip: You don't need to configure the API Key in advance. When you use the skill, the agent will ask for your key and include it in the generated code.
-
-## Examples
-
-### Chat Completion
-
-**You say:**
-```
-I want to use GPT-4 in my Python project
-```
-
-**The agent generates:**
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="sk-your-api-key",
-    base_url="https://api.lemondata.cc/v1"
-)
-
-response = client.chat.completions.create(
-    model="gpt-5.4",
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-print(response.choices[0].message.content)
-```
-
-If the agent guesses a wrong model name (e.g. `gpt5`), the API returns:
-```json
-{
-  "error": {
-    "code": "model_not_found",
-    "did_you_mean": "gpt-5.4",
-    "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
-    "hint": "Did you mean 'gpt-5.4'? Use GET https://api.lemondata.cc/v1/models to list all available models."
-  }
-}
-```
-
-The agent reads `did_you_mean`, corrects the model name, and retries — all automatically.
-
-### Image Generation
-
-**You say:**
-```
-Generate images with Flux in Node.js
-```
-
-The agent calls the image API, handles errors, and generates complete code with download and save logic.
-
-### Speech Recognition
-
-**You say:**
-```
-Integrate speech-to-text in my app
-```
-
-The agent generates code with the correct `/v1/audio/transcriptions` endpoint and audio file handling.
-
-## Agent-First Error Recovery
-
-Every error response includes structured hints that any coding agent can parse. See the [full Agent-First API reference](/guides/agent-first-api) for details.
-
-| Error | What the API Returns | What the Agent Does |
-|-------|---------------------|---------------------|
-| Wrong model name | `did_you_mean` + `suggestions` | Auto-corrects and retries |
-| Insufficient balance | `balance_usd` + cheaper `suggestions` | Switches to affordable model |
-| Model unavailable | `alternatives` + `retry_after` | Switches to available model |
-| Rate limited | `retry_after` (exact seconds) | Waits and retries |
-| Context too long | `suggestions` with larger models | Switches to bigger context model |
-
-### Native Endpoint Optimization
-
-When you call `/v1/chat/completions` with a Claude or Gemini model, the API returns optimization headers:
-
-```
-X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance.
-X-LemonData-Native-Endpoint: /v1/messages
-```
-
-The agent automatically switches to the native endpoint for better performance (no format conversion, extended thinking, prompt caching).
-
-### Model Discovery
-
-No need to search documentation:
-
-```bash
-# Machine-readable API overview
-curl https://lemondata.cc/llms.txt
-
-# List models by category
-curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
-curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
-
-# Filter by capability
-curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
-```
-
-## Supported Capabilities
-
-| Type | Examples |
-|------|----------|
-| Chat | GPT-5.4, Claude, Gemini, DeepSeek |
-| Image Generation | Midjourney, Flux, Stable Diffusion |
-| Video Generation | Sora, Runway, Kling, Luma AI |
-| Music Generation | Suno |
-| 3D Models | Tripo3D |
-| Audio | Text-to-Speech, Speech-to-Text |
-| Embeddings | text-embedding-3 |
-| Rerank | bce-reranker, qwen3-rerank |
-
-## Best Practices
-
-  
-  
-  
-
-## FAQ
-
-#### Skill not triggering automatically?
-
-Try mentioning "LemonData" or "LemonData API" in your request:
-    ```
-    Use LemonData to integrate GPT-4 in my project
-    ```
-
-  
-#### How does the API help the agent find the right model?
-
-LemonData's [Agent-First API](/guides/agent-first-api) returns structured error hints. If the agent guesses a wrong model name, the error includes `did_you_mean` with the correct name and `suggestions` with alternatives. The agent reads these and auto-corrects on the next attempt.
-
-  
-#### Which coding agents are supported?
-
-Any coding agent that supports shared skill or rules directories. When the installer is supported, `npx skills add` places the shared `lemondata-api-integration` skill in the detected location automatically.
-
-  
-#### How to update the skill?
-
-Re-run the installer:
-    ```bash
-    npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata-api-integration -y
-    ```
-
-## Resources
-
-  
-  
-  
-
-> Info: **Have questions?** Check our [GitHub Issues](https://github.com/hedging8563/lemondata-skills/issues) or contact [support@lemondata.cc](mailto:support@lemondata.cc)
 
 ---
 
