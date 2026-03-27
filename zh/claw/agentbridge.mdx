@@ -1,0 +1,54 @@
+---
+title: "AgentBridge"
+description: "把单个 LemonClaw 实例的运行时接入包直接交给编程 agent。"
+---
+
+AgentBridge 允许编程 agent 使用托管控制台中显示的实例 gateway token，直接与单个运行中的 LemonClaw 实例通信。
+
+## 如何获取接入包
+
+打开 Dashboard > Claw，选择一个运行中的实例，点击 AgentBridge，然后从弹窗里复制完整接入包。接入包已经包含 runtime base URL、bearer token、session key 约定以及最重要的 endpoints。
+
+## 这个 Token 能做什么
+
+复制出来的 gateway token 只管理 runtime。它可以读取 runtime 状态、发送 chat 请求、接收 SSE 流式输出、读取 thread 历史、停止当前 thread，以及拉取 AgentBridge 返回的媒体文件。它不能续费、重建、从 hosted control plane 重启实例，也不能访问组织计费或 admin 路由。
+
+## Session Key 规则
+
+Session key 固定为 `agentbridge:<client_id>:<workspace_id>:<thread_id>`。同一个 thread 请保持这三个值稳定。如果切换到了不同的 provider family，请新建一个 `thread_id`，不要复用旧 thread。
+
+## 核心 Runtime Endpoints
+
+- `GET /api/status`
+- `GET /api/usage?session=<session_key>`
+- `POST /api/agentbridge/chat`
+- `POST /api/agentbridge/chat/stream`
+- `POST /api/agentbridge/uploads`
+- `GET /api/agentbridge/messages`
+- `GET /api/agentbridge/events/stream`
+- `POST /api/agentbridge/stop`
+- `GET /api/agentbridge/media`
+
+```bash
+curl -N https://claw-demo.lemondata.cc/api/agentbridge/chat/stream \
+  -H "Authorization: Bearer <gateway_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "codex",
+    "workspace_id": "default",
+    "thread_id": "demo-thread",
+    "message": "Give me a short status update for this instance."
+  }'
+```
+
+## 给编程 Agent 的提示词
+
+可以把下面这段短提示和 access pack 一起发给编程 agent：
+
+> Use `/api/agentbridge/chat/stream` first. Keep `client_id`, `workspace_id`, and `thread_id` stable for the same conversation. If you get `provider_family_conflict`, create a new `thread_id` instead of reusing the old one.
+
+## 常见错误
+
+- `provider_family_conflict` —— 当前 thread 已经在另一个 provider family 上有历史，请新建 `thread_id`。
+- `Unauthorized` —— bearer token 缺失、失效，或不属于当前实例。
+- `Instance not running` —— 只有运行中的实例才会签发 AgentBridge access pack。

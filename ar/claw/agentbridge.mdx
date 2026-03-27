@@ -1,0 +1,54 @@
+---
+title: "AgentBridge"
+description: "امنح وكيل برمجة حزمة وصول جاهزة للـ runtime لمثيل LemonClaw واحد."
+---
+
+يتيح AgentBridge لوكيل البرمجة التحدث مباشرةً مع مثيل LemonClaw قيد التشغيل باستخدام gateway token الخاص بالمثيل والموجود في لوحة التحكم المستضافة.
+
+## كيفية الحصول على حزمة الوصول
+
+افتح Dashboard > Claw، واختر مثيلاً قيد التشغيل، ثم انقر على AgentBridge وانسخ حزمة الوصول الكاملة من النافذة المنبثقة. تحتوي الحزمة بالفعل على runtime base URL و bearer token وقاعدة session key وأهم endpoints.
+
+## ما الذي يفعله هذا الرمز
+
+رمز gateway المنسوخ يدير الـ runtime فقط. يمكنه قراءة حالة الـ runtime، وإرسال طلبات chat، واستقبال خرج SSE، وقراءة سجل thread، وإيقاف thread قيد التشغيل، وجلب الوسائط التي يعيدها AgentBridge. لا يمكنه التجديد أو إعادة البناء أو إعادة التشغيل من hosted control plane أو الوصول إلى مسارات الفوترة والإدارة الخاصة بالمؤسسة.
+
+## قاعدة session key
+
+تتبع session keys دائماً الصيغة `agentbridge:<client_id>:<workspace_id>:<thread_id>`. حافظ على القيم الثلاث ثابتة لنفس thread. وإذا انتقلت إلى provider family مختلفة، فأنشئ `thread_id` جديداً بدلاً من إعادة استخدام thread القديم.
+
+## أهم endpoints الخاصة بالـ runtime
+
+- `GET /api/status`
+- `GET /api/usage?session=<session_key>`
+- `POST /api/agentbridge/chat`
+- `POST /api/agentbridge/chat/stream`
+- `POST /api/agentbridge/uploads`
+- `GET /api/agentbridge/messages`
+- `GET /api/agentbridge/events/stream`
+- `POST /api/agentbridge/stop`
+- `GET /api/agentbridge/media`
+
+```bash
+curl -N https://claw-demo.lemondata.cc/api/agentbridge/chat/stream \
+  -H "Authorization: Bearer <gateway_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "codex",
+    "workspace_id": "default",
+    "thread_id": "demo-thread",
+    "message": "Give me a short status update for this instance."
+  }'
+```
+
+## تعليمة لوكلاء البرمجة
+
+أرسل هذه التعليمة القصيرة إلى coding agent مع حزمة الوصول:
+
+> Use `/api/agentbridge/chat/stream` first. Keep `client_id`, `workspace_id`, and `thread_id` stable for the same conversation. If you get `provider_family_conflict`, create a new `thread_id` instead of reusing the old one.
+
+## أخطاء شائعة
+
+- `provider_family_conflict` — لدى هذا thread سجل سابق على provider family مختلفة؛ أنشئ `thread_id` جديداً.
+- `Unauthorized` — bearer token مفقود أو منتهي الصلاحية أو لا يخص هذا المثيل.
+- `Instance not running` — لا يتم إصدار AgentBridge access packs إلا للمثيلات قيد التشغيل.

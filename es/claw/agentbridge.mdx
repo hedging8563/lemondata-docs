@@ -1,0 +1,54 @@
+---
+title: "AgentBridge"
+description: "Entrega a un coding agent un access pack listo para la runtime de una instancia LemonClaw."
+---
+
+AgentBridge permite que un coding agent hable directamente con una instancia LemonClaw en ejecución usando el gateway token de la instancia que aparece en el dashboard alojado.
+
+## Cómo obtener el access pack
+
+Abre Dashboard > Claw, elige una instancia en ejecución, haz clic en AgentBridge y copia el access pack completo desde el modal. Ya incluye la runtime base URL, el bearer token, la convención de session key y los endpoints más importantes.
+
+## Qué puede hacer el token
+
+El gateway token copiado solo administra la runtime. Puede leer el estado runtime, enviar solicitudes de chat, recibir salida SSE, leer el historial del thread, detener un thread en ejecución y recuperar medios devueltos por AgentBridge. No puede renovar, reconstruir, reiniciar desde la hosted control plane ni acceder a rutas de facturación o administración de la organización.
+
+## Regla de las session keys
+
+Las session keys siempre siguen el formato `agentbridge:<client_id>:<workspace_id>:<thread_id>`. Mantén esos tres valores estables para el mismo thread. Si cambias a otra provider family, crea un nuevo `thread_id` en lugar de reutilizar el thread anterior.
+
+## Endpoints runtime principales
+
+- `GET /api/status`
+- `GET /api/usage?session=<session_key>`
+- `POST /api/agentbridge/chat`
+- `POST /api/agentbridge/chat/stream`
+- `POST /api/agentbridge/uploads`
+- `GET /api/agentbridge/messages`
+- `GET /api/agentbridge/events/stream`
+- `POST /api/agentbridge/stop`
+- `GET /api/agentbridge/media`
+
+```bash
+curl -N https://claw-demo.lemondata.cc/api/agentbridge/chat/stream \
+  -H "Authorization: Bearer <gateway_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "codex",
+    "workspace_id": "default",
+    "thread_id": "demo-thread",
+    "message": "Give me a short status update for this instance."
+  }'
+```
+
+## Prompt para coding agents
+
+Entrega esta instrucción breve al coding agent junto con el access pack:
+
+> Use `/api/agentbridge/chat/stream` first. Keep `client_id`, `workspace_id`, and `thread_id` stable for the same conversation. If you get `provider_family_conflict`, create a new `thread_id` instead of reusing the old one.
+
+## Errores comunes
+
+- `provider_family_conflict` — el thread ya tiene historial en otra provider family; crea un nuevo `thread_id`.
+- `Unauthorized` — falta el bearer token, expiró o no pertenece a esta instancia.
+- `Instance not running` — los AgentBridge access packs solo se emiten para instancias en ejecución.

@@ -1335,7 +1335,7 @@ No need to search documentation:
 
 ```bash
 # Machine-readable API overview
-curl https://lemondata.cc/llms.txt
+curl https://api.lemondata.cc/llms.txt
 
 # List models by category
 curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
@@ -3897,6 +3897,8 @@ URL: https://docs.lemondata.cc/api-reference/images/edit-image
 
 Creates an edited or extended image given an original image and a prompt. Requires `multipart/form-data` content type.
 
+> Warning: This endpoint currently documents the DALL-E style multipart editing flow. Other supported image-to-image families on LemonData use `POST /v1/images/generations` with `operation: "image-to-image"` and JSON inputs such as `image_url` where supported.
+
 ## Request Body
 
 ## Response
@@ -4450,48 +4452,59 @@ URL: https://docs.lemondata.cc/api-reference/management/introduction
 
 ## Overview
 
-The Management API lets you automate **organization API key lifecycle** and **key-level reporting** without using a standard inference API key.
+The Management API lets you manage organization API keys and retrieve usage and billing for a specific key without using a standard inference API key.
 
-Use a **management token** from your Dashboard Settings page:
+Use a management token from your Dashboard **Settings** page:
 
 ```bash
 Authorization: Bearer mt-your-management-token
 ```
 
-> Warning: Management tokens are different from standard `sk-...` inference API keys.
-
-- Use `mt-...` for `/v1/management/*`
-- Use `sk-...` for model inference endpoints such as `/v1/responses`
+> Warning: Management tokens are different from inference API keys. Use `mt-...` for `/v1/management/*`, and use `sk-...` for model inference endpoints such as `/v1/responses`.
 
 ## Available Endpoints
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/management/api-keys` | GET | List user-managed API keys in the organization |
+|----------|--------|------|
+| `/v1/management/api-keys` | GET | List user-managed API keys in the current organization |
 | `/v1/management/api-keys` | POST | Create a new user API key |
-| `/v1/management/api-keys/{keyId}` | PATCH | Update name, limit, models, expiry, or status |
-| `/v1/management/api-keys/{keyId}/usage` | GET | Retrieve paginated key-level usage details |
-| `/v1/management/api-keys/{keyId}/billing` | GET | Retrieve aggregated key-level billing breakdowns |
+| `/v1/management/api-keys/{keyId}` | PATCH | Update name, usage limit, allowed models, expiry, or status |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Retrieve paginated usage details for a specific key |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Retrieve aggregated billing breakdowns for a specific key |
 
-## Safe Response Contract
+## Field Notes
 
-Management API responses expose only **public billing and reporting fields** such as:
-
-- logical model
+- requested model name (`model`)
 - public model vendor
-- scene
-- access channel (`platform` or `byok`)
-- usage unit and quantity
-- cache metrics
+- `scene`
+- `accessChannel`: `platform` means the request was billed as a platform request; `byok` means it used your own upstream provider key
+- usage quantity, billing unit, and cache metrics
 - cost and timestamps
 
-They do **not** expose internal routing implementation details.
+Responses expose public billing and reporting fields only. Internal routing details and physical provider metadata stay hidden.
 
-## Notes
+## Filters
 
-- Management API does **not** support hard-deleting API keys in v1.
-- Use `PATCH` with a revoked status to disable a key.
-- Key-level billing is consumption-only and does not include recharge or invoice records.
+`/usage` and `/billing` currently support filtering by:
+
+- time range
+- requested model name (`model`)
+- public model vendor
+- `scene`
+- `accessChannel`
+- pagination
+
+## Quick Example
+
+Start by listing the API keys available to the current management token:
+
+## Next Steps
+
+- [List API Keys](/api-reference/management/list-api-keys)
+- [Create API Key](/api-reference/management/create-api-key)
+- [Update API Key](/api-reference/management/update-api-key)
+- [Get API Key Usage](/api-reference/management/get-api-key-usage)
+- [Get API Key Billing](/api-reference/management/get-api-key-billing)
 
 ---
 
@@ -4505,7 +4518,9 @@ URL: https://docs.lemondata.cc/api-reference/management/list-api-keys
 
 Returns user API keys in the organization associated with the current management token.
 
-System-managed keys such as Playground and Claw keys are excluded.
+## Notes
+
+- System-managed keys such as Playground and Claw keys are excluded.
 
 ## Request / Response
 
@@ -4523,7 +4538,9 @@ URL: https://docs.lemondata.cc/api-reference/management/create-api-key
 
 Creates a new `type=user` API key in the organization associated with the current management token.
 
-The full key is shown **only once** in the response.
+## Notes
+
+- The full key is shown only once in the response.
 
 ## Request / Response
 
@@ -4539,15 +4556,11 @@ URL: https://docs.lemondata.cc/api-reference/management/update-api-key
 
 ## Overview
 
-Use this endpoint to update:
+Use this endpoint to update the name, usage limit, allowed models, expiry, or status of an existing user API key.
 
-- name
-- usage limit
-- allowed models
-- expiry
-- status (`active`, `inactive`, `revoked`)
+## Notes
 
-Hard delete is intentionally not supported in the Management API v1.
+- Hard delete is intentionally not supported in Management API v1.
 
 ## Request / Response
 
@@ -4563,13 +4576,7 @@ URL: https://docs.lemondata.cc/api-reference/management/get-api-key-usage
 
 ## Overview
 
-This endpoint returns key-level usage details with filters for:
-
-- time range
-- logical model
-- public model vendor
-- scene
-- access channel (`platform` / `byok`)
+This endpoint returns key-level usage details with filters for requested model name (`model`), public model vendor, `scene`, and `accessChannel`.
 
 ## Notes
 
@@ -4590,17 +4597,11 @@ URL: https://docs.lemondata.cc/api-reference/management/get-api-key-billing
 
 ## Overview
 
-This endpoint returns consumption-only billing aggregates for the selected API key.
+This endpoint returns consumption-only billing aggregates for the selected API key, including total cost, total requests, usage unit breakdowns, and breakdowns by requested model name (`model`), vendor, `scene`, `accessChannel`, cache class, plus a daily cost trend.
 
-It includes:
+## Notes
 
-- total cost
-- total requests
-- usage unit breakdown
-- breakdowns by logical model, vendor, scene, access channel, and cache class
-- daily cost trend
-
-Recharge, invoices, and other organization-level financial records are intentionally excluded.
+- Recharge, invoices, and other organization-level financial records are intentionally excluded.
 
 ## Request / Response
 
@@ -5115,6 +5116,64 @@ Returns Claw service health status. No authentication required.
 ```json
 {"status": "ok", "timestamp": "2026-02-08T15:00:00.000Z"}
 ```
+
+---
+
+### AgentBridge
+
+> Give a coding agent a runtime-ready access pack for one LemonClaw instance.
+
+URL: https://docs.lemondata.cc/claw/agentbridge
+
+AgentBridge lets a coding agent talk directly to one running LemonClaw instance by using the instance gateway token shown in the hosted dashboard.
+
+## Get The Access Pack
+
+Open Dashboard > Claw, choose a running instance, click AgentBridge, then copy the full access pack from the modal. That pack already contains the runtime base URL, bearer token, session key convention, and the most important endpoints.
+
+## What The Token Can Do
+
+The copied gateway token manages runtime only. It can read runtime status, send chat requests, stream SSE output, read thread history, stop a running thread, and fetch media returned by AgentBridge. It cannot renew, rebuild, restart from the hosted control plane, or access organization billing and admin routes.
+
+## Session Keys
+
+Session keys always follow `agentbridge:::`. Keep all three values stable for the same thread. If you switch to a different provider family, create a new `thread_id` instead of reusing the old one.
+
+## Core Runtime Endpoints
+
+- `GET /api/status`
+- `GET /api/usage?session=`
+- `POST /api/agentbridge/chat`
+- `POST /api/agentbridge/chat/stream`
+- `POST /api/agentbridge/uploads`
+- `GET /api/agentbridge/messages`
+- `GET /api/agentbridge/events/stream`
+- `POST /api/agentbridge/stop`
+- `GET /api/agentbridge/media`
+
+```bash
+curl -N https://claw-demo.lemondata.cc/api/agentbridge/chat/stream \
+  -H "Authorization: Bearer " \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "codex",
+    "workspace_id": "default",
+    "thread_id": "demo-thread",
+    "message": "Give me a short status update for this instance."
+  }'
+```
+
+## Prompt For Coding Agents
+
+Give this short instruction together with the copied access pack:
+
+> Use `/api/agentbridge/chat/stream` first. Keep `client_id`, `workspace_id`, and `thread_id` stable for the same conversation. If you get `provider_family_conflict`, create a new `thread_id` instead of reusing the old one.
+
+## Common Errors
+
+- `provider_family_conflict` — the thread already has history on a different provider family; create a new `thread_id`.
+- `Unauthorized` — the bearer token is missing, expired, or invalid for this instance.
+- `Instance not running` — AgentBridge access packs are only issued for running instances.
 
 ---
 

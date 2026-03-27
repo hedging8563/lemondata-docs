@@ -1,0 +1,54 @@
+---
+title: "AgentBridge"
+description: "Gib einem Coding-Agent ein runtime-fertiges Access Pack für eine einzelne LemonClaw-Instanz."
+---
+
+Mit AgentBridge kann ein Coding-Agent direkt mit einer laufenden LemonClaw-Instanz sprechen, indem er den im Hosted-Dashboard angezeigten Gateway-Token der Instanz verwendet.
+
+## So bekommst du das Access Pack
+
+Öffne Dashboard > Claw, wähle eine laufende Instanz aus, klicke auf AgentBridge und kopiere das vollständige Access Pack aus dem Modal. Es enthält bereits Runtime-Base-URL, Bearer-Token, Session-Key-Regel und die wichtigsten Endpoints.
+
+## Was der Token darf
+
+Der kopierte Gateway-Token verwaltet nur die Runtime. Er kann Runtime-Status lesen, Chat-Anfragen senden, SSE-Streams empfangen, Thread-Historie lesen, einen laufenden Thread stoppen und von AgentBridge gelieferte Medien abrufen. Er kann nicht verlängern, neu aufbauen, aus der Hosted-Control-Plane neu starten oder auf Organisations-Billing- und Admin-Routen zugreifen.
+
+## Session-Key-Regel
+
+Session Keys folgen immer dem Format `agentbridge:<client_id>:<workspace_id>:<thread_id>`. Halte alle drei Werte für denselben Thread stabil. Wenn du zu einer anderen Provider-Family wechselst, lege eine neue `thread_id` an statt den alten Thread wiederzuverwenden.
+
+## Zentrale Runtime-Endpoints
+
+- `GET /api/status`
+- `GET /api/usage?session=<session_key>`
+- `POST /api/agentbridge/chat`
+- `POST /api/agentbridge/chat/stream`
+- `POST /api/agentbridge/uploads`
+- `GET /api/agentbridge/messages`
+- `GET /api/agentbridge/events/stream`
+- `POST /api/agentbridge/stop`
+- `GET /api/agentbridge/media`
+
+```bash
+curl -N https://claw-demo.lemondata.cc/api/agentbridge/chat/stream \
+  -H "Authorization: Bearer <gateway_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "codex",
+    "workspace_id": "default",
+    "thread_id": "demo-thread",
+    "message": "Give me a short status update for this instance."
+  }'
+```
+
+## Prompt für Coding-Agents
+
+Gib dem Coding-Agent diesen kurzen Hinweis zusammen mit dem Access Pack:
+
+> Use `/api/agentbridge/chat/stream` first. Keep `client_id`, `workspace_id`, and `thread_id` stable for the same conversation. If you get `provider_family_conflict`, create a new `thread_id` instead of reusing the old one.
+
+## Häufige Fehler
+
+- `provider_family_conflict` — der Thread hat bereits Historie auf einer anderen Provider-Family; erstelle eine neue `thread_id`.
+- `Unauthorized` — der Bearer-Token fehlt, ist abgelaufen oder gehört nicht zu dieser Instanz.
+- `Instance not running` — AgentBridge Access Packs werden nur für laufende Instanzen ausgegeben.

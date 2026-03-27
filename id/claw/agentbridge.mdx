@@ -1,0 +1,54 @@
+---
+title: "AgentBridge"
+description: "Berikan access pack siap-runtime untuk satu instance LemonClaw kepada coding agent."
+---
+
+AgentBridge memungkinkan coding agent berbicara langsung dengan instance LemonClaw yang sedang berjalan dengan menggunakan gateway token instance yang terlihat di dashboard hosted.
+
+## Cara mendapatkan access pack
+
+Buka Dashboard > Claw, pilih instance yang sedang berjalan, klik AgentBridge, lalu salin access pack lengkap dari modal. Paket itu sudah berisi runtime base URL, bearer token, aturan session key, dan endpoint yang paling penting.
+
+## Apa yang bisa dilakukan token ini
+
+Gateway token yang disalin hanya mengelola runtime. Token ini dapat membaca status runtime, mengirim request chat, menerima output SSE, membaca riwayat thread, menghentikan thread yang sedang berjalan, dan mengambil media yang dikembalikan AgentBridge. Token ini tidak dapat memperpanjang, rebuild, restart dari hosted control plane, atau mengakses route billing/admin organisasi.
+
+## Aturan session key
+
+Session key selalu mengikuti format `agentbridge:<client_id>:<workspace_id>:<thread_id>`. Jaga ketiga nilai itu tetap stabil untuk thread yang sama. Jika Anda berpindah ke provider family lain, buat `thread_id` baru alih-alih memakai thread lama.
+
+## Runtime endpoint utama
+
+- `GET /api/status`
+- `GET /api/usage?session=<session_key>`
+- `POST /api/agentbridge/chat`
+- `POST /api/agentbridge/chat/stream`
+- `POST /api/agentbridge/uploads`
+- `GET /api/agentbridge/messages`
+- `GET /api/agentbridge/events/stream`
+- `POST /api/agentbridge/stop`
+- `GET /api/agentbridge/media`
+
+```bash
+curl -N https://claw-demo.lemondata.cc/api/agentbridge/chat/stream \
+  -H "Authorization: Bearer <gateway_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "codex",
+    "workspace_id": "default",
+    "thread_id": "demo-thread",
+    "message": "Give me a short status update for this instance."
+  }'
+```
+
+## Prompt untuk coding agent
+
+Berikan instruksi singkat ini bersama access pack kepada coding agent:
+
+> Use `/api/agentbridge/chat/stream` first. Keep `client_id`, `workspace_id`, and `thread_id` stable for the same conversation. If you get `provider_family_conflict`, create a new `thread_id` instead of reusing the old one.
+
+## Error umum
+
+- `provider_family_conflict` — thread ini sudah memiliki riwayat pada provider family lain; buat `thread_id` baru.
+- `Unauthorized` — bearer token hilang, kedaluwarsa, atau bukan milik instance ini.
+- `Instance not running` — AgentBridge access pack hanya diterbitkan untuk instance yang sedang berjalan.

@@ -1,0 +1,54 @@
+---
+title: "AgentBridge"
+description: "하나의 LemonClaw 인스턴스용 runtime-ready access pack 을 coding agent 에 전달합니다."
+---
+
+AgentBridge 를 사용하면 hosted dashboard 에 표시되는 인스턴스 gateway token 으로 coding agent 가 실행 중인 LemonClaw 인스턴스에 직접 연결할 수 있습니다.
+
+## Access Pack 받기
+
+Dashboard > Claw 에서 실행 중인 인스턴스를 선택한 뒤 AgentBridge 를 클릭하고 modal 에서 전체 access pack 을 복사합니다. 이 pack 에는 runtime base URL, bearer token, session key 규칙, 핵심 endpoints 가 이미 들어 있습니다.
+
+## 이 Token 으로 할 수 있는 일
+
+복사되는 gateway token 은 runtime 전용입니다. runtime status 조회, chat 요청, SSE 스트림 수신, thread history 조회, 실행 중인 thread 중지, AgentBridge 가 반환한 media 조회가 가능합니다. 갱신, 재구축, hosted control plane 에서의 재시작, 조직 과금이나 admin routes 접근은 할 수 없습니다.
+
+## Session Key 규칙
+
+Session key 는 항상 `agentbridge:<client_id>:<workspace_id>:<thread_id>` 형식을 따릅니다. 같은 thread 에서는 이 세 값을 고정하세요. provider family 를 바꾸려면 기존 thread 를 재사용하지 말고 새로운 `thread_id` 를 만드세요.
+
+## 핵심 Runtime Endpoints
+
+- `GET /api/status`
+- `GET /api/usage?session=<session_key>`
+- `POST /api/agentbridge/chat`
+- `POST /api/agentbridge/chat/stream`
+- `POST /api/agentbridge/uploads`
+- `GET /api/agentbridge/messages`
+- `GET /api/agentbridge/events/stream`
+- `POST /api/agentbridge/stop`
+- `GET /api/agentbridge/media`
+
+```bash
+curl -N https://claw-demo.lemondata.cc/api/agentbridge/chat/stream \
+  -H "Authorization: Bearer <gateway_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "codex",
+    "workspace_id": "default",
+    "thread_id": "demo-thread",
+    "message": "Give me a short status update for this instance."
+  }'
+```
+
+## Coding Agent 에 줄 프롬프트
+
+아래 짧은 지시문을 access pack 과 함께 coding agent 에 전달하세요.
+
+> Use `/api/agentbridge/chat/stream` first. Keep `client_id`, `workspace_id`, and `thread_id` stable for the same conversation. If you get `provider_family_conflict`, create a new `thread_id` instead of reusing the old one.
+
+## 자주 보는 오류
+
+- `provider_family_conflict` — 이 thread 에는 다른 provider family 의 이력이 있습니다. 새 `thread_id` 를 만드세요.
+- `Unauthorized` — bearer token 이 없거나 만료되었거나 현재 인스턴스의 token 이 아닙니다.
+- `Instance not running` — AgentBridge access pack 은 실행 중인 인스턴스에만 발급됩니다.

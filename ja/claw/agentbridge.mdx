@@ -1,0 +1,54 @@
+---
+title: "AgentBridge"
+description: "1 つの LemonClaw インスタンス用 runtime-ready access pack を coding agent に渡します。"
+---
+
+AgentBridge を使うと、ホスト型ダッシュボードに表示されるインスタンス gateway token を使って、coding agent が実行中の LemonClaw インスタンスに直接接続できます。
+
+## Access Pack の取得方法
+
+Dashboard > Claw を開き、実行中のインスタンスを選び、AgentBridge をクリックして modal から完全な access pack をコピーします。この pack には runtime base URL、bearer token、session key ルール、主要 endpoints が含まれています。
+
+## この Token でできること
+
+コピーされる gateway token は runtime 専用です。runtime status の確認、chat リクエスト、SSE ストリーム、thread history の取得、実行中 thread の停止、AgentBridge が返す media の取得ができます。更新、再構築、hosted control plane からの再起動、組織の課金や admin routes には使えません。
+
+## Session Key ルール
+
+Session key は常に `agentbridge:<client_id>:<workspace_id>:<thread_id>` です。同じ thread では 3 つの値を固定してください。provider family を切り替えるときは、既存 thread を再利用せず、新しい `thread_id` を作成してください。
+
+## 主要 Runtime Endpoints
+
+- `GET /api/status`
+- `GET /api/usage?session=<session_key>`
+- `POST /api/agentbridge/chat`
+- `POST /api/agentbridge/chat/stream`
+- `POST /api/agentbridge/uploads`
+- `GET /api/agentbridge/messages`
+- `GET /api/agentbridge/events/stream`
+- `POST /api/agentbridge/stop`
+- `GET /api/agentbridge/media`
+
+```bash
+curl -N https://claw-demo.lemondata.cc/api/agentbridge/chat/stream \
+  -H "Authorization: Bearer <gateway_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "codex",
+    "workspace_id": "default",
+    "thread_id": "demo-thread",
+    "message": "Give me a short status update for this instance."
+  }'
+```
+
+## Coding Agent へのプロンプト
+
+以下の短い指示を access pack と一緒に coding agent に渡してください。
+
+> Use `/api/agentbridge/chat/stream` first. Keep `client_id`, `workspace_id`, and `thread_id` stable for the same conversation. If you get `provider_family_conflict`, create a new `thread_id` instead of reusing the old one.
+
+## よくあるエラー
+
+- `provider_family_conflict` — その thread は別の provider family で履歴を持っています。新しい `thread_id` を作成してください。
+- `Unauthorized` — bearer token がない、失効している、またはこのインスタンスに属していません。
+- `Instance not running` — AgentBridge access pack は実行中のインスタンスにのみ発行されます。
