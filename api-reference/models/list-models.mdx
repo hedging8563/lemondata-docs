@@ -18,11 +18,33 @@ description: "Lists all available models"
   - `object` (string): `model`
   - `created` (integer): Creation timestamp
   - `owned_by` (string): Model provider
+  - `lemondata.category` (string): Public model category
+  - `lemondata.public_contract_summary` (object or `null`): Public non-chat contract summary
+  - `lemondata.agent_preferences` (object): Non-chat recommendation snapshot keyed by scene
 </ResponseField>
+
+## Query Parameters
+
+<ParamField query="category" type="string">
+  Optional public category filter. Supports `chat`, `image`, `video`, `audio`, `tts`, `stt`, `music`, `3d`, `embedding`, `rerank`, and `translation`.
+</ParamField>
+
+<ParamField query="recommended_for" type="string">
+  Optional non-chat recommendation scene. Supports `image`, `video`, `music`, `3d`, `tts`, `stt`, `embedding`, `rerank`, and `translation`.
+</ParamField>
+
+<Note>
+When `recommended_for` is present, `/v1/models` sorts non-chat models by the latest cached 24-hour success-rate snapshot. Models with `status = "insufficient_samples"` remain visible but sort after scored models.
+</Note>
 
 <RequestExample>
 ```bash cURL
 curl "https://api.lemondata.cc/v1/models" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```bash cURL
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
@@ -157,3 +179,37 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 | `moonshot` | kimi-k2.5 |
 | `minimax` | minimax-m2.1 |
 | `meta` | llama-3.3-70b, llama-3.1-405b |
+
+## Agent Recommendation Example
+
+```json Response
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "gemini-2.5-flash-image",
+      "object": "model",
+      "created": 1706000000,
+      "owned_by": "google",
+      "lemondata": {
+        "category": "image",
+        "pricing_unit": "per_request",
+        "agent_preferences": {
+          "image": {
+            "preferred_rank": 1,
+            "success_rate_24h": 0.98,
+            "sample_count_24h": 423,
+            "status": "ready",
+            "updated_at": "2026-03-28T12:00:00.000Z",
+            "basis": {
+              "score_source": "clickhouse_24h",
+              "channel_id": null,
+              "physical_model": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```

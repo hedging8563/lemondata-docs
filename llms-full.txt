@@ -419,18 +419,27 @@ These headers appear on both streaming and non-streaming responses.
 
 ## /v1/models Enhancements
 
-Three new fields in the `lemondata` extension of each model object:
+`/v1/models` now carries non-chat recommendation metadata that agents can use before they call image, video, music, 3D, TTS, STT, embedding, rerank, or translation endpoints.
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
@@ -441,6 +450,14 @@ Three new fields in the `lemondata` extension of each model object:
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Model type |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | How the model is billed |
 | `cache_pricing` | object or `null` | Upstream prompt cache prices + platform semantic cache discount |
+| `agent_preferences.` | object | Non-chat recommendation snapshot for that scene |
+
+`agent_preferences` is derived from a cached 24-hour success-rate snapshot:
+
+- Window: 24 hours
+- Snapshot cache: stale-while-revalidate
+- `status = "ready"` means the model has enough recent samples to participate in ranking
+- `status = "insufficient_samples"` means the model stays visible but is not ranked ahead of scored models
 
 ### Category Filtering
 
@@ -449,6 +466,37 @@ GET https://api.lemondata.cc/v1/models?category=chat          # Chat models only
 GET https://api.lemondata.cc/v1/models?category=image         # Image generation models
 GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
+
+### Recommendation Discovery
+
+For non-chat workflows, agents should fetch the current recommended shortlist first:
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+Valid `recommended_for` values are:
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+If both `category` and `recommended_for` are present, they must match exactly.
+
+Recommended agent flow:
+
+1. `GET /v1/models?recommended_for=`
+2. Pick the first `agent_preferences..status == "ready"` model
+3. Call the endpoint explicitly with `model=`
+4. On transient errors only, retry with the next `ready` model
 
 ## llms.txt
 
@@ -1968,11 +2016,11 @@ Image, video, and audio models are priced per request:
 | Whisper (per minute) | $0.006 |
 | TTS-1 | $0.015 |
 
-### Async Task Billing (Video/Music/3D)
+### Async Task Billing (Video/Music/3D and Some Image Models)
 
-> Warning: **Important**: Video, music, and 3D generation tasks are **billed at submission time**, not upon completion.
+> Warning: **Important**: Video, music, and 3D generation tasks are **billed at submission time**, not upon completion. Some image models can also return task-based responses and should be treated the same way when they do.
 
-For async generation tasks (video, music, 3D models):
+For task-based generation flows (video, music, 3D, and some image models):
 
 1. **Billing occurs immediately** when you submit the task
 2. Follow the returned `poll_url` for status checks, and treat `task_id` as the async task identity
@@ -3128,6 +3176,9 @@ Get your API key from the [Dashboard](https://lemondata.cc/dashboard).
 |----------|--------|-------------|
 | `/v1/images/generations` | POST | Generate images from text |
 | `/v1/images/edits` | POST | Edit images |
+| `/v1/images/generations/{id}` | GET | Image task status path for task-based image responses |
+
+> Info: Some image models may return results inline, some may return task-based responses, and some may behave either way depending on the routed provider path. If the create response includes `poll_url`, follow it exactly.
 
 ### Audio
 
@@ -3151,6 +3202,8 @@ Get your API key from the [Dashboard](https://lemondata.cc/dashboard).
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/tasks/{id}` | GET | Unified async task status endpoint. Recommended when following a returned `poll_url` |
+
+> Info: This endpoint is not limited to video, music, and 3D. Some image tasks may also use `/v1/tasks/{id}` as the canonical polling path.
 
 ### Music
 
@@ -3276,6 +3329,10 @@ URL: https://docs.lemondata.cc/api-reference/models/list-models
 
 ## Response
 
+## Query Parameters
+
+> Note: When `recommended_for` is present, `/v1/models` sorts non-chat models by the latest cached 24-hour success-rate snapshot. Models with `status = "insufficient_samples"` remain visible but sort after scored models.
+
 ## Filtering by Provider
 
 ```python
@@ -3298,6 +3355,40 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 | `moonshot` | kimi-k2.5 |
 | `minimax` | minimax-m2.1 |
 | `meta` | llama-3.3-70b, llama-3.1-405b |
+
+## Agent Recommendation Example
+
+```json Response
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "gemini-2.5-flash-image",
+      "object": "model",
+      "created": 1706000000,
+      "owned_by": "google",
+      "lemondata": {
+        "category": "image",
+        "pricing_unit": "per_request",
+        "agent_preferences": {
+          "image": {
+            "preferred_rank": 1,
+            "success_rate_24h": 0.98,
+            "sample_count_24h": 423,
+            "status": "ready",
+            "updated_at": "2026-03-28T12:00:00.000Z",
+            "basis": {
+              "score_source": "clickhouse_24h",
+              "channel_id": null,
+              "physical_model": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```
 
 ---
 
@@ -3324,6 +3415,20 @@ If the model doesn't exist, you'll receive a 404 error:
   }
 }
 ```
+
+## Non-Chat Recommendation Metadata
+
+For non-chat models, the detail route also returns `lemondata.agent_preferences.`.
+
+Use it to inspect:
+
+- `preferred_rank`
+- `success_rate_24h`
+- `sample_count_24h`
+- `status`
+- `updated_at`
+
+The public response intentionally keeps `basis.channel_id` and `basis.physical_model` as `null` so agents can consume the recommendation signal without learning internal routing identifiers.
 
 ---
 
@@ -3492,6 +3597,8 @@ for block in message.content:
 
 URL: https://docs.lemondata.cc/api-reference/embeddings/create-embedding
 
+> Note: For coding agents, discover the current recommended embedding shortlist first with `GET /v1/models?recommended_for=embedding`, then send the selected `model` explicitly to this endpoint.
+
 ## Request Body
 
 ## Available Models
@@ -3528,6 +3635,8 @@ for i, data in enumerate(response.data):
 > Reranks documents by relevance to a query
 
 URL: https://docs.lemondata.cc/api-reference/rerank/create-rerank
+
+> Note: For coding agents, discover the current recommended rerank shortlist first with `GET /v1/models?recommended_for=rerank`, then send the selected `model` explicitly to this endpoint.
 
 Rerank documents using semantic similarity models. Useful for improving search results and RAG applications.
 
@@ -3781,15 +3890,17 @@ Use the interactive OpenAPI panel above for the exact schema.
 
 URL: https://docs.lemondata.cc/api-reference/images/create-image
 
+> Note: For coding agents, discover the current recommended image shortlist first with `GET /v1/models?recommended_for=image`, then send the selected `model` explicitly to this endpoint.
+
 ## Request Body
 
 ## Response
 
-### Synchronous Response (DALL-E, Flux Schnell, etc.)
+### Inline Response
 
-### Asynchronous Response (Midjourney, Flux Pro, Ideogram, etc.)
+### Async Task Response
 
-Some models require longer processing time and return an async response:
+Some image models return an async task immediately, and some may behave as either inline or task-based depending on the routed provider path. When the response includes `status: "pending"`, treat it as an async task response:
 
 > Info: Use the returned `poll_url` exactly when it is provided. Treat `task_id` as the async task identity for follow-up polling.
 
@@ -3799,19 +3910,19 @@ Some models require longer processing time and return an async response:
 
 | Model | Type | Features |
 |-------|------|----------|
-| `dall-e-3` | Sync | Best quality, prompt enhancement |
-| `dall-e-2` | Sync | Faster, more affordable |
-| `flux-pro` | **Async** | Photorealistic, high quality |
-| `flux-schnell` | Sync | Very fast |
-| `midjourney` | **Async** | Artistic style |
-| `ideogram-v3` | **Async** | Best text rendering |
-| `stable-diffusion-3` | Sync | Open source, customizable |
+| `dall-e-3` | Usually inline | Best quality, prompt enhancement |
+| `dall-e-2` | Usually inline | Faster, more affordable |
+| `flux-pro` | Often task-based | Photorealistic, high quality |
+| `flux-schnell` | Usually inline | Very fast |
+| `midjourney` | Often task-based | Artistic style |
+| `ideogram-v3` | Often task-based | Best text rendering |
+| `stable-diffusion-3` | Usually inline | Open source, customizable |
 
-> Tip: **Async models** return `status: "pending"` and require polling. See [Get Image Status](/api-reference/images/get-image-status) for how to retrieve results.
+> Tip: Do not hard-code a model as always synchronous or always asynchronous. If the create response returns `status: "pending"`, follow `poll_url` and poll until completion.
 
-## Handling Async Responses
+## Handling Task-Based Responses
 
-For async models, check if the response contains `status: "pending"`:
+For image models, always check whether the response contains `status: "pending"`:
 
 ```python
 import requests
@@ -3826,15 +3937,16 @@ def generate_image(prompt, model="midjourney"):
     )
     data = response.json()
 
-    # Check if async
+    # Check if task-based
     if data.get("status") == "pending":
         task_id = data["task_id"]
-        print(f"Async task started: {task_id}")
+        poll_url = data.get("poll_url")
+        print(f"Image task started: {task_id}")
 
         # Poll for result
         while True:
             status_resp = requests.get(
-                f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/images/generations/{task_id}",
                 headers={"Authorization": "Bearer sk-your-api-key"}
             )
             status_data = status_resp.json()
@@ -3846,7 +3958,7 @@ def generate_image(prompt, model="midjourney"):
 
             time.sleep(3)
     else:
-        # Sync response
+        # Inline response
         return data["data"][0]["url"]
 
 # Usage
@@ -3906,13 +4018,13 @@ URL: https://docs.lemondata.cc/api-reference/images/get-image-status
 
 ## Path Parameters
 
-> Info: If the create response included `poll_url`, prefer calling that exact URL for polling.
+> Info: If the create response included `poll_url`, prefer calling that exact URL for polling. Some image tasks may surface a `poll_url` under `/v1/tasks/{id}` instead of the image-specific status path.
 
 ## Response
 
 ## Polling Best Practices
 
-> Tip: **Recommended polling interval**: 3-5 seconds. Most image generation tasks complete within 30-120 seconds depending on the model.
+> Tip: **Recommended polling interval**: 3-5 seconds. Most image generation tasks complete within 30-120 seconds depending on the model and routed provider path.
 
 ```python
 import requests
@@ -3950,6 +4062,8 @@ print(f"Generated image: {image_url}")
 
 URL: https://docs.lemondata.cc/api-reference/audio/create-speech
 
+> Note: For coding agents, discover the current recommended TTS shortlist first with `GET /v1/models?recommended_for=tts`, then send the selected `model` explicitly to this endpoint.
+
 ## Request Body
 
 ## Response
@@ -3980,6 +4094,8 @@ Returns the audio file in the requested format.
 
 URL: https://docs.lemondata.cc/api-reference/audio/create-transcription
 
+> Note: For coding agents, discover the current recommended STT shortlist first with `GET /v1/models?recommended_for=stt`, then send the selected `model` explicitly to this endpoint.
+
 ## Request Body
 
 ## Response
@@ -4009,6 +4125,8 @@ URL: https://docs.lemondata.cc/api-reference/audio/create-translation
 
 Translates audio in any supported language into English text. Unlike transcription, this endpoint always outputs English text regardless of the input language.
 
+> Note: This page documents **audio translation** (`POST /v1/audio/translations`). For **text translation**, use `POST /v1/translations`.
+
 ## Request Body
 
 ## Response
@@ -4032,6 +4150,8 @@ For `verbose_json` format, the response also includes:
 > Creates a music generation task using Suno
 
 URL: https://docs.lemondata.cc/api-reference/music/create-music
+
+> Note: For coding agents, discover the current recommended music shortlist first with `GET /v1/models?recommended_for=music`, then send the selected `model` explicitly to this endpoint.
 
 Generate music and lyrics using AI. This is an asynchronous API. Create responses return a task identity, and may also return a preferred `poll_url` for status checks.
 
@@ -4064,6 +4184,8 @@ Poll this endpoint to check the status of your music generation task.
 URL: https://docs.lemondata.cc/api-reference/video/create-video
 
 ## Overview
+
+> Note: For coding agents, discover the current recommended video shortlist first with `GET /v1/models?recommended_for=video`, then send the selected `model` explicitly to this endpoint.
 
 Video generation is asynchronous. You submit a request, receive a canonical async task ID and `poll_url`, then poll for the result.
 
@@ -4334,6 +4456,8 @@ def wait_for_video(task_id, max_wait=600, interval=5):
 
 URL: https://docs.lemondata.cc/api-reference/3d/create-3d
 
+> Note: For coding agents, discover the current recommended 3D shortlist first with `GET /v1/models?recommended_for=3d`, then send the selected `model` explicitly to this endpoint.
+
 Generate 3D models from text or images using Tripo3D and other providers. This is an asynchronous API. Create responses return a task identity, and may also return a preferred `poll_url` for status checks.
 
 ## Request Body
@@ -4371,7 +4495,7 @@ URL: https://docs.lemondata.cc/api-reference/tasks/get-task-status
 
 Use this endpoint for unified async polling across task types such as video, image, music, and 3D generation.
 
-> Info: If a create response includes `poll_url`, call that exact path. For newer async workflows, `poll_url` may point to `/v1/tasks/{id}`.
+> Info: If a create response includes `poll_url`, call that exact path. Some image models may return task-based responses under either an image-specific status path or `/v1/tasks/{id}`.
 
 ## Path Parameters
 

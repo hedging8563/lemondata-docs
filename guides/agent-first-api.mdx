@@ -160,18 +160,27 @@ These headers appear on both streaming and non-streaming responses.
 
 ## /v1/models Enhancements
 
-Three new fields in the `lemondata` extension of each model object:
+`/v1/models` now carries non-chat recommendation metadata that agents can use before they call image, video, music, 3D, TTS, STT, embedding, rerank, or translation endpoints.
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
@@ -182,6 +191,14 @@ Three new fields in the `lemondata` extension of each model object:
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Model type |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | How the model is billed |
 | `cache_pricing` | object or `null` | Upstream prompt cache prices + platform semantic cache discount |
+| `agent_preferences.<scene>` | object | Non-chat recommendation snapshot for that scene |
+
+`agent_preferences` is derived from a cached 24-hour success-rate snapshot:
+
+- Window: 24 hours
+- Snapshot cache: stale-while-revalidate
+- `status = "ready"` means the model has enough recent samples to participate in ranking
+- `status = "insufficient_samples"` means the model stays visible but is not ranked ahead of scored models
 
 ### Category Filtering
 
@@ -190,6 +207,37 @@ GET https://api.lemondata.cc/v1/models?category=chat          # Chat models only
 GET https://api.lemondata.cc/v1/models?category=image         # Image generation models
 GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
+
+### Recommendation Discovery
+
+For non-chat workflows, agents should fetch the current recommended shortlist first:
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+Valid `recommended_for` values are:
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+If both `category` and `recommended_for` are present, they must match exactly.
+
+Recommended agent flow:
+
+1. `GET /v1/models?recommended_for=<scene>`
+2. Pick the first `agent_preferences.<scene>.status == "ready"` model
+3. Call the endpoint explicitly with `model=<selected>`
+4. On transient errors only, retry with the next `ready` model
 
 ## llms.txt
 
