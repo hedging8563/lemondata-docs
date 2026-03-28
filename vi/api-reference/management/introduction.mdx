@@ -1,12 +1,17 @@
 ---
 title: "API quản lý"
-description: "Dùng token quản lý để quản lý API key của tổ chức và xem usage, billing theo từng key."
+description: "Dùng token quản lý để quản lý API key của tổ chức và xem mức sử dụng cùng chi phí theo từng key."
 ---
+
 ## Tổng quan
 
-Management API cho phép bạn quản lý API Key của tổ chức và truy xuất dữ liệu usage cũng như billing theo từng key mà không cần dùng inference API key thông thường.
+Management API cho phép bạn quản lý API key của tổ chức và truy xuất mức sử dụng cũng như chi phí theo từng key mà không cần dùng inference API key thông thường.
 
-Sử dụng management token từ trang **Settings** trong Dashboard:
+Bạn có thể phát hành và xoay vòng management token từ trang **Settings** trong Dashboard.
+
+```bash
+Authorization: Bearer mt-your-management-token
+```
 
 <Warning>
 Management token khác với inference API key. Hãy dùng `mt-...` cho `/v1/management/*`, và dùng `sk-...` cho các endpoint suy luận như `/v1/responses`.
@@ -14,71 +19,71 @@ Management token khác với inference API key. Hãy dùng `mt-...` cho `/v1/man
 
 ## Endpoint khả dụng
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| /v1/management/api-keys | GET | List user-managed API keys in the current organization |
-| /v1/management/api-keys | POST | Create a new user API key |
-| /v1/management/api-keys/{keyId} | PATCH | Update name, usage limit, allowed models, expiry, or status |
-| /v1/management/api-keys/{keyId}/usage | GET | Retrieve paginated usage details for a specific key |
-| /v1/management/api-keys/{keyId}/billing | GET | Retrieve aggregated billing breakdowns for a specific key |
+| Endpoint | Method | Mô tả |
+|----------|--------|------|
+| `/v1/management/api-keys` | GET | Liệt kê API key người dùng trong tổ chức hiện tại |
+| `/v1/management/api-keys` | POST | Tạo API key người dùng mới |
+| `/v1/management/api-keys/{keyId}` | PATCH | Cập nhật tên, giới hạn sử dụng, model cho phép, thời gian hết hạn hoặc trạng thái |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Lấy chi tiết usage có phân trang cho một key cụ thể |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Lấy breakdown chi phí tổng hợp cho một key cụ thể |
 
 ## Hợp đồng bộ lọc usage
 
-`GET /v1/management/api-keys/{keyId}/usage` hỗ trợ các query parameter sau:
+`GET /v1/management/api-keys/{keyId}/usage` hỗ trợ các query parameter sau.
 
-| Tham số | Kiểu | Mặc định / giới hạn | Ghi chú |
-|-----------|------|------------------|-------|
-| page | integer | default 1, min 1 | 1-based page number |
-| limit | integer | default 50, min 1, max 100 | Page size |
-| logicalModel | string | max length 100 | Requested logical model name |
-| modelVendor | string | max length 100 | Public model vendor |
-| scene | enum | - | chat, image, audio, video, embedding, rerank, translation, music, 3d |
-| accessChannel | enum | - | platform or byok |
-| startDate | string | - | Inclusive lower bound; accepts RFC3339 with timezone or YYYY-MM-DD |
-| endDate | string | - | Inclusive upper bound; accepts RFC3339 with timezone or YYYY-MM-DD |
+| Tham số | Kiểu | Mặc định / giới hạn | Mô tả |
+|---------|------|---------------------|------|
+| `page` | integer | mặc định `1`, tối thiểu `1` | Số trang bắt đầu từ 1 |
+| `limit` | integer | mặc định `50`, tối thiểu `1`, tối đa `100` | Kích thước mỗi trang |
+| `logicalModel` | string | độ dài tối đa `100` | Tên model logic được yêu cầu |
+| `modelVendor` | string | độ dài tối đa `100` | Nhà cung cấp model công khai |
+| `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
+| `accessChannel` | enum | - | `platform` hoặc `byok` |
+| `startDate` | string | - | Cận dưới bao gồm; chấp nhận RFC3339 có múi giờ hoặc `YYYY-MM-DD` |
+| `endDate` | string | - | Cận trên bao gồm; chấp nhận RFC3339 có múi giờ hoặc `YYYY-MM-DD` |
 
 Nếu truyền đồng thời `startDate` và `endDate`, thì `startDate` phải nhỏ hơn hoặc bằng `endDate`.
 
-## Hợp đồng body API Key
+## Hợp đồng body API key
 
 ### POST /v1/management/api-keys
 
-| Trường | Kiểu | Mặc định / giới hạn | Ghi chú |
-|-------|------|------------------|-------|
-| name | string | bắt buộc, mặc định Default Key, độ dài 1-50 | Tên hiển thị, được làm sạch ở phía server |
-| limitAmount | number \| null | tối thiểu 0, tối đa 100000 | null hoặc bỏ qua = không giới hạn, 0 = không có quota khả dụng, số dương = trần USD |
-| models | string[] | mặc định [] | Danh sách cho phép logical model tùy chọn |
-| expiresAt | string \| null | datetime RFC3339 | null nghĩa là không hết hạn |
+| Trường | Kiểu | Mặc định / giới hạn | Mô tả |
+|--------|------|---------------------|------|
+| `name` | string | bắt buộc, mặc định `Default Key`, độ dài `1-50` | Tên hiển thị; server sẽ cắt khoảng trắng ở đầu và cuối |
+| `limitAmount` | number \| null | tối thiểu `0`, tối đa `100000` | `null` hoặc bỏ qua = không giới hạn, `0` = quota bằng 0, số dương = trần chi tiêu USD |
+| `models` | string[] | mặc định `[]` | Danh sách cho phép model logic tùy chọn |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` nghĩa là không hết hạn |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| Trường | Kiểu | Mặc định / giới hạn | Ghi chú |
-|-------|------|------------------|-------|
-| status | enum | - | active, inactive, revoked |
-| name | string | độ dài 1-50 | Tên hiển thị đã cập nhật |
-| limitAmount | number \| null | tối thiểu 0, tối đa 100000 | null nghĩa là không giới hạn, 0 nghĩa là không có quota |
-| models | string[] | - | Danh sách cho phép logical model đã cập nhật |
-| expiresAt | string \| null | datetime RFC3339 | null sẽ xoá thời gian hết hạn |
+| Trường | Kiểu | Mặc định / giới hạn | Mô tả |
+|--------|------|---------------------|------|
+| `status` | enum | - | `active`, `inactive`, `revoked` |
+| `name` | string | độ dài `1-50` | Tên hiển thị sau khi cập nhật |
+| `limitAmount` | number \| null | tối thiểu `0`, tối đa `100000` | `null` = không giới hạn, `0` = quota bằng 0 |
+| `models` | string[] | - | Danh sách model logic cho phép sau khi cập nhật |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` sẽ xoá thời gian hết hạn |
 
 Yêu cầu PATCH phải có ít nhất một trường.
 
 ## Ngữ nghĩa báo cáo
 
-- logicalModel là tên model logic công khai mà phía gọi yêu cầu.
-- modelVendor là nhà cung cấp model công khai, không phải tuyến vật lý bị ẩn.
-- scene là ngữ cảnh yêu cầu công khai, được suy ra từ endpoint hoặc loại tác vụ.
-- accessChannel=platform nghĩa là yêu cầu được tính phí qua kênh nền tảng của LemonData.
-- accessChannel=byok nghĩa là yêu cầu đã dùng khóa upstream provider của riêng bạn.
+- `logicalModel` là model logic công khai mà phía gọi yêu cầu.
+- `modelVendor` là nhà cung cấp model công khai, không phải tuyến vật lý bị ẩn.
+- `scene` là ngữ cảnh yêu cầu công khai được suy ra từ endpoint hoặc loại tác vụ.
+- `accessChannel=platform` nghĩa là yêu cầu được tính phí qua kênh nền tảng của LemonData.
+- `accessChannel=byok` nghĩa là yêu cầu dùng khóa upstream provider của riêng bạn.
 
-Phản hồi chỉ trả về các trường billing và reporting công khai; chi tiết routing nội bộ và metadata kênh vật lý sẽ vẫn bị ẩn.
+Phản hồi chỉ trả về các trường chi phí và báo cáo công khai. Chi tiết routing nội bộ và metadata provider vật lý vẫn bị ẩn.
 
-## Lưu ý về phân trang billing
+## Lưu ý về phân trang chi phí
 
-`/usage` có phân trang. `/billing` hiện là endpoint tổng hợp và không trả về metadata phân trang kiểu `page` / `limit`.
+`/usage` có phân trang. `/billing` hiện là endpoint tổng hợp và không trả về metadata phân trang kiểu `page` / `limit`. Nếu bạn cần bản ghi chi tiết từng dòng, hãy dùng `/usage`.
 
 ## Ví dụ nhanh
 
-Bắt đầu bằng cách liệt kê các API Key khả dụng cho management token hiện tại:
+Bắt đầu bằng cách liệt kê các API key khả dụng cho management token hiện tại.
 
 <RequestExample>
 ```bash cURL
@@ -111,8 +116,8 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 
 ## Bước tiếp theo
 
-- [List API Keys](/api-reference/management/list-api-keys)
-- [Create API Key](/api-reference/management/create-api-key)
-- [Update API Key](/api-reference/management/update-api-key)
-- [Get API Key Usage](/api-reference/management/get-api-key-usage)
-- [Get API Key Billing](/api-reference/management/get-api-key-billing)
+- [Liệt kê API key](/vi/api-reference/management/list-api-keys)
+- [Tạo API key](/vi/api-reference/management/create-api-key)
+- [Cập nhật API key](/vi/api-reference/management/update-api-key)
+- [Lấy usage API key](/vi/api-reference/management/get-api-key-usage)
+- [Lấy chi phí API key](/vi/api-reference/management/get-api-key-billing)

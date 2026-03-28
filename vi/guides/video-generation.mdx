@@ -1,20 +1,23 @@
 ---
-title: "Tạo Video"
-description: "Tạo video với các model từ 11 nhà cung cấp — text-to-video, image-to-video, điều khiển keyframe, mở rộng video và chỉnh sửa"
+title: "Tạo video"
+description: "Dùng hợp đồng công khai thống nhất cho các luồng text-to-video, image-to-video, reference-to-video, điều khiển khung đầu/cuối, điều khiển chuyển động và video-to-video."
 ---
 
 ## Tổng quan
 
-LemonData cung cấp quyền truy cập vào các model tạo video từ 11 nhà cung cấp thông qua một API hợp nhất duy nhất. Việc tạo video là **bất đồng bộ** — bạn gửi một request, nhận về một task ID và `poll_url`, sau đó poll để lấy kết quả.
+LemonData cung cấp khả năng tạo video thông qua một API hợp nhất. Quá trình này **bất đồng bộ**: bạn gửi yêu cầu, nhận `task_id` và `poll_url`, rồi kiểm tra trạng thái định kỳ cho tới khi có kết quả cuối cùng.
 
 <Info>
-Danh sách model được cập nhật thường xuyên. Để xem các model khả dụng mới nhất và giá cả, hãy truy cập [trang Models](https://lemondata.cc/vi/models) hoặc sử dụng [Models API](/api-reference/models/list-models).
+Danh sách model video công khai có thể thay đổi theo thời gian. Để xem tình trạng mới nhất, hãy dùng [Models API](/vi/api-reference/models/list-models) hoặc truy cập [trang Models](https://lemondata.cc/vi/models).
 </Info>
 
 <Warning>
-Audio behavior is model-dependent. In LemonData, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some models are silent by default or silent-only. For passthrough-governed models, pass `output_audio=true` to make a best-effort upstream audio request.
+Hành vi âm thanh phụ thuộc vào từng model. Trong LemonData, họ Veo 3 mặc định bật âm thanh khi bỏ qua `output_audio`. Một số model công khai chỉ hỗ trợ im lặng hoặc không cung cấp công tắc âm thanh ổn định.
 </Warning>
 
+<Info>
+Trong môi trường vận hành, nên ưu tiên URL `https` công khai thay vì base64 inline cho ảnh, video và âm thanh. Các model tương thích vẫn hỗ trợ URL `data:`, nhưng URL công khai sẽ dễ retry, kiểm tra và debug hơn.
+</Info>
 
 ### Quy trình bất đồng bộ
 
@@ -25,30 +28,145 @@ sequenceDiagram
     participant Provider
 
     Client->>LemonData: POST /v1/videos/generations
-    LemonData->>Provider: Forward request
+    LemonData->>Provider: Chuyển tiếp yêu cầu đã chuẩn hóa
     Provider-->>LemonData: task_id + pending
     LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
-    loop Poll every 5-10s
+    loop Kiểm tra mỗi 5-10 giây
         Client->>LemonData: GET poll_url
-        LemonData->>Provider: Query status
-        Provider-->>LemonData: Status update
+        LemonData->>Provider: Truy vấn trạng thái
+        Provider-->>LemonData: Cập nhật trạng thái
         LemonData-->>Client: { status, video_url? }
     end
 ```
 
-<CodeGroup>
+## Các thao tác công khai hiện tại
 
-```python Python
-import requests
-import time
+Hợp đồng video công khai hiện tại của LemonData tập trung vào các thao tác sau:
 
-API_KEY = "sk-your-api-key"
-BASE = "https://api.lemondata.cc/v1"
-headers = {"Authorization": f"Bearer {API_KEY}"}
+- `text-to-video`
+- `image-to-video`
+- `reference-to-video`
+- `start-end-to-video`
+- `video-to-video`
+- `motion-control`
 
-# Step 1: Submit generation request
-resp = requests.post(f"{BASE}/videos/generations",
+Hợp đồng yêu cầu cũng chấp nhận `audio-to-video` và `video-extension` cho một số luồng đặc thù theo model, nhưng trong bản tài liệu hiện tại chưa có model công khai phổ biến nào quảng bá rõ ràng hai khả năng này.
+
+## Ma trận khả năng
+
+**Chú thích**: ✅ Có ít nhất một model công khai đang bật trong nhóm nhà cung cấp đó hỗ trợ khả năng này | ❌ Hiện chưa có model công khai đang bật nào đại diện cho khả năng đó
+
+| Nhóm | T2V | I2V | Tham chiếu | Đầu-Cuối | V2V | Chuyển động |
+|------|-----|-----|------------|----------|-----|-------------|
+| OpenAI | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Kuaishou | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Google | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| ByteDance | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Alibaba | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Shengshu | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| xAI | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Khác | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+
+### Giải thích khả năng
+
+- **T2V (Text-to-Video)**: Tạo video từ prompt văn bản
+- **I2V (Image-to-Video)**: Tạo video từ một ảnh đầu vào. Để tương thích rộng nhất, nên dùng `image_url`
+- **Tham chiếu**: Điều kiện hóa quá trình sinh bằng một hoặc nhiều ảnh tham chiếu qua `reference_images`
+- **Đầu-Cuối**: Điều khiển khung đầu và khung cuối bằng `start_image` và `end_image`
+- **V2V (Video-to-Video)**: Dùng một video có sẵn làm đầu vào chính
+- **Chuyển động**: Kết hợp ảnh chủ thể với video tham chiếu chuyển động
+
+## Danh sách model công khai hiện tại
+
+### OpenAI
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `sora-2` | Văn bản sang video, image-to-video |
+| `sora-2-pro` | Văn bản sang video, image-to-video |
+| `sora-2-pro-storyboard` | Image-to-video |
+
+### Kuaishou
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `kling-3.0-motion-control` | Điều khiển chuyển động |
+| `kling-3.0-video` | Văn bản sang video, image-to-video, start-end-to-video |
+| `kling-v2.5-turbo-pro` | Văn bản sang video, image-to-video, start-end-to-video |
+| `kling-v2.5-turbo-std` | Văn bản sang video, image-to-video |
+| `kling-v2.6-pro` | Văn bản sang video, image-to-video, start-end-to-video |
+| `kling-v2.6-std` | Văn bản sang video, image-to-video |
+| `kling-v3.0-pro` | Văn bản sang video, image-to-video, start-end-to-video |
+| `kling-v3.0-std` | Văn bản sang video, image-to-video, start-end-to-video |
+| `kling-video-o1-pro` | Văn bản sang video, image-to-video, reference-to-video, start-end-to-video, video-to-video |
+| `kling-video-o1-std` | Văn bản sang video, image-to-video, reference-to-video, start-end-to-video, video-to-video |
+
+### Google
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `veo3` | Văn bản sang video, image-to-video |
+| `veo3-fast` | Văn bản sang video, image-to-video |
+| `veo3-pro` | Văn bản sang video, image-to-video |
+| `veo3.1` | Văn bản sang video, image-to-video, reference-to-video, start-end-to-video |
+| `veo3.1-fast` | Văn bản sang video, image-to-video, reference-to-video, start-end-to-video |
+| `veo3.1-pro` | Văn bản sang video, image-to-video, start-end-to-video |
+
+### ByteDance
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `seedance-1.5-pro` | Văn bản sang video, image-to-video |
+
+### MiniMax
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `hailuo-2.3-fast` | Image-to-video |
+| `hailuo-2.3-pro` | Văn bản sang video, image-to-video |
+| `hailuo-2.3-standard` | Văn bản sang video, image-to-video |
+
+### Alibaba
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `wan-2.2-plus` | Văn bản sang video, image-to-video |
+| `wan-2.5` | Văn bản sang video, image-to-video |
+| `wan-2.6` | Văn bản sang video, image-to-video, reference-to-video |
+
+### Shengshu
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `viduq2` | Văn bản sang video, reference-to-video |
+| `viduq2-pro` | Image-to-video, reference-to-video, start-end-to-video |
+| `viduq2-pro-fast` | Image-to-video, start-end-to-video |
+| `viduq2-turbo` | Image-to-video, start-end-to-video |
+| `viduq3-pro` | Văn bản sang video, image-to-video, start-end-to-video |
+| `viduq3-turbo` | Văn bản sang video, image-to-video, start-end-to-video |
+
+### xAI
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `grok-imagine-image-to-video` | Image-to-video |
+| `grok-imagine-text-to-video` | Văn bản sang video |
+| `grok-imagine-upscale` | Video-to-video |
+
+### Khác
+
+| Model | Thao tác công khai |
+|-------|--------------------|
+| `topaz-video-upscale` | Video-to-video |
+
+## Ví dụ sử dụng
+
+### Text-to-video
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "sora-2",
@@ -58,217 +176,53 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-create_data = resp.json()
-task_id = create_data["task_id"]
-poll_url = create_data["poll_url"]
-
-# Step 2: Poll for result
-while True:
-    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
-    if status["status"] in ("completed", "succeeded"):
-        print(f"Video URL: {status['video_url']}")
-        break
-    elif status["status"] == "failed":
-        print(f"Failed: {status.get('error')}")
-        break
-    time.sleep(10)
 ```
 
-```javascript JavaScript
-const API_KEY = 'sk-your-api-key';
-const BASE = 'https://api.lemondata.cc/v1';
-const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
-
-// Step 1: Submit
-const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
-  method: 'POST', headers,
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A calm cinematic shot of a cat walking through a sunlit garden.',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-}).then(r => r.json());
-
-// Step 2: Poll
-const poll = setInterval(async () => {
-  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
-  if (['completed', 'succeeded'].includes(status.status)) {
-    console.log('Video URL:', status.video_url);
-    clearInterval(poll);
-  } else if (status.status === 'failed') {
-    console.error('Failed:', status.error);
-    clearInterval(poll);
-  }
-}, 10000);
-```
-
-</CodeGroup>
-
-## Ma trận khả năng của model
-
-Các model khác nhau vượt trội ở các tác vụ khác nhau. Hãy sử dụng ma trận này để chọn model phù hợp cho trường hợp sử dụng của bạn.
-
-**Chú thích**: ✅ Hỗ trợ | ❌ Không hỗ trợ
-
-| Series | Provider | T2V | I2V | Keyframe | Extension | Editing | Max Duration |
-|--------|----------|-----|-----|----------|-----------|---------|-------------|
-| **Sora** | OpenAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~20s |
-| **Kling** | Kuaishou | ✅ | ✅ | ❌ | ✅ | ❌ | 10s |
-| **Veo** | Google | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Seedance** | ByteDance | ✅ | ✅ | ✅ | ✅ | ✅ | 10s |
-| **Hailuo** | MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Wan** | Alibaba | ✅ | ✅ | ❌ | ❌ | ❌ | 5s |
-| **Runway** | Runway | ❌ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Luma** | Luma | ✅ | ❌ | ❌ | ✅ | ❌ | 5s |
-| **Vidu** | Vidu | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Grok** | xAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~15s |
-| **Higgsfield** | Higgsfield | ✅ | ❌ | ❌ | ❌ | ❌ | ~5s |
-
-### Định nghĩa khả năng
-
-- **T2V (Text-to-Video)**: Tạo video từ một prompt văn bản
-- **I2V (Image-to-Video)**: Biến một hình ảnh tĩnh thành video. Để có khả năng tương thích rộng nhất, hãy cung cấp `image_url` công khai.
-- **Keyframe**: Điều khiển khung hình đầu và cuối bằng `start_image` + `end_image`
-- **Extension**: Mở rộng thời lượng của một video hiện có
-- **Editing**: Chỉnh sửa các khía cạnh cụ thể của một video hiện có
-
-## Inventory model công khai hiện tại
-
-### OpenAI
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `sora-2` | Văn bản sang video, Hình ảnh sang video |
-| `sora-2-pro` | Văn bản sang video, Hình ảnh sang video |
-| `sora-2-pro-storyboard` | Hình ảnh sang video |
-
-### Kuaishou
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `kling-3.0-motion-control` | Điều khiển chuyển động |
-| `kling-3.0-video` | Văn bản sang video, Hình ảnh sang video, Đầu-cuối sang video |
-| `kling-v2.5-turbo-pro` | Văn bản sang video, Hình ảnh sang video, Đầu-cuối sang video |
-| `kling-v2.5-turbo-std` | Văn bản sang video, Hình ảnh sang video |
-| `kling-v2.6-pro` | Văn bản sang video, Hình ảnh sang video, Đầu-cuối sang video |
-| `kling-v2.6-std` | Văn bản sang video, Hình ảnh sang video |
-| `kling-v3.0-pro` | Văn bản sang video, Hình ảnh sang video, Đầu-cuối sang video |
-| `kling-v3.0-std` | Văn bản sang video, Hình ảnh sang video, Đầu-cuối sang video |
-| `kling-video-o1-pro` | Văn bản sang video, Hình ảnh sang video, Ảnh tham chiếu sang video, Đầu-cuối sang video, Video sang video |
-| `kling-video-o1-std` | Văn bản sang video, Hình ảnh sang video, Ảnh tham chiếu sang video, Đầu-cuối sang video, Video sang video |
-
-### Google
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `veo3` | Văn bản sang video, Hình ảnh sang video |
-| `veo3-fast` | Văn bản sang video, Hình ảnh sang video |
-| `veo3-pro` | Văn bản sang video, Hình ảnh sang video |
-| `veo3.1` | Văn bản sang video, Hình ảnh sang video, Ảnh tham chiếu sang video, Đầu-cuối sang video |
-| `veo3.1-fast` | Văn bản sang video, Hình ảnh sang video, Ảnh tham chiếu sang video, Đầu-cuối sang video |
-| `veo3.1-pro` | Văn bản sang video, Hình ảnh sang video, Đầu-cuối sang video |
-
-### ByteDance
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `seedance-1.5-pro` | Văn bản sang video, Hình ảnh sang video |
-
-### MiniMax
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `hailuo-2.3-fast` | Hình ảnh sang video |
-| `hailuo-2.3-pro` | Văn bản sang video, Hình ảnh sang video |
-| `hailuo-2.3-standard` | Văn bản sang video, Hình ảnh sang video |
-
-### Alibaba
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `wan-2.2-plus` | Văn bản sang video, Hình ảnh sang video |
-| `wan-2.5` | Văn bản sang video, Hình ảnh sang video |
-| `wan-2.6` | Văn bản sang video, Hình ảnh sang video, Ảnh tham chiếu sang video |
-
-### Shengshu
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `viduq2` | Văn bản sang video, Ảnh tham chiếu sang video |
-| `viduq2-pro` | Hình ảnh sang video, Ảnh tham chiếu sang video, Đầu-cuối sang video |
-| `viduq2-pro-fast` | Hình ảnh sang video, Đầu-cuối sang video |
-| `viduq2-turbo` | Hình ảnh sang video, Đầu-cuối sang video |
-| `viduq3-pro` | Văn bản sang video, Hình ảnh sang video, Đầu-cuối sang video |
-| `viduq3-turbo` | Văn bản sang video, Hình ảnh sang video, Đầu-cuối sang video |
-
-### xAI
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `grok-imagine-image-to-video` | Hình ảnh sang video |
-| `grok-imagine-text-to-video` | Văn bản sang video |
-| `grok-imagine-upscale` | Video sang video |
-
-
-### Other
-
-| Model | Thao tác công khai |
-|-------|-------------------|
-| `topaz-video-upscale` | Video sang video |
-
-
-## Ví dụ sử dụng
-
-### Text-to-Video (T2V)
-
-Trường hợp sử dụng phổ biến nhất. Tất cả các model đều hỗ trợ điều này.
+### Image-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "sora-2",
-        "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
-        "operation": "Văn bản sang video",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-```
-
-### Image-to-Video (I2V)
-
-Biến một hình ảnh tĩnh thành video. Để có khả năng tương thích rộng nhất giữa các model video, hãy host hình ảnh nguồn và truyền `image_url`.
-
-```python
-# Using image URL
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
-        "operation": "Hình ảnh sang video",
+        "operation": "image-to-video",
         "image_url": "https://example.com/portrait.jpg",
         "duration": 6,
         "aspect_ratio": "16:9"
     }
 )
-
 ```
 
-### Điều khiển Keyframe (Hình ảnh đầu + cuối)
+### Reference-to-video
 
-Điều khiển cả khung hình đầu tiên và cuối cùng để có các chuyển cảnh chính xác. Hiện được hỗ trợ bởi Seedance 2.0.
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+### Start-end-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "viduq2-pro",
-        "prompt": "Smooth transition from day to night, city lights gradually turning on",
-        "operation": "Đầu-cuối sang video",
+        "prompt": "Smooth transition from day to night.",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/city-day.jpg",
         "end_image": "https://example.com/city-night.jpg",
         "duration": 5,
@@ -278,63 +232,66 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-### Mở rộng video
-
-Mở rộng thời lượng của một video hiện có. Sử dụng các model có khả năng extension.
+### Video-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "kling-video-extend",
-        "prompt": "Continue the scene naturally",
-        "image_url": "https://example.com/last-frame.jpg"
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale this clip while preserving the original motion."
+    }
+)
+```
+
+### Motion control
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
     }
 )
 ```
 
 ## Tham chiếu tham số
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model` | string | ID của model (mặc định: `sora-2`) |
-| `prompt` | string | **Bắt buộc.** Mô tả văn bản của video |
-| `image_url` | string | URL của hình ảnh bắt đầu (cho I2V) |
-| `image` | string | Hình ảnh inline dưới dạng data URL. Được hỗ trợ bởi các model tương thích, nhưng `image_url` mang lại khả năng tương thích rộng nhất. |
-| `duration` | integer | Thời lượng video tính bằng giây (1-60, phụ thuộc model) |
-| `aspect_ratio` | string | `16:9`, `9:16`, `1:1`, v.v. |
-| `resolution` | string | `1080p`, `720p`, `4k` |
-| `fps` | integer | Số khung hình mỗi giây (1-120) |
-| `negative_prompt` | string | Những gì cần tránh trong quá trình tạo |
-| `seed` | integer | Seed ngẫu nhiên để tái lập kết quả |
-| `cfg_scale` | number | Thang hướng dẫn (0-20) |
-| `motion_strength` | number | Cường độ chuyển động (0-1) |
-| `start_image` | string | URL của keyframe bắt đầu |
-| `end_image` | string | URL của keyframe kết thúc |
+| Tham số | Kiểu | Ghi chú |
+|---------|------|---------|
+| `operation` | string | Trong môi trường vận hành, nên truyền một cách tường minh |
+| `image_url` | string | Dạng đầu vào ảnh ổn định nhất |
+| `image` | string | URL `data:` hữu ích cho thử nghiệm cục bộ và tích hợp nhỏ |
+| `reference_images` | string[] | Trường công khai chuẩn cho conditioning bằng ảnh tham chiếu |
+| `reference_image_type` | string | Bộ chọn tùy chọn `asset` / `style` |
+| `video_url` | string | Bắt buộc với các model `video-to-video` và `motion-control` công khai hiện tại |
+| `audio_url` | string | Dùng cho các luồng sinh video có điều kiện bằng âm thanh nếu model hỗ trợ |
+| `output_audio` | boolean | Họ Veo 3 sẽ coi trường bị bỏ qua là `true` |
 
-<Warning>
-Không phải mọi tham số đều được hỗ trợ bởi mọi model. Các tham số không được hỗ trợ sẽ bị bỏ qua một cách im lặng. Hãy kiểm tra tài liệu của model để biết các tham số được hỗ trợ.
-</Warning>
-
-## Hướng dẫn chọn model
+## Hướng dẫn chọn model nhanh
 
 <CardGroup cols={2}>
-  <Card title="Chất lượng tốt nhất" icon="crown">
-    **Seedance 2.0** hoặc **Kling v2.6 Pro** — chất lượng điện ảnh, chi tiết phong phú, chuyển động tự nhiên
+  <Card title="Chất lượng cao nhất" icon="crown">
+    Nếu chất lượng quan trọng hơn tốc độ, **veo3.1-pro**, **kling-video-o1-pro**, và **viduq3-pro** là những lựa chọn mạnh.
   </Card>
-  <Card title="Tạo nhanh nhất" icon="bolt">
-    **Higgsfield Turbo** hoặc **Hailuo 2.3** — kết quả nhanh cho tạo mẫu và lặp lại
+  <Card title="Lặp nhanh" icon="bolt">
+    Nếu cần thử nghiệm nhanh, bạn có thể bắt đầu với **veo3.1-fast**, **hailuo-2.3-fast**, hoặc **viduq3-turbo**.
   </Card>
-  <Card title="Linh hoạt nhất" icon="wand-magic-sparkles">
-    **Seedance 2.0** — hỗ trợ T2V, I2V, keyframe, extension và editing trong một model
+  <Card title="Luồng nhiều ảnh tham chiếu" icon="images">
+    Khi cần conditioning chuyên biệt bằng ảnh tham chiếu, hãy ưu tiên **veo3.1**, **veo3.1-fast**, **wan-2.6**, hoặc **kling-video-o1-pro / std**.
   </Card>
-  <Card title="Giá trị tốt nhất" icon="coins">
-    **Wan 2.6** hoặc **Hailuo 2.3** — chất lượng cạnh tranh với chi phí thấp hơn cho mỗi lần tạo
+  <Card title="Video-to-video" icon="film">
+    Các đường `video-to-video` công khai đang bật phổ biến hiện nay chủ yếu gồm **topaz-video-upscale**, **grok-imagine-upscale**, và **kling-video-o1-pro / std**.
   </Card>
 </CardGroup>
 
-## Thanh toán
+## Billing
 
-Tạo video sử dụng **mức giá cố định cho mỗi lần tạo**. Bạn sẽ bị tính phí một lần khi task được gửi, bất kể thời lượng video. Nếu quá trình tạo thất bại, khoản phí sẽ được hoàn lại tự động.
-
-Kiểm tra giá hiện tại trên [trang Models](https://lemondata.cc/vi/models) hoặc thông qua [Pricing API](/api-reference/pricing/get-pricing).
+Billing phụ thuộc vào model. Một số model video công khai thực tế gần với cách tính phí theo request, trong khi một số model khác gần với cách tính theo thời lượng giây. Để xem mặt bằng giá công khai hiện tại, hãy tham khảo [trang Models](https://lemondata.cc/vi/models) hoặc [Pricing API](/vi/api-reference/pricing/get-pricing).
