@@ -1,96 +1,155 @@
 ---
-title: "Buat Video"
+title: "Buat video"
 openapi: "POST /v1/videos/generations"
-description: "Membuat task generasi video"
+description: "Membuat tugas generasi video"
 ---
 
 ## Ringkasan
 
-Generasi video bersifat asynchronous. Anda mengirimkan request, menerima task ID dan `poll_url`, lalu melakukan polling untuk hasilnya.
+Generasi video berjalan secara asinkron. Anda mengirim permintaan, menerima `task_id` dan `poll_url`, lalu memeriksa status secara berkala sampai hasil akhirnya siap.
 
 <Info>
-Untuk perilaku polling yang paling andal, ikuti `poll_url` yang dikembalikan oleh request pembuatan secara persis.
+Untuk perilaku pengecekan status yang paling andal, gunakan `poll_url` yang dikembalikan oleh respons pembuatan secara persis.
 </Info>
 
 <Warning>
 Output audio bergantung pada model. Di LemonData, keluarga Veo 3 akan menyalakan audio secara default ketika `output_audio` dihilangkan. Jika model mendukung kontrol audio, gunakan `output_audio` untuk menyalakan atau mematikannya secara eksplisit. Alias camelCase `outputAudio` juga diterima untuk kompatibilitas.
 </Warning>
 
+<Info>
+Untuk integrasi produksi, sebaiknya gunakan URL `https` publik untuk gambar, video, dan audio. Model yang kompatibel masih menerima URL `data:`, tetapi muatan base64 yang besar lebih sulit untuk dicoba ulang, diinspeksi, dan di-debug.
+</Info>
 
-## Request Body
+## Request body
 
 <ParamField body="model" type="string" default="sora-2">
-  ID model video. Default API adalah `sora-2`. Lihat [Panduan Generasi Video](/guides/video-generation) untuk matriks model saat ini dan kemampuan yang didukung.
+  ID model video. Default API adalah `sora-2`. Lihat [panduan generasi video](/id/guides/video-generation) untuk matriks model publik saat ini dan kemampuan yang didukung.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  Deskripsi teks dari video yang akan dihasilkan.
+  Deskripsi teks video yang ingin Anda hasilkan. Field ini wajib untuk sebagian besar model video publik.
+</ParamField>
+
+<ParamField body="operation" type="string">
+  Operasi video yang akan dijalankan. Kontrak publik mendukung `text-to-video`, `image-to-video`, `reference-to-video`, `start-end-to-video`, `video-to-video`, `video-extension`, `audio-to-video`, dan `motion-control`. LemonData bisa menebak operasi berdasarkan input yang Anda kirim, tetapi untuk traffic produksi sebaiknya `operation` dikirim secara eksplisit.
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  URL yang dapat diakses publik dari gambar awal untuk generasi image-to-video (I2V). Untuk kompatibilitas lintas-model terbaik, gunakan `image_url`.
+  URL publik dari gambar awal untuk alur image-to-video. Untuk kompatibilitas lintas-model yang paling luas, sebaiknya gunakan `image_url`.
 </ParamField>
 
 <ParamField body="image" type="string">
-  Gambar inline sebagai data URL (misalnya, `data:image/jpeg;base64,...`). Didukung oleh model yang kompatibel, tetapi `image_url` memberikan kompatibilitas terluas di seluruh model video.
+  Gambar inline dalam bentuk URL `data:` (misalnya `data:image/jpeg;base64,...`). Model yang kompatibel mendukung format ini, tetapi dalam praktik produksi `image_url` biasanya lebih stabil.
+</ParamField>
+
+<ParamField body="reference_images" type="array">
+  Gambar referensi untuk alur reference-to-video. Anda dapat mengirim hingga 3 item. URL `https` publik lebih direkomendasikan, walaupun model yang kompatibel juga menerima URL `data:`.
+</ParamField>
+
+<ParamField body="reference_image_type" type="string">
+  Field opsional untuk model yang membedakan referensi `asset` dan `style`.
+</ParamField>
+
+<ParamField body="video_url" type="string">
+  URL publik dari video sumber. Field ini diperlukan untuk alur publik `video-to-video` saat ini dan untuk model `motion-control`.
+</ParamField>
+
+<ParamField body="audio_url" type="string">
+  URL audio publik untuk model yang mendukung `audio-to-video`.
+</ParamField>
+
+<ParamField body="task_id" type="string">
+  ID tugas dari penyedia untuk beberapa alur lanjutan, ekstensi, atau turunan tertentu.
+</ParamField>
+
+<ParamField body="extend_at" type="integer">
+  Offset awal khusus model yang dipakai oleh beberapa alur `video-extension`.
+</ParamField>
+
+<ParamField body="extend_times" type="string">
+  Pengali atau jumlah pengulangan khusus model yang dipakai oleh beberapa alur `video-extension`.
 </ParamField>
 
 <ParamField body="duration" type="integer">
-  Durasi video dalam detik (bergantung pada model).
+  Durasi video dalam detik. Nilai yang diizinkan bergantung pada model.
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  Rasio aspek (misalnya, `16:9`, `9:16`, `1:1`).
+  Rasio aspek, misalnya `16:9`, `9:16`, atau `1:1`.
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  Resolusi video (misalnya, `1080p`, `720p`).
+  Resolusi output, misalnya `720p`, `1080p`, atau `4k`. Ketersediaannya bergantung pada model.
 </ParamField>
 
 <ParamField body="output_audio" type="boolean">
-  Pengalih output audio yang bergantung pada model. Di LemonData, keluarga Veo 3 menggunakan `true` sebagai default ketika field ini dihilangkan. Model video lain mengikuti perilaku default yang telah ditetapkan. Alias camelCase `outputAudio` diterima untuk kompatibilitas.
+  Sakelar output audio yang bergantung pada model. Di LemonData, keluarga Veo 3 menggunakan `true` sebagai default ketika field ini dihilangkan. Alias camelCase `outputAudio` juga diterima untuk kompatibilitas.
 </ParamField>
 
 <ParamField body="fps" type="integer">
-  Frame per detik (1-120).
+  Frame per detik (1-120). Hanya berlaku pada model yang mengekspos kontrol FPS.
 </ParamField>
 
 <ParamField body="negative_prompt" type="string">
-  Hal-hal yang harus dihindari dalam generasi video.
+  Elemen yang ingin dihindari dalam video yang dihasilkan.
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  Seed acak untuk generasi yang dapat direproduksi.
+  Seed acak untuk hasil yang dapat direproduksi.
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
-  Skala classifier-free guidance (0-20).
+  Kekuatan kepatuhan terhadap prompt (0-20) pada model yang mengekspos kontrol ini.
 </ParamField>
 
 <ParamField body="motion_strength" type="number">
-  Intensitas gerakan (0-1).
+  Intensitas gerakan (0-1) pada model yang mengekspos kontrol ini.
 </ParamField>
 
 <ParamField body="start_image" type="string">
-  URL dari gambar frame awal.
+  URL gambar frame pertama, atau input gambar yang kompatibel, untuk `start-end-to-video`.
 </ParamField>
 
 <ParamField body="end_image" type="string">
-  URL dari gambar frame akhir.
+  URL gambar frame terakhir, atau input gambar yang kompatibel, untuk `start-end-to-video`.
+</ParamField>
+
+<ParamField body="size" type="string">
+  Tingkat ukuran khusus model untuk beberapa model video yang kompatibel dengan OpenAI.
+</ParamField>
+
+<ParamField body="watermark" type="boolean">
+  Sakelar watermark untuk model yang mengeksposnya secara publik.
+</ParamField>
+
+<ParamField body="effect_type" type="string">
+  Pemilih efek khusus model untuk alur efek atau editing tertentu.
 </ParamField>
 
 <ParamField body="user" type="string">
   Pengidentifikasi unik untuk end-user.
 </ParamField>
 
+## Catatan kompatibilitas
+
+- Field publik kanonis menggunakan snake_case: `reference_images`, `reference_image_type`, dan `output_audio`.
+- Untuk kompatibilitas, LemonData juga menerima alias camelCase `referenceImages`, `referenceImageType`, dan `outputAudio`.
+- Jika `operation` tidak dikirim, LemonData akan menebaknya dari input yang tersedia. Meski begitu, untuk produksi tetap disarankan untuk mengirimkannya secara eksplisit.
+
+## Praktik terbaik untuk input media
+
+- Untuk `image_url`, `reference_images`, `video_url`, dan `audio_url`, sebaiknya gunakan URL `https` publik.
+- Jika memungkinkan, hindari mencampur base64 inline dan URL jarak jauh dalam permintaan yang sama.
+- Jika Anda menggunakan signed URL, pastikan masa berlakunya cukup panjang untuk menutupi coba ulang dan pembuatan tugas asinkron.
+
 ## Respons
 
 <ResponseField name="task_id" type="string">
-  Pengidentifikasi task unik untuk polling.
+  Pengidentifikasi tugas unik untuk pengecekan status.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  URL polling yang direkomendasikan untuk task ini. Gunakan path ini secara persis saat memeriksa status.
+  URL pengecekan status yang direkomendasikan untuk tugas ini. Gunakan path ini secara persis saat memeriksa status.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -114,114 +173,6 @@ curl -X POST "https://api.lemondata.cc/v1/videos/generations" \
     "aspect_ratio": "16:9"
   }'
 ```
-
-```python Python
-import requests
-
-response = requests.post(
-    "https://api.lemondata.cc/v1/videos/generations",
-    headers={
-        "Authorization": "Bearer sk-your-api-key",
-        "Content-Type": "application/json"
-    },
-    json={
-        "model": "sora-2",
-        "prompt": "A cat walking through a garden, cinematic lighting",
-        "operation": "text-to-video",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-
-data = response.json()
-task_id = data["task_id"]
-print(f"Poll URL: {data['poll_url']}")
-print(f"Task ID: {task_id}")
-```
-
-```javascript JavaScript
-const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer sk-your-api-key',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A cat walking through a garden, cinematic lighting',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-});
-
-const data = await response.json();
-console.log(`Poll URL: ${data.poll_url}`);
-console.log(`Task ID: ${data.task_id}`);
-```
-
-```go Go
-package main
-
-import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "net/http"
-)
-
-func main() {
-    payload := map[string]interface{}{
-        "model":    "sora-2",
-        "prompt":   "A cat walking through a garden, cinematic lighting",
-        "operation": "text-to-video",
-        "duration": 4,
-        "aspect_ratio": "16:9",
-    }
-    body, _ := json.Marshal(payload)
-
-    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/videos/generations", bytes.NewBuffer(body))
-    req.Header.Set("Authorization", "Bearer sk-your-api-key")
-    req.Header.Set("Content-Type", "application/json")
-
-    client := &http.Client{}
-    resp, _ := client.Do(req)
-    defer resp.Body.Close()
-
-    var result map[string]interface{}
-    json.NewDecoder(resp.Body).Decode(&result)
-    fmt.Printf("Poll URL: %s\n", result["poll_url"])
-    fmt.Printf("Task ID: %s\n", result["task_id"])
-}
-```
-
-```php PHP
-<?php
-$ch = curl_init('https://api.lemondata.cc/v1/videos/generations');
-
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer sk-your-api-key'
-    ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'sora-2',
-        'prompt' => 'A cat walking through a garden, cinematic lighting',
-        'operation' => 'text-to-video',
-        'duration' => 4,
-        'aspect_ratio' => '16:9'
-    ])
-]);
-
-$response = curl_exec($ch);
-curl_close($ch);
-
-$data = json_decode($response, true);
-echo "Poll URL: " . $data['poll_url'] . "\n";
-echo "Task ID: " . $data['task_id'];
-```
 </RequestExample>
 
 <ResponseExample>
@@ -236,14 +187,14 @@ echo "Task ID: " . $data['task_id'];
 ```
 </ResponseExample>
 
-## Image to Video
+## Image to video
 
 ```python
 response = requests.post(
     "https://api.lemondata.cc/v1/videos/generations",
     headers={"Authorization": "Bearer sk-your-api-key"},
     json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
         "operation": "image-to-video",
         "image_url": "https://example.com/image.jpg",
@@ -253,9 +204,33 @@ response = requests.post(
 )
 ```
 
-## Kontrol Keyframe
+## Reference to video
 
-Gunakan `start_image` dan `end_image` untuk mengontrol frame pertama dan terakhir (didukung oleh Vidu Q2 Pro):
+Jika model mendukung conditioning berbasis gambar referensi, gunakan `operation=reference-to-video`. Dalam kontrak publik LemonData, referensi dikirim melalui `reference_images`.
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity, palette, and framing while adding subtle natural motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "reference_image_type": "asset",
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+## Kontrol frame awal dan akhir
+
+Gunakan `start_image` dan `end_image` untuk mengontrol frame pertama dan frame terakhir.
 
 ```python
 response = requests.post(
@@ -264,7 +239,7 @@ response = requests.post(
     json={
         "model": "viduq2-pro",
         "prompt": "Smooth transition from day to night",
-        "operation": "Awal-akhir ke video",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/day.jpg",
         "end_image": "https://example.com/night.jpg",
         "duration": 5,
@@ -274,72 +249,105 @@ response = requests.post(
 )
 ```
 
-## Model yang Tersedia
+## Video to video
+
+Jika model menerima video yang sudah ada sebagai input utama, gunakan `operation=video-to-video`.
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale the clip while preserving the original motion.",
+        "resolution": "1080p"
+    }
+)
+```
+
+## Motion control
+
+Jika model membutuhkan gambar subjek sekaligus video referensi gerakan, gunakan `operation=motion-control`. LemonData akan menormalkan bentuk publik `image_url` + `video_url` ke kontrak upstream yang sesuai.
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
+    }
+)
+```
+
+## Ketersediaan audio-to-video dan video-extension saat ini
+
+Kontrak publik LemonData menerima `audio-to-video` dan `video-extension` untuk alur khusus model tertentu. Namun, dalam inventaris model publik yang umumnya diaktifkan pada build dokumentasi ini, belum ada model yang secara luas diaktifkan dan secara publik mengiklankan dua kemampuan tersebut. Sebelum mengintegrasikan alur ini, cek ketersediaan terbaru melalui [Models API](/id/api-reference/models/list-models) atau [halaman model](https://lemondata.cc/id/models).
+
+## Inventaris model video publik yang sedang aktif
 
 <Info>
-Daftar model sering diperbarui. Untuk model dan harga terbaru yang tersedia, kunjungi [halaman Models](https://lemondata.cc/id/models).
-</Info>
-
-Untuk panduan lengkap dengan perbandingan kemampuan dan contoh penggunaan, lihat [Panduan Generasi Video](/guides/video-generation).
-
-## Model video publik yang saat ini aktif
-
-<Info>
-Daftar ini selaras dengan inventaris model video publik yang aktif pada build dokumentasi ini. Untuk status terbaru, gunakan [Models API](/api-reference/models/list-models).
+Daftar ini diselaraskan dengan inventaris model video publik yang aktif pada build dokumentasi ini. Untuk kondisi terbaru, gunakan [Models API](/id/api-reference/models/list-models).
 </Info>
 
 ### OpenAI
 
 | Model | Operasi publik |
-|-------|-------------------|
+|-------|----------------|
 | `sora-2` | Teks ke video, image-to-video |
 | `sora-2-pro` | Teks ke video, image-to-video |
-| `sora-2-pro-storyboard` | Gambar ke video |
+| `sora-2-pro-storyboard` | Image-to-video |
 
 ### Kuaishou
 
 | Model | Operasi publik |
-|-------|-------------------|
-| `kling-3.0-motion-control` | Kontrol gerakan |
-| `kling-3.0-video` | Teks ke video, image-to-video, Awal-akhir ke video |
-| `kling-v2.5-turbo-pro` | Teks ke video, image-to-video, Awal-akhir ke video |
+|-------|----------------|
+| `kling-3.0-motion-control` | Motion control |
+| `kling-3.0-video` | Teks ke video, image-to-video, start-end-to-video |
+| `kling-v2.5-turbo-pro` | Teks ke video, image-to-video, start-end-to-video |
 | `kling-v2.5-turbo-std` | Teks ke video, image-to-video |
-| `kling-v2.6-pro` | Teks ke video, image-to-video, Awal-akhir ke video |
+| `kling-v2.6-pro` | Teks ke video, image-to-video, start-end-to-video |
 | `kling-v2.6-std` | Teks ke video, image-to-video |
-| `kling-v3.0-pro` | Teks ke video, image-to-video, Awal-akhir ke video |
-| `kling-v3.0-std` | Teks ke video, image-to-video, Awal-akhir ke video |
-| `kling-video-o1-pro` | Teks ke video, image-to-video, reference-to-video, Awal-akhir ke video, video-to-video |
-| `kling-video-o1-std` | Teks ke video, image-to-video, reference-to-video, Awal-akhir ke video, video-to-video |
+| `kling-v3.0-pro` | Teks ke video, image-to-video, start-end-to-video |
+| `kling-v3.0-std` | Teks ke video, image-to-video, start-end-to-video |
+| `kling-video-o1-pro` | Teks ke video, image-to-video, reference-to-video, start-end-to-video, video-to-video |
+| `kling-video-o1-std` | Teks ke video, image-to-video, reference-to-video, start-end-to-video, video-to-video |
 
 ### Google
 
 | Model | Operasi publik |
-|-------|-------------------|
+|-------|----------------|
 | `veo3` | Teks ke video, image-to-video |
 | `veo3-fast` | Teks ke video, image-to-video |
 | `veo3-pro` | Teks ke video, image-to-video |
-| `veo3.1` | Teks ke video, image-to-video, reference-to-video, Awal-akhir ke video |
-| `veo3.1-fast` | Teks ke video, image-to-video, reference-to-video, Awal-akhir ke video |
-| `veo3.1-pro` | Teks ke video, image-to-video, Awal-akhir ke video |
+| `veo3.1` | Teks ke video, image-to-video, reference-to-video, start-end-to-video |
+| `veo3.1-fast` | Teks ke video, image-to-video, reference-to-video, start-end-to-video |
+| `veo3.1-pro` | Teks ke video, image-to-video, start-end-to-video |
 
 ### ByteDance
 
 | Model | Operasi publik |
-|-------|-------------------|
+|-------|----------------|
 | `seedance-1.5-pro` | Teks ke video, image-to-video |
 
 ### MiniMax
 
 | Model | Operasi publik |
-|-------|-------------------|
-| `hailuo-2.3-fast` | Gambar ke video |
+|-------|----------------|
+| `hailuo-2.3-fast` | Image-to-video |
 | `hailuo-2.3-pro` | Teks ke video, image-to-video |
 | `hailuo-2.3-standard` | Teks ke video, image-to-video |
 
 ### Alibaba
 
 | Model | Operasi publik |
-|-------|-------------------|
+|-------|----------------|
 | `wan-2.2-plus` | Teks ke video, image-to-video |
 | `wan-2.5` | Teks ke video, image-to-video |
 | `wan-2.6` | Teks ke video, image-to-video, reference-to-video |
@@ -347,25 +355,24 @@ Daftar ini selaras dengan inventaris model video publik yang aktif pada build do
 ### Shengshu
 
 | Model | Operasi publik |
-|-------|-------------------|
+|-------|----------------|
 | `viduq2` | Teks ke video, reference-to-video |
-| `viduq2-pro` | Gambar ke video, reference-to-video, Awal-akhir ke video |
-| `viduq2-pro-fast` | Gambar ke video, Awal-akhir ke video |
-| `viduq2-turbo` | Gambar ke video, Awal-akhir ke video |
-| `viduq3-pro` | Teks ke video, image-to-video, Awal-akhir ke video |
-| `viduq3-turbo` | Teks ke video, image-to-video, Awal-akhir ke video |
+| `viduq2-pro` | Image-to-video, reference-to-video, start-end-to-video |
+| `viduq2-pro-fast` | Image-to-video, start-end-to-video |
+| `viduq2-turbo` | Image-to-video, start-end-to-video |
+| `viduq3-pro` | Teks ke video, image-to-video, start-end-to-video |
+| `viduq3-turbo` | Teks ke video, image-to-video, start-end-to-video |
 
 ### xAI
 
 | Model | Operasi publik |
-|-------|-------------------|
-| `grok-imagine-image-to-video` | Gambar ke video |
+|-------|----------------|
+| `grok-imagine-image-to-video` | Image-to-video |
 | `grok-imagine-text-to-video` | Teks ke video |
-| `grok-imagine-upscale` | Video ke video |
+| `grok-imagine-upscale` | Video-to-video |
 
-
-### Other
+### Lainnya
 
 | Model | Operasi publik |
-|-------|-------------------|
-| `topaz-video-upscale` | Video ke video |
+|-------|----------------|
+| `topaz-video-upscale` | Video-to-video |

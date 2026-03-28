@@ -1,12 +1,17 @@
 ---
 title: "واجهة برمجة تطبيقات الإدارة"
-description: "استخدم رمز إدارة لإدارة مفاتيح API الخاصة بالمؤسسة واستعراض الاستخدام والفوترة لكل مفتاح."
+description: "أدر مفاتيح API الخاصة بالمؤسسة واطلع على الاستخدام والفوترة لكل مفتاح باستخدام رمز إدارة."
 ---
+
 ## نظرة عامة
 
-تتيح لك Management API إدارة مفاتيح API الخاصة بالمؤسسة واسترجاع الاستخدام والفوترة على مستوى المفتاح من دون استخدام مفتاح استدلال عادي.
+تتيح لك واجهة الإدارة إدارة مفاتيح API الخاصة بالمؤسسة واستعراض الاستخدام والفوترة لكل مفتاح دون استخدام مفتاح استدلال عادي.
 
-يمكنك استخدام رمز إدارة من صفحة **Settings** في لوحة التحكم:
+يمكنك إصدار رمز الإدارة وتدويره من صفحة **Settings** في لوحة التحكم.
+
+```bash
+Authorization: Bearer mt-your-management-token
+```
 
 <Warning>
 تختلف رموز الإدارة عن مفاتيح API الخاصة بالاستدلال. استخدم `mt-...` مع `/v1/management/*`، واستخدم `sk-...` مع واجهات الاستدلال مثل `/v1/responses`.
@@ -14,71 +19,71 @@ description: "استخدم رمز إدارة لإدارة مفاتيح API ال�
 
 ## الواجهات المتاحة
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| /v1/management/api-keys | GET | List user-managed API keys in the current organization |
-| /v1/management/api-keys | POST | Create a new user API key |
-| /v1/management/api-keys/{keyId} | PATCH | Update name, usage limit, allowed models, expiry, or status |
-| /v1/management/api-keys/{keyId}/usage | GET | Retrieve paginated usage details for a specific key |
-| /v1/management/api-keys/{keyId}/billing | GET | Retrieve aggregated billing breakdowns for a specific key |
+| Endpoint | Method | الوصف |
+|----------|--------|-------|
+| `/v1/management/api-keys` | GET | يعرض قائمة مفاتيح API الخاصة بالمستخدم في المؤسسة الحالية |
+| `/v1/management/api-keys` | POST | ينشئ مفتاح API جديدًا للمستخدم |
+| `/v1/management/api-keys/{keyId}` | PATCH | يحدّث الاسم أو حد الاستخدام أو النماذج المسموح بها أو تاريخ الانتهاء أو الحالة |
+| `/v1/management/api-keys/{keyId}/usage` | GET | يجلب تفاصيل الاستخدام المرقّمة على صفحات لمفتاح محدد |
+| `/v1/management/api-keys/{keyId}/billing` | GET | يجلب تفاصيل الفوترة المجمعة لمفتاح محدد |
 
 ## عقد مرشحات الاستخدام
 
-`GET /v1/management/api-keys/{keyId}/usage` يدعم معلمات الاستعلام التالية:
+يدعم `GET /v1/management/api-keys/{keyId}/usage` معلمات الاستعلام التالية.
 
-| المعامل | النوع | القيم الافتراضية / القيود | ملاحظات |
-|-----------|------|------------------|-------|
-| page | integer | default 1, min 1 | 1-based page number |
-| limit | integer | default 50, min 1, max 100 | Page size |
-| logicalModel | string | max length 100 | Requested logical model name |
-| modelVendor | string | max length 100 | Public model vendor |
-| scene | enum | - | chat, image, audio, video, embedding, rerank, translation, music, 3d |
-| accessChannel | enum | - | platform or byok |
-| startDate | string | - | Inclusive lower bound; accepts RFC3339 with timezone or YYYY-MM-DD |
-| endDate | string | - | Inclusive upper bound; accepts RFC3339 with timezone or YYYY-MM-DD |
+| المعامل | النوع | القيم الافتراضية / القيود | الوصف |
+|---------|------|----------------------------|-------|
+| `page` | integer | الافتراضي `1`، الحد الأدنى `1` | رقم الصفحة بدءًا من 1 |
+| `limit` | integer | الافتراضي `50`، الحد الأدنى `1`، الحد الأقصى `100` | حجم الصفحة |
+| `logicalModel` | string | أقصى طول `100` | اسم النموذج المنطقي المطلوب |
+| `modelVendor` | string | أقصى طول `100` | مزود النموذج العام |
+| `scene` | enum | - | `chat` و `image` و `audio` و `video` و `embedding` و `rerank` و `translation` و `music` و `3d` |
+| `accessChannel` | enum | - | `platform` أو `byok` |
+| `startDate` | string | - | حد سفلي شامل؛ يقبل RFC3339 مع منطقة زمنية أو `YYYY-MM-DD` |
+| `endDate` | string | - | حد علوي شامل؛ يقبل RFC3339 مع منطقة زمنية أو `YYYY-MM-DD` |
 
-إذا تم تمرير `startDate` و `endDate` معًا، فيجب أن يكون `startDate` أسبق من أو مساويًا لـ `endDate`.
+إذا تم إرسال `startDate` و `endDate` معًا، فيجب أن يكون `startDate` أسبق من أو مساويًا لـ `endDate`.
 
-## عقد حقول API Key
+## عقد جسم مفتاح API
 
 ### POST /v1/management/api-keys
 
-| الحقل | النوع | القيم الافتراضية / القيود | ملاحظات |
-|-------|------|------------------|-------|
-| name | string | required, default Default Key, length 1-50 | Display name, trimmed server-side |
-| limitAmount | number \| null | min 0, max 100000 | null or omitted = unlimited, 0 = zero quota, positive = USD spending cap |
-| models | string[] | default [] | Optional logical model allowlist |
-| expiresAt | string \| null | RFC3339 datetime | null means no expiry |
+| الحقل | النوع | القيم الافتراضية / القيود | الوصف |
+|-------|------|----------------------------|-------|
+| `name` | string | مطلوب، الافتراضي `Default Key`، الطول `1-50` | اسم العرض؛ تتم إزالة المسافات من البداية والنهاية على الخادم |
+| `limitAmount` | number \| null | الحد الأدنى `0`، الحد الأقصى `100000` | `null` أو الحذف = غير محدود، `0` = حصة صفرية، والقيمة الموجبة = سقف إنفاق بالدولار |
+| `models` | string[] | الافتراضي `[]` | قائمة اختيارية للنماذج المنطقية المسموح بها |
+| `expiresAt` | string \| null | تاريخ ووقت RFC3339 | `null` يعني عدم وجود انتهاء |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| الحقل | النوع | القيم الافتراضية / القيود | ملاحظات |
-|-------|------|------------------|-------|
-| status | enum | - | active, inactive, revoked |
-| name | string | length 1-50 | Updated display name |
-| limitAmount | number \| null | min 0, max 100000 | null means unlimited, 0 means zero quota |
-| models | string[] | - | Updated logical model allowlist |
-| expiresAt | string \| null | RFC3339 datetime | null clears the expiry |
+| الحقل | النوع | القيم الافتراضية / القيود | الوصف |
+|-------|------|----------------------------|-------|
+| `status` | enum | - | `active` أو `inactive` أو `revoked` |
+| `name` | string | الطول `1-50` | اسم العرض بعد التحديث |
+| `limitAmount` | number \| null | الحد الأدنى `0`، الحد الأقصى `100000` | `null` = غير محدود، `0` = حصة صفرية |
+| `models` | string[] | - | قائمة النماذج المنطقية المسموح بها بعد التحديث |
+| `expiresAt` | string \| null | تاريخ ووقت RFC3339 | `null` يزيل تاريخ الانتهاء |
 
-يجب تمرير حقل واحد على الأقل في طلب PATCH.
+يجب أن يتضمن طلب PATCH حقلًا واحدًا على الأقل.
 
 ## دلالات التقارير
 
-- يشير logicalModel إلى اسم النموذج المنطقي العام الذي طلبه العميل.
-- يشير modelVendor إلى مزود النموذج العام، وليس المسار الفيزيائي المخفي.
-- scene هو مشهد الطلب العام المشتق من الـ endpoint أو من نوع المهمة.
-- يعني accessChannel=platform أن الطلب تمت محاسبته عبر قناة المنصة الخاصة بـ LemonData.
-- يعني accessChannel=byok أن الطلب استخدم مفتاح مزود upstream الخاص بك.
+- يشير `logicalModel` إلى النموذج المنطقي العام الذي طلبه المستدعي.
+- يشير `modelVendor` إلى مزود النموذج العام، وليس المسار الفيزيائي المخفي.
+- تمثل `scene` مشهد الطلب العام المشتق من الواجهة أو نوع المهمة.
+- تعني `accessChannel=platform` أن الطلب تمت محاسبته عبر قناة منصة LemonData.
+- تعني `accessChannel=byok` أن الطلب استخدم مفتاح مزود upstream الخاص بك.
 
-الواجهة تعيد فقط حقول الفوترة والتقارير العامة، ولا تكشف تفاصيل التوجيه الداخلي أو بيانات القنوات الفيزيائية.
+لا تكشف الاستجابات إلا حقول الفوترة والتقارير العامة. أما تفاصيل التوجيه الداخلي وبيانات المزود الفيزيائية فتبقى مخفية.
 
 ## ملاحظة حول ترقيم صفحات الفوترة
 
-`/usage` واجهة بترقيم صفحات. أما `/billing` فهو حاليًا endpoint للتجميع ولا يعيد بيانات `page` / `limit`.
+واجهة `/usage` تدعم ترقيم الصفحات. أما `/billing` فهي حاليًا واجهة تجميعية ولا تعيد بيانات ترقيم صفحات على نمط `page` / `limit`. وإذا كنت تحتاج إلى سجلات تفصيلية على مستوى الصفوف فاستعمل `/usage`.
 
 ## مثال سريع
 
-ابدأ بسرد مفاتيح API المتاحة لرمز الإدارة الحالي:
+ابدأ باستعراض مفاتيح API المتاحة لرمز الإدارة الحالي.
 
 <RequestExample>
 ```bash cURL
@@ -111,8 +116,8 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 
 ## الخطوات التالية
 
-- [List API Keys](/api-reference/management/list-api-keys)
-- [Create API Key](/api-reference/management/create-api-key)
-- [Update API Key](/api-reference/management/update-api-key)
-- [Get API Key Usage](/api-reference/management/get-api-key-usage)
-- [Get API Key Billing](/api-reference/management/get-api-key-billing)
+- [عرض مفاتيح API](/ar/api-reference/management/list-api-keys)
+- [إنشاء مفتاح API](/ar/api-reference/management/create-api-key)
+- [تحديث مفتاح API](/ar/api-reference/management/update-api-key)
+- [جلب استخدام مفتاح API](/ar/api-reference/management/get-api-key-usage)
+- [جلب فوترة مفتاح API](/ar/api-reference/management/get-api-key-billing)

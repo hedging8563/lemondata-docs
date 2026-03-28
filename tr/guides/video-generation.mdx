@@ -1,22 +1,25 @@
 ---
-title: "Video Oluşturma"
-description: "11 sağlayıcıdaki modellerle video oluşturun — text-to-video, image-to-video, keyframe kontrolü, video uzatma ve düzenleme"
+title: "Video oluşturma"
+description: "Metinden videoya, image-to-video, reference-to-video, ilk/son kare kontrolü, hareket kontrolü ve video-to-video akışlarına birleşik bir herkese açık sözleşme üzerinden erişin."
 ---
 
-## Genel Bakış
+## Genel bakış
 
-LemonData, 11 sağlayıcının video oluşturma modellerine tek ve birleşik bir API üzerinden erişim sağlar. Video oluşturma **asenkron**dur — bir istek gönderirsiniz, bir görev kimliği ve `poll_url` alırsınız, ardından sonuç için sorgulama yaparsınız.
+LemonData video oluşturmayı tek bir birleşik API üzerinden sunar. Üretim **asenkron** olarak çalışır: istek gönderirsiniz, `task_id` ve `poll_url` alırsınız, ardından nihai sonuç hazır olana kadar durumu düzenli olarak sorgularsınız.
 
 <Info>
-Model listesi sık sık güncellenir. Mevcut en güncel modeller ve fiyatlandırma için [Models page](https://lemondata.cc/tr/models) sayfasını ziyaret edin veya [Models API](/api-reference/models/list-models) kullanın.
+Güncel herkese açık video modeli envanterini [Models API](/tr/api-reference/models/list-models) üzerinden veya [modeller sayfasında](https://lemondata.cc/tr/models) görebilirsiniz.
 </Info>
 
 <Warning>
-Audio behavior is model-dependent. In LemonData, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some models are silent by default or silent-only. For passthrough-governed models, pass `output_audio=true` to make a best-effort upstream audio request.
+Ses davranışı modele bağlıdır. LemonData’da `output_audio` gönderilmezse Veo 3 ailesi varsayılan olarak sesi açık kabul eder. Diğer herkese açık modeller sessiz olabilir ya da kararlı bir ses anahtarı sunmayabilir.
 </Warning>
 
+<Info>
+Üretim entegrasyonlarında görsel, video ve ses girdileri için herkese açık `https` URL’lerini tercih edin. Uyumlu modeller `data:` URL’lerini kabul etmeye devam eder, ancak herkese açık URL’ler yeniden deneme, gözlemlenebilirlik ve hata ayıklama açısından daha sağlamdır.
+</Info>
 
-### Asenkron İş Akışı
+### Asenkron akış
 
 ```mermaid
 sequenceDiagram
@@ -25,30 +28,145 @@ sequenceDiagram
     participant Provider
 
     Client->>LemonData: POST /v1/videos/generations
-    LemonData->>Provider: Forward request
+    LemonData->>Provider: Normalize edilmiş isteği ilet
     Provider-->>LemonData: task_id + pending
     LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
-    loop Poll every 5-10s
+    loop Her 5-10 saniyede bir sorgula
         Client->>LemonData: GET poll_url
-        LemonData->>Provider: Query status
-        Provider-->>LemonData: Status update
+        LemonData->>Provider: Durumu sorgula
+        Provider-->>LemonData: Durum güncellemesi
         LemonData-->>Client: { status, video_url? }
     end
 ```
 
-<CodeGroup>
+## Güncel herkese açık işlemler
 
-```python Python
-import requests
-import time
+LemonData’nın güncel herkese açık video sözleşmesi şu işlemlere odaklanır:
 
-API_KEY = "sk-your-api-key"
-BASE = "https://api.lemondata.cc/v1"
-headers = {"Authorization": f"Bearer {API_KEY}"}
+- `text-to-video`
+- `image-to-video`
+- `reference-to-video`
+- `start-end-to-video`
+- `video-to-video`
+- `motion-control`
 
-# Step 1: Submit generation request
-resp = requests.post(f"{BASE}/videos/generations",
+Sözleşme ayrıca modele özgü akışlar için `audio-to-video` ve `video-extension` değerlerini de kabul eder, ancak bu doküman derlemesinde geniş şekilde etkinleştirilmiş herkese açık model listesinde bu iki yeteneği açıkça sunan bir model yoktur.
+
+## Yetenek matrisi
+
+**Gösterim**: ✅ Bu sağlayıcı ailesinde ilgili yeteneğe sahip en az bir etkin herkese açık model var | ❌ Etkin herkese açık modellerde şu anda temsil edilmiyor
+
+| Seri | T2V | I2V | Referans | İlk-Son | V2V | Hareket |
+|------|-----|-----|----------|---------|-----|---------|
+| OpenAI | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Kuaishou | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Google | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| ByteDance | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Alibaba | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Shengshu | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| xAI | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Diğer | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+
+### Yetenek tanımları
+
+- **T2V (Text-to-Video)**: metin prompt’undan video üretme
+- **I2V (Image-to-Video)**: başlangıç görselinden video üretme; en geniş uyumluluk için `image_url` önerilir
+- **Referans**: `reference_images` ile bir veya daha fazla referans görsel üzerinden koşullandırma
+- **İlk-Son**: `start_image` ve `end_image` ile ilk ve son kareyi kontrol etme
+- **V2V (Video-to-Video)**: mevcut bir videoyu birincil girdi olarak kullanma
+- **Hareket**: özne görseli ile hareket referans videosunu birlikte kullanma
+
+## Güncel herkese açık model envanteri
+
+### OpenAI
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `sora-2` | Metinden videoya, image-to-video |
+| `sora-2-pro` | Metinden videoya, image-to-video |
+| `sora-2-pro-storyboard` | Image-to-video |
+
+### Kuaishou
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `kling-3.0-motion-control` | Hareket kontrolü |
+| `kling-3.0-video` | Metinden videoya, image-to-video, start-end-to-video |
+| `kling-v2.5-turbo-pro` | Metinden videoya, image-to-video, start-end-to-video |
+| `kling-v2.5-turbo-std` | Metinden videoya, image-to-video |
+| `kling-v2.6-pro` | Metinden videoya, image-to-video, start-end-to-video |
+| `kling-v2.6-std` | Metinden videoya, image-to-video |
+| `kling-v3.0-pro` | Metinden videoya, image-to-video, start-end-to-video |
+| `kling-v3.0-std` | Metinden videoya, image-to-video, start-end-to-video |
+| `kling-video-o1-pro` | Metinden videoya, image-to-video, reference-to-video, start-end-to-video, video-to-video |
+| `kling-video-o1-std` | Metinden videoya, image-to-video, reference-to-video, start-end-to-video, video-to-video |
+
+### Google
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `veo3` | Metinden videoya, image-to-video |
+| `veo3-fast` | Metinden videoya, image-to-video |
+| `veo3-pro` | Metinden videoya, image-to-video |
+| `veo3.1` | Metinden videoya, image-to-video, reference-to-video, start-end-to-video |
+| `veo3.1-fast` | Metinden videoya, image-to-video, reference-to-video, start-end-to-video |
+| `veo3.1-pro` | Metinden videoya, image-to-video, start-end-to-video |
+
+### ByteDance
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `seedance-1.5-pro` | Metinden videoya, image-to-video |
+
+### MiniMax
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `hailuo-2.3-fast` | Image-to-video |
+| `hailuo-2.3-pro` | Metinden videoya, image-to-video |
+| `hailuo-2.3-standard` | Metinden videoya, image-to-video |
+
+### Alibaba
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `wan-2.2-plus` | Metinden videoya, image-to-video |
+| `wan-2.5` | Metinden videoya, image-to-video |
+| `wan-2.6` | Metinden videoya, image-to-video, reference-to-video |
+
+### Shengshu
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `viduq2` | Metinden videoya, reference-to-video |
+| `viduq2-pro` | Image-to-video, reference-to-video, start-end-to-video |
+| `viduq2-pro-fast` | Image-to-video, start-end-to-video |
+| `viduq2-turbo` | Image-to-video, start-end-to-video |
+| `viduq3-pro` | Metinden videoya, image-to-video, start-end-to-video |
+| `viduq3-turbo` | Metinden videoya, image-to-video, start-end-to-video |
+
+### xAI
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `grok-imagine-image-to-video` | Image-to-video |
+| `grok-imagine-text-to-video` | Metinden videoya |
+| `grok-imagine-upscale` | Video-to-video |
+
+### Diğer
+
+| Model | Herkese açık işlemler |
+|-------|-----------------------|
+| `topaz-video-upscale` | Video-to-video |
+
+## Kullanım örnekleri
+
+### Text-to-video
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "sora-2",
@@ -58,217 +176,53 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-create_data = resp.json()
-task_id = create_data["task_id"]
-poll_url = create_data["poll_url"]
-
-# Step 2: Poll for result
-while True:
-    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
-    if status["status"] in ("completed", "succeeded"):
-        print(f"Video URL: {status['video_url']}")
-        break
-    elif status["status"] == "failed":
-        print(f"Failed: {status.get('error')}")
-        break
-    time.sleep(10)
 ```
 
-```javascript JavaScript
-const API_KEY = 'sk-your-api-key';
-const BASE = 'https://api.lemondata.cc/v1';
-const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
-
-// Step 1: Submit
-const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
-  method: 'POST', headers,
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A calm cinematic shot of a cat walking through a sunlit garden.',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-}).then(r => r.json());
-
-// Step 2: Poll
-const poll = setInterval(async () => {
-  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
-  if (['completed', 'succeeded'].includes(status.status)) {
-    console.log('Video URL:', status.video_url);
-    clearInterval(poll);
-  } else if (status.status === 'failed') {
-    console.error('Failed:', status.error);
-    clearInterval(poll);
-  }
-}, 10000);
-```
-
-</CodeGroup>
-
-## Model Yetenek Matrisi
-
-Farklı modeller farklı görevlerde öne çıkar. Kullanım senaryonuza uygun modeli seçmek için bu matrisi kullanın.
-
-**Gösterim**: ✅ Desteklenir | ❌ Desteklenmez
-
-| Series | Provider | T2V | I2V | Keyframe | Extension | Editing | Max Duration |
-|--------|----------|-----|-----|----------|-----------|---------|-------------|
-| **Sora** | OpenAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~20s |
-| **Kling** | Kuaishou | ✅ | ✅ | ❌ | ✅ | ❌ | 10s |
-| **Veo** | Google | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Seedance** | ByteDance | ✅ | ✅ | ✅ | ✅ | ✅ | 10s |
-| **Hailuo** | MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Wan** | Alibaba | ✅ | ✅ | ❌ | ❌ | ❌ | 5s |
-| **Runway** | Runway | ❌ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Luma** | Luma | ✅ | ❌ | ❌ | ✅ | ❌ | 5s |
-| **Vidu** | Vidu | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Grok** | xAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~15s |
-| **Higgsfield** | Higgsfield | ✅ | ❌ | ❌ | ❌ | ❌ | ~5s |
-
-### Yetenek Tanımları
-
-- **T2V (Text-to-Video)**: Bir metin prompt'undan video oluşturma
-- **I2V (Image-to-Video)**: Statik bir görseli videoya dönüştürme. En geniş uyumluluk için herkese açık bir `image_url` sağlayın.
-- **Keyframe**: `start_image` + `end_image` ile başlangıç ve bitiş karelerini kontrol etme
-- **Extension**: Mevcut bir videonun süresini uzatma
-- **Editing**: Mevcut bir videonun belirli yönlerini değiştirme
-
-## Güncel herkese açık model envanteri
-
-### OpenAI
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `sora-2` | Metinden videoya, Görüntüden videoya |
-| `sora-2-pro` | Metinden videoya, Görüntüden videoya |
-| `sora-2-pro-storyboard` | Görüntüden videoya |
-
-### Kuaishou
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `kling-3.0-motion-control` | Hareket kontrolü |
-| `kling-3.0-video` | Metinden videoya, Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-| `kling-v2.5-turbo-pro` | Metinden videoya, Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-| `kling-v2.5-turbo-std` | Metinden videoya, Görüntüden videoya |
-| `kling-v2.6-pro` | Metinden videoya, Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-| `kling-v2.6-std` | Metinden videoya, Görüntüden videoya |
-| `kling-v3.0-pro` | Metinden videoya, Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-| `kling-v3.0-std` | Metinden videoya, Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-| `kling-video-o1-pro` | Metinden videoya, Görüntüden videoya, Referanstan videoya, Başlangıç-bitiş karelerinden videoya, Videodan videoya |
-| `kling-video-o1-std` | Metinden videoya, Görüntüden videoya, Referanstan videoya, Başlangıç-bitiş karelerinden videoya, Videodan videoya |
-
-### Google
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `veo3` | Metinden videoya, Görüntüden videoya |
-| `veo3-fast` | Metinden videoya, Görüntüden videoya |
-| `veo3-pro` | Metinden videoya, Görüntüden videoya |
-| `veo3.1` | Metinden videoya, Görüntüden videoya, Referanstan videoya, Başlangıç-bitiş karelerinden videoya |
-| `veo3.1-fast` | Metinden videoya, Görüntüden videoya, Referanstan videoya, Başlangıç-bitiş karelerinden videoya |
-| `veo3.1-pro` | Metinden videoya, Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-
-### ByteDance
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `seedance-1.5-pro` | Metinden videoya, Görüntüden videoya |
-
-### MiniMax
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `hailuo-2.3-fast` | Görüntüden videoya |
-| `hailuo-2.3-pro` | Metinden videoya, Görüntüden videoya |
-| `hailuo-2.3-standard` | Metinden videoya, Görüntüden videoya |
-
-### Alibaba
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `wan-2.2-plus` | Metinden videoya, Görüntüden videoya |
-| `wan-2.5` | Metinden videoya, Görüntüden videoya |
-| `wan-2.6` | Metinden videoya, Görüntüden videoya, Referanstan videoya |
-
-### Shengshu
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `viduq2` | Metinden videoya, Referanstan videoya |
-| `viduq2-pro` | Görüntüden videoya, Referanstan videoya, Başlangıç-bitiş karelerinden videoya |
-| `viduq2-pro-fast` | Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-| `viduq2-turbo` | Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-| `viduq3-pro` | Metinden videoya, Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-| `viduq3-turbo` | Metinden videoya, Görüntüden videoya, Başlangıç-bitiş karelerinden videoya |
-
-### xAI
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `grok-imagine-image-to-video` | Görüntüden videoya |
-| `grok-imagine-text-to-video` | Metinden videoya |
-| `grok-imagine-upscale` | Videodan videoya |
-
-
-### Other
-
-| Model | Herkese açık işlemler |
-|-------|-------------------|
-| `topaz-video-upscale` | Videodan videoya |
-
-
-## Kullanım Örnekleri
-
-### Text-to-Video (T2V)
-
-En yaygın kullanım senaryosu. Tüm modeller bunu destekler.
+### Image-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "sora-2",
-        "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
-        "operation": "Metinden videoya",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-```
-
-### Image-to-Video (I2V)
-
-Statik bir görseli canlandırın. Video modelleri arasında en geniş uyumluluk için kaynak görseli barındırın ve `image_url` geçin.
-
-```python
-# Using image URL
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
-        "operation": "Görüntüden videoya",
+        "operation": "image-to-video",
         "image_url": "https://example.com/portrait.jpg",
         "duration": 6,
         "aspect_ratio": "16:9"
     }
 )
-
 ```
 
-### Keyframe Kontrolü (Başlangıç + Bitiş Görseli)
+### Reference-to-video
 
-Hassas geçişler için hem ilk hem de son kareyi kontrol edin. Şu anda Seedance 2.0 tarafından desteklenmektedir.
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+### Start-end-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "viduq2-pro",
-        "prompt": "Smooth transition from day to night, city lights gradually turning on",
-        "operation": "Başlangıç-bitiş karelerinden videoya",
+        "prompt": "Smooth transition from day to night.",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/city-day.jpg",
         "end_image": "https://example.com/city-night.jpg",
         "duration": 5,
@@ -278,63 +232,66 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-### Video Uzatma
-
-Mevcut bir videonun süresini uzatın. Uzatma yeteneğine sahip modelleri kullanın.
+### Video-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "kling-video-extend",
-        "prompt": "Continue the scene naturally",
-        "image_url": "https://example.com/last-frame.jpg"
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale this clip while preserving the original motion."
     }
 )
 ```
 
-## Parametre Referansı
+### Motion control
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model` | string | Model kimliği (varsayılan: `sora-2`) |
-| `prompt` | string | **Gerekli.** Videonun metinsel açıklaması |
-| `image_url` | string | Başlangıç görselinin URL'si (I2V için) |
-| `image` | string | Data URL olarak satır içi görsel. Uyumlu modeller tarafından desteklenir, ancak `image_url` en geniş uyumluluğu sağlar. |
-| `duration` | integer | Video süresi saniye cinsinden (1-60, modele bağlı) |
-| `aspect_ratio` | string | `16:9`, `9:16`, `1:1`, vb. |
-| `resolution` | string | `1080p`, `720p`, `4k` |
-| `fps` | integer | Saniye başına kare sayısı (1-120) |
-| `negative_prompt` | string | Oluşturma sırasında kaçınılması gerekenler |
-| `seed` | integer | Yeniden üretilebilirlik için rastgele seed |
-| `cfg_scale` | number | Yönlendirme ölçeği (0-20) |
-| `motion_strength` | number | Hareket yoğunluğu (0-1) |
-| `start_image` | string | Başlangıç keyframe'inin URL'si |
-| `end_image` | string | Bitiş keyframe'inin URL'si |
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
+    }
+)
+```
 
-<Warning>
-Tüm parametreler her model tarafından desteklenmez. Desteklenmeyen parametreler sessizce yok sayılır. Desteklenen parametreler için modelin dokümantasyonunu kontrol edin.
-</Warning>
+## Parametre referansı
 
-## Model Seçim Rehberi
+| Parametre | Tür | Not |
+|-----------|-----|-----|
+| `operation` | string | Üretimde açıkça göndermeniz önerilir |
+| `image_url` | string | Görsel girdileri için en sağlam biçim |
+| `image` | string | Yerel testler ve küçük entegrasyonlar için `data:` URL |
+| `reference_images` | string[] | Referans görsel koşullandırması için kanonik herkese açık alan |
+| `reference_image_type` | string | İsteğe bağlı `asset` / `style` seçicisi |
+| `video_url` | string | Güncel herkese açık `video-to-video` ve `motion-control` modelleri için gereklidir |
+| `audio_url` | string | Uygun olduğunda modele özgü ses koşullu akışlarda kullanılır |
+| `output_audio` | boolean | Veo 3 ailesi alan gönderilmezse `true` kabul eder |
+
+## Hızlı model seçimi rehberi
 
 <CardGroup cols={2}>
-  <Card title="En İyi Kalite" icon="crown">
-    **Seedance 2.0** veya **Kling v2.6 Pro** — sinematik kalite, zengin ayrıntı, doğal hareket
+  <Card title="En yüksek kalite" icon="crown">
+    Kalite hızdan daha önemliyse **veo3.1-pro**, **kling-video-o1-pro** ve **viduq3-pro** güçlü seçeneklerdir.
   </Card>
-  <Card title="En Hızlı Oluşturma" icon="bolt">
-    **Higgsfield Turbo** veya **Hailuo 2.3** — prototipleme ve iterasyon için hızlı sonuçlar
+  <Card title="Hızlı iterasyon" icon="bolt">
+    Hızlı denemeler için **veo3.1-fast**, **hailuo-2.3-fast** ve **viduq3-turbo** iyi başlangıç noktalarıdır.
   </Card>
-  <Card title="En Çok Yönlü" icon="wand-magic-sparkles">
-    **Seedance 2.0** — tek bir modelde T2V, I2V, keyframe, uzatma ve düzenlemeyi destekler
+  <Card title="Referans ağırlıklı akışlar" icon="images">
+    Özel referans görsel kontrolü gerekiyorsa **veo3.1**, **veo3.1-fast**, **wan-2.6** veya **kling-video-o1-pro / std** ile başlayın.
   </Card>
-  <Card title="En İyi Fiyat/Performans" icon="coins">
-    **Wan 2.6** veya **Hailuo 2.3** — oluşturma başına daha düşük maliyetle rekabetçi kalite
+  <Card title="Video-to-video" icon="film">
+    Şu anda genel olarak etkin herkese açık `video-to-video` yolları ağırlıklı olarak **topaz-video-upscale**, **grok-imagine-upscale** ve **kling-video-o1-pro / std** modellerini kapsar.
   </Card>
 </CardGroup>
 
-## Faturalandırma
+## Faturalama
 
-Video oluşturma, **oluşturma başına sabit fiyatlandırma** kullanır. Video süresinden bağımsız olarak, görev gönderildiğinde bir kez ücretlendirilirsiniz. Oluşturma başarısız olursa, ücret otomatik olarak iade edilir.
-
-Güncel fiyatlandırmayı [Models page](https://lemondata.cc/tr/models) üzerinde veya [Pricing API](/api-reference/pricing/get-pricing) aracılığıyla kontrol edin.
+Faturalama modele bağlıdır. Bazı herkese açık video modelleri pratikte istek başına fiyatlandırılırken, bazıları saniye bazlı fiyatlandırmaya daha yakındır. Güncel herkese açık fiyat yüzeyi için [modeller sayfasına](https://lemondata.cc/tr/models) veya [Pricing API](/tr/api-reference/pricing/get-pricing) bakın.

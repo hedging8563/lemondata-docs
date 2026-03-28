@@ -1,22 +1,25 @@
 ---
-title: "Pembuatan Video"
-description: "Buat video dengan model dari 11 penyedia — text-to-video, image-to-video, kontrol keyframe, perpanjangan video, dan pengeditan"
+title: "Generasi video"
+description: "Akses lewat kontrak publik terpadu untuk alur teks ke video, image-to-video, reference-to-video, kontrol frame awal/akhir, motion control, dan video-to-video."
 ---
 
 ## Ringkasan
 
-LemonData menyediakan akses ke model pembuatan video dari 11 penyedia melalui satu API terpadu. Pembuatan video bersifat **asinkron** — Anda mengirimkan request, menerima task ID dan `poll_url`, lalu melakukan poll untuk hasilnya.
+LemonData menyediakan generasi video melalui satu API terpadu. Prosesnya **asinkron**: Anda mengirim permintaan, menerima `task_id` dan `poll_url`, lalu memeriksa status secara berkala sampai hasil akhir tersedia.
 
 <Info>
-Daftar model sering diperbarui. Untuk model dan harga terbaru yang tersedia, kunjungi [halaman Models](https://lemondata.cc/id/models) atau gunakan [Models API](/api-reference/models/list-models).
+Inventaris model video publik terbaru dapat dilihat melalui [Models API](/id/api-reference/models/list-models) atau [halaman model](https://lemondata.cc/id/models).
 </Info>
 
 <Warning>
-Audio behavior is model-dependent. In LemonData, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some models are silent by default or silent-only. For passthrough-governed models, pass `output_audio=true` to make a best-effort upstream audio request.
+Perilaku audio bergantung pada model. Di LemonData, keluarga Veo 3 diperlakukan sebagai audio aktif secara default ketika `output_audio` dihilangkan. Model publik lainnya bisa saja diam secara default atau tidak mengekspos sakelar audio yang stabil.
 </Warning>
 
+<Info>
+Untuk integrasi produksi, lebih baik gunakan URL `https` publik untuk gambar, video, dan audio. Model yang kompatibel masih menerima URL `data:`, tetapi URL publik biasanya lebih andal untuk coba ulang, observabilitas, dan debugging.
+</Info>
 
-### Alur Kerja Async
+### Alur asinkron
 
 ```mermaid
 sequenceDiagram
@@ -25,30 +28,145 @@ sequenceDiagram
     participant Provider
 
     Client->>LemonData: POST /v1/videos/generations
-    LemonData->>Provider: Forward request
+    LemonData->>Provider: Teruskan permintaan yang sudah dinormalisasi
     Provider-->>LemonData: task_id + pending
     LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
-    loop Poll every 5-10s
+    loop Cek tiap 5-10 detik
         Client->>LemonData: GET poll_url
-        LemonData->>Provider: Query status
-        Provider-->>LemonData: Status update
+        LemonData->>Provider: Periksa status
+        Provider-->>LemonData: Pembaruan status
         LemonData-->>Client: { status, video_url? }
     end
 ```
 
-<CodeGroup>
+## Operasi publik saat ini
 
-```python Python
-import requests
-import time
+Saat ini kontrak video publik LemonData berpusat pada operasi berikut:
 
-API_KEY = "sk-your-api-key"
-BASE = "https://api.lemondata.cc/v1"
-headers = {"Authorization": f"Bearer {API_KEY}"}
+- `text-to-video`
+- `image-to-video`
+- `reference-to-video`
+- `start-end-to-video`
+- `video-to-video`
+- `motion-control`
 
-# Step 1: Submit generation request
-resp = requests.post(f"{BASE}/videos/generations",
+Kontrak juga menerima `audio-to-video` dan `video-extension` untuk alur spesifik model tertentu, tetapi pada build dokumentasi ini belum ada model publik yang secara luas diaktifkan dan mempromosikan dua kemampuan itu.
+
+## Matriks kemampuan
+
+**Legenda**: ✅ Ada setidaknya satu model publik yang saat ini aktif di keluarga penyedia tersebut | ❌ Belum ada model publik aktif yang mewakili kemampuan itu
+
+| Seri | T2V | I2V | Referensi | Start-End | V2V | Motion |
+|------|-----|-----|-----------|-----------|-----|--------|
+| OpenAI | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Kuaishou | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Google | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| ByteDance | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Alibaba | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Shengshu | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| xAI | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Lainnya | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+
+### Definisi kemampuan
+
+- **T2V (Text-to-Video)**: menghasilkan video dari prompt teks
+- **I2V (Image-to-Video)**: menghasilkan video dari gambar awal; untuk kompatibilitas terluas, gunakan `image_url`
+- **Referensi**: mengondisikan generasi dengan satu atau beberapa gambar referensi melalui `reference_images`
+- **Start-End**: mengontrol frame pertama dan terakhir dengan `start_image` dan `end_image`
+- **V2V (Video-to-Video)**: menggunakan video yang sudah ada sebagai input utama
+- **Motion**: menggabungkan gambar subjek dengan video referensi gerakan
+
+## Inventaris model publik saat ini
+
+### OpenAI
+
+| Model | Operasi publik |
+|-------|----------------|
+| `sora-2` | Teks ke video, image-to-video |
+| `sora-2-pro` | Teks ke video, image-to-video |
+| `sora-2-pro-storyboard` | Image-to-video |
+
+### Kuaishou
+
+| Model | Operasi publik |
+|-------|----------------|
+| `kling-3.0-motion-control` | Motion control |
+| `kling-3.0-video` | Teks ke video, image-to-video, start-end-to-video |
+| `kling-v2.5-turbo-pro` | Teks ke video, image-to-video, start-end-to-video |
+| `kling-v2.5-turbo-std` | Teks ke video, image-to-video |
+| `kling-v2.6-pro` | Teks ke video, image-to-video, start-end-to-video |
+| `kling-v2.6-std` | Teks ke video, image-to-video |
+| `kling-v3.0-pro` | Teks ke video, image-to-video, start-end-to-video |
+| `kling-v3.0-std` | Teks ke video, image-to-video, start-end-to-video |
+| `kling-video-o1-pro` | Teks ke video, image-to-video, reference-to-video, start-end-to-video, video-to-video |
+| `kling-video-o1-std` | Teks ke video, image-to-video, reference-to-video, start-end-to-video, video-to-video |
+
+### Google
+
+| Model | Operasi publik |
+|-------|----------------|
+| `veo3` | Teks ke video, image-to-video |
+| `veo3-fast` | Teks ke video, image-to-video |
+| `veo3-pro` | Teks ke video, image-to-video |
+| `veo3.1` | Teks ke video, image-to-video, reference-to-video, start-end-to-video |
+| `veo3.1-fast` | Teks ke video, image-to-video, reference-to-video, start-end-to-video |
+| `veo3.1-pro` | Teks ke video, image-to-video, start-end-to-video |
+
+### ByteDance
+
+| Model | Operasi publik |
+|-------|----------------|
+| `seedance-1.5-pro` | Teks ke video, image-to-video |
+
+### MiniMax
+
+| Model | Operasi publik |
+|-------|----------------|
+| `hailuo-2.3-fast` | Image-to-video |
+| `hailuo-2.3-pro` | Teks ke video, image-to-video |
+| `hailuo-2.3-standard` | Teks ke video, image-to-video |
+
+### Alibaba
+
+| Model | Operasi publik |
+|-------|----------------|
+| `wan-2.2-plus` | Teks ke video, image-to-video |
+| `wan-2.5` | Teks ke video, image-to-video |
+| `wan-2.6` | Teks ke video, image-to-video, reference-to-video |
+
+### Shengshu
+
+| Model | Operasi publik |
+|-------|----------------|
+| `viduq2` | Teks ke video, reference-to-video |
+| `viduq2-pro` | Image-to-video, reference-to-video, start-end-to-video |
+| `viduq2-pro-fast` | Image-to-video, start-end-to-video |
+| `viduq2-turbo` | Image-to-video, start-end-to-video |
+| `viduq3-pro` | Teks ke video, image-to-video, start-end-to-video |
+| `viduq3-turbo` | Teks ke video, image-to-video, start-end-to-video |
+
+### xAI
+
+| Model | Operasi publik |
+|-------|----------------|
+| `grok-imagine-image-to-video` | Image-to-video |
+| `grok-imagine-text-to-video` | Teks ke video |
+| `grok-imagine-upscale` | Video-to-video |
+
+### Lainnya
+
+| Model | Operasi publik |
+|-------|----------------|
+| `topaz-video-upscale` | Video-to-video |
+
+## Contoh penggunaan
+
+### Text-to-video
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "sora-2",
@@ -58,217 +176,53 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-create_data = resp.json()
-task_id = create_data["task_id"]
-poll_url = create_data["poll_url"]
-
-# Step 2: Poll for result
-while True:
-    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
-    if status["status"] in ("completed", "succeeded"):
-        print(f"Video URL: {status['video_url']}")
-        break
-    elif status["status"] == "failed":
-        print(f"Failed: {status.get('error')}")
-        break
-    time.sleep(10)
 ```
 
-```javascript JavaScript
-const API_KEY = 'sk-your-api-key';
-const BASE = 'https://api.lemondata.cc/v1';
-const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
-
-// Step 1: Submit
-const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
-  method: 'POST', headers,
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A calm cinematic shot of a cat walking through a sunlit garden.',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-}).then(r => r.json());
-
-// Step 2: Poll
-const poll = setInterval(async () => {
-  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
-  if (['completed', 'succeeded'].includes(status.status)) {
-    console.log('Video URL:', status.video_url);
-    clearInterval(poll);
-  } else if (status.status === 'failed') {
-    console.error('Failed:', status.error);
-    clearInterval(poll);
-  }
-}, 10000);
-```
-
-</CodeGroup>
-
-## Matriks Kapabilitas Model
-
-Model yang berbeda unggul dalam tugas yang berbeda. Gunakan matriks ini untuk memilih model yang tepat untuk use case Anda.
-
-**Legenda**: ✅ Didukung | ❌ Tidak didukung
-
-| Series | Provider | T2V | I2V | Keyframe | Extension | Editing | Max Duration |
-|--------|----------|-----|-----|----------|-----------|---------|-------------|
-| **Sora** | OpenAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~20s |
-| **Kling** | Kuaishou | ✅ | ✅ | ❌ | ✅ | ❌ | 10s |
-| **Veo** | Google | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Seedance** | ByteDance | ✅ | ✅ | ✅ | ✅ | ✅ | 10s |
-| **Hailuo** | MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Wan** | Alibaba | ✅ | ✅ | ❌ | ❌ | ❌ | 5s |
-| **Runway** | Runway | ❌ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Luma** | Luma | ✅ | ❌ | ❌ | ✅ | ❌ | 5s |
-| **Vidu** | Vidu | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Grok** | xAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~15s |
-| **Higgsfield** | Higgsfield | ✅ | ❌ | ❌ | ❌ | ❌ | ~5s |
-
-### Definisi Kapabilitas
-
-- **T2V (Text-to-Video)**: Buat video dari prompt teks
-- **I2V (Image-to-Video)**: Animasikan gambar statis menjadi video. Untuk kompatibilitas terluas, berikan `image_url` publik.
-- **Keyframe**: Kendalikan frame awal dan akhir dengan `start_image` + `end_image`
-- **Extension**: Perpanjang durasi video yang sudah ada
-- **Editing**: Ubah aspek tertentu dari video yang sudah ada
-
-## Inventaris model publik saat ini
-
-### OpenAI
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `sora-2` | Teks ke video, Gambar ke video |
-| `sora-2-pro` | Teks ke video, Gambar ke video |
-| `sora-2-pro-storyboard` | Gambar ke video |
-
-### Kuaishou
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `kling-3.0-motion-control` | Kontrol gerakan |
-| `kling-3.0-video` | Teks ke video, Gambar ke video, Awal-akhir ke video |
-| `kling-v2.5-turbo-pro` | Teks ke video, Gambar ke video, Awal-akhir ke video |
-| `kling-v2.5-turbo-std` | Teks ke video, Gambar ke video |
-| `kling-v2.6-pro` | Teks ke video, Gambar ke video, Awal-akhir ke video |
-| `kling-v2.6-std` | Teks ke video, Gambar ke video |
-| `kling-v3.0-pro` | Teks ke video, Gambar ke video, Awal-akhir ke video |
-| `kling-v3.0-std` | Teks ke video, Gambar ke video, Awal-akhir ke video |
-| `kling-video-o1-pro` | Teks ke video, Gambar ke video, Referensi ke video, Awal-akhir ke video, Video ke video |
-| `kling-video-o1-std` | Teks ke video, Gambar ke video, Referensi ke video, Awal-akhir ke video, Video ke video |
-
-### Google
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `veo3` | Teks ke video, Gambar ke video |
-| `veo3-fast` | Teks ke video, Gambar ke video |
-| `veo3-pro` | Teks ke video, Gambar ke video |
-| `veo3.1` | Teks ke video, Gambar ke video, Referensi ke video, Awal-akhir ke video |
-| `veo3.1-fast` | Teks ke video, Gambar ke video, Referensi ke video, Awal-akhir ke video |
-| `veo3.1-pro` | Teks ke video, Gambar ke video, Awal-akhir ke video |
-
-### ByteDance
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `seedance-1.5-pro` | Teks ke video, Gambar ke video |
-
-### MiniMax
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `hailuo-2.3-fast` | Gambar ke video |
-| `hailuo-2.3-pro` | Teks ke video, Gambar ke video |
-| `hailuo-2.3-standard` | Teks ke video, Gambar ke video |
-
-### Alibaba
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `wan-2.2-plus` | Teks ke video, Gambar ke video |
-| `wan-2.5` | Teks ke video, Gambar ke video |
-| `wan-2.6` | Teks ke video, Gambar ke video, Referensi ke video |
-
-### Shengshu
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `viduq2` | Teks ke video, Referensi ke video |
-| `viduq2-pro` | Gambar ke video, Referensi ke video, Awal-akhir ke video |
-| `viduq2-pro-fast` | Gambar ke video, Awal-akhir ke video |
-| `viduq2-turbo` | Gambar ke video, Awal-akhir ke video |
-| `viduq3-pro` | Teks ke video, Gambar ke video, Awal-akhir ke video |
-| `viduq3-turbo` | Teks ke video, Gambar ke video, Awal-akhir ke video |
-
-### xAI
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `grok-imagine-image-to-video` | Gambar ke video |
-| `grok-imagine-text-to-video` | Teks ke video |
-| `grok-imagine-upscale` | Video ke video |
-
-
-### Other
-
-| Model | Operasi publik |
-|-------|-------------------|
-| `topaz-video-upscale` | Video ke video |
-
-
-## Contoh Penggunaan
-
-### Text-to-Video (T2V)
-
-Use case yang paling umum. Semua model mendukung ini.
+### Image-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "sora-2",
-        "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
-        "operation": "Teks ke video",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-```
-
-### Image-to-Video (I2V)
-
-Animasikan gambar statis. Untuk kompatibilitas terluas di berbagai model video, host gambar sumber dan kirimkan `image_url`.
-
-```python
-# Using image URL
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
-        "operation": "Gambar ke video",
+        "operation": "image-to-video",
         "image_url": "https://example.com/portrait.jpg",
         "duration": 6,
         "aspect_ratio": "16:9"
     }
 )
-
 ```
 
-### Kontrol Keyframe (Gambar Awal + Akhir)
+### Reference-to-video
 
-Kendalikan frame pertama dan terakhir untuk transisi yang presisi. Saat ini didukung oleh Seedance 2.0.
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+### Start-end-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "viduq2-pro",
-        "prompt": "Smooth transition from day to night, city lights gradually turning on",
-        "operation": "Awal-akhir ke video",
+        "prompt": "Smooth transition from day to night.",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/city-day.jpg",
         "end_image": "https://example.com/city-night.jpg",
         "duration": 5,
@@ -278,63 +232,66 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-### Perpanjangan Video
-
-Perpanjang durasi video yang sudah ada. Gunakan model dengan kapabilitas extension.
+### Video-to-video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "kling-video-extend",
-        "prompt": "Continue the scene naturally",
-        "image_url": "https://example.com/last-frame.jpg"
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale this clip while preserving the original motion."
     }
 )
 ```
 
-## Referensi Parameter
+### Motion control
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model` | string | ID model (default: `sora-2`) |
-| `prompt` | string | **Wajib.** Deskripsi teks dari video |
-| `image_url` | string | URL dari gambar awal (untuk I2V) |
-| `image` | string | Gambar inline sebagai data URL. Didukung oleh model yang kompatibel, tetapi `image_url` memberikan kompatibilitas paling luas. |
-| `duration` | integer | Durasi video dalam detik (1-60, bergantung pada model) |
-| `aspect_ratio` | string | `16:9`, `9:16`, `1:1`, dll. |
-| `resolution` | string | `1080p`, `720p`, `4k` |
-| `fps` | integer | Frame per detik (1-120) |
-| `negative_prompt` | string | Hal yang harus dihindari dalam pembuatan |
-| `seed` | integer | Seed acak untuk reproduksibilitas |
-| `cfg_scale` | number | Skala panduan (0-20) |
-| `motion_strength` | number | Intensitas gerakan (0-1) |
-| `start_image` | string | URL dari keyframe awal |
-| `end_image` | string | URL dari keyframe akhir |
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
+    }
+)
+```
 
-<Warning>
-Tidak semua parameter didukung oleh setiap model. Parameter yang tidak didukung akan diabaikan tanpa pemberitahuan. Periksa dokumentasi model untuk parameter yang didukung.
-</Warning>
+## Referensi parameter
 
-## Panduan Pemilihan Model
+| Parameter | Tipe | Catatan |
+|-----------|------|---------|
+| `operation` | string | Di produksi, sebaiknya dikirim eksplisit |
+| `image_url` | string | Bentuk input gambar yang paling stabil |
+| `image` | string | URL `data:` untuk pengujian lokal dan integrasi kecil |
+| `reference_images` | string[] | Field publik kanonis untuk conditioning berbasis referensi |
+| `reference_image_type` | string | Pemilih opsional `asset` / `style` |
+| `video_url` | string | Wajib untuk model publik `video-to-video` dan `motion-control` saat ini |
+| `audio_url` | string | Dipakai oleh alur audio-conditioned tertentu jika tersedia |
+| `output_audio` | boolean | Keluarga Veo 3 memperlakukan field yang dihilangkan sebagai `true` |
+
+## Panduan cepat memilih model
 
 <CardGroup cols={2}>
-  <Card title="Kualitas Terbaik" icon="crown">
-    **Seedance 2.0** atau **Kling v2.6 Pro** — kualitas sinematik, detail kaya, gerakan alami
+  <Card title="Kualitas tertinggi" icon="crown">
+    Jika kualitas lebih penting daripada kecepatan, **veo3.1-pro**, **kling-video-o1-pro**, dan **viduq3-pro** adalah pilihan yang kuat.
   </Card>
-  <Card title="Pembuatan Tercepat" icon="bolt">
-    **Higgsfield Turbo** atau **Hailuo 2.3** — hasil cepat untuk prototyping dan iterasi
+  <Card title="Iterasi cepat" icon="bolt">
+    Untuk iterasi cepat, **veo3.1-fast**, **hailuo-2.3-fast**, dan **viduq3-turbo** adalah titik awal yang bagus.
   </Card>
-  <Card title="Paling Serbaguna" icon="wand-magic-sparkles">
-    **Seedance 2.0** — mendukung T2V, I2V, keyframe, extension, dan editing dalam satu model
+  <Card title="Alur berbasis referensi" icon="images">
+    Jika Anda membutuhkan conditioning khusus dengan gambar referensi, mulai dari **veo3.1**, **veo3.1-fast**, **wan-2.6**, atau **kling-video-o1-pro / std**.
   </Card>
-  <Card title="Nilai Terbaik" icon="coins">
-    **Wan 2.6** atau **Hailuo 2.3** — kualitas kompetitif dengan biaya per pembuatan yang lebih rendah
+  <Card title="Video-to-video" icon="film">
+    Jalur `video-to-video` publik yang saat ini paling umum diaktifkan terutama adalah **topaz-video-upscale**, **grok-imagine-upscale**, dan **kling-video-o1-pro / std**.
   </Card>
 </CardGroup>
 
-## Penagihan
+## Billing
 
-Pembuatan video menggunakan **harga tetap per pembuatan**. Anda dikenai biaya satu kali saat task dikirimkan, terlepas dari durasi video. Jika pembuatan gagal, biaya akan dikembalikan secara otomatis.
-
-Periksa harga terkini di [halaman Models](https://lemondata.cc/id/models) atau melalui [Pricing API](/api-reference/pricing/get-pricing).
+Penagihan bergantung pada model. Beberapa model video publik secara efektif berperilaku seperti model berbasis permintaan, sedangkan yang lain lebih mirip model berbasis durasi. Untuk informasi harga publik terbaru, lihat [halaman model](https://lemondata.cc/id/models) atau [Pricing API](/id/api-reference/pricing/get-pricing).
