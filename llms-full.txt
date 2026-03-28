@@ -1975,7 +1975,7 @@ Image, video, and audio models are priced per request:
 For async generation tasks (video, music, 3D models):
 
 1. **Billing occurs immediately** when you submit the task
-2. You receive a `task_id` to poll for status
+2. Follow the returned `poll_url` for status checks, and treat `task_id` as the async task identity
 3. **No automatic refunds** if the task fails
 
 This is because upstream providers charge us when the task is submitted, regardless of the outcome. If you experience task failures, please contact support@lemondata.cc for assistance.
@@ -1988,8 +1988,9 @@ response = client.post("/v1/videos/generations", json={
 })
 # ⚠️ You are billed NOW, not when the video is ready
 
+poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Poll for status...
+# Poll poll_url for status...
 ```
 
 ## Token Counting
@@ -2438,8 +2439,6 @@ URL: https://docs.lemondata.cc/guides/video-generation
 LemonData provides access to video generation models through a single unified API. Video generation is **asynchronous**: submit a request, receive a task ID and `poll_url`, then poll for the final result.
 
 > Info: The model inventory changes over time. For the latest public availability, use the [Models API](/api-reference/models/list-models) or visit the [Models page](https://lemondata.cc/en/models).
-
-> Info: If a create response returns `poll_url`, call that exact URL. When it points to `/v1/tasks/{id}`, treat that as the canonical fixed status endpoint.
 
 > Info: If a create response returns `poll_url`, call that exact URL. When it points to `/v1/tasks/{id}`, treat that as the canonical fixed status endpoint.
 
@@ -3158,14 +3157,18 @@ Get your API key from the [Dashboard](https://lemondata.cc/dashboard).
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/music/generations` | POST | Create music generation task |
-| `/v1/music/generations/{id}` | GET | Get music task status |
+| `/v1/music/generations/{id}` | GET | Music-specific status path |
+
+> Info: For new clients, prefer the returned `poll_url` first. If you need a fixed task-status endpoint, use `/v1/tasks/{id}`; keep `/v1/music/generations/{id}` for music-specific compatibility paths.
 
 ### 3D Generation
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/3d/generations` | POST | Create 3D model generation task |
-| `/v1/3d/generations/{id}` | GET | Get 3D task status |
+| `/v1/3d/generations/{id}` | GET | 3D-specific status path |
+
+> Info: For new clients, prefer the returned `poll_url` first. If you need a fixed task-status endpoint, use `/v1/tasks/{id}`; keep `/v1/3d/generations/{id}` for 3D-specific compatibility paths.
 
 ### Models
 
@@ -3788,6 +3791,8 @@ URL: https://docs.lemondata.cc/api-reference/images/create-image
 
 Some models require longer processing time and return an async response:
 
+> Info: Use the returned `poll_url` exactly when it is provided. Treat `task_id` as the async task identity for follow-up polling.
+
 > Note: When you receive `status: "pending"`, use the [Get Image Status](/api-reference/images/get-image-status) endpoint to poll for the result.
 
 ## Available Models
@@ -3900,6 +3905,8 @@ Creates a variation of a given image. Requires `multipart/form-data` content typ
 URL: https://docs.lemondata.cc/api-reference/images/get-image-status
 
 ## Path Parameters
+
+> Info: If the create response included `poll_url`, prefer calling that exact URL for polling.
 
 ## Response
 
@@ -4026,7 +4033,7 @@ For `verbose_json` format, the response also includes:
 
 URL: https://docs.lemondata.cc/api-reference/music/create-music
 
-Generate music and lyrics using AI. This is an asynchronous API - you'll receive a task ID to poll for completion.
+Generate music and lyrics using AI. This is an asynchronous API. Create responses return a task identity, and may also return a preferred `poll_url` for status checks.
 
 ## Request Body
 
@@ -4041,6 +4048,8 @@ Generate music and lyrics using AI. This is an asynchronous API - you'll receive
 URL: https://docs.lemondata.cc/api-reference/music/get-music-status
 
 Poll this endpoint to check the status of your music generation task.
+
+> Info: If the create response included `poll_url`, prefer calling that exact URL for polling. `/v1/tasks/{id}` is the canonical fixed status endpoint for music jobs, and `id` / `task_id` should be treated as the same async task identity.
 
 ## Path Parameters
 
@@ -4325,7 +4334,7 @@ def wait_for_video(task_id, max_wait=600, interval=5):
 
 URL: https://docs.lemondata.cc/api-reference/3d/create-3d
 
-Generate 3D models from text or images using Tripo3D and other providers. This is an asynchronous API.
+Generate 3D models from text or images using Tripo3D and other providers. This is an asynchronous API. Create responses return a task identity, and may also return a preferred `poll_url` for status checks.
 
 ## Request Body
 
@@ -4340,6 +4349,8 @@ Generate 3D models from text or images using Tripo3D and other providers. This i
 URL: https://docs.lemondata.cc/api-reference/3d/get-3d-status
 
 Poll this endpoint to check the status of your 3D model generation task.
+
+> Info: If the create response included `poll_url`, prefer calling that exact URL for polling. `/v1/tasks/{id}` is the canonical fixed status endpoint for 3D jobs, and `id` / `task_id` should be treated as the same async task identity.
 
 ## Path Parameters
 
