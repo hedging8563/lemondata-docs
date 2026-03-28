@@ -6,10 +6,18 @@ description: "Creates a video generation task"
 
 ## Overview
 
-Video generation is asynchronous. You submit a request, receive a task ID and `poll_url`, then poll for the result.
+Video generation is asynchronous. You submit a request, receive a canonical async task ID and `poll_url`, then poll for the result.
 
 <Info>
 For the most reliable polling behavior, follow the exact `poll_url` returned by the create request.
+</Info>
+
+<Info>
+If a create response returns `poll_url`, call that exact URL. When it points to `/v1/tasks/{id}`, treat that as the canonical fixed status endpoint.
+</Info>
+
+<Info>
+The async task identifier may surface as `id` or `task_id` depending on the adapter. Treat them as the same task identity.
 </Info>
 
 <Warning>
@@ -144,20 +152,44 @@ For production integrations, prefer publicly reachable `https` URLs for images, 
 
 ## Response
 
+<ResponseField name="id" type="string">
+  Canonical async task identifier. Treat this as the same identity as `task_id` when both are present.
+</ResponseField>
+
 <ResponseField name="task_id" type="string">
-  Unique task identifier for polling.
+  Canonical async task identifier for polling. This is the same task identity used by async status endpoints.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  Recommended polling URL for this task. Use this exact path when checking status.
+  Preferred polling URL for this task. Use this exact path when checking status.
 </ResponseField>
 
 <ResponseField name="status" type="string">
   Initial status: `pending`.
 </ResponseField>
 
+<ResponseField name="created" type="integer">
+  Unix timestamp when the task was created.
+</ResponseField>
+
 <ResponseField name="model" type="string">
   Model used.
+</ResponseField>
+
+<ResponseField name="video_url" type="string">
+  Direct video URL when the result is already available.
+</ResponseField>
+
+<ResponseField name="video" type="object">
+  Single video payload with `url`, `duration`, `width`, and `height` when available.
+</ResponseField>
+
+<ResponseField name="videos" type="array">
+  Multiple video payloads when the provider returns more than one output.
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message or structured error object when the task fails.
 </ResponseField>
 
 <RequestExample>
@@ -223,11 +255,12 @@ console.log(`Task ID: ${data.task_id}`);
 <ResponseExample>
 ```json Response
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
   "poll_url": "/v1/tasks/video_abc123",
   "status": "pending",
   "model": "sora-2",
-  "created_at": 1706000000
+  "created": 1706000000
 }
 ```
 </ResponseExample>

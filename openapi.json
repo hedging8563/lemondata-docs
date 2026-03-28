@@ -469,7 +469,7 @@
           "Video"
         ],
         "summary": "Create video generation task",
-        "description": "Creates a video generation task. Videos are generated asynchronously. Use the task ID to poll for completion.",
+        "description": "Creates an asynchronous video generation task. The response returns a canonical task ID and usually a preferred `poll_url`; clients should poll `poll_url` first, or use `/v1/tasks/{id}` as the fixed status endpoint.",
         "operationId": "createVideo",
         "requestBody": {
           "required": true,
@@ -551,14 +551,14 @@
           "Video"
         ],
         "summary": "Get video task status",
-        "description": "Retrieves the status and result of a video generation task.",
+        "description": "Retrieves the status and result of a video generation task. New clients should prefer the `poll_url` returned by create responses, or use `/v1/tasks/{id}` as the canonical fixed status endpoint. The `/v1/videos/generations/{id}` path remains for backward compatibility.",
         "operationId": "getVideoTask",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "The video task ID",
+            "description": "The async task ID returned by `id` / `task_id`, or embedded in `poll_url`",
             "schema": {
               "type": "string"
             }
@@ -580,6 +580,55 @@
           },
           "404": {
             "description": "Task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/tasks/{id}": {
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Get async task status",
+        "description": "Retrieves the status and result of an asynchronous generation task. Prefer the `poll_url` returned by the create response; `/v1/tasks/{id}` is the canonical fixed status endpoint for video, music, and 3D jobs.",
+        "operationId": "getAsyncTask",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The async task ID returned by `id` / `task_id`, or embedded in `poll_url`",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status (task-type specific fields may be present)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoTaskResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "Task not available to the current API key",
             "content": {
               "application/json": {
                 "schema": {

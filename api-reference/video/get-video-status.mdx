@@ -1,23 +1,31 @@
 ---
 title: "Get Video Status"
-openapi: "GET /v1/videos/generations/{id}"
+openapi: "GET /v1/tasks/{id}"
 description: "Retrieves the status and result of a video generation task"
 ---
 
 ## Path Parameters
 
-<ParamField path="task_id" type="string" required>
-  The task ID returned from the create video request.
+<ParamField path="id" type="string" required>
+  The task ID returned from the create video request. Treat `id` and `task_id` as the same async identity.
 </ParamField>
 
 <Info>
-If the create response includes `poll_url`, use that exact URL for polling. `/v1/videos/generations/{id}` remains available for video-specific polling, and `/v1/tasks/{task_id}` provides a unified async task endpoint.
+If a create response returns `poll_url`, call that exact URL. When it points to `/v1/tasks/{id}`, treat that as the canonical fixed status endpoint.
 </Info>
 
 ## Response
 
+<ResponseField name="id" type="string">
+  Canonical async task identifier.
+</ResponseField>
+
 <ResponseField name="task_id" type="string">
-  Task identifier.
+  Async task identifier alias.
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  Preferred polling URL when the create response supplies one.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -32,16 +40,28 @@ If the create response includes `poll_url`, use that exact URL for polling. `/v1
   URL of the generated video (when completed).
 </ResponseField>
 
+<ResponseField name="video" type="object">
+  Single video payload with `url`, `duration`, `width`, and `height` when available.
+</ResponseField>
+
+<ResponseField name="videos" type="array">
+  Multiple video payloads when the upstream returns more than one output.
+</ResponseField>
+
 <ResponseField name="error" type="string">
   Error message (if failed).
 </ResponseField>
 
-<ResponseField name="created_at" type="integer">
+<ResponseField name="created" type="integer">
   Creation timestamp.
 </ResponseField>
 
-<ResponseField name="completed_at" type="integer">
-  Completion timestamp (when done).
+<ResponseField name="updated" type="integer">
+  Last update timestamp.
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  Model used for the task.
 </ResponseField>
 
 <RequestExample>
@@ -176,43 +196,54 @@ while (true) {
 <ResponseExample>
 ```json Response (pending)
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "pending",
   "progress": 0,
   "model": "sora-2",
-  "created_at": 1706000000
+  "created": 1706000000,
+  "updated": 1706000000
 }
 ```
 
 ```json Response (processing)
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "processing",
   "progress": 45,
   "model": "sora-2",
-  "created_at": 1706000000
+  "created": 1706000000,
+  "updated": 1706000030
 }
 ```
 
 ```json Response (completed)
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "completed",
   "progress": 100,
   "video_url": "https://cdn.lemondata.cc/videos/abc123.mp4",
   "model": "sora-2",
-  "created_at": 1706000000,
-  "completed_at": 1706000060
+  "created": 1706000000,
+  "updated": 1706000060
 }
 ```
 
 ```json Response (failed)
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "failed",
   "error": "Content policy violation",
   "model": "sora-2",
-  "created_at": 1706000000
+  "created": 1706000000,
+  "updated": 1706000060
 }
 ```
 </ResponseExample>

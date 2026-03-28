@@ -1,23 +1,31 @@
 ---
 title: "获取视频状态"
-openapi: "GET /v1/videos/generations/{id}"
+openapi: "GET /v1/tasks/{id}"
 description: "获取视频生成任务的状态和结果"
 ---
 
 ## 路径参数
 
-<ParamField path="task_id" type="string" required>
-  创建视频请求返回的任务 ID。
+<ParamField path="id" type="string" required>
+  创建视频请求返回的异步任务 ID。`id` 和 `task_id` 指向同一个任务身份。
 </ParamField>
 
 <Info>
-如果创建接口返回了 `poll_url`，请优先直接使用这个 URL 轮询。`/v1/videos/generations/{id}` 仍然可用于视频专用状态查询，而 `/v1/tasks/{task_id}` 提供统一的异步任务查询入口。
+如果创建响应返回 `poll_url`，请直接使用该 URL。若它指向 `/v1/tasks/{id}`，请将其视为规范的固定状态查询入口。
 </Info>
 
 ## 响应
 
+<ResponseField name="id" type="string">
+  规范异步任务 ID。
+</ResponseField>
+
 <ResponseField name="task_id" type="string">
-  任务标识符。
+  异步任务 ID 别名。
+</ResponseField>
+
+<ResponseField name="poll_url" type="string">
+  创建响应返回的优先轮询 URL。
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -32,16 +40,28 @@ description: "获取视频生成任务的状态和结果"
   生成的视频 URL（完成时）。
 </ResponseField>
 
+<ResponseField name="video" type="object">
+  可用时返回单个视频对象，包含 `url`、`duration`、`width` 和 `height`。
+</ResponseField>
+
+<ResponseField name="videos" type="array">
+  当上游返回多个输出时，可能出现视频数组。
+</ResponseField>
+
 <ResponseField name="error" type="string">
   错误信息（失败时）。
 </ResponseField>
 
-<ResponseField name="created_at" type="integer">
+<ResponseField name="created" type="integer">
   创建时间戳。
 </ResponseField>
 
-<ResponseField name="completed_at" type="integer">
-  完成时间戳（完成时）。
+<ResponseField name="updated" type="integer">
+  最后更新时间戳。
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  任务所使用的模型。
 </ResponseField>
 
 <RequestExample>
@@ -176,43 +196,54 @@ while (true) {
 <ResponseExample>
 ```json Response (pending)
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "pending",
   "progress": 0,
   "model": "sora-2",
-  "created_at": 1706000000
+  "created": 1706000000,
+  "updated": 1706000000
 }
 ```
 
 ```json Response (processing)
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "processing",
   "progress": 45,
   "model": "sora-2",
-  "created_at": 1706000000
+  "created": 1706000000,
+  "updated": 1706000030
 }
 ```
 
 ```json Response (completed)
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "completed",
   "progress": 100,
   "video_url": "https://cdn.lemondata.cc/videos/abc123.mp4",
   "model": "sora-2",
-  "created_at": 1706000000,
-  "completed_at": 1706000060
+  "created": 1706000000,
+  "updated": 1706000060
 }
 ```
 
 ```json Response (failed)
 {
+  "id": "video_abc123",
   "task_id": "video_abc123",
+  "poll_url": "/v1/tasks/video_abc123",
   "status": "failed",
   "error": "Content policy violation",
   "model": "sora-2",
-  "created_at": 1706000000
+  "created": 1706000000,
+  "updated": 1706000060
 }
 ```
 </ResponseExample>
