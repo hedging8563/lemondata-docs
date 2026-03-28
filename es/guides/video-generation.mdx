@@ -1,20 +1,23 @@
 ---
-title: "Generación de Video"
-description: "Genera videos con modelos de 11 proveedores: texto a video, imagen a video, control por keyframe, extensión de video y edición"
+title: "Generación de video"
+description: "Accede mediante un contrato público unificado a texto a video, imagen a video, referencia a video, control de fotogramas inicial/final, control de movimiento y video a video."
 ---
 
 ## Resumen
 
-LemonData proporciona acceso a modelos de generación de video de 11 proveedores a través de una única API unificada. La generación de video es **asíncrona**: envías una solicitud, recibes un ID de tarea y `poll_url`, y luego consultas periódicamente el resultado.
+LemonData ofrece generación de video mediante una API unificada. La generación es **asíncrona**: envías una solicitud, recibes `task_id` y `poll_url`, y después consultas hasta obtener el resultado final.
 
 <Info>
-La lista de modelos se actualiza con frecuencia. Para ver los modelos disponibles más recientes y los precios, visita la [página de Modelos](https://lemondata.cc/es/models) o usa la [API de Modelos](/api-reference/models/list-models).
+Puedes ver el inventario público actual de modelos de video a través de la [Models API](/es/api-reference/models/list-models) o en la [página de modelos](https://lemondata.cc/es/models).
 </Info>
 
 <Warning>
-Audio behavior is model-dependent. In LemonData, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some models are silent by default or silent-only. For passthrough-governed models, pass `output_audio=true` to make a best-effort upstream audio request.
+El comportamiento del audio depende del modelo. En LemonData, la familia Veo 3 se trata por defecto como audio activado cuando se omite `output_audio`. Otros modelos públicos son silenciosos por defecto o no exponen un interruptor de audio estable.
 </Warning>
 
+<Info>
+En producción, es mejor usar URLs `https` públicas para imágenes, videos y audio. Los modelos compatibles siguen aceptando URLs `data:`, pero las URLs son más robustas para reintentos, observabilidad y depuración.
+</Info>
 
 ### Flujo asíncrono
 
@@ -25,30 +28,145 @@ sequenceDiagram
     participant Provider
 
     Client->>LemonData: POST /v1/videos/generations
-    LemonData->>Provider: Forward request
+    LemonData->>Provider: Reenvía la solicitud normalizada
     Provider-->>LemonData: task_id + pending
     LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
-    loop Poll every 5-10s
+    loop Consultar cada 5-10 s
         Client->>LemonData: GET poll_url
-        LemonData->>Provider: Query status
-        Provider-->>LemonData: Status update
+        LemonData->>Provider: Consulta el estado
+        Provider-->>LemonData: Actualización de estado
         LemonData-->>Client: { status, video_url? }
     end
 ```
 
-<CodeGroup>
+## Operaciones públicas actuales
 
-```python Python
-import requests
-import time
+El contrato público de video de LemonData se centra actualmente en estas operaciones:
 
-API_KEY = "sk-your-api-key"
-BASE = "https://api.lemondata.cc/v1"
-headers = {"Authorization": f"Bearer {API_KEY}"}
+- `text-to-video`
+- `image-to-video`
+- `reference-to-video`
+- `start-end-to-video`
+- `video-to-video`
+- `motion-control`
 
-# Step 1: Submit generation request
-resp = requests.post(f"{BASE}/videos/generations",
+El contrato también acepta `audio-to-video` y `video-extension` para flujos específicos de algunos modelos, pero en la lista pública generalmente habilitada de esta compilación no hay ningún modelo ampliamente habilitado que publique esas capacidades.
+
+## Matriz de capacidades
+
+**Leyenda**: ✅ Hay al menos un modelo público actualmente habilitado en esa familia de proveedores con esa capacidad | ❌ No hay modelos públicos actualmente habilitados con esa capacidad
+
+| Serie | T2V | I2V | Referencia | Inicio-Fin | V2V | Movimiento |
+|-------|-----|-----|------------|------------|-----|------------|
+| OpenAI | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Kuaishou | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Google | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| ByteDance | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Alibaba | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Shengshu | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| xAI | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Otros | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+
+### Definiciones de capacidades
+
+- **T2V (Text-to-Video)**: generar un video a partir de un prompt de texto
+- **I2V (Image-to-Video)**: generar un video a partir de una imagen inicial; para la compatibilidad más amplia conviene usar `image_url`
+- **Referencia**: condicionar la generación con una o varias imágenes de referencia mediante `reference_images`
+- **Inicio-Fin**: controlar el primer y el último fotograma con `start_image` y `end_image`
+- **V2V (Video-to-Video)**: usar un video existente como entrada principal
+- **Movimiento**: combinar una imagen del sujeto con un video de referencia de movimiento
+
+## Inventario público actual de modelos
+
+### OpenAI
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `sora-2` | Texto a video, imagen a video |
+| `sora-2-pro` | Texto a video, imagen a video |
+| `sora-2-pro-storyboard` | Imagen a video |
+
+### Kuaishou
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `kling-3.0-motion-control` | Control de movimiento |
+| `kling-3.0-video` | Texto a video, imagen a video, inicio-fin a video |
+| `kling-v2.5-turbo-pro` | Texto a video, imagen a video, inicio-fin a video |
+| `kling-v2.5-turbo-std` | Texto a video, imagen a video |
+| `kling-v2.6-pro` | Texto a video, imagen a video, inicio-fin a video |
+| `kling-v2.6-std` | Texto a video, imagen a video |
+| `kling-v3.0-pro` | Texto a video, imagen a video, inicio-fin a video |
+| `kling-v3.0-std` | Texto a video, imagen a video, inicio-fin a video |
+| `kling-video-o1-pro` | Texto a video, imagen a video, referencia a video, inicio-fin a video, video a video |
+| `kling-video-o1-std` | Texto a video, imagen a video, referencia a video, inicio-fin a video, video a video |
+
+### Google
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `veo3` | Texto a video, imagen a video |
+| `veo3-fast` | Texto a video, imagen a video |
+| `veo3-pro` | Texto a video, imagen a video |
+| `veo3.1` | Texto a video, imagen a video, referencia a video, inicio-fin a video |
+| `veo3.1-fast` | Texto a video, imagen a video, referencia a video, inicio-fin a video |
+| `veo3.1-pro` | Texto a video, imagen a video, inicio-fin a video |
+
+### ByteDance
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `seedance-1.5-pro` | Texto a video, imagen a video |
+
+### MiniMax
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `hailuo-2.3-fast` | Imagen a video |
+| `hailuo-2.3-pro` | Texto a video, imagen a video |
+| `hailuo-2.3-standard` | Texto a video, imagen a video |
+
+### Alibaba
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `wan-2.2-plus` | Texto a video, imagen a video |
+| `wan-2.5` | Texto a video, imagen a video |
+| `wan-2.6` | Texto a video, imagen a video, referencia a video |
+
+### Shengshu
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `viduq2` | Texto a video, referencia a video |
+| `viduq2-pro` | Imagen a video, referencia a video, inicio-fin a video |
+| `viduq2-pro-fast` | Imagen a video, inicio-fin a video |
+| `viduq2-turbo` | Imagen a video, inicio-fin a video |
+| `viduq3-pro` | Texto a video, imagen a video, inicio-fin a video |
+| `viduq3-turbo` | Texto a video, imagen a video, inicio-fin a video |
+
+### xAI
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `grok-imagine-image-to-video` | Imagen a video |
+| `grok-imagine-text-to-video` | Texto a video |
+| `grok-imagine-upscale` | Video a video |
+
+### Otros
+
+| Modelo | Operaciones públicas |
+|--------|----------------------|
+| `topaz-video-upscale` | Video a video |
+
+## Ejemplos de uso
+
+### Texto a video
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "sora-2",
@@ -58,217 +176,53 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-create_data = resp.json()
-task_id = create_data["task_id"]
-poll_url = create_data["poll_url"]
-
-# Step 2: Poll for result
-while True:
-    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
-    if status["status"] in ("completed", "succeeded"):
-        print(f"Video URL: {status['video_url']}")
-        break
-    elif status["status"] == "failed":
-        print(f"Failed: {status.get('error')}")
-        break
-    time.sleep(10)
 ```
 
-```javascript JavaScript
-const API_KEY = 'sk-your-api-key';
-const BASE = 'https://api.lemondata.cc/v1';
-const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
-
-// Step 1: Submit
-const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
-  method: 'POST', headers,
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A calm cinematic shot of a cat walking through a sunlit garden.',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-}).then(r => r.json());
-
-// Step 2: Poll
-const poll = setInterval(async () => {
-  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
-  if (['completed', 'succeeded'].includes(status.status)) {
-    console.log('Video URL:', status.video_url);
-    clearInterval(poll);
-  } else if (status.status === 'failed') {
-    console.error('Failed:', status.error);
-    clearInterval(poll);
-  }
-}, 10000);
-```
-
-</CodeGroup>
-
-## Matriz de capacidades de modelos
-
-Diferentes modelos destacan en diferentes tareas. Usa esta matriz para elegir el modelo adecuado para tu caso de uso.
-
-**Leyenda**: ✅ Compatible | ❌ No compatible
-
-| Series | Provider | T2V | I2V | Keyframe | Extension | Editing | Max Duration |
-|--------|----------|-----|-----|----------|-----------|---------|-------------|
-| **Sora** | OpenAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~20s |
-| **Kling** | Kuaishou | ✅ | ✅ | ❌ | ✅ | ❌ | 10s |
-| **Veo** | Google | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Seedance** | ByteDance | ✅ | ✅ | ✅ | ✅ | ✅ | 10s |
-| **Hailuo** | MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Wan** | Alibaba | ✅ | ✅ | ❌ | ❌ | ❌ | 5s |
-| **Runway** | Runway | ❌ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Luma** | Luma | ✅ | ❌ | ❌ | ✅ | ❌ | 5s |
-| **Vidu** | Vidu | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Grok** | xAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~15s |
-| **Higgsfield** | Higgsfield | ✅ | ❌ | ❌ | ❌ | ❌ | ~5s |
-
-### Definiciones de capacidades
-
-- **T2V (Text-to-Video)**: Genera video a partir de un prompt de texto
-- **I2V (Image-to-Video)**: Anima una imagen estática y la convierte en video. Para la compatibilidad más amplia, proporciona una `image_url` pública.
-- **Keyframe**: Controla los fotogramas inicial y final con `start_image` + `end_image`
-- **Extension**: Extiende la duración de un video existente
-- **Editing**: Modifica aspectos específicos de un video existente
-
-## Inventario público actual de modelos
-
-### OpenAI
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `sora-2` | Texto a video, Imagen a video |
-| `sora-2-pro` | Texto a video, Imagen a video |
-| `sora-2-pro-storyboard` | Imagen a video |
-
-### Kuaishou
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `kling-3.0-motion-control` | Control de movimiento |
-| `kling-3.0-video` | Texto a video, Imagen a video, Inicio-fin a video |
-| `kling-v2.5-turbo-pro` | Texto a video, Imagen a video, Inicio-fin a video |
-| `kling-v2.5-turbo-std` | Texto a video, Imagen a video |
-| `kling-v2.6-pro` | Texto a video, Imagen a video, Inicio-fin a video |
-| `kling-v2.6-std` | Texto a video, Imagen a video |
-| `kling-v3.0-pro` | Texto a video, Imagen a video, Inicio-fin a video |
-| `kling-v3.0-std` | Texto a video, Imagen a video, Inicio-fin a video |
-| `kling-video-o1-pro` | Texto a video, Imagen a video, Referencia a video, Inicio-fin a video, Video a video |
-| `kling-video-o1-std` | Texto a video, Imagen a video, Referencia a video, Inicio-fin a video, Video a video |
-
-### Google
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `veo3` | Texto a video, Imagen a video |
-| `veo3-fast` | Texto a video, Imagen a video |
-| `veo3-pro` | Texto a video, Imagen a video |
-| `veo3.1` | Texto a video, Imagen a video, Referencia a video, Inicio-fin a video |
-| `veo3.1-fast` | Texto a video, Imagen a video, Referencia a video, Inicio-fin a video |
-| `veo3.1-pro` | Texto a video, Imagen a video, Inicio-fin a video |
-
-### ByteDance
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `seedance-1.5-pro` | Texto a video, Imagen a video |
-
-### MiniMax
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `hailuo-2.3-fast` | Imagen a video |
-| `hailuo-2.3-pro` | Texto a video, Imagen a video |
-| `hailuo-2.3-standard` | Texto a video, Imagen a video |
-
-### Alibaba
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `wan-2.2-plus` | Texto a video, Imagen a video |
-| `wan-2.5` | Texto a video, Imagen a video |
-| `wan-2.6` | Texto a video, Imagen a video, Referencia a video |
-
-### Shengshu
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `viduq2` | Texto a video, Referencia a video |
-| `viduq2-pro` | Imagen a video, Referencia a video, Inicio-fin a video |
-| `viduq2-pro-fast` | Imagen a video, Inicio-fin a video |
-| `viduq2-turbo` | Imagen a video, Inicio-fin a video |
-| `viduq3-pro` | Texto a video, Imagen a video, Inicio-fin a video |
-| `viduq3-turbo` | Texto a video, Imagen a video, Inicio-fin a video |
-
-### xAI
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `grok-imagine-image-to-video` | Imagen a video |
-| `grok-imagine-text-to-video` | Texto a video |
-| `grok-imagine-upscale` | Video a video |
-
-
-### Other
-
-| Model | Operaciones públicas |
-|-------|-------------------|
-| `topaz-video-upscale` | Video a video |
-
-
-## Ejemplos de uso
-
-### Text-to-Video (T2V)
-
-El caso de uso más común. Todos los modelos admiten esto.
+### Imagen a video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "sora-2",
-        "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
-        "operation": "Texto a video",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-```
-
-### Image-to-Video (I2V)
-
-Anima una imagen estática. Para obtener la compatibilidad más amplia entre los modelos de video, aloja la imagen fuente y pasa `image_url`.
-
-```python
-# Using image URL
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
-        "operation": "Imagen a video",
+        "operation": "image-to-video",
         "image_url": "https://example.com/portrait.jpg",
         "duration": 6,
         "aspect_ratio": "16:9"
     }
 )
-
 ```
 
-### Control por keyframe (imagen inicial + final)
+### Referencia a video
 
-Controla tanto el primer como el último fotograma para lograr transiciones precisas. Actualmente es compatible con Seedance 2.0.
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+### Control de fotograma inicial y final
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "viduq2-pro",
-        "prompt": "Smooth transition from day to night, city lights gradually turning on",
-        "operation": "Inicio-fin a video",
+        "prompt": "Smooth transition from day to night.",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/city-day.jpg",
         "end_image": "https://example.com/city-night.jpg",
         "duration": 5,
@@ -278,63 +232,66 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-### Extensión de video
-
-Extiende la duración de un video existente. Usa modelos con capacidad de extensión.
+### Video a video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "kling-video-extend",
-        "prompt": "Continue the scene naturally",
-        "image_url": "https://example.com/last-frame.jpg"
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale this clip while preserving the original motion."
+    }
+)
+```
+
+### Control de movimiento
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
     }
 )
 ```
 
 ## Referencia de parámetros
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model` | string | ID del modelo (predeterminado: `sora-2`) |
-| `prompt` | string | **Obligatorio.** Descripción de texto del video |
-| `image_url` | string | URL de la imagen inicial (para I2V) |
-| `image` | string | Imagen inline como data URL. Compatible con modelos compatibles, pero `image_url` ofrece la compatibilidad más amplia. |
-| `duration` | integer | Duración del video en segundos (1-60, según el modelo) |
-| `aspect_ratio` | string | `16:9`, `9:16`, `1:1`, etc. |
-| `resolution` | string | `1080p`, `720p`, `4k` |
-| `fps` | integer | Fotogramas por segundo (1-120) |
-| `negative_prompt` | string | Qué se debe evitar en la generación |
-| `seed` | integer | Semilla aleatoria para reproducibilidad |
-| `cfg_scale` | number | Escala de guidance (0-20) |
-| `motion_strength` | number | Intensidad de movimiento (0-1) |
-| `start_image` | string | URL del keyframe inicial |
-| `end_image` | string | URL del keyframe final |
+| Parámetro | Tipo | Nota |
+|-----------|------|------|
+| `operation` | string | En producción conviene enviarlo explícitamente |
+| `image_url` | string | Forma más robusta de entrada de imagen |
+| `image` | string | URL `data:` útil para pruebas locales e integraciones pequeñas |
+| `reference_images` | string[] | Campo público canónico para condicionamiento con referencias |
+| `reference_image_type` | string | Selector opcional `asset` / `style` |
+| `video_url` | string | Obligatorio para los modelos públicos actuales de `video-to-video` y `motion-control` |
+| `audio_url` | string | Para flujos específicos de audio a video |
+| `output_audio` | boolean | La familia Veo 3 trata la omisión como `true` |
 
-<Warning>
-No todos los parámetros son compatibles con todos los modelos. Los parámetros no compatibles se ignoran silenciosamente. Consulta la documentación del modelo para ver los parámetros compatibles.
-</Warning>
-
-## Guía de selección de modelos
+## Guía rápida de selección de modelo
 
 <CardGroup cols={2}>
-  <Card title="Mejor calidad" icon="crown">
-    **Seedance 2.0** o **Kling v2.6 Pro**: calidad cinematográfica, gran nivel de detalle y movimiento natural
+  <Card title="Máxima calidad" icon="crown">
+    Si la calidad importa más que la velocidad, **veo3.1-pro**, **kling-video-o1-pro** y **viduq3-pro** son opciones fuertes.
   </Card>
-  <Card title="Generación más rápida" icon="bolt">
-    **Higgsfield Turbo** o **Hailuo 2.3**: resultados rápidos para prototipado e iteración
+  <Card title="Iteración rápida" icon="bolt">
+    Para ciclos rápidos, **veo3.1-fast**, **hailuo-2.3-fast** y **viduq3-turbo** son buenos puntos de partida.
   </Card>
-  <Card title="Más versátil" icon="wand-magic-sparkles">
-    **Seedance 2.0**: admite T2V, I2V, keyframe, extensión y edición en un solo modelo
+  <Card title="Flujos con referencias" icon="images">
+    Si necesitas control dedicado por imágenes de referencia, empieza con **veo3.1**, **veo3.1-fast**, **wan-2.6** o **kling-video-o1-pro / std**.
   </Card>
-  <Card title="Mejor valor" icon="coins">
-    **Wan 2.6** o **Hailuo 2.3**: calidad competitiva con menor costo por generación
+  <Card title="Video a video" icon="film">
+    Las rutas públicas generalmente habilitadas de `video-to-video` hoy son sobre todo **topaz-video-upscale**, **grok-imagine-upscale** y **kling-video-o1-pro / std**.
   </Card>
 </CardGroup>
 
 ## Facturación
 
-La generación de video usa **precios fijos por generación**. Se te cobra una sola vez cuando se envía la tarea, independientemente de la duración del video. Si la generación falla, el cargo se reembolsa automáticamente.
-
-Consulta los precios actuales en la [página de Modelos](https://lemondata.cc/es/models) o mediante la [API de precios](/api-reference/pricing/get-pricing).
+La facturación depende del modelo. Algunos modelos públicos de video se comportan en la práctica como modelos cobrados por solicitud, mientras que otros se asemejan más a un cobro por segundo. Para la superficie pública de precios actual, consulta la [página de modelos](https://lemondata.cc/es/models) o la [Pricing API](/es/api-reference/pricing/get-pricing).

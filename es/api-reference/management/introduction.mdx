@@ -1,84 +1,89 @@
 ---
 title: "API de administración"
-description: "Usa un token de administración para gestionar las claves API de la organización y consultar el uso y la facturación por clave."
+description: "Gestiona las API Keys de la organización y consulta uso y facturación por clave mediante un token de administración."
 ---
+
 ## Resumen
 
-La Management API te permite gestionar API Keys de organización y consultar uso y facturación por clave sin usar una API Key de inferencia estándar.
+La API de administración te permite gestionar las API Keys de la organización y consultar uso y facturación por clave sin usar una API Key estándar de inferencia.
 
-Usa un token de gestión desde la página **Settings** del Dashboard:
+Puedes emitir y rotar el token de administración desde la página **Settings** del Dashboard.
+
+```bash
+Authorization: Bearer mt-your-management-token
+```
 
 <Warning>
-Los management tokens son distintos de las API Keys de inferencia. Usa `mt-...` para `/v1/management/*` y `sk-...` para endpoints de inferencia como `/v1/responses`.
+Los tokens de administración son distintos de las API Keys de inferencia. Usa `mt-...` para `/v1/management/*` y `sk-...` para endpoints de inferencia como `/v1/responses`.
 </Warning>
 
 ## Endpoints disponibles
 
 | Endpoint | Method | Descripción |
 |----------|--------|-------------|
-| /v1/management/api-keys | GET | List user-managed API keys in the current organization |
-| /v1/management/api-keys | POST | Create a new user API key |
-| /v1/management/api-keys/{keyId} | PATCH | Update name, usage limit, allowed models, expiry, or status |
-| /v1/management/api-keys/{keyId}/usage | GET | Retrieve paginated usage details for a specific key |
-| /v1/management/api-keys/{keyId}/billing | GET | Retrieve aggregated billing breakdowns for a specific key |
+| `/v1/management/api-keys` | GET | Lista las API Keys de usuario de la organización actual |
+| `/v1/management/api-keys` | POST | Crea una nueva API Key de usuario |
+| `/v1/management/api-keys/{keyId}` | PATCH | Actualiza nombre, límite de uso, modelos permitidos, vencimiento o estado |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Recupera el detalle de uso paginado para una clave concreta |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Recupera el desglose agregado de facturación para una clave concreta |
 
 ## Contrato de filtros de uso
 
-`GET /v1/management/api-keys/{keyId}/usage` admite los siguientes parámetros de consulta:
+`GET /v1/management/api-keys/{keyId}/usage` admite los siguientes parámetros de consulta.
 
-| Parámetro | Tipo | Valores por defecto / límites | Notas |
-|-----------|------|------------------|-------|
-| page | integer | por defecto 1, mín. 1 | Número de página desde 1 |
-| limit | integer | por defecto 50, mín. 1, máx. 100 | Tamaño de página |
-| logicalModel | string | longitud máxima 100 | Nombre del modelo lógico solicitado |
-| modelVendor | string | longitud máxima 100 | Proveedor público del modelo |
-| scene | enum | - | chat, image, audio, video, embedding, rerank, translation, music, 3d |
-| accessChannel | enum | - | platform o byok |
-| startDate | string | - | Límite inferior inclusivo; acepta RFC3339 con zona horaria o YYYY-MM-DD |
-| endDate | string | - | Límite superior inclusivo; acepta RFC3339 con zona horaria o YYYY-MM-DD |
+| Parámetro | Tipo | Valores por defecto / límites | Descripción |
+|-----------|------|-------------------------------|-------------|
+| `page` | integer | valor por defecto `1`, mínimo `1` | Número de página empezando en 1 |
+| `limit` | integer | valor por defecto `50`, mínimo `1`, máximo `100` | Tamaño de página |
+| `logicalModel` | string | longitud máxima `100` | Nombre del modelo lógico solicitado |
+| `modelVendor` | string | longitud máxima `100` | Proveedor público del modelo |
+| `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
+| `accessChannel` | enum | - | `platform` o `byok` |
+| `startDate` | string | - | Límite inferior inclusivo; acepta RFC3339 con zona horaria o `YYYY-MM-DD` |
+| `endDate` | string | - | Límite superior inclusivo; acepta RFC3339 con zona horaria o `YYYY-MM-DD` |
 
-Si se envían `startDate` y `endDate`, entonces `startDate` debe ser menor o igual que `endDate`.
+Si `startDate` y `endDate` se envían a la vez, `startDate` debe ser anterior o igual a `endDate`.
 
 ## Contrato del cuerpo de API Key
 
 ### POST /v1/management/api-keys
 
-| Campo | Tipo | Valores por defecto / límites | Notas |
-|-------|------|------------------|-------|
-| name | string | obligatorio, valor por defecto Default Key, longitud 1-50 | Nombre visible, normalizado en el servidor |
-| limitAmount | number \| null | mín. 0, máx. 100000 | null u omitido = ilimitado, 0 = sin cuota utilizable, valor positivo = límite en USD |
-| models | string[] | por defecto [] | Lista opcional de modelos lógicos permitidos |
-| expiresAt | string \| null | fecha y hora RFC3339 | null significa sin vencimiento |
+| Campo | Tipo | Valores por defecto / límites | Descripción |
+|-------|------|-------------------------------|-------------|
+| `name` | string | obligatorio, valor por defecto `Default Key`, longitud `1-50` | Nombre visible; el servidor recorta espacios al inicio y al final |
+| `limitAmount` | number \| null | mínimo `0`, máximo `100000` | `null` u omitido = ilimitado, `0` = cuota cero, valor positivo = tope de gasto en USD |
+| `models` | string[] | valor por defecto `[]` | Lista opcional de modelos lógicos permitidos |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` significa sin vencimiento |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| Campo | Tipo | Valores por defecto / límites | Notas |
-|-------|------|------------------|-------|
-| status | enum | - | active, inactive, revoked |
-| name | string | longitud 1-50 | Nombre visible actualizado |
-| limitAmount | number \| null | mín. 0, máx. 100000 | null significa ilimitado, 0 significa cuota cero |
-| models | string[] | - | Lista actualizada de modelos lógicos permitidos |
-| expiresAt | string \| null | fecha y hora RFC3339 | null elimina el vencimiento |
+| Campo | Tipo | Valores por defecto / límites | Descripción |
+|-------|------|-------------------------------|-------------|
+| `status` | enum | - | `active`, `inactive`, `revoked` |
+| `name` | string | longitud `1-50` | Nombre visible actualizado |
+| `limitAmount` | number \| null | mínimo `0`, máximo `100000` | `null` = ilimitado, `0` = cuota cero |
+| `models` | string[] | - | Lista actualizada de modelos lógicos permitidos |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` elimina el vencimiento |
 
-Debes enviar al menos un campo en la solicitud PATCH.
+La solicitud PATCH debe incluir al menos un campo.
 
-## Semántica de reportes
+## Semántica de reporting
 
-- logicalModel se refiere al modelo lógico público solicitado por el cliente.
-- modelVendor se refiere al proveedor público del modelo, no a la ruta física oculta.
-- scene es la escena pública de la solicitud derivada del endpoint o del tipo de tarea.
-- accessChannel=platform significa que la solicitud se facturó a través del canal de plataforma de LemonData.
-- accessChannel=byok significa que la solicitud usó tu propia clave del proveedor upstream.
+- `logicalModel` se refiere al modelo lógico público solicitado por quien llama.
+- `modelVendor` se refiere al proveedor público del modelo, no a la ruta física oculta.
+- `scene` es la escena pública de la solicitud derivada del endpoint o del tipo de tarea.
+- `accessChannel=platform` significa que la solicitud se facturó a través del canal de plataforma de LemonData.
+- `accessChannel=byok` significa que la solicitud usó tu propia clave del proveedor upstream.
 
-Las respuestas solo exponen campos públicos de facturación y reporting; los detalles internos de routing y la metadata física permanecen ocultos.
+Las respuestas solo exponen campos públicos de facturación y reporting. Los detalles de routing interno y la metadata física del proveedor permanecen ocultos.
 
 ## Nota sobre la paginación de billing
 
-`/usage` está paginado. `/billing` es actualmente un endpoint agregado y no devuelve metadata de paginación tipo `page` / `limit`.
+`/usage` está paginado. `/billing` es actualmente un endpoint agregado y no devuelve metadata de paginación tipo `page` / `limit`. Si necesitas registros detallados línea por línea, usa `/usage`.
 
 ## Ejemplo rápido
 
-Empieza listando las API Keys disponibles para el token de gestión actual:
+Empieza listando las API Keys disponibles para el token de administración actual.
 
 <RequestExample>
 ```bash cURL
@@ -111,8 +116,8 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 
 ## Siguientes pasos
 
-- [List API Keys](/api-reference/management/list-api-keys)
-- [Create API Key](/api-reference/management/create-api-key)
-- [Update API Key](/api-reference/management/update-api-key)
-- [Get API Key Usage](/api-reference/management/get-api-key-usage)
-- [Get API Key Billing](/api-reference/management/get-api-key-billing)
+- [Listar API Keys](/es/api-reference/management/list-api-keys)
+- [Crear API Key](/es/api-reference/management/create-api-key)
+- [Actualizar API Key](/es/api-reference/management/update-api-key)
+- [Obtener uso de API Key](/es/api-reference/management/get-api-key-usage)
+- [Obtener facturación de API Key](/es/api-reference/management/get-api-key-billing)
