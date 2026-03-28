@@ -52,6 +52,7 @@ Wenn `startDate` und `endDate` zusammen angegeben werden, muss `startDate` klein
 |------|-----|--------------------|--------------|
 | `name` | string | erforderlich, Standard `Default Key`, Länge `1-50` | Anzeigename; führende und nachgestellte Leerzeichen werden serverseitig entfernt |
 | `limitAmount` | number \| null | min. `0`, max. `100000` | `null` oder weggelassen = unbegrenzt, `0` = kein nutzbares Budget, positive Zahl = USD-Limit |
+| `limitCurrency` | enum | Standard `USD` | Optional: `USD` oder `CNY`. Wenn `CNY` gesetzt ist, wird `limitAmount` als RMB interpretiert und serverseitig vor dem Speichern in USD umgerechnet |
 | `models` | string[] | Standard `[]` | Optionale Allowlist für logische Modelle |
 | `expiresAt` | string \| null | RFC3339-Datetime | `null` bedeutet ohne Ablaufzeit |
 
@@ -62,10 +63,17 @@ Wenn `startDate` und `endDate` zusammen angegeben werden, muss `startDate` klein
 | `status` | enum | - | `active`, `inactive`, `revoked` |
 | `name` | string | Länge `1-50` | Aktualisierter Anzeigename |
 | `limitAmount` | number \| null | min. `0`, max. `100000` | `null` = unbegrenzt, `0` = kein nutzbares Budget |
+| `limitCurrency` | enum | Standard `USD` | Optional: `USD` oder `CNY`. Wenn `CNY` gesetzt ist, wird `limitAmount` als RMB interpretiert und serverseitig vor dem Speichern in USD umgerechnet |
 | `models` | string[] | - | Aktualisierte Allowlist für logische Modelle |
 | `expiresAt` | string \| null | RFC3339-Datetime | `null` entfernt die Ablaufzeit |
 
 Mindestens ein Feld muss in der PATCH-Anfrage angegeben werden.
+
+## Währungsvertrag
+
+- Standardmäßig wird `limitAmount` auf der Request-Seite als USD interpretiert. Mit `limitCurrency: "CNY"` kannst du ein Limit in RMB senden; der Server rechnet es vor dem Speichern mit dem aktuellen Kurs in USD um.
+- Monetäre Antwortfelder behalten das ursprüngliche USD-Feld und ergänzen einen RMB-Begleitwert mit dem Suffix `_cny`.
+- `exchange_rate` wird zusammen mit den API-Key-Metadaten zurückgegeben und ist der USD→CNY-Kurs für jeden `*_cny`-Wert in dieser Antwort.
 
 ## Reporting-Semantik
 
@@ -103,7 +111,10 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
       "key_prefix": "sk-abc123...",
       "status": "active",
       "limit_amount": 500.0,
+      "limit_amount_cny": 3600.0,
       "used_amount": 148.25,
+      "used_amount_cny": 1067.4,
+      "exchange_rate": 7.2,
       "models": ["gpt-4o-mini", "claude-3-7-sonnet"],
       "expires_at": "2026-04-30T00:00:00.000Z",
       "last_used_at": "2026-03-27T08:12:45.000Z",

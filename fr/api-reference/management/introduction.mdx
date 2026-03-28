@@ -52,6 +52,7 @@ Si `startDate` et `endDate` sont fournis ensemble, `startDate` doit être antér
 |------|------|------------------------------|-------------|
 | `name` | string | requis, valeur par défaut `Default Key`, longueur `1-50` | Nom affiché ; les espaces de début et de fin sont retirés côté serveur |
 | `limitAmount` | number \| null | min. `0`, max. `100000` | `null` ou omis = illimité, `0` = aucun budget exploitable, valeur positive = plafond en USD |
+| `limitCurrency` | enum | valeur par défaut `USD` | Optionnel : `USD` ou `CNY`. Si défini sur `CNY`, `limitAmount` est interprété en RMB puis converti en USD côté serveur avant le stockage |
 | `models` | string[] | valeur par défaut `[]` | Liste d’autorisation optionnelle des modèles logiques |
 | `expiresAt` | string \| null | datetime RFC3339 | `null` signifie sans date d’expiration |
 
@@ -62,10 +63,17 @@ Si `startDate` et `endDate` sont fournis ensemble, `startDate` doit être antér
 | `status` | enum | - | `active`, `inactive`, `revoked` |
 | `name` | string | longueur `1-50` | Nom affiché mis à jour |
 | `limitAmount` | number \| null | min. `0`, max. `100000` | `null` = illimité, `0` = aucun budget exploitable |
+| `limitCurrency` | enum | valeur par défaut `USD` | Optionnel : `USD` ou `CNY`. Si défini sur `CNY`, `limitAmount` est interprété en RMB puis converti en USD côté serveur avant le stockage |
 | `models` | string[] | - | Liste d’autorisation des modèles logiques mise à jour |
 | `expiresAt` | string \| null | datetime RFC3339 | `null` efface la date d’expiration |
 
 Au moins un champ doit être fourni dans la requête PATCH.
+
+## Contrat monétaire
+
+- Par défaut, `limitAmount` côté requête est interprété en USD. Définissez `limitCurrency: "CNY"` pour envoyer un plafond en RMB ; le serveur le convertira en USD avec le taux actuel avant le stockage.
+- Les champs monétaires de la réponse conservent la valeur d’origine en USD et ajoutent un équivalent RMB avec le suffixe `_cny`.
+- `exchange_rate` est renvoyé avec les métadonnées de l’API key et représente le taux USD→CNY utilisé pour chaque valeur `*_cny` de cette réponse.
 
 ## Sémantique des rapports
 
@@ -103,7 +111,10 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
       "key_prefix": "sk-abc123...",
       "status": "active",
       "limit_amount": 500.0,
+      "limit_amount_cny": 3600.0,
       "used_amount": 148.25,
+      "used_amount_cny": 1067.4,
+      "exchange_rate": 7.2,
       "models": ["gpt-4o-mini", "claude-3-7-sonnet"],
       "expires_at": "2026-04-30T00:00:00.000Z",
       "last_used_at": "2026-03-27T08:12:45.000Z",
