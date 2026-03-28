@@ -1,20 +1,23 @@
 ---
 title: "動画生成"
-description: "11のプロバイダーにまたがるモデルで動画を生成 — text-to-video、image-to-video、keyframe制御、動画延長、編集"
+description: "統一された公開契約を通じて、テキストから動画、画像から動画、参照画像から動画、開始終了フレーム制御、モーション制御、動画から動画を扱います。"
 ---
 
 ## 概要
 
-LemonData は、11 のプロバイダーの動画生成モデルへのアクセスを、単一の統一 API を通じて提供します。動画生成は **非同期** です — リクエストを送信すると、task ID と `poll_url` を受け取り、その後結果を取得するためにポーリングします。
+LemonData は単一の統一 API を通じて動画生成機能を提供します。動画生成は**非同期**です。リクエスト送信後、`task_id` と `poll_url` が返り、その後はポーリングで最終結果を取得します。
 
 <Info>
-モデル一覧は頻繁に更新されます。最新の利用可能なモデルと価格については、[Models page](https://lemondata.cc/ja/models) を参照するか、[Models API](/api-reference/models/list-models) を使用してください。
+公開動画モデルの最新在庫を確認するには、[Models API](/ja/api-reference/models/list-models) または [モデルページ](https://lemondata.cc/ja/models) を利用してください。
 </Info>
 
 <Warning>
-Audio behavior is model-dependent. In LemonData, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some models are silent by default or silent-only. For passthrough-governed models, pass `output_audio=true` to make a best-effort upstream audio request.
+音声挙動はモデル依存です。LemonData では、Veo 3 系列は `output_audio` を省略すると既定で有声として扱われます。一方、無音が既定のモデルや、安定した音声トグルを公開していないモデルもあります。
 </Warning>
 
+<Info>
+本番運用では、画像・動画・音声入力には公開アクセス可能な `https` URL を優先してください。互換モデルでは `data:` URL も利用できますが、URL の方が retry・観測・デバッグの面で扱いやすくなります。
+</Info>
 
 ### 非同期ワークフロー
 
@@ -25,30 +28,145 @@ sequenceDiagram
     participant Provider
 
     Client->>LemonData: POST /v1/videos/generations
-    LemonData->>Provider: Forward request
+    LemonData->>Provider: 正規化されたリクエストを転送
     Provider-->>LemonData: task_id + pending
     LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
-    loop Poll every 5-10s
+    loop 5〜10秒ごとにポーリング
         Client->>LemonData: GET poll_url
-        LemonData->>Provider: Query status
-        Provider-->>LemonData: Status update
+        LemonData->>Provider: ステータス照会
+        Provider-->>LemonData: 状態更新
         LemonData-->>Client: { status, video_url? }
     end
 ```
 
-<CodeGroup>
+## 現在の公開操作
 
-```python Python
-import requests
-import time
+LemonData の公開動画契約は主に次の操作をカバーしています。
 
-API_KEY = "sk-your-api-key"
-BASE = "https://api.lemondata.cc/v1"
-headers = {"Authorization": f"Bearer {API_KEY}"}
+- `text-to-video`
+- `image-to-video`
+- `reference-to-video`
+- `start-end-to-video`
+- `video-to-video`
+- `motion-control`
 
-# Step 1: Submit generation request
-resp = requests.post(f"{BASE}/videos/generations",
+`audio-to-video` と `video-extension` も契約上は受け付けますが、このドキュメント時点の「広く有効な公開モデル」一覧には、これらを一般公開しているモデルは含まれていません。
+
+## 能力マトリクス
+
+**凡例**：✅ 該当 Provider ファミリーに、現在有効な公開モデルが少なくとも 1 つ存在する | ❌ 現在有効な公開モデルでは未公開
+
+| Series | T2V | I2V | Reference | Start-End | V2V | Motion |
+|--------|-----|-----|-----------|-----------|-----|--------|
+| OpenAI | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Kuaishou | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Google | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| ByteDance | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Alibaba | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Shengshu | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| xAI | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Other | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+
+### 用語の意味
+
+- **T2V (Text-to-Video)**：テキスト prompt から動画を生成
+- **I2V (Image-to-Video)**：開始画像から動画を生成。互換性の観点では `image_url` を推奨
+- **Reference**：`reference_images` で 1 枚または複数の参考画像を渡して条件制御
+- **Start-End**：`start_image` と `end_image` で開始フレームと終了フレームを制御
+- **V2V (Video-to-Video)**：既存動画を主入力として扱う
+- **Motion**：主体画像とモーション参照動画を同時に使う
+
+## 現在の公開モデル一覧
+
+### OpenAI
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `sora-2` | テキストから動画、画像から動画 |
+| `sora-2-pro` | テキストから動画、画像から動画 |
+| `sora-2-pro-storyboard` | 画像から動画 |
+
+### Kuaishou
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `kling-3.0-motion-control` | モーション制御 |
+| `kling-3.0-video` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-v2.5-turbo-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-v2.5-turbo-std` | テキストから動画、画像から動画 |
+| `kling-v2.6-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-v2.6-std` | テキストから動画、画像から動画 |
+| `kling-v3.0-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-v3.0-std` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-video-o1-pro` | テキストから動画、画像から動画、参考画像から動画、開始・終了フレームから動画、動画から動画 |
+| `kling-video-o1-std` | テキストから動画、画像から動画、参考画像から動画、開始・終了フレームから動画、動画から動画 |
+
+### Google
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `veo3` | テキストから動画、画像から動画 |
+| `veo3-fast` | テキストから動画、画像から動画 |
+| `veo3-pro` | テキストから動画、画像から動画 |
+| `veo3.1` | テキストから動画、画像から動画、参考画像から動画、開始・終了フレームから動画 |
+| `veo3.1-fast` | テキストから動画、画像から動画、参考画像から動画、開始・終了フレームから動画 |
+| `veo3.1-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+
+### ByteDance
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `seedance-1.5-pro` | テキストから動画、画像から動画 |
+
+### MiniMax
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `hailuo-2.3-fast` | 画像から動画 |
+| `hailuo-2.3-pro` | テキストから動画、画像から動画 |
+| `hailuo-2.3-standard` | テキストから動画、画像から動画 |
+
+### Alibaba
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `wan-2.2-plus` | テキストから動画、画像から動画 |
+| `wan-2.5` | テキストから動画、画像から動画 |
+| `wan-2.6` | テキストから動画、画像から動画、参考画像から動画 |
+
+### Shengshu
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `viduq2` | テキストから動画、参考画像から動画 |
+| `viduq2-pro` | 画像から動画、参考画像から動画、開始・終了フレームから動画 |
+| `viduq2-pro-fast` | 画像から動画、開始・終了フレームから動画 |
+| `viduq2-turbo` | 画像から動画、開始・終了フレームから動画 |
+| `viduq3-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `viduq3-turbo` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+
+### xAI
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `grok-imagine-image-to-video` | 画像から動画 |
+| `grok-imagine-text-to-video` | テキストから動画 |
+| `grok-imagine-upscale` | 動画から動画 |
+
+### Other
+
+| Model | 公開オペレーション |
+|-------|----------|
+| `topaz-video-upscale` | 動画から動画 |
+
+## 使用例
+
+### テキストから動画
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "sora-2",
@@ -58,217 +176,53 @@ resp = requests.post(f"{BASE}/videos/generations",
         "aspect_ratio": "16:9"
     }
 )
-create_data = resp.json()
-task_id = create_data["task_id"]
-poll_url = create_data["poll_url"]
-
-# Step 2: Poll for result
-while True:
-    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
-    if status["status"] in ("completed", "succeeded"):
-        print(f"Video URL: {status['video_url']}")
-        break
-    elif status["status"] == "failed":
-        print(f"Failed: {status.get('error')}")
-        break
-    time.sleep(10)
 ```
 
-```javascript JavaScript
-const API_KEY = 'sk-your-api-key';
-const BASE = 'https://api.lemondata.cc/v1';
-const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
-
-// Step 1: Submit
-const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
-  method: 'POST', headers,
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A calm cinematic shot of a cat walking through a sunlit garden.',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-}).then(r => r.json());
-
-// Step 2: Poll
-const poll = setInterval(async () => {
-  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
-  if (['completed', 'succeeded'].includes(status.status)) {
-    console.log('Video URL:', status.video_url);
-    clearInterval(poll);
-  } else if (status.status === 'failed') {
-    console.error('Failed:', status.error);
-    clearInterval(poll);
-  }
-}, 10000);
-```
-
-</CodeGroup>
-
-## モデル機能マトリクス
-
-モデルごとに得意なタスクは異なります。このマトリクスを使用して、ユースケースに適したモデルを選択してください。
-
-**凡例**: ✅ 対応 | ❌ 非対応
-
-| Series | Provider | T2V | I2V | Keyframe | Extension | Editing | Max Duration |
-|--------|----------|-----|-----|----------|-----------|---------|-------------|
-| **Sora** | OpenAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~20s |
-| **Kling** | Kuaishou | ✅ | ✅ | ❌ | ✅ | ❌ | 10s |
-| **Veo** | Google | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Seedance** | ByteDance | ✅ | ✅ | ✅ | ✅ | ✅ | 10s |
-| **Hailuo** | MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Wan** | Alibaba | ✅ | ✅ | ❌ | ❌ | ❌ | 5s |
-| **Runway** | Runway | ❌ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Luma** | Luma | ✅ | ❌ | ❌ | ✅ | ❌ | 5s |
-| **Vidu** | Vidu | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Grok** | xAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~15s |
-| **Higgsfield** | Higgsfield | ✅ | ❌ | ❌ | ❌ | ❌ | ~5s |
-
-### 機能の定義
-
-- **T2V (Text-to-Video)**: テキストプロンプトから動画を生成
-- **I2V (Image-to-Video)**: 静止画像を動画化します。最も広い互換性のため、公開された `image_url` を指定してください。
-- **Keyframe**: `start_image` + `end_image` で開始フレームと終了フレームを制御
-- **Extension**: 既存動画の長さを延長
-- **Editing**: 既存動画の特定の要素を変更
-
-## 現在の公開モデル一覧
-
-### OpenAI
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `sora-2` | テキストから動画, 画像から動画 |
-| `sora-2-pro` | テキストから動画, 画像から動画 |
-| `sora-2-pro-storyboard` | 画像から動画 |
-
-### Kuaishou
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `kling-3.0-motion-control` | モーション制御 |
-| `kling-3.0-video` | テキストから動画, 画像から動画, 開始・終了フレームから動画 |
-| `kling-v2.5-turbo-pro` | テキストから動画, 画像から動画, 開始・終了フレームから動画 |
-| `kling-v2.5-turbo-std` | テキストから動画, 画像から動画 |
-| `kling-v2.6-pro` | テキストから動画, 画像から動画, 開始・終了フレームから動画 |
-| `kling-v2.6-std` | テキストから動画, 画像から動画 |
-| `kling-v3.0-pro` | テキストから動画, 画像から動画, 開始・終了フレームから動画 |
-| `kling-v3.0-std` | テキストから動画, 画像から動画, 開始・終了フレームから動画 |
-| `kling-video-o1-pro` | テキストから動画, 画像から動画, 参考画像から動画, 開始・終了フレームから動画, 動画から動画 |
-| `kling-video-o1-std` | テキストから動画, 画像から動画, 参考画像から動画, 開始・終了フレームから動画, 動画から動画 |
-
-### Google
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `veo3` | テキストから動画, 画像から動画 |
-| `veo3-fast` | テキストから動画, 画像から動画 |
-| `veo3-pro` | テキストから動画, 画像から動画 |
-| `veo3.1` | テキストから動画, 画像から動画, 参考画像から動画, 開始・終了フレームから動画 |
-| `veo3.1-fast` | テキストから動画, 画像から動画, 参考画像から動画, 開始・終了フレームから動画 |
-| `veo3.1-pro` | テキストから動画, 画像から動画, 開始・終了フレームから動画 |
-
-### ByteDance
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `seedance-1.5-pro` | テキストから動画, 画像から動画 |
-
-### MiniMax
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `hailuo-2.3-fast` | 画像から動画 |
-| `hailuo-2.3-pro` | テキストから動画, 画像から動画 |
-| `hailuo-2.3-standard` | テキストから動画, 画像から動画 |
-
-### Alibaba
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `wan-2.2-plus` | テキストから動画, 画像から動画 |
-| `wan-2.5` | テキストから動画, 画像から動画 |
-| `wan-2.6` | テキストから動画, 画像から動画, 参考画像から動画 |
-
-### Shengshu
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `viduq2` | テキストから動画, 参考画像から動画 |
-| `viduq2-pro` | 画像から動画, 参考画像から動画, 開始・終了フレームから動画 |
-| `viduq2-pro-fast` | 画像から動画, 開始・終了フレームから動画 |
-| `viduq2-turbo` | 画像から動画, 開始・終了フレームから動画 |
-| `viduq3-pro` | テキストから動画, 画像から動画, 開始・終了フレームから動画 |
-| `viduq3-turbo` | テキストから動画, 画像から動画, 開始・終了フレームから動画 |
-
-### xAI
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `grok-imagine-image-to-video` | 画像から動画 |
-| `grok-imagine-text-to-video` | テキストから動画 |
-| `grok-imagine-upscale` | 動画から動画 |
-
-
-### Other
-
-| Model | 公開オペレーション |
-|-------|-------------------|
-| `topaz-video-upscale` | 動画から動画 |
-
-
-## 使用例
-
-### Text-to-Video (T2V)
-
-最も一般的なユースケースです。すべてのモデルがこれをサポートしています。
+### 画像から動画
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "sora-2",
-        "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
-        "operation": "テキストから動画",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-```
-
-### Image-to-Video (I2V)
-
-静止画像を動画化します。動画モデル間で最も広い互換性を得るには、元画像をホストし、`image_url` を渡してください。
-
-```python
-# Using image URL
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
-        "operation": "画像から動画",
+        "operation": "image-to-video",
         "image_url": "https://example.com/portrait.jpg",
         "duration": 6,
         "aspect_ratio": "16:9"
     }
 )
-
 ```
 
-### Keyframe 制御 (開始 + 終了画像)
+### 参考画像から動画
 
-正確なトランジションのために、最初と最後のフレームの両方を制御します。現在は Seedance 2.0 でサポートされています。
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+### 開始・終了フレーム制御
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "viduq2-pro",
-        "prompt": "Smooth transition from day to night, city lights gradually turning on",
-        "operation": "開始・終了フレームから動画",
+        "prompt": "Smooth transition from day to night.",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/city-day.jpg",
         "end_image": "https://example.com/city-night.jpg",
         "duration": 5,
@@ -278,63 +232,66 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-### 動画延長
-
-既存動画の長さを延長します。延長機能を持つモデルを使用してください。
+### 動画から動画
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "kling-video-extend",
-        "prompt": "Continue the scene naturally",
-        "image_url": "https://example.com/last-frame.jpg"
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale this clip while preserving the original motion."
     }
 )
 ```
 
-## パラメータリファレンス
+### モーション制御
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model` | string | モデル ID（デフォルト: `sora-2`） |
-| `prompt` | string | **必須。** 動画のテキスト説明 |
-| `image_url` | string | 開始画像の URL（I2V 用） |
-| `image` | string | data URL としてのインライン画像。互換モデルでサポートされますが、`image_url` が最も広い互換性を提供します。 |
-| `duration` | integer | 動画の長さ（秒）（1-60、モデル依存） |
-| `aspect_ratio` | string | `16:9`, `9:16`, `1:1` など |
-| `resolution` | string | `1080p`, `720p`, `4k` |
-| `fps` | integer | 1 秒あたりのフレーム数（1-120） |
-| `negative_prompt` | string | 生成時に避けたい内容 |
-| `seed` | integer | 再現性のためのランダム seed |
-| `cfg_scale` | number | ガイダンススケール（0-20） |
-| `motion_strength` | number | モーション強度（0-1） |
-| `start_image` | string | 開始 keyframe の URL |
-| `end_image` | string | 終了 keyframe の URL |
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
+    }
+)
+```
 
-<Warning>
-すべてのパラメータがすべてのモデルでサポートされているわけではありません。未対応のパラメータは黙って無視されます。サポートされているパラメータについては、各モデルのドキュメントを確認してください。
-</Warning>
+## パラメータの目安
 
-## モデル選択ガイド
+| パラメータ | 型 | メモ |
+|-----------|------|------|
+| `operation` | string | 本番では明示指定を推奨 |
+| `image_url` | string | 最も互換性が高い画像入力 |
+| `image` | string | ローカル検証や小さな入力向けの `data:` URL |
+| `reference_images` | string[] | 参考画像条件制御の正式な公開フィールド |
+| `reference_image_type` | string | 任意の `asset` / `style` 切り替え |
+| `video_url` | string | 現在の公開 `video-to-video` / `motion-control` モデルで必要 |
+| `audio_url` | string | モデル固有の音声条件フロー向け |
+| `output_audio` | boolean | Veo 3 系列は省略時に `true` 扱い |
+
+## モデル選定のヒント
 
 <CardGroup cols={2}>
   <Card title="最高品質" icon="crown">
-    **Seedance 2.0** または **Kling v2.6 Pro** — シネマティック品質、豊かなディテール、自然なモーション
+    品質優先なら **veo3.1-pro**、**kling-video-o1-pro**、**viduq3-pro** が有力です。
   </Card>
-  <Card title="最速生成" icon="bolt">
-    **Higgsfield Turbo** または **Hailuo 2.3** — プロトタイピングと反復に素早い結果
+  <Card title="高速な反復" icon="bolt">
+    より速い試行には **veo3.1-fast**、**hailuo-2.3-fast**、**viduq3-turbo** が有力です。
   </Card>
-  <Card title="最も汎用的" icon="wand-magic-sparkles">
-    **Seedance 2.0** — 1 つのモデルで T2V、I2V、keyframe、extension、editing をサポート
+  <Card title="参照画像条件制御" icon="images">
+    参照画像ベースの条件制御には **veo3.1**、**veo3.1-fast**、**wan-2.6**、**kling-video-o1-pro / std** を優先してください。
   </Card>
-  <Card title="最高のコストパフォーマンス" icon="coins">
-    **Wan 2.6** または **Hailuo 2.3** — 生成あたりのコストを抑えつつ競争力のある品質
+  <Card title="動画から動画" icon="film">
+    一般公開されている `video-to-video` ルートは主に **topaz-video-upscale**、**grok-imagine-upscale**、**kling-video-o1-pro / std** です。
   </Card>
 </CardGroup>
 
 ## 課金
 
-動画生成では **生成ごとの固定価格** が使用されます。動画の長さにかかわらず、タスク送信時に 1 回課金されます。生成に失敗した場合、料金は自動的に返金されます。
-
-現在の価格は [Models page](https://lemondata.cc/ja/models) または [Pricing API](/api-reference/pricing/get-pricing) で確認してください。
+動画課金はモデルごとに異なります。実質的に従量が「回数ベース」のモデルもあれば、「秒ベース」のモデルもあります。最新の公開価格は [モデルページ](https://lemondata.cc/ja/models) または [Pricing API](/ja/api-reference/pricing/get-pricing) を確認してください。

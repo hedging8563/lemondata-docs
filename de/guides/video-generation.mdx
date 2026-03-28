@@ -1,20 +1,23 @@
 ---
 title: "Video-Generierung"
-description: "Generieren Sie Videos mit Modellen von 11 Anbietern — Text-zu-Video, Bild-zu-Video, Keyframe-Steuerung, Video-Erweiterung und Bearbeitung"
+description: "Greifen Sie über einen einheitlichen öffentlichen Vertrag auf Text-zu-Video, Bild-zu-Video, Referenzbild-zu-Video, Start-/Endframe-Steuerung, Bewegungssteuerung und Video-zu-Video zu."
 ---
 
 ## Überblick
 
-LemonData bietet Zugriff auf Video-Generierungsmodelle von 11 Anbietern über eine einzige einheitliche API. Die Video-Generierung ist **asynchron** — Sie senden eine Anfrage, erhalten eine Task-ID und `poll_url` und pollen dann auf das Ergebnis.
+LemonData bietet Video-Generierung über eine einheitliche API an. Die Generierung ist **asynchron**: Sie senden eine Anfrage, erhalten `task_id` und `poll_url` und pollen anschließend auf das Endergebnis.
 
 <Info>
-Die Modellliste wird häufig aktualisiert. Die neuesten verfügbaren Modelle und Preise finden Sie auf der [Modellseite](https://lemondata.cc/de/models) oder über die [Models API](/api-reference/models/list-models).
+Den aktuellen Bestand öffentlicher Videomodelle finden Sie über die [Models API](/de/api-reference/models/list-models) oder auf der [Modellseite](https://lemondata.cc/de/models).
 </Info>
 
 <Warning>
-Audio behavior is model-dependent. In LemonData, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some models are silent by default or silent-only. For passthrough-governed models, pass `output_audio=true` to make a best-effort upstream audio request.
+Das Audioverhalten ist modellabhängig. In LemonData wird die Veo-3-Familie bei weggelassenem `output_audio` standardmäßig als audio-on behandelt. Andere öffentliche Modelle sind standardmäßig stumm oder veröffentlichen keinen stabilen Audio-Schalter.
 </Warning>
 
+<Info>
+In Produktion sollten Sie für Bild-, Video- und Audioeingaben öffentlich erreichbare `https`-URLs bevorzugen. Kompatible Modelle akzeptieren weiterhin `data:`-URLs, aber URLs sind für Retry, Observability und Debugging in der Regel robuster.
+</Info>
 
 ### Asynchroner Workflow
 
@@ -25,121 +28,62 @@ sequenceDiagram
     participant Provider
 
     Client->>LemonData: POST /v1/videos/generations
-    LemonData->>Provider: Forward request
+    LemonData->>Provider: Normalisierte Anfrage weiterleiten
     Provider-->>LemonData: task_id + pending
     LemonData-->>Client: { task_id, poll_url, status: "pending" }
 
-    loop Poll every 5-10s
+    loop Alle 5-10 Sekunden pollen
         Client->>LemonData: GET poll_url
-        LemonData->>Provider: Query status
-        Provider-->>LemonData: Status update
+        LemonData->>Provider: Status abfragen
+        Provider-->>LemonData: Status-Update
         LemonData-->>Client: { status, video_url? }
     end
 ```
 
-<CodeGroup>
+## Aktuelle öffentliche Operationen
 
-```python Python
-import requests
-import time
+Der öffentliche Videovertrag von LemonData konzentriert sich derzeit auf diese Operationen:
 
-API_KEY = "sk-your-api-key"
-BASE = "https://api.lemondata.cc/v1"
-headers = {"Authorization": f"Bearer {API_KEY}"}
+- `text-to-video`
+- `image-to-video`
+- `reference-to-video`
+- `start-end-to-video`
+- `video-to-video`
+- `motion-control`
 
-# Step 1: Submit generation request
-resp = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "sora-2",
-        "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
-        "operation": "text-to-video",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-create_data = resp.json()
-task_id = create_data["task_id"]
-poll_url = create_data["poll_url"]
+Der Vertrag akzeptiert außerdem `audio-to-video` und `video-extension` für modellspezifische Flows, aber in der aktuell allgemein aktivierten öffentlichen Modellliste dieses Docs-Builds gibt es kein breit aktiviertes Modell, das diese Fähigkeiten öffentlich anbietet.
 
-# Step 2: Poll for result
-while True:
-    status = requests.get(f"https://api.lemondata.cc{poll_url}", headers=headers).json()
-    if status["status"] in ("completed", "succeeded"):
-        print(f"Video URL: {status['video_url']}")
-        break
-    elif status["status"] == "failed":
-        print(f"Failed: {status.get('error')}")
-        break
-    time.sleep(10)
-```
+## Fähigkeitsmatrix
 
-```javascript JavaScript
-const API_KEY = 'sk-your-api-key';
-const BASE = 'https://api.lemondata.cc/v1';
-const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
+**Legende**: ✅ In dieser Provider-Familie gibt es mindestens ein aktuell aktives öffentliches Modell mit dieser Fähigkeit | ❌ In den aktuell aktiven öffentlichen Modellen nicht öffentlich verfügbar
 
-// Step 1: Submit
-const { task_id, poll_url } = await fetch(`${BASE}/videos/generations`, {
-  method: 'POST', headers,
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A calm cinematic shot of a cat walking through a sunlit garden.',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-}).then(r => r.json());
+| Series | T2V | I2V | Reference | Start-End | V2V | Motion |
+|--------|-----|-----|-----------|-----------|-----|--------|
+| OpenAI | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Kuaishou | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Google | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| ByteDance | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Alibaba | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Shengshu | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| xAI | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Other | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
 
-// Step 2: Poll
-const poll = setInterval(async () => {
-  const status = await fetch(`https://api.lemondata.cc${poll_url}`, { headers }).then(r => r.json());
-  if (['completed', 'succeeded'].includes(status.status)) {
-    console.log('Video URL:', status.video_url);
-    clearInterval(poll);
-  } else if (status.status === 'failed') {
-    console.error('Failed:', status.error);
-    clearInterval(poll);
-  }
-}, 10000);
-```
+### Begriffserläuterung
 
-</CodeGroup>
-
-## Matrix der Modellfähigkeiten
-
-Verschiedene Modelle eignen sich besonders gut für unterschiedliche Aufgaben. Verwenden Sie diese Matrix, um das richtige Modell für Ihren Anwendungsfall auszuwählen.
-
-**Legende**: ✅ Unterstützt | ❌ Nicht unterstützt
-
-| Series | Provider | T2V | I2V | Keyframe | Extension | Editing | Max Duration |
-|--------|----------|-----|-----|----------|-----------|---------|-------------|
-| **Sora** | OpenAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~20s |
-| **Kling** | Kuaishou | ✅ | ✅ | ❌ | ✅ | ❌ | 10s |
-| **Veo** | Google | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Seedance** | ByteDance | ✅ | ✅ | ✅ | ✅ | ✅ | 10s |
-| **Hailuo** | MiniMax | ✅ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Wan** | Alibaba | ✅ | ✅ | ❌ | ❌ | ❌ | 5s |
-| **Runway** | Runway | ❌ | ✅ | ❌ | ❌ | ❌ | 10s |
-| **Luma** | Luma | ✅ | ❌ | ❌ | ✅ | ❌ | 5s |
-| **Vidu** | Vidu | ✅ | ✅ | ✅ | ❌ | ❌ | 8s |
-| **Grok** | xAI | ✅ | ❌ | ❌ | ❌ | ❌ | ~15s |
-| **Higgsfield** | Higgsfield | ✅ | ❌ | ❌ | ❌ | ❌ | ~5s |
-
-### Definitionen der Fähigkeiten
-
-- **T2V (Text-to-Video)**: Video aus einem Text-Prompt generieren
-- **I2V (Image-to-Video)**: Ein statisches Bild zu einem Video animieren. Für die breiteste Kompatibilität geben Sie eine öffentliche `image_url` an.
-- **Keyframe**: Start- und Endframes mit `start_image` + `end_image` steuern
-- **Extension**: Die Dauer eines bestehenden Videos verlängern
-- **Editing**: Bestimmte Aspekte eines bestehenden Videos ändern
+- **T2V (Text-to-Video)**: Video aus einem Text-Prompt erzeugen
+- **I2V (Image-to-Video)**: Video aus einem Startbild erzeugen; aus Kompatibilitätsgründen wird `image_url` empfohlen
+- **Reference**: Konditionierung über ein oder mehrere Referenzbilder via `reference_images`
+- **Start-End**: Ersten und letzten Frame mit `start_image` und `end_image` steuern
+- **V2V (Video-to-Video)**: Ein bestehendes Video als Haupteingang verwenden
+- **Motion**: Motivbild und Bewegungsreferenzvideo gemeinsam verwenden
 
 ## Aktueller öffentlicher Modellbestand
 
 ### OpenAI
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `sora-2` | Text-zu-Video, Bild-zu-Video |
 | `sora-2-pro` | Text-zu-Video, Bild-zu-Video |
 | `sora-2-pro-storyboard` | Bild-zu-Video |
@@ -147,7 +91,7 @@ Verschiedene Modelle eignen sich besonders gut für unterschiedliche Aufgaben. V
 ### Kuaishou
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `kling-3.0-motion-control` | Bewegungssteuerung |
 | `kling-3.0-video` | Text-zu-Video, Bild-zu-Video, Start-Endbild-zu-Video |
 | `kling-v2.5-turbo-pro` | Text-zu-Video, Bild-zu-Video, Start-Endbild-zu-Video |
@@ -162,7 +106,7 @@ Verschiedene Modelle eignen sich besonders gut für unterschiedliche Aufgaben. V
 ### Google
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `veo3` | Text-zu-Video, Bild-zu-Video |
 | `veo3-fast` | Text-zu-Video, Bild-zu-Video |
 | `veo3-pro` | Text-zu-Video, Bild-zu-Video |
@@ -173,13 +117,13 @@ Verschiedene Modelle eignen sich besonders gut für unterschiedliche Aufgaben. V
 ### ByteDance
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `seedance-1.5-pro` | Text-zu-Video, Bild-zu-Video |
 
 ### MiniMax
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `hailuo-2.3-fast` | Bild-zu-Video |
 | `hailuo-2.3-pro` | Text-zu-Video, Bild-zu-Video |
 | `hailuo-2.3-standard` | Text-zu-Video, Bild-zu-Video |
@@ -187,7 +131,7 @@ Verschiedene Modelle eignen sich besonders gut für unterschiedliche Aufgaben. V
 ### Alibaba
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `wan-2.2-plus` | Text-zu-Video, Bild-zu-Video |
 | `wan-2.5` | Text-zu-Video, Bild-zu-Video |
 | `wan-2.6` | Text-zu-Video, Bild-zu-Video, Referenzbild-zu-Video |
@@ -195,7 +139,7 @@ Verschiedene Modelle eignen sich besonders gut für unterschiedliche Aufgaben. V
 ### Shengshu
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `viduq2` | Text-zu-Video, Referenzbild-zu-Video |
 | `viduq2-pro` | Bild-zu-Video, Referenzbild-zu-Video, Start-Endbild-zu-Video |
 | `viduq2-pro-fast` | Bild-zu-Video, Start-Endbild-zu-Video |
@@ -206,24 +150,20 @@ Verschiedene Modelle eignen sich besonders gut für unterschiedliche Aufgaben. V
 ### xAI
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `grok-imagine-image-to-video` | Bild-zu-Video |
 | `grok-imagine-text-to-video` | Text-zu-Video |
 | `grok-imagine-upscale` | Video-zu-Video |
 
-
 ### Other
 
 | Model | Öffentliche Operationen |
-|-------|-------------------|
+|-------|----------|
 | `topaz-video-upscale` | Video-zu-Video |
 
+## Verwendungsbeispiele
 
-## Anwendungsbeispiele
-
-### Text-to-Video (T2V)
-
-Der häufigste Anwendungsfall. Alle Modelle unterstützen dies.
+### Text-zu-Video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
@@ -231,44 +171,58 @@ response = requests.post(f"{BASE}/videos/generations",
     json={
         "model": "sora-2",
         "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
-        "operation": "Text-zu-Video",
+        "operation": "text-to-video",
         "duration": 4,
         "aspect_ratio": "16:9"
     }
 )
 ```
 
-### Image-to-Video (I2V)
-
-Animieren Sie ein statisches Bild. Für die breiteste Kompatibilität über Videomodelle hinweg hosten Sie das Quellbild und übergeben `image_url`.
+### Bild-zu-Video
 
 ```python
-# Using image URL
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
-        "operation": "Bild-zu-Video",
+        "operation": "image-to-video",
         "image_url": "https://example.com/portrait.jpg",
         "duration": 6,
         "aspect_ratio": "16:9"
     }
 )
-
 ```
 
-### Keyframe-Steuerung (Start + Endbild)
+### Referenzbild-zu-Video
 
-Steuern Sie sowohl den ersten als auch den letzten Frame für präzise Übergänge. Derzeit unterstützt von Seedance 2.0.
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+### Start- und Endframe-Steuerung
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
         "model": "viduq2-pro",
-        "prompt": "Smooth transition from day to night, city lights gradually turning on",
-        "operation": "Start-Endbild-zu-Video",
+        "prompt": "Smooth transition from day to night.",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/city-day.jpg",
         "end_image": "https://example.com/city-night.jpg",
         "duration": 5,
@@ -278,63 +232,66 @@ response = requests.post(f"{BASE}/videos/generations",
 )
 ```
 
-### Video-Erweiterung
-
-Verlängern Sie die Dauer eines bestehenden Videos. Verwenden Sie Modelle mit Erweiterungsfähigkeit.
+### Video-zu-Video
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
     headers=headers,
     json={
-        "model": "kling-video-extend",
-        "prompt": "Continue the scene naturally",
-        "image_url": "https://example.com/last-frame.jpg"
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale this clip while preserving the original motion."
     }
 )
 ```
 
-## Parameterreferenz
+### Bewegungssteuerung
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model` | string | Modell-ID (Standard: `sora-2`) |
-| `prompt` | string | **Erforderlich.** Textbeschreibung des Videos |
-| `image_url` | string | URL des Startbildes (für I2V) |
-| `image` | string | Inline-Bild als data URL. Von kompatiblen Modellen unterstützt, aber `image_url` bietet die breiteste Kompatibilität. |
-| `duration` | integer | Videodauer in Sekunden (1–60, modellabhängig) |
-| `aspect_ratio` | string | `16:9`, `9:16`, `1:1` usw. |
-| `resolution` | string | `1080p`, `720p`, `4k` |
-| `fps` | integer | Frames pro Sekunde (1–120) |
-| `negative_prompt` | string | Was bei der Generierung vermieden werden soll |
-| `seed` | integer | Zufalls-Seed für Reproduzierbarkeit |
-| `cfg_scale` | number | Guidance-Skala (0–20) |
-| `motion_strength` | number | Bewegungsintensität (0–1) |
-| `start_image` | string | URL des Start-Keyframes |
-| `end_image` | string | URL des End-Keyframes |
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
+    }
+)
+```
 
-<Warning>
-Nicht alle Parameter werden von jedem Modell unterstützt. Nicht unterstützte Parameter werden stillschweigend ignoriert. Prüfen Sie die Dokumentation des Modells auf unterstützte Parameter.
-</Warning>
+## Hinweise zu Parametern
 
-## Leitfaden zur Modellauswahl
+| Parameter | Typ | Hinweis |
+|-----------|------|---------|
+| `operation` | string | In Produktion explizit angeben |
+| `image_url` | string | Robusteste Form für Bildeingaben |
+| `image` | string | `data:`-URL für lokale Tests und kleine Integrationen |
+| `reference_images` | string[] | Kanonisches öffentliches Feld für Referenzbild-Konditionierung |
+| `reference_image_type` | string | Optionaler `asset` / `style`-Schalter |
+| `video_url` | string | Für aktuelle öffentliche `video-to-video`- und `motion-control`-Modelle erforderlich |
+| `audio_url` | string | Für modellspezifische Audio-zu-Video-Flows |
+| `output_audio` | boolean | Veo-3-Familie behandelt Auslassung als `true` |
+
+## Hinweise zur Modellauswahl
 
 <CardGroup cols={2}>
-  <Card title="Beste Qualität" icon="crown">
-    **Seedance 2.0** oder **Kling v2.6 Pro** — cineastische Qualität, viele Details, natürliche Bewegung
+  <Card title="Höchste Qualität" icon="crown">
+    Wenn Qualität wichtiger ist als Geschwindigkeit, sind **veo3.1-pro**, **kling-video-o1-pro** und **viduq3-pro** starke Kandidaten.
   </Card>
-  <Card title="Schnellste Generierung" icon="bolt">
-    **Higgsfield Turbo** oder **Hailuo 2.3** — schnelle Ergebnisse für Prototyping und Iteration
+  <Card title="Schnelle Iteration" icon="bolt">
+    Für schnelle Schleifen eignen sich **veo3.1-fast**, **hailuo-2.3-fast** und **viduq3-turbo**.
   </Card>
-  <Card title="Am vielseitigsten" icon="wand-magic-sparkles">
-    **Seedance 2.0** — unterstützt T2V, I2V, Keyframe, Erweiterung und Bearbeitung in einem Modell
+  <Card title="Referenzbild-Konditionierung" icon="images">
+    Für dedizierte Referenzbild-Steuerung sind **veo3.1**, **veo3.1-fast**, **wan-2.6** sowie **kling-video-o1-pro / std** gute Startpunkte.
   </Card>
-  <Card title="Bestes Preis-Leistungs-Verhältnis" icon="coins">
-    **Wan 2.6** oder **Hailuo 2.3** — wettbewerbsfähige Qualität bei geringeren Kosten pro Generierung
+  <Card title="Video-zu-Video" icon="film">
+    Die allgemein aktivierten öffentlichen `video-to-video`-Pfade sind derzeit vor allem **topaz-video-upscale**, **grok-imagine-upscale** und **kling-video-o1-pro / std**.
   </Card>
 </CardGroup>
 
 ## Abrechnung
 
-Die Video-Generierung verwendet **feste Preise pro Generierung**. Ihnen wird einmal bei Einreichung der Task berechnet, unabhängig von der Videodauer. Falls die Generierung fehlschlägt, wird die Gebühr automatisch erstattet.
-
-Die aktuellen Preise finden Sie auf der [Modellseite](https://lemondata.cc/de/models) oder über die [Pricing API](/api-reference/pricing/get-pricing).
+Die Abrechnung ist modellabhängig. Einige öffentliche Videomodelle verhalten sich effektiv wie requestbasierte Modelle, andere eher wie sekundenbasierte Modelle. Verlassen Sie sich für die aktuelle öffentliche Preisfläche auf die [Modellseite](https://lemondata.cc/de/models) oder die [Pricing API](/de/api-reference/pricing/get-pricing).

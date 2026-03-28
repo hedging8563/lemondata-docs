@@ -1,80 +1,85 @@
 ---
 title: "API de gestion"
-description: "Utilisez un jeton de gestion pour gérer les clés API de l'organisation et consulter l'utilisation et la facturation par clé."
+description: "Utilisez un jeton de gestion pour gérer les API Keys de l’organisation et consulter l’usage et la facturation par clé."
 ---
+
 ## Vue d’ensemble
 
-La Management API vous permet de gérer les API Keys d’organisation et de consulter l’usage et la facturation par clé sans utiliser une clé d’inférence standard.
+La Management API permet de gérer les API Keys d’organisation et de consulter l’usage ainsi que la facturation par clé, sans utiliser de clé d’inférence classique.
 
-Utilisez un management token depuis la page **Settings** du Dashboard :
+Les management tokens peuvent être créés et rotés depuis la page **Settings** du Dashboard.
+
+```bash
+Authorization: Bearer mt-your-management-token
+```
 
 <Warning>
-Les management tokens sont différents des API Keys d’inférence. Utilisez `mt-...` pour `/v1/management/*` et `sk-...` pour les endpoints d’inférence tels que `/v1/responses`.
+Les management tokens sont différents des API Keys d’inférence. Utilisez `mt-...` pour `/v1/management/*` et `sk-...` pour les endpoints de modèle comme `/v1/responses`.
 </Warning>
 
 ## Endpoints disponibles
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| /v1/management/api-keys | GET | List user-managed API keys in the current organization |
-| /v1/management/api-keys | POST | Create a new user API key |
-| /v1/management/api-keys/{keyId} | PATCH | Update name, usage limit, allowed models, expiry, or status |
-| /v1/management/api-keys/{keyId}/usage | GET | Retrieve paginated usage details for a specific key |
-| /v1/management/api-keys/{keyId}/billing | GET | Retrieve aggregated billing breakdowns for a specific key |
+| `/v1/management/api-keys` | GET | Liste les API Keys utilisateur de l’organisation courante |
+| `/v1/management/api-keys` | POST | Crée une nouvelle API Key utilisateur |
+| `/v1/management/api-keys/{keyId}` | PATCH | Met à jour le nom, le plafond, les modèles autorisés, l’expiration ou le statut |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Retourne les détails d’usage paginés pour une clé |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Retourne un découpage agrégé de facturation pour une clé |
 
 ## Contrat des filtres d’usage
 
 `GET /v1/management/api-keys/{keyId}/usage` prend en charge les paramètres de requête suivants :
 
-| Paramètre | Type | Valeurs par défaut / limites | Notes |
-|-----------|------|------------------|-------|
-| page | integer | default 1, min 1 | 1-based page number |
-| limit | integer | default 50, min 1, max 100 | Page size |
-| logicalModel | string | max length 100 | Requested logical model name |
-| modelVendor | string | max length 100 | Public model vendor |
-| scene | enum | - | chat, image, audio, video, embedding, rerank, translation, music, 3d |
-| accessChannel | enum | - | platform or byok |
-| startDate | string | - | Inclusive lower bound; accepts RFC3339 with timezone or YYYY-MM-DD |
-| endDate | string | - | Inclusive upper bound; accepts RFC3339 with timezone or YYYY-MM-DD |
+| Paramètre | Type | Valeurs par défaut / limites | Description |
+|-----------|------|------------------------------|-------------|
+| `page` | integer | valeur par défaut `1`, min. `1` | Numéro de page à partir de 1 |
+| `limit` | integer | valeur par défaut `50`, min. `1`, max. `100` | Nombre d’éléments par page |
+| `logicalModel` | string | longueur maximale `100` | Nom du modèle logique demandé |
+| `modelVendor` | string | longueur maximale `100` | Fournisseur public du modèle |
+| `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
+| `accessChannel` | enum | - | `platform` ou `byok` |
+| `startDate` | string | - | Borne inférieure incluse ; accepte RFC3339 avec fuseau horaire ou `YYYY-MM-DD` |
+| `endDate` | string | - | Borne supérieure incluse ; accepte RFC3339 avec fuseau horaire ou `YYYY-MM-DD` |
 
-Si `startDate` et `endDate` sont fournis, `startDate` doit être antérieur ou égal à `endDate`.
+Si `startDate` et `endDate` sont fournis ensemble, `startDate` doit être antérieur ou égal à `endDate`.
 
 ## Contrat du body API Key
 
 ### POST /v1/management/api-keys
 
-| Champ | Type | Valeurs par défaut / limites | Notes |
-|-------|------|------------------|-------|
-| name | string | requis, valeur par défaut Default Key, longueur 1-50 | Nom affiché, normalisé côté serveur |
-| limitAmount | number \| null | min. 0, max. 100000 | null ou omis = illimité, 0 = aucun quota exploitable, valeur positive = plafond en USD |
-| models | string[] | valeur par défaut [] | Liste d’autorisation optionnelle des modèles logiques |
-| expiresAt | string \| null | datetime RFC3339 | null signifie sans date d’expiration |
+| Champ | Type | Valeurs par défaut / limites | Description |
+|------|------|------------------------------|-------------|
+| `name` | string | requis, valeur par défaut `Default Key`, longueur `1-50` | Nom affiché ; les espaces de début et de fin sont retirés côté serveur |
+| `limitAmount` | number \| null | min. `0`, max. `100000` | `null` ou omis = illimité, `0` = aucun budget exploitable, valeur positive = plafond en USD |
+| `models` | string[] | valeur par défaut `[]` | Liste d’autorisation optionnelle des modèles logiques |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` signifie sans date d’expiration |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| Champ | Type | Valeurs par défaut / limites | Notes |
-|-------|------|------------------|-------|
-| status | enum | - | active, inactive, revoked |
-| name | string | longueur 1-50 | Nom affiché mis à jour |
-| limitAmount | number \| null | min. 0, max. 100000 | null signifie illimité, 0 signifie quota nul |
-| models | string[] | - | Liste d’autorisation des modèles logiques mise à jour |
-| expiresAt | string \| null | datetime RFC3339 | null efface la date d’expiration |
+| Champ | Type | Valeurs par défaut / limites | Description |
+|------|------|------------------------------|-------------|
+| `status` | enum | - | `active`, `inactive`, `revoked` |
+| `name` | string | longueur `1-50` | Nom affiché mis à jour |
+| `limitAmount` | number \| null | min. `0`, max. `100000` | `null` = illimité, `0` = aucun budget exploitable |
+| `models` | string[] | - | Liste d’autorisation des modèles logiques mise à jour |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` efface la date d’expiration |
 
 Au moins un champ doit être fourni dans la requête PATCH.
 
 ## Sémantique des rapports
 
-- logicalModel désigne le modèle logique public demandé par l’appelant.
-- modelVendor désigne le fournisseur public du modèle, et non la route physique cachée.
-- scene correspond à la scène publique de la requête, dérivée de l’endpoint ou du type de tâche.
-- accessChannel=platform signifie que la requête a été facturée via le canal plateforme de LemonData.
-- accessChannel=byok signifie que la requête a utilisé votre propre clé de fournisseur upstream.
+- `logicalModel` désigne le modèle logique public demandé par l’appelant.
+- `modelVendor` désigne le fournisseur public du modèle, et non la route physique cachée.
+- `scene` correspond à la scène publique de la requête, dérivée de l’endpoint ou du type de tâche.
+- `accessChannel=platform` signifie que la requête a été facturée via le canal plateforme de LemonData.
+- `accessChannel=byok` signifie que la requête a utilisé votre propre clé de fournisseur upstream.
 
 Les réponses n’exposent que des champs publics de billing et de reporting ; les détails de routage interne et les métadonnées physiques restent masqués.
 
 ## Note sur la pagination billing
 
-`/usage` est paginé. `/billing` est actuellement un endpoint agrégé et ne renvoie pas de métadonnées de pagination de type `page` / `limit`.
+`/usage` est paginé. `/billing` est actuellement un endpoint agrégé et ne renvoie pas de métadonnées de pagination de type `page` / `limit`. Pour des enregistrements ligne à ligne, utilisez `/usage`.
 
 ## Exemple rapide
 
@@ -111,8 +116,8 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 
 ## Étapes suivantes
 
-- [List API Keys](/api-reference/management/list-api-keys)
-- [Create API Key](/api-reference/management/create-api-key)
-- [Update API Key](/api-reference/management/update-api-key)
-- [Get API Key Usage](/api-reference/management/get-api-key-usage)
-- [Get API Key Billing](/api-reference/management/get-api-key-billing)
+- [Lister les API Keys](/fr/api-reference/management/list-api-keys)
+- [Créer une API Key](/fr/api-reference/management/create-api-key)
+- [Mettre à jour une API Key](/fr/api-reference/management/update-api-key)
+- [Obtenir l’usage d’une API Key](/fr/api-reference/management/get-api-key-usage)
+- [Obtenir la facturation d’une API Key](/fr/api-reference/management/get-api-key-billing)

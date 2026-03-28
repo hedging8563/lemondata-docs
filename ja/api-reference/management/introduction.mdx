@@ -1,41 +1,46 @@
 ---
 title: "管理 API"
-description: "管理トークンを使って組織の API キーを管理し、キー単位の使用量と請求を取得します。"
+description: "管理トークンを使って組織 API Key を管理し、キー単位の使用量と請求を取得します。"
 ---
+
 ## 概要
 
-Management API を使うと、通常の推論用 API Key を使わずに、組織の API Key 管理とキー単位の利用状況・請求情報の取得ができます。
+Management API を使うと、通常の推論用 API Key を使わずに、組織 API Key の管理とキー単位の使用量・請求情報の取得ができます。
 
-Dashboard の **Settings** ページで発行した management token を使用します:
+管理トークンは Dashboard の **Settings** ページで発行・ローテーションできます。
+
+```bash
+Authorization: Bearer mt-your-management-token
+```
 
 <Warning>
-management token は推論用 API Key とは異なります。`/v1/management/*` には `mt-...` を、`/v1/responses` などの推論エンドポイントには `sk-...` を使用してください。
+管理トークンは推論用 API Key とは異なります。`mt-...` は `/v1/management/*` 用、`sk-...` は `/v1/responses` などの推論エンドポイント用です。
 </Warning>
 
-## 利用可能なエンドポイント
+## 利用できるエンドポイント
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| /v1/management/api-keys | GET | List user-managed API keys in the current organization |
-| /v1/management/api-keys | POST | Create a new user API key |
-| /v1/management/api-keys/{keyId} | PATCH | Update name, usage limit, allowed models, expiry, or status |
-| /v1/management/api-keys/{keyId}/usage | GET | Retrieve paginated usage details for a specific key |
-| /v1/management/api-keys/{keyId}/billing | GET | Retrieve aggregated billing breakdowns for a specific key |
+| Endpoint | Method | 説明 |
+|----------|--------|------|
+| `/v1/management/api-keys` | GET | 現在の組織に属するユーザー API Key を一覧表示 |
+| `/v1/management/api-keys` | POST | 新しいユーザー API Key を作成 |
+| `/v1/management/api-keys/{keyId}` | PATCH | 名前、利用上限、許可モデル、有効期限、状態を更新 |
+| `/v1/management/api-keys/{keyId}/usage` | GET | 指定した Key の利用明細をページネーション付きで取得 |
+| `/v1/management/api-keys/{keyId}/billing` | GET | 指定した Key の集計済み請求内訳を取得 |
 
 ## 利用フィルタ契約
 
-`GET /v1/management/api-keys/{keyId}/usage` では次のクエリパラメータを利用できます。
+`GET /v1/management/api-keys/{keyId}/usage` では以下の query パラメータを利用できます。
 
 | パラメータ | 型 | 既定値 / 制約 | 説明 |
-|-----------|------|------------------|-------|
-| page | integer | default 1, min 1 | 1-based page number |
-| limit | integer | default 50, min 1, max 100 | Page size |
-| logicalModel | string | max length 100 | Requested logical model name |
-| modelVendor | string | max length 100 | Public model vendor |
-| scene | enum | - | chat, image, audio, video, embedding, rerank, translation, music, 3d |
-| accessChannel | enum | - | platform or byok |
-| startDate | string | - | Inclusive lower bound; accepts RFC3339 with timezone or YYYY-MM-DD |
-| endDate | string | - | Inclusive upper bound; accepts RFC3339 with timezone or YYYY-MM-DD |
+|-----------|------|---------------|------|
+| `page` | integer | 既定値 `1`、最小 `1` | 1 始まりのページ番号 |
+| `limit` | integer | 既定値 `50`、最小 `1`、最大 `100` | 1 ページあたりの件数 |
+| `logicalModel` | string | 最大長 `100` | リクエスト時に指定された論理モデル名 |
+| `modelVendor` | string | 最大長 `100` | 公開モデルのベンダー名 |
+| `scene` | enum | - | `chat`、`image`、`audio`、`video`、`embedding`、`rerank`、`translation`、`music`、`3d` |
+| `accessChannel` | enum | - | `platform` または `byok` |
+| `startDate` | string | - | 開始日時（含む）。タイムゾーン付き RFC3339 または `YYYY-MM-DD` を受け付けます |
+| `endDate` | string | - | 終了日時（含む）。タイムゾーン付き RFC3339 または `YYYY-MM-DD` を受け付けます |
 
 `startDate` と `endDate` を同時に指定する場合、`startDate` は `endDate` 以下である必要があります。
 
@@ -43,42 +48,42 @@ management token は推論用 API Key とは異なります。`/v1/management/*`
 
 ### POST /v1/management/api-keys
 
-| 項目 | 型 | 既定値 / 制約 | 説明 |
-|-------|------|------------------|-------|
-| name | string | 必須、既定値 Default Key、長さ 1-50 | 表示名。サーバー側で trim されます |
-| limitAmount | number \| null | 最小 0、最大 100000 | null または省略 = 無制限、0 = 利用不可、正の値 = USD 上限 |
-| models | string[] | 既定値 [] | 任意の logical model 許可リスト |
-| expiresAt | string \| null | RFC3339 datetime | null は無期限を意味します |
+| フィールド | 型 | 既定値 / 制約 | 説明 |
+|-----------|------|---------------|------|
+| `name` | string | 必須、既定値 `Default Key`、長さ `1-50` | 表示名。サーバー側で前後空白が取り除かれます |
+| `limitAmount` | number \| null | 最小 `0`、最大 `100000` | `null` または省略 = 無制限、`0` = 利用可能額 0、正の値 = USD 上限 |
+| `models` | string[] | 既定値 `[]` | 任意の論理モデル許可リスト |
+| `expiresAt` | string \| null | RFC3339 datetime | `null` は期限なしを意味します |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| 項目 | 型 | 既定値 / 制約 | 説明 |
-|-------|------|------------------|-------|
-| status | enum | - | active, inactive, revoked |
-| name | string | 長さ 1-50 | 更新後の表示名 |
-| limitAmount | number \| null | 最小 0、最大 100000 | null は無制限、0 は利用不可を意味します |
-| models | string[] | - | 更新後の logical model 許可リスト |
-| expiresAt | string \| null | RFC3339 datetime | null は期限を解除します |
+| フィールド | 型 | 既定値 / 制約 | 説明 |
+|-----------|------|---------------|------|
+| `status` | enum | - | `active`、`inactive`、`revoked` |
+| `name` | string | 長さ `1-50` | 更新後の表示名 |
+| `limitAmount` | number \| null | 最小 `0`、最大 `100000` | `null` = 無制限、`0` = 利用可能額 0 |
+| `models` | string[] | - | 更新後の論理モデル許可リスト |
+| `expiresAt` | string \| null | RFC3339 datetime | `null` は有効期限を解除します |
 
 PATCH リクエストでは少なくとも 1 つのフィールドを指定する必要があります。
 
 ## レポートの意味
 
-- logicalModel は、呼び出し元が要求した公開 logical model を指します。
-- modelVendor は、隠れた物理ルートではなく、公開されている model vendor を指します。
-- scene は、endpoint または task type から導出される公開リクエストシーンです。
-- accessChannel=platform は、そのリクエストが LemonData の platform channel 経由で課金されたことを意味します。
-- accessChannel=byok は、そのリクエストがあなた自身の upstream provider key を使用したことを意味します。
+- `logicalModel` は、呼び出し元が要求した公開 logical model を指します。
+- `modelVendor` は、隠れた物理ルートではなく、公開 model vendor を指します。
+- `scene` は、endpoint または task type から導出される公開リクエストシーンです。
+- `accessChannel=platform` は、LemonData の platform channel 経由で課金されたことを意味します。
+- `accessChannel=byok` は、あなた自身の upstream provider key が使われたことを意味します。
 
-レスポンスには公開可能な請求・レポート項目のみが含まれ、内部ルーティングや物理チャネルのメタデータは公開されません。
+レスポンスには公開可能な Billing / Reporting 項目のみが含まれ、内部ルーティングや物理チャネルのメタデータは公開されません。
 
 ## Billing ページネーションに関する注意
 
-`/usage` はページネーション対応です。`/billing` は現在集計用 endpoint であり、`page` / `limit` 形式のページネーション情報は返しません。
+`/usage` はページネーション対応です。`/billing` は現在、集計済み請求内訳を返すエンドポイントであり、`page` / `limit` 型のページネーション情報は返しません。行レベルの明細が必要な場合は `/usage` を利用してください。
 
 ## クイック例
 
-まずは現在の management token で参照できる API Keys を一覧してください。
+まずは現在の管理トークンで参照可能な API Keys を一覧します。
 
 <RequestExample>
 ```bash cURL
@@ -111,8 +116,8 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 
 ## 次のステップ
 
-- [List API Keys](/api-reference/management/list-api-keys)
-- [Create API Key](/api-reference/management/create-api-key)
-- [Update API Key](/api-reference/management/update-api-key)
-- [Get API Key Usage](/api-reference/management/get-api-key-usage)
-- [Get API Key Billing](/api-reference/management/get-api-key-billing)
+- [API Keys を一覧表示](/ja/api-reference/management/list-api-keys)
+- [API Key を作成](/ja/api-reference/management/create-api-key)
+- [API Key を更新](/ja/api-reference/management/update-api-key)
+- [API Key の使用量を取得](/ja/api-reference/management/get-api-key-usage)
+- [API Key の請求情報を取得](/ja/api-reference/management/get-api-key-billing)

@@ -6,99 +6,158 @@ description: "動画生成タスクを作成します"
 
 ## 概要
 
-動画生成は非同期です。リクエストを送信すると、task ID と `poll_url` を受け取り、その後結果を取得するためにポーリングを行います。
+動画生成は非同期です。リクエストを送信すると、`task_id` と `poll_url` が返り、その後はポーリングで最終結果を取得します。
 
 <Info>
-最も信頼性の高いポーリング動作を実現するには、作成リクエストで返された正確な `poll_url` に従ってください。
+最も安定したポーリングのため、作成レスポンスで返された `poll_url` をそのまま使用してください。
 </Info>
 
 <Warning>
-音声出力はモデル依存です。LemonData では、Veo 3 ファミリーは `output_audio` を省略すると既定で音声オンとして扱われます。モデルが音声制御に対応している場合は、`output_audio` を使って明示的に切り替えてください。camelCase の別名 `outputAudio` も互換性のために受け付けます。
+音声出力はモデル依存です。LemonData では Veo 3 系列は `output_audio` を省略すると既定で音声オンとして扱われます。モデルが音声制御に対応している場合は、`output_audio` で明示的に切り替えてください。camelCase の別名 `outputAudio` も互換性のため受け付けます。
 </Warning>
 
+<Info>
+本番環境では、画像・動画・音声入力には公開アクセス可能な `https` URL を優先してください。互換モデルでは `data:` URL も利用できますが、大きな base64 は retry・観測・デバッグを難しくします。
+</Info>
 
 ## リクエストボディ
 
 <ParamField body="model" type="string" default="sora-2">
-  動画モデル ID。API のデフォルトは `sora-2` です。現在のモデル対応表とサポートされている機能については、[動画生成ガイド](/guides/video-generation)を参照してください。
+  動画モデル ID。API の既定値は `sora-2` です。現在の公開動画モデル一覧と対応機能は [動画生成ガイド](/ja/guides/video-generation) を参照してください。
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  生成する動画のテキスト説明。
+  生成したい動画のテキスト説明です。大半の公開動画モデルで必須です。
+</ParamField>
+
+<ParamField body="operation" type="string">
+  実行する動画操作です。公開契約では `text-to-video`、`image-to-video`、`reference-to-video`、`start-end-to-video`、`video-to-video`、`video-extension`、`audio-to-video`、`motion-control` を受け付けます。入力から自動推定もできますが、本番では明示指定を推奨します。
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  image-to-video（I2V）生成用の開始画像の公開アクセス可能な URL。モデル間の互換性を最大化するには、`image_url` の使用を推奨します。
+  画像から動画生成に使う開始画像 URL です。最も広い互換性を得るには `image_url` を優先してください。
 </ParamField>
 
 <ParamField body="image" type="string">
-  data URL としてのインライン画像（例: `data:image/jpeg;base64,...`）。互換性のあるモデルでサポートされていますが、`image_url` は動画モデル全体で最も広い互換性を提供します。
+  `data:image/...;base64,...` 形式のインライン画像です。互換モデルでは利用できますが、`image_url` の方が一般に扱いやすく安定します。
+</ParamField>
+
+<ParamField body="reference_images" type="array">
+  参照画像から動画生成で使う参考画像です。最大 3 件まで渡せます。公開 `https` URL を推奨しますが、互換モデルでは `data:` URL も利用できます。
+</ParamField>
+
+<ParamField body="reference_image_type" type="string">
+  `asset` と `style` を区別するモデル向けの任意フィールドです。
+</ParamField>
+
+<ParamField body="video_url" type="string">
+  元動画の公開 URL です。現在の公開 `video-to-video` フローおよび `motion-control` モデルで必要です。
+</ParamField>
+
+<ParamField body="audio_url" type="string">
+  `audio-to-video` 系モデルで使う公開音声 URL です。
+</ParamField>
+
+<ParamField body="task_id" type="string">
+  一部の継続・延長・派生フローで使う Provider 側の task ID です。
+</ParamField>
+
+<ParamField body="extend_at" type="integer">
+  一部の `video-extension` フローで使うモデル固有の延長開始オフセットです。
+</ParamField>
+
+<ParamField body="extend_times" type="string">
+  一部の `video-extension` フローで使うモデル固有の延長回数・倍率です。
 </ParamField>
 
 <ParamField body="duration" type="integer">
-  動画の長さ（秒）（モデル依存）。
+  動画の長さ（秒）です。利用可能な値はモデルごとに異なります。
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  アスペクト比（例: `16:9`、`9:16`、`1:1`）。
+  アスペクト比です。例：`16:9`、`9:16`、`1:1`。
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  動画解像度（例: `1080p`、`720p`）。
+  出力解像度です。例：`720p`、`1080p`、`4k`。対応可否はモデル依存です。
 </ParamField>
 
 <ParamField body="output_audio" type="boolean">
-  モデル依存の音声出力トグルです。LemonData では、この項目を省略すると Veo 3 ファミリーは既定で `true` として扱われます。他の動画モデルは、それぞれ定義されたデフォルト動作に従います。camelCase の別名 `outputAudio` も互換性のために受け付けます。
+  モデル依存の音声出力トグルです。LemonData では Veo 3 系列は省略時に `true` として扱われます。camelCase の別名 `outputAudio` も受け付けます。
 </ParamField>
 
 <ParamField body="fps" type="integer">
-  1 秒あたりのフレーム数（1～120）。
+  フレームレート（1〜120）。FPS を公開しているモデルのみ有効です。
 </ParamField>
 
 <ParamField body="negative_prompt" type="string">
-  動画生成で避けたい内容。
+  生成で避けたい内容です。
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  再現可能な生成のためのランダム seed。
+  再現性のための乱数 seed です。
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
-  Classifier-free guidance scale（0～20）。
+  プロンプト追従強度（0〜20）。対応モデルのみ有効です。
 </ParamField>
 
 <ParamField body="motion_strength" type="number">
-  モーション強度（0～1）。
+  動きの強さ（0〜1）。対応モデルのみ有効です。
 </ParamField>
 
 <ParamField body="start_image" type="string">
-  開始フレーム画像の URL。
+  `start-end-to-video` で使う開始フレーム画像 URL または互換画像入力です。
 </ParamField>
 
 <ParamField body="end_image" type="string">
-  終了フレーム画像の URL。
+  `start-end-to-video` で使う終了フレーム画像 URL または互換画像入力です。
+</ParamField>
+
+<ParamField body="size" type="string">
+  一部の OpenAI 互換動画モデルで使うサイズティアです。
+</ParamField>
+
+<ParamField body="watermark" type="boolean">
+  一部モデルが公開しているウォーターマーク切り替えです。
+</ParamField>
+
+<ParamField body="effect_type" type="string">
+  一部の編集・エフェクト系フローで使うモデル固有のエフェクト指定です。
 </ParamField>
 
 <ParamField body="user" type="string">
-  エンドユーザー向けの一意識別子。
+  エンドユーザーを識別する一意な ID です。
 </ParamField>
+
+## 互換メモ
+
+- 正式な公開フィールドは snake_case の `reference_images`、`reference_image_type`、`output_audio` です。
+- 互換性のため `referenceImages`、`referenceImageType`、`outputAudio` も受け付けます。
+- `operation` を省略した場合、LemonData は入力内容から自動推定しますが、本番では明示指定を推奨します。
+
+## 入力のベストプラクティス
+
+- `image_url`、`reference_images`、`video_url`、`audio_url` には、公開アクセス可能な `https` URL を優先してください。
+- 同一リクエスト内で base64 とリモート URL を混在させるのは避ける方が安全です。
+- 署名付き URL を使う場合は、再試行や非同期タスク生成をカバーできる有効期限を確保してください。
 
 ## レスポンス
 
 <ResponseField name="task_id" type="string">
-  ポーリング用の一意なタスク識別子。
+  ポーリング用の一意なタスク ID です。
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  このタスクに推奨されるポーリング URL。ステータス確認時にはこの正確なパスを使用してください。
+  このタスクに推奨されるポーリング URL です。状態確認にはこのパスをそのまま使ってください。
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  初期ステータス: `pending`。
+  初期ステータスは `pending` です。
 </ResponseField>
 
 <ResponseField name="model" type="string">
-  使用されたモデル。
+  使用されたモデルです。
 </ResponseField>
 
 <RequestExample>
@@ -113,114 +172,6 @@ curl -X POST "https://api.lemondata.cc/v1/videos/generations" \
     "duration": 4,
     "aspect_ratio": "16:9"
   }'
-```
-
-```python Python
-import requests
-
-response = requests.post(
-    "https://api.lemondata.cc/v1/videos/generations",
-    headers={
-        "Authorization": "Bearer sk-your-api-key",
-        "Content-Type": "application/json"
-    },
-    json={
-        "model": "sora-2",
-        "prompt": "A cat walking through a garden, cinematic lighting",
-        "operation": "text-to-video",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-
-data = response.json()
-task_id = data["task_id"]
-print(f"Poll URL: {data['poll_url']}")
-print(f"Task ID: {task_id}")
-```
-
-```javascript JavaScript
-const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer sk-your-api-key',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A cat walking through a garden, cinematic lighting',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-});
-
-const data = await response.json();
-console.log(`Poll URL: ${data.poll_url}`);
-console.log(`Task ID: ${data.task_id}`);
-```
-
-```go Go
-package main
-
-import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "net/http"
-)
-
-func main() {
-    payload := map[string]interface{}{
-        "model":    "sora-2",
-        "prompt":   "A cat walking through a garden, cinematic lighting",
-        "operation": "text-to-video",
-        "duration": 4,
-        "aspect_ratio": "16:9",
-    }
-    body, _ := json.Marshal(payload)
-
-    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/videos/generations", bytes.NewBuffer(body))
-    req.Header.Set("Authorization", "Bearer sk-your-api-key")
-    req.Header.Set("Content-Type", "application/json")
-
-    client := &http.Client{}
-    resp, _ := client.Do(req)
-    defer resp.Body.Close()
-
-    var result map[string]interface{}
-    json.NewDecoder(resp.Body).Decode(&result)
-    fmt.Printf("Poll URL: %s\n", result["poll_url"])
-    fmt.Printf("Task ID: %s\n", result["task_id"])
-}
-```
-
-```php PHP
-<?php
-$ch = curl_init('https://api.lemondata.cc/v1/videos/generations');
-
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer sk-your-api-key'
-    ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'sora-2',
-        'prompt' => 'A cat walking through a garden, cinematic lighting',
-        'operation' => 'text-to-video',
-        'duration' => 4,
-        'aspect_ratio' => '16:9'
-    ])
-]);
-
-$response = curl_exec($ch);
-curl_close($ch);
-
-$data = json_decode($response, true);
-echo "Poll URL: " . $data['poll_url'] . "\n";
-echo "Task ID: " . $data['task_id'];
 ```
 </RequestExample>
 
@@ -243,7 +194,7 @@ response = requests.post(
     "https://api.lemondata.cc/v1/videos/generations",
     headers={"Authorization": "Bearer sk-your-api-key"},
     json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
         "operation": "image-to-video",
         "image_url": "https://example.com/image.jpg",
@@ -253,9 +204,33 @@ response = requests.post(
 )
 ```
 
-## キーフレーム制御
+## 参照画像から動画
 
-最初と最後のフレームを制御するには `start_image` と `end_image` を使用します（Vidu Q2 Pro でサポート）:
+参照画像による条件制御を持つモデルでは `operation=reference-to-video` を使用します。LemonData の公開契約では、参考画像は `reference_images` で渡します。
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "reference_image_type": "asset",
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+## 開始・終了フレーム制御
+
+`start_image` と `end_image` を使って最初と最後のフレームを制御します。
 
 ```python
 response = requests.post(
@@ -264,7 +239,7 @@ response = requests.post(
     json={
         "model": "viduq2-pro",
         "prompt": "Smooth transition from day to night",
-        "operation": "開始・終了フレームから動画",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/day.jpg",
         "end_image": "https://example.com/night.jpg",
         "duration": 5,
@@ -274,103 +249,130 @@ response = requests.post(
 )
 ```
 
-## 利用可能なモデル
+## 動画から動画
+
+既存の動画を主入力として使う場合は `operation=video-to-video` を使用します。
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale the clip while preserving the original motion.",
+        "resolution": "1080p"
+    }
+)
+```
+
+## モーション制御
+
+主体画像とモーション参照動画の両方を必要とするモデルでは `operation=motion-control` を使用します。LemonData は公開リクエスト形の `image_url` と `video_url` を上流契約へ正規化します。
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
+    }
+)
+```
+
+## Audio-to-Video / Video Extension の公開可用性
+
+LemonData の公開契約は `audio-to-video` と `video-extension` を受け付けますが、このドキュメント時点の「一般公開かつ有効」モデル一覧には、これらを広く提供する公開モデルは含まれていません。統合前に [Models API](/ja/api-reference/models/list-models) か [モデルページ](https://lemondata.cc/ja/models) で最新可用性を確認してください。
+
+## 現在の公開モデル一覧
 
 <Info>
-モデル一覧は頻繁に更新されます。最新の利用可能なモデルと料金については、[Models page](https://lemondata.cc/ja/models)を参照してください。
-</Info>
-
-機能比較や使用例を含む完全なガイドについては、[動画生成ガイド](/guides/video-generation)を参照してください。
-
-## 現在有効な公開動画モデル
-
-<Info>
-この一覧は、このドキュメントビルド時点で有効な公開動画モデルの在庫に合わせています。最新状態は [Models API](/api-reference/models/list-models) を参照してください。
+この一覧は、このドキュメントビルド時点で有効な公開動画モデルの在庫と揃えています。最新状態は [Models API](/ja/api-reference/models/list-models) を参照してください。
 </Info>
 
 ### OpenAI
 
 | Model | 公開オペレーション |
-|-------|-------------------|
-| `sora-2` | テキストから動画, image-to-video |
-| `sora-2-pro` | テキストから動画, image-to-video |
+|-------|----------|
+| `sora-2` | テキストから動画、画像から動画 |
+| `sora-2-pro` | テキストから動画、画像から動画 |
 | `sora-2-pro-storyboard` | 画像から動画 |
 
 ### Kuaishou
 
 | Model | 公開オペレーション |
-|-------|-------------------|
+|-------|----------|
 | `kling-3.0-motion-control` | モーション制御 |
-| `kling-3.0-video` | テキストから動画, image-to-video, 開始・終了フレームから動画 |
-| `kling-v2.5-turbo-pro` | テキストから動画, image-to-video, 開始・終了フレームから動画 |
-| `kling-v2.5-turbo-std` | テキストから動画, image-to-video |
-| `kling-v2.6-pro` | テキストから動画, image-to-video, 開始・終了フレームから動画 |
-| `kling-v2.6-std` | テキストから動画, image-to-video |
-| `kling-v3.0-pro` | テキストから動画, image-to-video, 開始・終了フレームから動画 |
-| `kling-v3.0-std` | テキストから動画, image-to-video, 開始・終了フレームから動画 |
-| `kling-video-o1-pro` | テキストから動画, image-to-video, reference-to-video, 開始・終了フレームから動画, video-to-video |
-| `kling-video-o1-std` | テキストから動画, image-to-video, reference-to-video, 開始・終了フレームから動画, video-to-video |
+| `kling-3.0-video` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-v2.5-turbo-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-v2.5-turbo-std` | テキストから動画、画像から動画 |
+| `kling-v2.6-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-v2.6-std` | テキストから動画、画像から動画 |
+| `kling-v3.0-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-v3.0-std` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `kling-video-o1-pro` | テキストから動画、画像から動画、参考画像から動画、開始・終了フレームから動画、動画から動画 |
+| `kling-video-o1-std` | テキストから動画、画像から動画、参考画像から動画、開始・終了フレームから動画、動画から動画 |
 
 ### Google
 
 | Model | 公開オペレーション |
-|-------|-------------------|
-| `veo3` | テキストから動画, image-to-video |
-| `veo3-fast` | テキストから動画, image-to-video |
-| `veo3-pro` | テキストから動画, image-to-video |
-| `veo3.1` | テキストから動画, image-to-video, reference-to-video, 開始・終了フレームから動画 |
-| `veo3.1-fast` | テキストから動画, image-to-video, reference-to-video, 開始・終了フレームから動画 |
-| `veo3.1-pro` | テキストから動画, image-to-video, 開始・終了フレームから動画 |
+|-------|----------|
+| `veo3` | テキストから動画、画像から動画 |
+| `veo3-fast` | テキストから動画、画像から動画 |
+| `veo3-pro` | テキストから動画、画像から動画 |
+| `veo3.1` | テキストから動画、画像から動画、参考画像から動画、開始・終了フレームから動画 |
+| `veo3.1-fast` | テキストから動画、画像から動画、参考画像から動画、開始・終了フレームから動画 |
+| `veo3.1-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
 
 ### ByteDance
 
 | Model | 公開オペレーション |
-|-------|-------------------|
-| `seedance-1.5-pro` | テキストから動画, image-to-video |
+|-------|----------|
+| `seedance-1.5-pro` | テキストから動画、画像から動画 |
 
 ### MiniMax
 
 | Model | 公開オペレーション |
-|-------|-------------------|
+|-------|----------|
 | `hailuo-2.3-fast` | 画像から動画 |
-| `hailuo-2.3-pro` | テキストから動画, image-to-video |
-| `hailuo-2.3-standard` | テキストから動画, image-to-video |
+| `hailuo-2.3-pro` | テキストから動画、画像から動画 |
+| `hailuo-2.3-standard` | テキストから動画、画像から動画 |
 
 ### Alibaba
 
 | Model | 公開オペレーション |
-|-------|-------------------|
-| `wan-2.2-plus` | テキストから動画, image-to-video |
-| `wan-2.5` | テキストから動画, image-to-video |
-| `wan-2.6` | テキストから動画, image-to-video, reference-to-video |
+|-------|----------|
+| `wan-2.2-plus` | テキストから動画、画像から動画 |
+| `wan-2.5` | テキストから動画、画像から動画 |
+| `wan-2.6` | テキストから動画、画像から動画、参考画像から動画 |
 
 ### Shengshu
 
 | Model | 公開オペレーション |
-|-------|-------------------|
-| `viduq2` | テキストから動画, reference-to-video |
-| `viduq2-pro` | 画像から動画, reference-to-video, 開始・終了フレームから動画 |
-| `viduq2-pro-fast` | 画像から動画, 開始・終了フレームから動画 |
-| `viduq2-turbo` | 画像から動画, 開始・終了フレームから動画 |
-| `viduq3-pro` | テキストから動画, image-to-video, 開始・終了フレームから動画 |
-| `viduq3-turbo` | テキストから動画, image-to-video, 開始・終了フレームから動画 |
+|-------|----------|
+| `viduq2` | テキストから動画、参考画像から動画 |
+| `viduq2-pro` | 画像から動画、参考画像から動画、開始・終了フレームから動画 |
+| `viduq2-pro-fast` | 画像から動画、開始・終了フレームから動画 |
+| `viduq2-turbo` | 画像から動画、開始・終了フレームから動画 |
+| `viduq3-pro` | テキストから動画、画像から動画、開始・終了フレームから動画 |
+| `viduq3-turbo` | テキストから動画、画像から動画、開始・終了フレームから動画 |
 
 ### xAI
 
 | Model | 公開オペレーション |
-|-------|-------------------|
+|-------|----------|
 | `grok-imagine-image-to-video` | 画像から動画 |
 | `grok-imagine-text-to-video` | テキストから動画 |
 | `grok-imagine-upscale` | 動画から動画 |
 
-
 ### Other
 
 | Model | 公開オペレーション |
-|-------|-------------------|
+|-------|----------|
 | `topaz-video-upscale` | 動画から動画 |
-| `viduq3-pro` | Shengshu | T2V、I2V |
-| `viduq3-turbo` | Shengshu | T2V、I2V、turbo tier |
-| `viduq2-pro` | Shengshu | T2V、I2V |
-| `grok-video-3` | xAI | T2V |
-| `higgsfield-turbo` | Higgsfield | T2V |

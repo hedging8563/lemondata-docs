@@ -1,100 +1,159 @@
 ---
 title: "Créer une vidéo"
 openapi: "POST /v1/videos/generations"
-description: "Crée une tâche de génération de vidéo"
+description: "Crée une tâche de génération vidéo"
 ---
 
 ## Vue d’ensemble
 
-La génération de vidéo est asynchrone. Vous soumettez une requête, recevez un ID de tâche et une `poll_url`, puis interrogez régulièrement pour obtenir le résultat.
+La génération vidéo est asynchrone. Une fois la requête envoyée, vous recevez un `task_id` et un `poll_url`, puis vous interrogez ce task jusqu’au résultat final.
 
 <Info>
-Pour un comportement de polling le plus fiable possible, suivez exactement la `poll_url` renvoyée par la requête de création.
+Pour un polling fiable, utilisez exactement le `poll_url` renvoyé par la requête de création.
 </Info>
 
 <Warning>
-La sortie audio dépend du modèle. Dans LemonData, la famille Veo 3 active l’audio par défaut lorsque `output_audio` est omis. Lorsqu’un modèle prend en charge le contrôle audio, utilisez `output_audio` pour l’activer ou le désactiver explicitement. L’alias camelCase `outputAudio` est également accepté pour compatibilité.
+La sortie audio dépend du modèle. Dans LemonData, la famille Veo 3 active l’audio par défaut lorsque `output_audio` est omis. Si un modèle prend en charge ce contrôle, utilisez `output_audio` pour le piloter explicitement. L’alias camelCase `outputAudio` est également accepté pour compatibilité.
 </Warning>
 
+<Info>
+En production, privilégiez des URLs `https` publiques pour les images, vidéos et fichiers audio. Les modèles compatibles acceptent toujours les `data:` URLs, mais les gros payloads base64 compliquent les retries, l’observabilité et le débogage.
+</Info>
 
 ## Corps de la requête
 
 <ParamField body="model" type="string" default="sora-2">
-  ID du modèle vidéo. La valeur par défaut de l’API est `sora-2`. Consultez le [Guide de génération vidéo](/guides/video-generation) pour la matrice actuelle des modèles et les capacités prises en charge.
+  ID du modèle vidéo. La valeur par défaut de l’API est `sora-2`. Pour voir la matrice actuelle des modèles publics et leurs capacités, consultez le [guide de génération vidéo](/fr/guides/video-generation).
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  Description textuelle de la vidéo à générer.
+  Description textuelle de la vidéo à générer. Ce champ est requis pour la plupart des modèles publics.
+</ParamField>
+
+<ParamField body="operation" type="string">
+  Opération vidéo à exécuter. Le contrat public accepte `text-to-video`, `image-to-video`, `reference-to-video`, `start-end-to-video`, `video-to-video`, `video-extension`, `audio-to-video` et `motion-control`. LemonData peut déduire l’opération à partir des entrées, mais une valeur explicite est recommandée en production.
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  URL publiquement accessible de l’image de départ pour la génération image-vers-vidéo (I2V). Pour une compatibilité optimale entre modèles, privilégiez `image_url`.
+  URL de l’image de départ pour les flux image-vers-vidéo. Pour la compatibilité la plus large, privilégiez `image_url`.
 </ParamField>
 
 <ParamField body="image" type="string">
-  Image inline sous forme d’URL de données (par exemple, `data:image/jpeg;base64,...`). Pris en charge par les modèles compatibles, mais `image_url` offre la compatibilité la plus large entre les modèles vidéo.
+  Image inline au format `data:` (par exemple `data:image/jpeg;base64,...`). Les modèles compatibles la prennent en charge, mais `image_url` reste l’option la plus robuste.
+</ParamField>
+
+<ParamField body="reference_images" type="array">
+  Images de référence pour les flux de référence-vers-vidéo. Jusqu’à 3 entrées sont acceptées. Les URLs `https` publiques sont recommandées, mais les `data:` URLs restent compatibles sur certains modèles.
+</ParamField>
+
+<ParamField body="reference_image_type" type="string">
+  Champ facultatif pour les modèles qui distinguent les références `asset` et `style`.
+</ParamField>
+
+<ParamField body="video_url" type="string">
+  URL publique de la vidéo source. Requise pour les flux publics `video-to-video` et pour les modèles `motion-control`.
+</ParamField>
+
+<ParamField body="audio_url" type="string">
+  URL publique du fichier audio pour les modèles `audio-to-video`.
+</ParamField>
+
+<ParamField body="task_id" type="string">
+  ID de tâche côté provider utilisé dans certains flux de continuation, d’extension ou de dérivation.
+</ParamField>
+
+<ParamField body="extend_at" type="integer">
+  Offset de départ spécifique au modèle pour certains flux `video-extension`.
+</ParamField>
+
+<ParamField body="extend_times" type="string">
+  Multiplicateur ou nombre de répétitions spécifique au modèle pour certains flux `video-extension`.
 </ParamField>
 
 <ParamField body="duration" type="integer">
-  Durée de la vidéo en secondes (dépend du modèle).
+  Durée de la vidéo en secondes. Les valeurs autorisées dépendent du modèle.
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  Ratio d’aspect (par ex., `16:9`, `9:16`, `1:1`).
+  Ratio d’image, par exemple `16:9`, `9:16` ou `1:1`.
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  Résolution vidéo (par ex., `1080p`, `720p`).
+  Résolution de sortie, par exemple `720p`, `1080p` ou `4k`. La prise en charge dépend du modèle.
 </ParamField>
 
 <ParamField body="output_audio" type="boolean">
-  Commutateur de sortie audio dépendant du modèle. Dans LemonData, la famille Veo 3 utilise `true` par défaut lorsque ce champ est omis. Les autres modèles vidéo suivent leur comportement par défaut gouverné. L’alias camelCase `outputAudio` est accepté pour compatibilité.
+  Commutateur de sortie audio dépendant du modèle. Dans LemonData, la famille Veo 3 est traitée comme `true` par défaut quand ce champ est omis. L’alias camelCase `outputAudio` est aussi accepté.
 </ParamField>
 
 <ParamField body="fps" type="integer">
-  Images par seconde (1-120).
+  Fréquence d’images (1–120). N’a d’effet que sur les modèles qui l’exposent publiquement.
 </ParamField>
 
 <ParamField body="negative_prompt" type="string">
-  Ce qu’il faut éviter dans la génération vidéo.
+  Éléments à éviter dans la génération.
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  Graine aléatoire pour une génération reproductible.
+  Seed aléatoire pour obtenir des résultats reproductibles.
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
-  Échelle de guidance sans classifieur (0-20).
+  Intensité de suivi du prompt (0–20), effective uniquement sur les modèles qui la prennent en charge.
 </ParamField>
 
 <ParamField body="motion_strength" type="number">
-  Intensité du mouvement (0-1).
+  Intensité du mouvement (0–1), effective uniquement sur les modèles compatibles.
 </ParamField>
 
 <ParamField body="start_image" type="string">
-  URL de l’image de l’image-clé de départ.
+  URL de l’image de premier frame, ou entrée image compatible, pour `start-end-to-video`.
 </ParamField>
 
 <ParamField body="end_image" type="string">
-  URL de l’image de l’image-clé de fin.
+  URL de l’image de dernier frame, ou entrée image compatible, pour `start-end-to-video`.
+</ParamField>
+
+<ParamField body="size" type="string">
+  Tier de taille utilisé par certains modèles vidéo compatibles OpenAI.
+</ParamField>
+
+<ParamField body="watermark" type="boolean">
+  Bascule de watermark exposée par certains modèles.
+</ParamField>
+
+<ParamField body="effect_type" type="string">
+  Sélecteur d’effet spécifique au modèle pour certains flux d’édition ou d’effets.
 </ParamField>
 
 <ParamField body="user" type="string">
-  Un identifiant unique pour l’utilisateur final.
+  Identifiant unique de l’utilisateur final.
 </ParamField>
+
+## Notes de compatibilité
+
+- Les champs publics canoniques utilisent le snake_case : `reference_images`, `reference_image_type` et `output_audio`.
+- Pour compatibilité, LemonData accepte aussi les alias camelCase `referenceImages`, `referenceImageType` et `outputAudio`.
+- Si `operation` est omis, LemonData la déduit à partir des entrées, mais une valeur explicite reste préférable en production.
+
+## Bonnes pratiques d’entrée
+
+- Pour `image_url`, `reference_images`, `video_url` et `audio_url`, privilégiez des URLs `https` publiques.
+- Évitez, si possible, de mélanger base64 inline et URLs distantes dans une même requête.
+- Si vous utilisez des URLs signées, assurez-vous qu’elles restent valides pendant la fenêtre de retry et de création asynchrone.
 
 ## Réponse
 
 <ResponseField name="task_id" type="string">
-  Identifiant unique de tâche pour le polling.
+  Identifiant unique du task pour le polling.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  URL de polling recommandée pour cette tâche. Utilisez ce chemin exact lors de la vérification du statut.
+  URL de polling recommandée pour ce task. Utilisez ce chemin tel quel lors des vérifications d’état.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Statut initial : `pending`.
+  Statut initial : `pending`.
 </ResponseField>
 
 <ResponseField name="model" type="string">
@@ -113,114 +172,6 @@ curl -X POST "https://api.lemondata.cc/v1/videos/generations" \
     "duration": 4,
     "aspect_ratio": "16:9"
   }'
-```
-
-```python Python
-import requests
-
-response = requests.post(
-    "https://api.lemondata.cc/v1/videos/generations",
-    headers={
-        "Authorization": "Bearer sk-your-api-key",
-        "Content-Type": "application/json"
-    },
-    json={
-        "model": "sora-2",
-        "prompt": "A cat walking through a garden, cinematic lighting",
-        "operation": "text-to-video",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-
-data = response.json()
-task_id = data["task_id"]
-print(f"Poll URL: {data['poll_url']}")
-print(f"Task ID: {task_id}")
-```
-
-```javascript JavaScript
-const response = await fetch('https://api.lemondata.cc/v1/videos/generations', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer sk-your-api-key',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    model: 'sora-2',
-    prompt: 'A cat walking through a garden, cinematic lighting',
-    operation: 'text-to-video',
-    duration: 4,
-    aspect_ratio: '16:9'
-  })
-});
-
-const data = await response.json();
-console.log(`Poll URL: ${data.poll_url}`);
-console.log(`Task ID: ${data.task_id}`);
-```
-
-```go Go
-package main
-
-import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "net/http"
-)
-
-func main() {
-    payload := map[string]interface{}{
-        "model":    "sora-2",
-        "prompt":   "A cat walking through a garden, cinematic lighting",
-        "operation": "text-to-video",
-        "duration": 4,
-        "aspect_ratio": "16:9",
-    }
-    body, _ := json.Marshal(payload)
-
-    req, _ := http.NewRequest("POST", "https://api.lemondata.cc/v1/videos/generations", bytes.NewBuffer(body))
-    req.Header.Set("Authorization", "Bearer sk-your-api-key")
-    req.Header.Set("Content-Type", "application/json")
-
-    client := &http.Client{}
-    resp, _ := client.Do(req)
-    defer resp.Body.Close()
-
-    var result map[string]interface{}
-    json.NewDecoder(resp.Body).Decode(&result)
-    fmt.Printf("Poll URL: %s\n", result["poll_url"])
-    fmt.Printf("Task ID: %s\n", result["task_id"])
-}
-```
-
-```php PHP
-<?php
-$ch = curl_init('https://api.lemondata.cc/v1/videos/generations');
-
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer sk-your-api-key'
-    ],
-    CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'sora-2',
-        'prompt' => 'A cat walking through a garden, cinematic lighting',
-        'operation' => 'text-to-video',
-        'duration' => 4,
-        'aspect_ratio' => '16:9'
-    ])
-]);
-
-$response = curl_exec($ch);
-curl_close($ch);
-
-$data = json_decode($response, true);
-echo "Poll URL: " . $data['poll_url'] . "\n";
-echo "Task ID: " . $data['task_id'];
 ```
 </RequestExample>
 
@@ -243,7 +194,7 @@ response = requests.post(
     "https://api.lemondata.cc/v1/videos/generations",
     headers={"Authorization": "Bearer sk-your-api-key"},
     json={
-        "model": "hailuo-2.3-fast",
+        "model": "hailuo-2.3-standard",
         "prompt": "The scene begins from the provided image and adds gentle natural motion.",
         "operation": "image-to-video",
         "image_url": "https://example.com/image.jpg",
@@ -253,9 +204,33 @@ response = requests.post(
 )
 ```
 
-## Contrôle par images-clés
+## Référence vers vidéo
 
-Utilisez `start_image` et `end_image` pour contrôler les premières et dernières images (pris en charge par Vidu Q2 Pro) :
+Pour les modèles qui prennent en charge un conditionnement dédié par images de référence, utilisez `operation=reference-to-video`. Dans le contrat public LemonData, les références passent par `reference_images`.
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "reference_image_type": "asset",
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+## Contrôle début / fin
+
+Utilisez `start_image` et `end_image` pour contrôler la première et la dernière image.
 
 ```python
 response = requests.post(
@@ -264,7 +239,7 @@ response = requests.post(
     json={
         "model": "viduq2-pro",
         "prompt": "Smooth transition from day to night",
-        "operation": "Début-fin vers vidéo",
+        "operation": "start-end-to-video",
         "start_image": "https://example.com/day.jpg",
         "end_image": "https://example.com/night.jpg",
         "duration": 5,
@@ -274,98 +249,130 @@ response = requests.post(
 )
 ```
 
-## Modèles disponibles
+## Vidéo vers vidéo
+
+Si un modèle accepte une vidéo existante comme entrée principale, utilisez `operation=video-to-video`.
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "topaz-video-upscale",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale the clip while preserving the original motion.",
+        "resolution": "1080p"
+    }
+)
+```
+
+## Contrôle de mouvement
+
+Quand un modèle exige à la fois une image de sujet et une vidéo de mouvement de référence, utilisez `operation=motion-control`. LemonData normalise la forme publique `image_url` + `video_url` vers le contrat amont.
+
+```python
+response = requests.post(
+    "https://api.lemondata.cc/v1/videos/generations",
+    headers={"Authorization": "Bearer sk-your-api-key"},
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
+    }
+)
+```
+
+## Disponibilité actuelle de Audio-to-Video et Video Extension
+
+Le contrat public LemonData accepte `audio-to-video` et `video-extension` pour des flux spécifiques à certains modèles. Cependant, dans la liste actuelle des modèles publics généralement activés pour cette documentation, aucun modèle public largement activé n’expose clairement ces capacités. Vérifiez donc l’état réel via la [Models API](/fr/api-reference/models/list-models) ou la [page des modèles](https://lemondata.cc/fr/models).
+
+## Inventaire public actuel des modèles
 
 <Info>
-La liste des modèles est mise à jour fréquemment. Pour les derniers modèles disponibles et les tarifs, consultez la [page des modèles](https://lemondata.cc/fr/models).
-</Info>
-
-Pour un guide complet avec des comparaisons de capacités et des exemples d’utilisation, consultez le [Guide de génération vidéo](/guides/video-generation).
-
-## Modèles vidéo publics actuellement activés
-
-<Info>
-Cette liste est alignée sur l’inventaire actuel des modèles vidéo publics activés dans cette build de documentation. Pour l’état le plus récent, interrogez la [Models API](/api-reference/models/list-models).
+Cette liste est alignée sur l’inventaire actuel des modèles vidéo publics activés dans cette build de documentation. Pour l’état le plus récent, interrogez la [Models API](/fr/api-reference/models/list-models).
 </Info>
 
 ### OpenAI
 
 | Model | Opérations publiques |
-|-------|-------------------|
-| `sora-2` | Texte vers vidéo, image-to-video |
-| `sora-2-pro` | Texte vers vidéo, image-to-video |
+|-------|----------|
+| `sora-2` | Texte vers vidéo, Image vers vidéo |
+| `sora-2-pro` | Texte vers vidéo, Image vers vidéo |
 | `sora-2-pro-storyboard` | Image vers vidéo |
 
 ### Kuaishou
 
 | Model | Opérations publiques |
-|-------|-------------------|
+|-------|----------|
 | `kling-3.0-motion-control` | Contrôle du mouvement |
-| `kling-3.0-video` | Texte vers vidéo, image-to-video, Début-fin vers vidéo |
-| `kling-v2.5-turbo-pro` | Texte vers vidéo, image-to-video, Début-fin vers vidéo |
-| `kling-v2.5-turbo-std` | Texte vers vidéo, image-to-video |
-| `kling-v2.6-pro` | Texte vers vidéo, image-to-video, Début-fin vers vidéo |
-| `kling-v2.6-std` | Texte vers vidéo, image-to-video |
-| `kling-v3.0-pro` | Texte vers vidéo, image-to-video, Début-fin vers vidéo |
-| `kling-v3.0-std` | Texte vers vidéo, image-to-video, Début-fin vers vidéo |
-| `kling-video-o1-pro` | Texte vers vidéo, image-to-video, reference-to-video, Début-fin vers vidéo, video-to-video |
-| `kling-video-o1-std` | Texte vers vidéo, image-to-video, reference-to-video, Début-fin vers vidéo, video-to-video |
+| `kling-3.0-video` | Texte vers vidéo, Image vers vidéo, Début-fin vers vidéo |
+| `kling-v2.5-turbo-pro` | Texte vers vidéo, Image vers vidéo, Début-fin vers vidéo |
+| `kling-v2.5-turbo-std` | Texte vers vidéo, Image vers vidéo |
+| `kling-v2.6-pro` | Texte vers vidéo, Image vers vidéo, Début-fin vers vidéo |
+| `kling-v2.6-std` | Texte vers vidéo, Image vers vidéo |
+| `kling-v3.0-pro` | Texte vers vidéo, Image vers vidéo, Début-fin vers vidéo |
+| `kling-v3.0-std` | Texte vers vidéo, Image vers vidéo, Début-fin vers vidéo |
+| `kling-video-o1-pro` | Texte vers vidéo, Image vers vidéo, Référence vers vidéo, Début-fin vers vidéo, Vidéo vers vidéo |
+| `kling-video-o1-std` | Texte vers vidéo, Image vers vidéo, Référence vers vidéo, Début-fin vers vidéo, Vidéo vers vidéo |
 
 ### Google
 
 | Model | Opérations publiques |
-|-------|-------------------|
-| `veo3` | Texte vers vidéo, image-to-video |
-| `veo3-fast` | Texte vers vidéo, image-to-video |
-| `veo3-pro` | Texte vers vidéo, image-to-video |
-| `veo3.1` | Texte vers vidéo, image-to-video, reference-to-video, Début-fin vers vidéo |
-| `veo3.1-fast` | Texte vers vidéo, image-to-video, reference-to-video, Début-fin vers vidéo |
-| `veo3.1-pro` | Texte vers vidéo, image-to-video, Début-fin vers vidéo |
+|-------|----------|
+| `veo3` | Texte vers vidéo, Image vers vidéo |
+| `veo3-fast` | Texte vers vidéo, Image vers vidéo |
+| `veo3-pro` | Texte vers vidéo, Image vers vidéo |
+| `veo3.1` | Texte vers vidéo, Image vers vidéo, Référence vers vidéo, Début-fin vers vidéo |
+| `veo3.1-fast` | Texte vers vidéo, Image vers vidéo, Référence vers vidéo, Début-fin vers vidéo |
+| `veo3.1-pro` | Texte vers vidéo, Image vers vidéo, Début-fin vers vidéo |
 
 ### ByteDance
 
 | Model | Opérations publiques |
-|-------|-------------------|
-| `seedance-1.5-pro` | Texte vers vidéo, image-to-video |
+|-------|----------|
+| `seedance-1.5-pro` | Texte vers vidéo, Image vers vidéo |
 
 ### MiniMax
 
 | Model | Opérations publiques |
-|-------|-------------------|
+|-------|----------|
 | `hailuo-2.3-fast` | Image vers vidéo |
-| `hailuo-2.3-pro` | Texte vers vidéo, image-to-video |
-| `hailuo-2.3-standard` | Texte vers vidéo, image-to-video |
+| `hailuo-2.3-pro` | Texte vers vidéo, Image vers vidéo |
+| `hailuo-2.3-standard` | Texte vers vidéo, Image vers vidéo |
 
 ### Alibaba
 
 | Model | Opérations publiques |
-|-------|-------------------|
-| `wan-2.2-plus` | Texte vers vidéo, image-to-video |
-| `wan-2.5` | Texte vers vidéo, image-to-video |
-| `wan-2.6` | Texte vers vidéo, image-to-video, reference-to-video |
+|-------|----------|
+| `wan-2.2-plus` | Texte vers vidéo, Image vers vidéo |
+| `wan-2.5` | Texte vers vidéo, Image vers vidéo |
+| `wan-2.6` | Texte vers vidéo, Image vers vidéo, Référence vers vidéo |
 
 ### Shengshu
 
 | Model | Opérations publiques |
-|-------|-------------------|
-| `viduq2` | Texte vers vidéo, reference-to-video |
-| `viduq2-pro` | Image vers vidéo, reference-to-video, Début-fin vers vidéo |
+|-------|----------|
+| `viduq2` | Texte vers vidéo, Référence vers vidéo |
+| `viduq2-pro` | Image vers vidéo, Référence vers vidéo, Début-fin vers vidéo |
 | `viduq2-pro-fast` | Image vers vidéo, Début-fin vers vidéo |
 | `viduq2-turbo` | Image vers vidéo, Début-fin vers vidéo |
-| `viduq3-pro` | Texte vers vidéo, image-to-video, Début-fin vers vidéo |
-| `viduq3-turbo` | Texte vers vidéo, image-to-video, Début-fin vers vidéo |
+| `viduq3-pro` | Texte vers vidéo, Image vers vidéo, Début-fin vers vidéo |
+| `viduq3-turbo` | Texte vers vidéo, Image vers vidéo, Début-fin vers vidéo |
 
 ### xAI
 
 | Model | Opérations publiques |
-|-------|-------------------|
+|-------|----------|
 | `grok-imagine-image-to-video` | Image vers vidéo |
 | `grok-imagine-text-to-video` | Texte vers vidéo |
 | `grok-imagine-upscale` | Vidéo vers vidéo |
 
-
 ### Other
 
 | Model | Opérations publiques |
-|-------|-------------------|
+|-------|----------|
 | `topaz-video-upscale` | Vidéo vers vidéo |
