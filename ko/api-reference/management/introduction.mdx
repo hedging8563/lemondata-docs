@@ -2,88 +2,83 @@
 title: "관리 API"
 description: "관리 토큰으로 조직 API 키를 관리하고 키 단위 사용량 및 청구를 조회합니다."
 ---
+## 개요
 
-## Overview
+Management API를 사용하면 일반 추론용 API Key 없이도 조직 API Key를 관리하고 키 단위 사용량 및 청구 데이터를 조회할 수 있습니다.
 
-The Management API lets you manage organization API keys and retrieve usage and billing for a specific key without using a standard inference API key.
-
-Use a management token from your Dashboard **Settings** page:
-
-```bash
-Authorization: Bearer mt-your-management-token
-```
+Dashboard의 **Settings** 페이지에서 발급한 management token을 사용하세요:
 
 <Warning>
-Management tokens are different from inference API keys. Use `mt-...` for `/v1/management/*`, and use `sk-...` for model inference endpoints such as `/v1/responses`.
+management token은 추론용 API Key와 다릅니다. `/v1/management/*` 에는 `mt-...` 를, `/v1/responses` 같은 추론 엔드포인트에는 `sk-...` 를 사용하세요.
 </Warning>
 
-## Available Endpoints
+## 사용 가능한 엔드포인트
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/management/api-keys` | GET | List user-managed API keys in the current organization |
-| `/v1/management/api-keys` | POST | Create a new user API key |
-| `/v1/management/api-keys/{keyId}` | PATCH | Update name, usage limit, allowed models, expiry, or status |
-| `/v1/management/api-keys/{keyId}/usage` | GET | Retrieve paginated usage details for a specific key |
-| `/v1/management/api-keys/{keyId}/billing` | GET | Retrieve aggregated billing breakdowns for a specific key |
+| /v1/management/api-keys | GET | List user-managed API keys in the current organization |
+| /v1/management/api-keys | POST | Create a new user API key |
+| /v1/management/api-keys/{keyId} | PATCH | Update name, usage limit, allowed models, expiry, or status |
+| /v1/management/api-keys/{keyId}/usage | GET | Retrieve paginated usage details for a specific key |
+| /v1/management/api-keys/{keyId}/billing | GET | Retrieve aggregated billing breakdowns for a specific key |
 
-## Usage Filter Contract
+## 사용 필터 계약
 
-`GET /v1/management/api-keys/{keyId}/usage` supports the following query parameters:
+`GET /v1/management/api-keys/{keyId}/usage` 는 다음 쿼리 파라미터를 지원합니다.
 
-| Parameter | Type | Default / Limits | Notes |
+| 파라미터 | 타입 | 기본값 / 제한 | 설명 |
 |-----------|------|------------------|-------|
-| `page` | integer | default `1`, min `1` | 1-based page number |
-| `limit` | integer | default `50`, min `1`, max `100` | Page size |
-| `logicalModel` | string | max length `100` | Requested logical model name |
-| `modelVendor` | string | max length `100` | Public model vendor |
-| `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
-| `accessChannel` | enum | - | `platform` or `byok` |
-| `startDate` | string | - | Inclusive lower bound; accepts RFC3339 with timezone or `YYYY-MM-DD` |
-| `endDate` | string | - | Inclusive upper bound; accepts RFC3339 with timezone or `YYYY-MM-DD` |
+| page | integer | default 1, min 1 | 1-based page number |
+| limit | integer | default 50, min 1, max 100 | Page size |
+| logicalModel | string | max length 100 | Requested logical model name |
+| modelVendor | string | max length 100 | Public model vendor |
+| scene | enum | - | chat, image, audio, video, embedding, rerank, translation, music, 3d |
+| accessChannel | enum | - | platform or byok |
+| startDate | string | - | Inclusive lower bound; accepts RFC3339 with timezone or YYYY-MM-DD |
+| endDate | string | - | Inclusive upper bound; accepts RFC3339 with timezone or YYYY-MM-DD |
 
-If both `startDate` and `endDate` are present, `startDate` must be earlier than or equal to `endDate`.
+`startDate` 와 `endDate` 를 함께 전달하는 경우 `startDate` 는 `endDate` 보다 이르거나 같아야 합니다.
 
-## API Key Body Contract
+## API Key 바디 계약
 
 ### POST /v1/management/api-keys
 
-| Field | Type | Default / Limits | Notes |
+| 필드 | 타입 | 기본값 / 제한 | 설명 |
 |-------|------|------------------|-------|
-| `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
-| `limitAmount` | number \| null | min `0`, max `100000` | `null` or omitted = unlimited, `0` = zero quota, positive = USD spending cap |
-| `models` | string[] | default `[]` | Optional logical model allowlist |
-| `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
+| name | string | required, default Default Key, length 1-50 | Display name, trimmed server-side |
+| limitAmount | number \| null | min 0, max 100000 | null or omitted = unlimited, 0 = zero quota, positive = USD spending cap |
+| models | string[] | default [] | Optional logical model allowlist |
+| expiresAt | string \| null | RFC3339 datetime | null means no expiry |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| Field | Type | Default / Limits | Notes |
+| 필드 | 타입 | 기본값 / 제한 | 설명 |
 |-------|------|------------------|-------|
-| `status` | enum | - | `active`, `inactive`, `revoked` |
-| `name` | string | length `1-50` | Updated display name |
-| `limitAmount` | number \| null | min `0`, max `100000` | `null` means unlimited, `0` means zero quota |
-| `models` | string[] | - | Updated logical model allowlist |
-| `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
+| status | enum | - | active, inactive, revoked |
+| name | string | length 1-50 | Updated display name |
+| limitAmount | number \| null | min 0, max 100000 | null means unlimited, 0 means zero quota |
+| models | string[] | - | Updated logical model allowlist |
+| expiresAt | string \| null | RFC3339 datetime | null clears the expiry |
 
-At least one PATCH field must be provided.
+PATCH 요청에는 최소 한 개의 필드를 포함해야 합니다.
 
-## Reporting Semantics
+## 리포팅 의미
 
-- `logicalModel` refers to the public logical model requested by the caller.
-- `modelVendor` refers to the public model vendor, not the hidden physical route.
-- `scene` is the public request scene derived from the endpoint or task type.
-- `accessChannel=platform` means the request was billed via LemonData’s platform channel.
-- `accessChannel=byok` means the request used your own upstream provider key.
+- logicalModel refers to the public logical model requested by the caller.
+- modelVendor refers to the public model vendor, not the hidden physical route.
+- scene is the public request scene derived from the endpoint or task type.
+- accessChannel=platform means the request was billed via LemonData’s platform channel.
+- accessChannel=byok means the request used your own upstream provider key.
 
-Responses expose public billing and reporting fields only. Internal routing details and physical provider metadata remain hidden.
+응답에는 공개 가능한 billing 및 reporting 필드만 포함되며, 내부 라우팅 세부정보와 물리 채널 메타데이터는 숨겨집니다.
 
-## Billing Pagination Note
+## Billing 페이지네이션 참고
 
-`/usage` is paginated. `/billing` is currently an aggregated breakdown endpoint and does **not** return page / limit style pagination metadata. If you need line-level records, use `/usage`.
+`/usage` 는 페이지네이션됩니다. `/billing` 은 현재 집계 endpoint 이며 `page` / `limit` 형태의 페이지네이션 메타데이터를 반환하지 않습니다.
 
-## Quick Example
+## 빠른 예시
 
-Start by listing the API keys available to the current management token:
+먼저 현재 management token으로 조회 가능한 API Key 목록을 확인하세요:
 
 <RequestExample>
 ```bash cURL
@@ -93,7 +88,6 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 </RequestExample>
 
 <ResponseExample>
-```json Response (200)
 {
   "object": "list",
   "data": [
@@ -111,10 +105,9 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
     }
   ]
 }
-```
 </ResponseExample>
 
-## Next Steps
+## 다음 단계
 
 - [List API Keys](/api-reference/management/list-api-keys)
 - [Create API Key](/api-reference/management/create-api-key)
