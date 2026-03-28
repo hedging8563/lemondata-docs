@@ -23,22 +23,29 @@ Authorization: Bearer sk-your-api-key
 
 Holen Sie sich Ihren API-Key im [Dashboard](https://lemondata.cc/dashboard).
 
+<Warning>
+**Über den interaktiven Playground**: Der Playground auf dieser Dokumentationsseite dient nur zu Demonstrationszwecken und unterstützt die Eingabe von API-Keys nicht. Um die API zu testen, verwenden Sie bitte:
+- **cURL** – Kopieren Sie die Beispielbefehle und ersetzen Sie `sk-your-api-key` durch Ihren tatsächlichen Key
+- **Postman** – Importieren Sie unsere [OpenAPI-Spezifikation](/openapi.json)
+- **SDK** – Verwenden Sie das OpenAI/Anthropic-SDK mit unserer Basis-URL
+</Warning>
+
 ## Unterstützte Endpunkte
 
 ### Chat & Textgenerierung
 
 | Endpunkt | Methode | Beschreibung |
 |----------|--------|-------------|
-| `/v1/chat/completions` | POST | OpenAI-kompatible Chat-Vervollständigungen |
+| `/v1/chat/completions` | POST | OpenAI-kompatible Chat-Completions |
 | `/v1/messages` | POST | Anthropic-kompatible Messages-API |
-| `/v1/responses` | POST | OpenAI Responses-API |
+| `/v1/responses` | POST | OpenAI-Responses-API |
 
 ### Embeddings & Rerank
 
 | Endpunkt | Methode | Beschreibung |
 |----------|--------|-------------|
 | `/v1/embeddings` | POST | Text-Embeddings erstellen |
-| `/v1/rerank` | POST | Dokumente reranken |
+| `/v1/rerank` | POST | Dokumente neu bewerten (Rerank) |
 
 ### Bilder
 
@@ -46,6 +53,11 @@ Holen Sie sich Ihren API-Key im [Dashboard](https://lemondata.cc/dashboard).
 |----------|--------|-------------|
 | `/v1/images/generations` | POST | Bilder aus Text generieren |
 | `/v1/images/edits` | POST | Bilder bearbeiten |
+| `/v1/images/generations/{id}` | GET | Pfad für den Bild-Task-Status bei Task-basierten Bildantworten |
+
+<Info>
+Einige Bildmodelle geben Ergebnisse inline zurück, andere geben Task-basierte Antworten zurück, und manche verhalten sich je nach geroutetem Provider-Pfad unterschiedlich. Wenn die Erstellungsantwort eine `poll_url` enthält, folgen Sie dieser exakt.
+</Info>
 
 ### Audio
 
@@ -59,11 +71,21 @@ Holen Sie sich Ihren API-Key im [Dashboard](https://lemondata.cc/dashboard).
 | Endpunkt | Methode | Beschreibung |
 |----------|--------|-------------|
 | `/v1/videos/generations` | POST | Video-Generierungs-Task erstellen |
-| `/v1/tasks/{id}` | GET | Asynchronen Status für Video-Jobs abrufen |
-| `/v1/videos/generations/{id}` | GET | Abwärtskompatibler Statuspfad für Video-Tasks |
+| `/v1/tasks/{id}` | GET | Asynchronen Task-Status für Video-Jobs abrufen |
+| `/v1/videos/generations/{id}` | GET | Legacy-kompatibler Pfad für den Video-Task-Status |
 
 <Info>
-Für neue Clients bevorzugen Sie `/v1/tasks/{id}` und folgen Sie dem `poll_url`, das von Create-Responses zurückgegeben wird. Lassen Sie `/v1/videos/generations/{id}` nur für Abwärtskompatibilität bestehen.
+Für neue Clients wird `/v1/tasks/{id}` empfohlen; folgen Sie der `poll_url`, die in den Erstellungsantworten zurückgegeben wird. Behalten Sie `/v1/videos/generations/{id}` nur für die Abwärtskompatibilität bei.
+</Info>
+
+### Asynchrone Tasks
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1/tasks/{id}` | GET | Einheitlicher Endpunkt für den asynchronen Task-Status. Empfohlen, wenn einer zurückgegebenen `poll_url` gefolgt wird |
+
+<Info>
+Dieser Endpunkt ist nicht auf Video, Musik und 3D beschränkt. Einige Bild-Tasks verwenden möglicherweise ebenfalls `/v1/tasks/{id}` als kanonischen Polling-Pfad.
 </Info>
 
 ### Musik
@@ -71,14 +93,22 @@ Für neue Clients bevorzugen Sie `/v1/tasks/{id}` und folgen Sie dem `poll_url`,
 | Endpunkt | Methode | Beschreibung |
 |----------|--------|-------------|
 | `/v1/music/generations` | POST | Musik-Generierungs-Task erstellen |
-| `/v1/music/generations/{id}` | GET | Status des Musik-Tasks abrufen |
+| `/v1/music/generations/{id}` | GET | Musikspezifischer Status-Pfad |
+
+<Info>
+Für neue Clients wird empfohlen, zuerst die zurückgegebene `poll_url` zu verwenden. Wenn Sie einen festen Endpunkt für den Task-Status benötigen, verwenden Sie `/v1/tasks/{id}`; behalten Sie `/v1/music/generations/{id}` für musikspezifische Kompatibilitätspfade bei.
+</Info>
 
 ### 3D-Generierung
 
 | Endpunkt | Methode | Beschreibung |
 |----------|--------|-------------|
 | `/v1/3d/generations` | POST | 3D-Modell-Generierungs-Task erstellen |
-| `/v1/3d/generations/{id}` | GET | Status des 3D-Tasks abrufen |
+| `/v1/3d/generations/{id}` | GET | 3D-spezifischer Status-Pfad |
+
+<Info>
+Für neue Clients wird empfohlen, zuerst die zurückgegebene `poll_url` zu verwenden. Wenn Sie einen festen Endpunkt für den Task-Status benötigen, verwenden Sie `/v1/tasks/{id}`; behalten Sie `/v1/3d/generations/{id}` für 3D-spezifische Kompatibilitätspfade bei.
+</Info>
 
 ### Modelle
 
@@ -86,6 +116,19 @@ Für neue Clients bevorzugen Sie `/v1/tasks/{id}` und folgen Sie dem `poll_url`,
 |----------|--------|-------------|
 | `/v1/models` | GET | Alle verfügbaren Modelle auflisten |
 | `/v1/models/{model}` | GET | Spezifische Modellinformationen abrufen |
+
+### Gemini (v1beta)
+
+Unterstützung für das native Google Gemini API-Format:
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/v1beta/models/{model}:generateContent` | POST | Inhalt generieren (Gemini-Format) |
+| `/v1beta/models/{model}:streamGenerateContent` | POST | Inhalt per Stream generieren (Gemini-Format) |
+
+<Note>
+Gemini-Endpunkte unterstützen zusätzlich zum Standard-Bearer-Token die Authentifizierung über den Query-Parameter `?key=`.
+</Note>
 
 ## Antwortformat
 
@@ -134,7 +177,7 @@ Alle Antworten enthalten ein `_routing`-Feld mit Kanalinformationen:
 | `channel.id` | Verwendete Kanal-ID |
 | `channel.provider` | Upstream-Provider (openai, anthropic, etc.) |
 | `channel.channelType` | `PLATFORM` (LemonData) oder `PRIVATE` (BYOK) |
-| `cached` | Gibt an, ob die Antwort aus dem Cache geladen wurde |
+| `cached` | Gibt an, ob die Antwort aus dem Cache geliefert wurde |
 | `retryCount` | Anzahl der Wiederholungsversuche (falls vorhanden) |
 
 ### Fehlerantwort
@@ -155,22 +198,15 @@ Rate Limits sind rollenbasiert und von Administratoren konfigurierbar. Standardw
 
 | Rolle | Anfragen/Min. |
 |------|-------------|
-| Benutzer | 60 |
+| User | 60 |
 | Partner | 300 |
 | VIP | 1.000 |
-| Admin | Unbegrenzt |
 
 <Note>
 Kontaktieren Sie den Support für individuelle Rate Limits. Die genauen Werte können je nach Kontokonfiguration variieren.
 </Note>
 
-Rate-Limit-Header sind in allen Antworten enthalten:
-
-```
-X-RateLimit-Limit: 60
-X-RateLimit-Remaining: 55
-X-RateLimit-Reset: 1234567890
-```
+Wenn Rate Limits überschritten werden, gibt die API einen `429`-Statuscode mit einem `Retry-After`-Header zurück, der angibt, wie lange gewartet werden muss.
 
 ## OpenAPI-Spezifikation
 

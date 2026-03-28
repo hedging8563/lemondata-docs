@@ -5,7 +5,7 @@ description: 'LemonData API 的完整參考指南'
 
 ## 概覽
 
-LemonData API **相容於 OpenAI**，這意味著您只需更改 Base URL 即可使用官方的 OpenAI SDK。我們也支援原生的 **Anthropic** 和 **Gemini** 請求格式。
+LemonData API **相容於 OpenAI**，這意味著您只需更改 base URL 即可使用官方的 OpenAI SDK。我們也支援原生的 **Anthropic** 和 **Gemini** 請求格式。
 
 ## Base URL
 
@@ -13,15 +13,22 @@ LemonData API **相容於 OpenAI**，這意味著您只需更改 Base URL 即可
 https://api.lemondata.cc
 ```
 
-## 身份驗證
+## 身分驗證
 
-所有 API 端點都需要使用 Bearer token 進行身份驗證：
+所有 API 端點都需要使用 Bearer token 進行身分驗證：
 
 ```bash
 Authorization: Bearer sk-your-api-key
 ```
 
-從 [控制台](https://lemondata.cc/dashboard) 獲取您的 API 金鑰。
+從 [Dashboard](https://lemondata.cc/dashboard) 獲取您的 API key。
+
+<Warning>
+**關於互動式 Playground**：此文件網站上的 playground 僅用於演示目的，不支援輸入 API key。如需測試 API，請使用：
+- **cURL** - 複製範例指令並將 `sk-your-api-key` 替換為您的實際金鑰
+- **Postman** - 匯入我們的 [OpenAPI spec](/openapi.json)
+- **SDK** - 配合我們的 base URL 使用 OpenAI/Anthropic SDK
+</Warning>
 
 ## 支援的端點
 
@@ -29,16 +36,16 @@ Authorization: Bearer sk-your-api-key
 
 | 端點 | 方法 | 描述 |
 |----------|--------|-------------|
-| `/v1/chat/completions` | POST | 相容於 OpenAI 的對話補全 |
-| `/v1/messages` | POST | 相容於 Anthropic 的訊息 API |
+| `/v1/chat/completions` | POST | OpenAI 相容的對話補全 |
+| `/v1/messages` | POST | Anthropic 相容的 messages API |
 | `/v1/responses` | POST | OpenAI Responses API |
 
-### 嵌入與重排序
+### 嵌入與重排 (Embeddings & Rerank)
 
 | 端點 | 方法 | 描述 |
 |----------|--------|-------------|
-| `/v1/embeddings` | POST | 建立文字嵌入 |
-| `/v1/rerank` | POST | 重排序文件 |
+| `/v1/embeddings` | POST | 建立文字嵌入 (embeddings) |
+| `/v1/rerank` | POST | 文件重排 (Rerank) |
 
 ### 圖片
 
@@ -46,6 +53,11 @@ Authorization: Bearer sk-your-api-key
 |----------|--------|-------------|
 | `/v1/images/generations` | POST | 從文字生成圖片 |
 | `/v1/images/edits` | POST | 編輯圖片 |
+| `/v1/images/generations/{id}` | GET | 基於任務的圖片回應之任務狀態路徑 |
+
+<Info>
+某些圖片模型可能會直接回傳結果，某些可能會回傳基於任務的回應，而某些則可能根據路由的供應商路徑而有所不同。如果建立請求的回應中包含 `poll_url`，請嚴格遵循該路徑。
+</Info>
 
 ### 音訊
 
@@ -59,11 +71,21 @@ Authorization: Bearer sk-your-api-key
 | 端點 | 方法 | 描述 |
 |----------|--------|-------------|
 | `/v1/videos/generations` | POST | 建立影片生成任務 |
-| `/v1/tasks/{id}` | GET | 取得影片任務的統一非同步狀態 |
-| `/v1/videos/generations/{id}` | GET | 僅為相容性保留的影片任務狀態路徑 |
+| `/v1/tasks/{id}` | GET | 獲取影片作業的非同步任務狀態 |
+| `/v1/videos/generations/{id}` | GET | 相容舊版的影片任務狀態路徑 |
 
 <Info>
-新用戶端請優先使用 `/v1/tasks/{id}`，並跟隨建立回應傳回的 `poll_url`。`/v1/videos/generations/{id}` 僅保留向後相容。
+對於新用戶，建議優先使用 `/v1/tasks/{id}` 並遵循建立請求回傳的 `poll_url`。僅為了向後相容性而保留 `/v1/videos/generations/{id}`。
+</Info>
+
+### 非同步任務
+
+| 端點 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1/tasks/{id}` | GET | 統一的非同步任務狀態端點。建議在遵循回傳的 `poll_url` 時使用 |
+
+<Info>
+此端點不限於影片、音樂和 3D。某些圖片任務也可能使用 `/v1/tasks/{id}` 作為規範的輪詢路徑。
 </Info>
 
 ### 音樂
@@ -71,14 +93,22 @@ Authorization: Bearer sk-your-api-key
 | 端點 | 方法 | 描述 |
 |----------|--------|-------------|
 | `/v1/music/generations` | POST | 建立音樂生成任務 |
-| `/v1/music/generations/{id}` | GET | 獲取音樂任務狀態 |
+| `/v1/music/generations/{id}` | GET | 音樂專用的狀態路徑 |
+
+<Info>
+對於新用戶，請優先使用回傳的 `poll_url`。如果您需要固定的任務狀態端點，請使用 `/v1/tasks/{id}`；保留 `/v1/music/generations/{id}` 用於音樂專用的相容性路徑。
+</Info>
 
 ### 3D 生成
 
 | 端點 | 方法 | 描述 |
 |----------|--------|-------------|
 | `/v1/3d/generations` | POST | 建立 3D 模型生成任務 |
-| `/v1/3d/generations/{id}` | GET | 獲取 3D 任務狀態 |
+| `/v1/3d/generations/{id}` | GET | 3D 專用的狀態路徑 |
+
+<Info>
+對於新用戶，請優先使用回傳的 `poll_url`。如果您需要固定的任務狀態端點，請使用 `/v1/tasks/{id}`；保留 `/v1/3d/generations/{id}` 用於 3D 專用的相容性路徑。
+</Info>
 
 ### 模型
 
@@ -87,9 +117,22 @@ Authorization: Bearer sk-your-api-key
 | `/v1/models` | GET | 列出所有可用模型 |
 | `/v1/models/{model}` | GET | 獲取特定模型資訊 |
 
+### Gemini (v1beta)
+
+原生 Google Gemini API 格式支援：
+
+| 端點 | 方法 | 描述 |
+|----------|--------|-------------|
+| `/v1beta/models/{model}:generateContent` | POST | 生成內容 (Gemini 格式) |
+| `/v1beta/models/{model}:streamGenerateContent` | POST | 串流生成內容 (Gemini 格式) |
+
+<Note>
+除了標準的 Bearer token 外，Gemini 端點還支援 `?key=` 查詢參數進行身分驗證。
+</Note>
+
 ## 回應格式
 
-所有回應均遵循一致的格式：
+所有回應都遵循一致的格式：
 
 ### 成功回應
 
@@ -110,7 +153,7 @@ Authorization: Bearer sk-your-api-key
 
 ### 路由透明度
 
-所有回應都包含一個帶有渠道資訊的 `_routing` 欄位：
+所有回應都包含一個帶有通道資訊的 `_routing` 欄位：
 
 ```json
 {
@@ -131,11 +174,11 @@ Authorization: Bearer sk-your-api-key
 
 | 欄位 | 描述 |
 |-------|-------------|
-| `channel.id` | 使用的渠道識別碼 |
+| `channel.id` | 使用的通道識別碼 |
 | `channel.provider` | 上游供應商 (openai, anthropic 等) |
 | `channel.channelType` | `PLATFORM` (LemonData) 或 `PRIVATE` (BYOK) |
 | `cached` | 回應是否來自快取 |
-| `retryCount` | 重試次數（如有） |
+| `retryCount` | 重試次數（如果有） |
 
 ### 錯誤回應
 
@@ -151,26 +194,19 @@ Authorization: Bearer sk-your-api-key
 
 ## 速率限制
 
-速率限制基於角色，並可由管理員配置。預設值：
+速率限制是基於角色的，且可由管理員配置。預設值：
 
-| 角色 | 每分鐘請求數 |
+| 角色 | 請求數/分鐘 |
 |------|-------------|
-| 使用者 | 60 |
-| 合作夥伴 | 300 |
+| User | 60 |
+| Partner | 300 |
 | VIP | 1,000 |
-| 管理員 | 無限制 |
 
 <Note>
-聯絡支援團隊以獲取自定義速率限制。確切數值可能因帳戶配置而異。
+聯繫支援團隊以獲取自定義速率限制。確切數值可能因帳戶配置而異。
 </Note>
 
-所有回應中都包含速率限制標頭：
-
-```
-X-RateLimit-Limit: 60
-X-RateLimit-Remaining: 55
-X-RateLimit-Reset: 1234567890
-```
+當超過速率限制時，API 會回傳 `429` 狀態碼，並帶有 `Retry-After` 標頭，指示需要等待多長時間。
 
 ## OpenAPI 規範
 

@@ -1,27 +1,27 @@
 ---
-title: "Görsel Durumunu Al"
+title: "Görüntü Durumunu Al"
 openapi: "GET /v1/images/generations/{task_id}"
-description: "Asenkron görsel oluşturma görevinin durumunu ve sonucunu alır"
+description: "Asenkron bir görüntü oluşturma görevinin durumunu ve sonucunu alın"
 ---
 
 ## Yol Parametreleri
 
 <ParamField path="task_id" type="string" required>
-  İlk görsel oluşturma isteğinden döndürülen görev ID'si.
+  İlk görüntü oluşturma isteğinden döndürülen görev kimliği (task ID).
 </ParamField>
 
 <Info>
-Create yanıtı `poll_url` içeriyorsa, sorgulama için doğrudan o URL'yi kullanın.
+Eğer oluşturma yanıtı `poll_url` içeriyorsa, yoklama (polling) için tam olarak bu URL'yi çağırmayı tercih edin. Bazı görüntü görevleri, görüntüye özel durum yolu yerine `/v1/tasks/{id}` altında bir `poll_url` sunabilir.
 </Info>
 
 ## Yanıt
 
 <ResponseField name="created" type="integer">
-  Oluşturma Unix zaman damgası.
+  Oluşturulma zamanının Unix zaman damgası.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Görev tanımlayıcısı.
+  Görev tanımlayıcı.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -29,15 +29,15 @@ Create yanıtı `poll_url` içeriyorsa, sorgulama için doğrudan o URL'yi kulla
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Oluşturulan görseller dizisi (`status` `completed` olduğunda doldurulur).
+  Oluşturulan görüntülerin dizisi (`status` değeri `completed` olduğunda doldurulur).
 
   Her nesne şunları içerir:
-  - `url` (string): Oluşturulan görselin URL'si
-  - `revised_prompt` (string): Oluşturma için kullanılan prompt
+  - `url` (string): Oluşturulan görüntünün URL'si
+  - `revised_prompt` (string): Oluşturma için kullanılan istem (prompt)
 </ResponseField>
 
 <ResponseField name="error" type="string">
-  Hata mesajı (sadece `status` `failed` olduğunda bulunur).
+  Hata mesajı (yalnızca `status` değeri `failed` olduğunda mevcuttur).
 </ResponseField>
 
 <RequestExample>
@@ -81,7 +81,7 @@ if (data.status === 'completed') {
 </RequestExample>
 
 <ResponseExample>
-```json Beklemede
+```json Pending
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -95,7 +95,7 @@ if (data.status === 'completed') {
 }
 ```
 
-```json Tamamlandı
+```json Completed
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -109,7 +109,7 @@ if (data.status === 'completed') {
 }
 ```
 
-```json Başarısız
+```json Failed
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -120,10 +120,10 @@ if (data.status === 'completed') {
 ```
 </ResponseExample>
 
-## Sorgulama En İyi Uygulamaları
+## Yoklama (Polling) İçin En İyi Uygulamalar
 
 <Tip>
-**Önerilen sorgulama aralığı**: 3-5 saniye. Çoğu görsel oluşturma görevi modele bağlı olarak 30-120 saniye içinde tamamlanır.
+**Önerilen yoklama aralığı**: 3-5 saniye. Çoğu görüntü oluşturma görevi, modele ve yönlendirilen sağlayıcı yoluna bağlı olarak 30-120 saniye içinde tamamlanır.
 </Tip>
 
 ```python
@@ -131,7 +131,7 @@ import requests
 import time
 
 def poll_image_task(task_id, api_key, max_wait=300, interval=3):
-    """Zaman aşımı ile görsel oluşturma sonucunu sorgula."""
+    """Poll for image generation result with timeout."""
     url = f"https://api.lemondata.cc/v1/images/generations/{task_id}"
     headers = {"Authorization": f"Bearer {api_key}"}
 
@@ -149,7 +149,7 @@ def poll_image_task(task_id, api_key, max_wait=300, interval=3):
 
     raise TimeoutError(f"Task {task_id} did not complete within {max_wait}s")
 
-# Kullanım
+# Usage
 image_url = poll_image_task("img_abc123def456", "sk-your-api-key")
 print(f"Generated image: {image_url}")
 ```

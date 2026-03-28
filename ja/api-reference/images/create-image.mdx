@@ -1,84 +1,84 @@
 ---
-title: "画像を作成"
+title: "画像の生成"
 openapi: "POST /v1/images/generations"
-description: "prompt を指定して画像を作成します"
+description: "プロンプトに基づいて画像を生成します"
 ---
 
 ## リクエストボディ
 
 <ParamField body="model" type="string" default="dall-e-3">
-  使用するモデル（例: `dall-e-3`, `flux-pro`, `midjourney`）。
+  使用するモデル（例：`dall-e-3`、`flux-pro`、`midjourney`）。
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  希望する画像のテキスト説明。
+  生成したい画像の説明テキスト。
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  作成する画像の数（1〜4、モデルによって異なります）。
+  生成する画像の数（1〜4、モデルに依存）。
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  画像サイズ。利用可能なオプションはモデルによって異なります:
-  - DALL-E 3: `1024x1024`, `1792x1024`, `1024x1792`
-  - その他のモデル: `512x512`, `1024x1024` など
+  画像サイズ。オプションはモデルによって異なります：
+  - DALL-E 3: `1024x1024`、`1792x1024`、`1024x1792`
+  - その他のモデル: `512x512`、`1024x1024`など。
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
-  画像品質（`standard` または `hd`）。DALL-E 3 のみ対応。
+  画質（`standard` または `hd`）。DALL-E 3のみ。
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  レスポンス形式: `url` または `b64_json`。
+  レスポンス形式：`url` または `b64_json`。
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
-  DALL-E 3 のスタイル: `vivid` または `natural`。
+  DALL-E 3のスタイル：`vivid` または `natural`。
 </ParamField>
 
 <ParamField body="user" type="string">
-  エンドユーザー向けの一意な識別子。
+  エンドユーザーの一意識別子。
 </ParamField>
 
 ## レスポンス
 
-### 同期レスポンス（DALL-E、Flux Schnell など）
+### インラインレスポンス
 
 <ResponseField name="created" type="integer">
-  作成時の Unix タイムスタンプ。
+  作成時のUnixタイムスタンプ。
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  作成された画像の配列。
+  生成された画像の配列。
 
-  各オブジェクトには以下が含まれます:
-  - `url` (string): 作成された画像の URL
-  - `b64_json` (string): Base64 エンコードされた画像（要求した場合）
-  - `revised_prompt` (string): 使用された prompt（DALL-E 3）
+  各オブジェクトに含まれるもの：
+  - `url` (string): 生成された画像のURL
+  - `b64_json` (string): Base64エンコードされた画像（リクエストされた場合）
+  - `revised_prompt` (string): 使用されたプロンプト（DALL-E 3）
 </ResponseField>
 
-### 非同期レスポンス（Midjourney、Flux Pro、Ideogram など）
+### 非同期タスクレスポンス
 
-一部のモデルでは処理時間が長くなるため、非同期レスポンスが返されます:
+一部の画像モデルは即座に非同期タスクを返し、ルーティングされたプロバイダーのパスに応じてインラインまたはタスクベースのいずれかとして動作する場合があります。レスポンスに `status: "pending"` が含まれている場合は、非同期タスクレスポンスとして扱ってください：
 
 <Info>
-`poll_url` が返された場合は、その URL をそのまま使ってください。`task_id` は後続のポーリングで使う非同期タスク ID として扱います。
+`poll_url` が提供されている場合は、そのまま使用してください。後続のポーリングには `task_id` を非同期タスクの識別子として使用します。
 </Info>
 
 <ResponseField name="created" type="integer">
-  作成時の Unix タイムスタンプ。
+  作成時のUnixタイムスタンプ。
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  ポーリング用の一意なタスク識別子。
+  ポーリング用の一意のタスク識別子。
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  初期ステータス: `pending`。
+  初期ステータス：`pending`。
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  結果をポーリングするための相対 URL（例: `/v1/images/generations/{task_id}`）。
+  結果をポーリングするための相対URL（例：`/v1/images/generations/{task_id}` または `/v1/tasks/{task_id}`）。
 </ResponseField>
 
 <ResponseField name="data" type="array">
@@ -86,7 +86,7 @@ description: "prompt を指定して画像を作成します"
 </ResponseField>
 
 <Note>
-`status: "pending"` を受け取った場合は、結果をポーリングするために [Get Image Status](/api-reference/images/get-image-status) エンドポイントを使用してください。
+`status: "pending"` を受け取った場合は、[Get Image Status](/api-reference/images/get-image-status) エンドポイントを使用して結果をポーリングしてください。
 </Note>
 
 <RequestExample>
@@ -170,7 +170,7 @@ echo $data['data'][0]['url'];
 </RequestExample>
 
 <ResponseExample>
-```json Synchronous Response
+```json Inline Response
 {
   "created": 1706000000,
   "data": [
@@ -182,7 +182,7 @@ echo $data['data'][0]['url'];
 }
 ```
 
-```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+```json Async Task Response
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -200,30 +200,30 @@ echo $data['data'][0]['url'];
 
 ## 利用可能なモデル
 
-| モデル | タイプ | 機能 |
+| モデル | タイプ | 特徴 |
 |-------|------|----------|
-| `dall-e-3` | 同期 | 最高品質、prompt 強化 |
-| `dall-e-2` | 同期 | より高速、より低コスト |
-| `flux-pro` | **非同期** | フォトリアル、高品質 |
-| `flux-schnell` | 同期 | 非常に高速 |
-| `midjourney` | **非同期** | 芸術的なスタイル |
-| `ideogram-v3` | **非同期** | 最高のテキストレンダリング |
-| `stable-diffusion-3` | 同期 | オープンソース、カスタマイズ可能 |
+| `dall-e-3` | 通常はインライン | 最高品質、プロンプト補正 |
+| `dall-e-2` | 通常はインライン | 高速、より手頃な価格 |
+| `flux-pro` | 多くの場合タスクベース | フォトリアル、高品質 |
+| `flux-schnell` | 通常はインライン | 非常に高速 |
+| `midjourney` | 多くの場合タスクベース | 芸術的なスタイル |
+| `ideogram-v3` | 多くの場合タスクベース | 最高のテキストレンダリング |
+| `stable-diffusion-3` | 通常はインライン | オープンソース、カスタマイズ可能 |
 
 <Tip>
-**非同期モデル** は `status: "pending"` を返し、ポーリングが必要です。結果の取得方法については [Get Image Status](/api-reference/images/get-image-status) を参照してください。
+モデルを常に同期または常に非同期としてハードコードしないでください。作成レスポンスが `status: "pending"` を返した場合は、`poll_url` に従い、完了するまでポーリングしてください。
 </Tip>
 
-## 非同期レスポンスの処理
+## タスクベースのレスポンスの処理
 
-非同期モデルでは、レスポンスに `status: "pending"` が含まれているかを確認してください:
+画像モデルの場合、レスポンスに `status: "pending"` が含まれているかどうかを常に確認してください：
 
 ```python
 import requests
 import time
 
 def generate_image(prompt, model="midjourney"):
-    # Create image request
+    # 画像生成リクエストの作成
     response = requests.post(
         "https://api.lemondata.cc/v1/images/generations",
         headers={"Authorization": "Bearer sk-your-api-key"},
@@ -231,15 +231,16 @@ def generate_image(prompt, model="midjourney"):
     )
     data = response.json()
 
-    # Check if async
+    # タスクベースかどうかを確認
     if data.get("status") == "pending":
         task_id = data["task_id"]
-        print(f"Async task started: {task_id}")
+        poll_url = data.get("poll_url")
+        print(f"Image task started: {task_id}")
 
-        # Poll for result
+        # 結果をポーリング
         while True:
             status_resp = requests.get(
-                f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/images/generations/{task_id}",
                 headers={"Authorization": "Bearer sk-your-api-key"}
             )
             status_data = status_resp.json()
@@ -251,10 +252,10 @@ def generate_image(prompt, model="midjourney"):
 
             time.sleep(3)
     else:
-        # Sync response
+        # インラインレスポンス
         return data["data"][0]["url"]
 
-# Usage
+# 使用例
 url = generate_image("a beautiful sunset over mountains", model="midjourney")
 print(f"Generated image: {url}")
 ```

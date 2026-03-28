@@ -23,6 +23,13 @@ Authorization: Bearer sk-your-api-key
 
 Obtenez votre clé API depuis le [Tableau de bord](https://lemondata.cc/dashboard).
 
+<Warning>
+**À propos du Playground interactif** : Le playground sur ce site de documentation est uniquement à des fins de démonstration et ne permet pas de saisir des clés API. Pour tester l'API, veuillez utiliser :
+- **cURL** - Copiez les exemples de commandes et remplacez `sk-your-api-key` par votre clé réelle
+- **Postman** - Importez notre [spécification OpenAPI](/openapi.json)
+- **SDK** - Utilisez le SDK OpenAI/Anthropic avec notre URL de base
+</Warning>
+
 ## Points de terminaison pris en charge
 
 ### Chat et génération de texte
@@ -46,6 +53,11 @@ Obtenez votre clé API depuis le [Tableau de bord](https://lemondata.cc/dashboar
 |----------|--------|-------------|
 | `/v1/images/generations` | POST | Générer des images à partir de texte |
 | `/v1/images/edits` | POST | Modifier des images |
+| `/v1/images/generations/{id}` | GET | Chemin du statut de la tâche d'image pour les réponses d'image basées sur des tâches |
+
+<Info>
+Certains modèles d'image peuvent renvoyer des résultats en ligne, d'autres peuvent renvoyer des réponses basées sur des tâches, et certains peuvent se comporter de l'une ou l'autre manière selon le chemin du fournisseur routé. Si la réponse de création inclut `poll_url`, suivez-le exactement.
+</Info>
 
 ### Audio
 
@@ -59,11 +71,21 @@ Obtenez votre clé API depuis le [Tableau de bord](https://lemondata.cc/dashboar
 | Point de terminaison | Méthode | Description |
 |----------|--------|-------------|
 | `/v1/videos/generations` | POST | Créer une tâche de génération de vidéo |
-| `/v1/tasks/{id}` | GET | Obtenir le statut asynchrone des tâches vidéo |
-| `/v1/videos/generations/{id}` | GET | Chemin de statut vidéo conservé pour compatibilité |
+| `/v1/tasks/{id}` | GET | Obtenir le statut de la tâche asynchrone pour les travaux vidéo |
+| `/v1/videos/generations/{id}` | GET | Chemin du statut de la tâche vidéo compatible avec l'ancien système |
 
 <Info>
 Pour les nouveaux clients, privilégiez `/v1/tasks/{id}` et suivez le `poll_url` renvoyé par les réponses de création. Conservez `/v1/videos/generations/{id}` uniquement pour la compatibilité ascendante.
+</Info>
+
+### Tâches asynchrones
+
+| Point de terminaison | Méthode | Description |
+|----------|--------|-------------|
+| `/v1/tasks/{id}` | GET | Point de terminaison unifié du statut des tâches asynchrones. Recommandé lors du suivi d'un `poll_url` renvoyé |
+
+<Info>
+Ce point de terminaison n'est pas limité à la vidéo, à la musique et à la 3D. Certaines tâches d'image peuvent également utiliser `/v1/tasks/{id}` comme chemin de scrutation (polling) canonique.
 </Info>
 
 ### Musique
@@ -71,14 +93,22 @@ Pour les nouveaux clients, privilégiez `/v1/tasks/{id}` et suivez le `poll_url`
 | Point de terminaison | Méthode | Description |
 |----------|--------|-------------|
 | `/v1/music/generations` | POST | Créer une tâche de génération de musique |
-| `/v1/music/generations/{id}` | GET | Obtenir le statut de la tâche musicale |
+| `/v1/music/generations/{id}` | GET | Chemin de statut spécifique à la musique |
+
+<Info>
+Pour les nouveaux clients, privilégiez d'abord le `poll_url` renvoyé. Si vous avez besoin d'un point de terminaison de statut de tâche fixe, utilisez `/v1/tasks/{id}` ; conservez `/v1/music/generations/{id}` pour les chemins de compatibilité spécifiques à la musique.
+</Info>
 
 ### Génération 3D
 
 | Point de terminaison | Méthode | Description |
 |----------|--------|-------------|
 | `/v1/3d/generations` | POST | Créer une tâche de génération de modèle 3D |
-| `/v1/3d/generations/{id}` | GET | Obtenir le statut de la tâche 3D |
+| `/v1/3d/generations/{id}` | GET | Chemin de statut spécifique à la 3D |
+
+<Info>
+Pour les nouveaux clients, privilégiez d'abord le `poll_url` renvoyé. Si vous avez besoin d'un point de terminaison de statut de tâche fixe, utilisez `/v1/tasks/{id}` ; conservez `/v1/3d/generations/{id}` pour les chemins de compatibilité spécifiques à la 3D.
+</Info>
 
 ### Modèles
 
@@ -86,6 +116,19 @@ Pour les nouveaux clients, privilégiez `/v1/tasks/{id}` et suivez le `poll_url`
 |----------|--------|-------------|
 | `/v1/models` | GET | Lister tous les modèles disponibles |
 | `/v1/models/{model}` | GET | Obtenir les informations d'un modèle spécifique |
+
+### Gemini (v1beta)
+
+Prise en charge du format natif de l'API Google Gemini :
+
+| Point de terminaison | Méthode | Description |
+|----------|--------|-------------|
+| `/v1beta/models/{model}:generateContent` | POST | Générer du contenu (format Gemini) |
+| `/v1beta/models/{model}:streamGenerateContent` | POST | Générer du contenu en streaming (format Gemini) |
+
+<Note>
+Les points de terminaison Gemini prennent en charge l'authentification par paramètre de requête `?key=` en plus du token Bearer standard.
+</Note>
 
 ## Format de réponse
 
@@ -110,7 +153,7 @@ Toutes les réponses suivent un format cohérent :
 
 ### Transparence du routage
 
-Toutes les réponses incluent un champ `_routing` avec les informations sur le canal :
+Toutes les réponses incluent un champ `_routing` avec des informations sur le canal :
 
 ```json
 {
@@ -134,7 +177,7 @@ Toutes les réponses incluent un champ `_routing` avec les informations sur le c
 | `channel.id` | Identifiant du canal utilisé |
 | `channel.provider` | Fournisseur en amont (openai, anthropic, etc.) |
 | `channel.channelType` | `PLATFORM` (LemonData) ou `PRIVATE` (BYOK) |
-| `cached` | Indique si la réponse a été servie depuis le cache |
+| `cached` | Si la réponse a été servie depuis le cache |
 | `retryCount` | Nombre de tentatives de réessai (le cas échéant) |
 
 ### Réponse d'erreur
@@ -158,19 +201,12 @@ Les limites de débit sont basées sur les rôles et configurables par les admin
 | Utilisateur | 60 |
 | Partenaire | 300 |
 | VIP | 1,000 |
-| Admin | Illimité |
 
 <Note>
 Contactez le support pour des limites de débit personnalisées. Les valeurs exactes peuvent varier selon la configuration du compte.
 </Note>
 
-Les en-têtes de limite de débit sont inclus dans toutes les réponses :
-
-```
-X-RateLimit-Limit: 60
-X-RateLimit-Remaining: 55
-X-RateLimit-Reset: 1234567890
-```
+Lorsque les limites de débit sont dépassées, l'API renvoie un code d'état `429` avec un en-tête `Retry-After` indiquant le temps d'attente.
 
 ## Spécification OpenAPI
 
@@ -179,5 +215,5 @@ X-RateLimit-Reset: 1234567890
   icon="file-code"
   href="/openapi.json"
 >
-  Téléchargez la spécification OpenAPI 3.0 complète
+  Télécharger la spécification OpenAPI 3.0 complète
 </Card>

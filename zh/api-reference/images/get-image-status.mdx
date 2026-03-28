@@ -7,17 +7,17 @@ description: "获取异步图像生成任务的状态和结果"
 ## 路径参数
 
 <ParamField path="task_id" type="string" required>
-  从初始图像生成请求返回的任务 ID。
+  初始图像生成请求返回的任务 ID。
 </ParamField>
 
 <Info>
-如果 create 响应中包含 `poll_url`，请优先直接调用这个 URL 轮询。
+如果创建响应中包含 `poll_url`，建议优先调用该特定 URL 进行轮询。某些图像任务可能会在 `/v1/tasks/{id}` 下显示 `poll_url`，而不是图像特定的状态路径。
 </Info>
 
 ## 响应
 
 <ResponseField name="created" type="integer">
-  创建时间的 Unix 时间戳。
+  创建时的 Unix 时间戳。
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
@@ -37,7 +37,7 @@ description: "获取异步图像生成任务的状态和结果"
 </ResponseField>
 
 <ResponseField name="error" type="string">
-  错误消息（仅当 `status` 为 `failed` 时存在）。
+  错误信息（仅在 `status` 为 `failed` 时存在）。
 </ResponseField>
 
 <RequestExample>
@@ -55,10 +55,10 @@ response = requests.get(
 )
 
 data = response.json()
-print(f"状态: {data['status']}")
+print(f"Status: {data['status']}")
 
 if data["status"] == "completed":
-    print(f"图像 URL: {data['data'][0]['url']}")
+    print(f"Image URL: {data['data'][0]['url']}")
 ```
 
 ```javascript JavaScript
@@ -72,16 +72,16 @@ const response = await fetch(
 );
 
 const data = await response.json();
-console.log(`状态: ${data.status}`);
+console.log(`Status: ${data.status}`);
 
 if (data.status === 'completed') {
-  console.log(`图像 URL: ${data.data[0].url}`);
+  console.log(`Image URL: ${data.data[0].url}`);
 }
 ```
 </RequestExample>
 
 <ResponseExample>
-```json 等待中
+```json Pending
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -89,13 +89,13 @@ if (data.status === 'completed') {
   "data": [
     {
       "url": "",
-      "revised_prompt": "山上美丽的日落"
+      "revised_prompt": "a beautiful sunset over mountains"
     }
   ]
 }
 ```
 
-```json 已完成
+```json Completed
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -103,18 +103,18 @@ if (data.status === 'completed') {
   "data": [
     {
       "url": "https://cdn.example.com/generated/image-abc123.png",
-      "revised_prompt": "山上美丽的日落，带有鲜艳的橙色和紫色"
+      "revised_prompt": "a beautiful sunset over mountains with vibrant orange and purple colors"
     }
   ]
 }
 ```
 
-```json 失败
+```json Failed
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
   "status": "failed",
-  "error": "内容政策违规",
+  "error": "Content policy violation",
   "data": []
 }
 ```
@@ -123,7 +123,7 @@ if (data.status === 'completed') {
 ## 轮询最佳实践
 
 <Tip>
-**推荐轮询间隔**：3-5 秒。大多数图像生成任务根据模型在 30-120 秒内完成。
+**建议轮询间隔**：3-5 秒。大多数图像生成任务在 30-120 秒内完成，具体取决于模型和路由的提供商路径。
 </Tip>
 
 ```python
@@ -131,7 +131,7 @@ import requests
 import time
 
 def poll_image_task(task_id, api_key, max_wait=300, interval=3):
-    """带超时的图像生成结果轮询。"""
+    """Poll for image generation result with timeout."""
     url = f"https://api.lemondata.cc/v1/images/generations/{task_id}"
     headers = {"Authorization": f"Bearer {api_key}"}
 
@@ -143,13 +143,13 @@ def poll_image_task(task_id, api_key, max_wait=300, interval=3):
         if data["status"] == "completed":
             return data["data"][0]["url"]
         elif data["status"] == "failed":
-            raise Exception(data.get("error", "生成失败"))
+            raise Exception(data.get("error", "Generation failed"))
 
         time.sleep(interval)
 
-    raise TimeoutError(f"任务 {task_id} 未在 {max_wait} 秒内完成")
+    raise TimeoutError(f"Task {task_id} did not complete within {max_wait}s")
 
-# 使用示例
+# Usage
 image_url = poll_image_task("img_abc123def456", "sk-your-api-key")
-print(f"生成的图像: {image_url}")
+print(f"Generated image: {image_url}")
 ```

@@ -19,13 +19,13 @@ description: "根据提示词创建图像"
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  图像尺寸。可选项因模型而异：
+  图像尺寸。选项因模型而异：
   - DALL-E 3：`1024x1024`、`1792x1024`、`1024x1792`
   - 其他模型：`512x512`、`1024x1024` 等。
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
-  图像质量（`standard` 或 `hd`）。仅适用于 DALL-E 3。
+  图像质量（`standard` 或 `hd`）。仅限 DALL-E 3。
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
@@ -42,31 +42,31 @@ description: "根据提示词创建图像"
 
 ## 响应
 
-### 同步响应（DALL-E、Flux Schnell 等）
+### 内联响应
 
 <ResponseField name="created" type="integer">
-  创建时间的 Unix 时间戳。
+  创建时的 Unix 时间戳。
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  生成图像的数组。
+  生成的图像数组。
 
   每个对象包含：
-  - `url`（string）：生成图像的 URL
-  - `b64_json`（string）：Base64 编码的图像（如果已请求）
-  - `revised_prompt`（string）：使用的提示词（DALL-E 3）
+  - `url` (string)：生成的图像 URL
+  - `b64_json` (string)：Base64 编码的图像（如果请求）
+  - `revised_prompt` (string)：使用的提示词（DALL-E 3）
 </ResponseField>
 
-### 异步响应（Midjourney、Flux Pro、Ideogram 等）
+### 异步任务响应
 
-某些模型需要更长的处理时间，并会返回异步响应：
+某些图像模型会立即返回异步任务，而某些模型可能会根据路由的提供商路径表现为内联或基于任务。当响应包含 `status: "pending"` 时，请将其视为异步任务响应：
 
 <Info>
-如果返回了 `poll_url`，请直接使用该 URL 轮询。将 `task_id` 视为后续轮询的异步任务身份。
+在提供 `poll_url` 时，请准确使用它。将 `task_id` 视为后续轮询的异步任务标识。
 </Info>
 
 <ResponseField name="created" type="integer">
-  创建时间的 Unix 时间戳。
+  创建时的 Unix 时间戳。
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
@@ -78,15 +78,15 @@ description: "根据提示词创建图像"
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  用于轮询结果的相对 URL（例如：`/v1/images/generations/{task_id}`）。
+  用于轮询结果的相对 URL（例如：`/v1/images/generations/{task_id}` 或 `/v1/tasks/{task_id}`）。
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  包含占位数据的数组。`url` 在完成前将为空。
+  包含占位符数据的数组。在完成之前，`url` 将为空。
 </ResponseField>
 
 <Note>
-当你收到 `status: "pending"` 时，请使用 [获取图像状态](/api-reference/images/get-image-status) 端点轮询结果。
+当您收到 `status: "pending"` 时，请使用 [获取图像状态](/api-reference/images/get-image-status) 接口来轮询结果。
 </Note>
 
 <RequestExample>
@@ -170,7 +170,7 @@ echo $data['data'][0]['url'];
 </RequestExample>
 
 <ResponseExample>
-```json Synchronous Response
+```json Inline Response
 {
   "created": 1706000000,
   "data": [
@@ -182,7 +182,7 @@ echo $data['data'][0]['url'];
 }
 ```
 
-```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+```json Async Task Response
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -200,23 +200,23 @@ echo $data['data'][0]['url'];
 
 ## 可用模型
 
-| Model | Type | Features |
+| 模型 | 类型 | 特性 |
 |-------|------|----------|
-| `dall-e-3` | 同步 | 最佳质量，提示词增强 |
-| `dall-e-2` | 同步 | 更快，更实惠 |
-| `flux-pro` | **异步** | 照片级真实感，高质量 |
-| `flux-schnell` | 同步 | 非常快 |
-| `midjourney` | **异步** | 艺术风格 |
-| `ideogram-v3` | **异步** | 最佳文本渲染 |
-| `stable-diffusion-3` | 同步 | 开源，可定制 |
+| `dall-e-3` | 通常为内联 | 最佳质量，提示词增强 |
+| `dall-e-2` | 通常为内联 | 更快速，更经济 |
+| `flux-pro` | 通常基于任务 | 照片级真实感，高质量 |
+| `flux-schnell` | 通常为内联 | 非常快速 |
+| `midjourney` | 通常基于任务 | 艺术风格 |
+| `ideogram-v3` | 通常基于任务 | 最佳文本渲染 |
+| `stable-diffusion-3` | 通常为内联 | 开源，可定制 |
 
 <Tip>
-**异步模型** 会返回 `status: "pending"` 并需要轮询。有关如何获取结果，请参阅 [获取图像状态](/api-reference/images/get-image-status)。
+不要将模型硬编码为始终同步或始终异步。如果创建响应返回 `status: "pending"`，请遵循 `poll_url` 并进行轮询直到完成。
 </Tip>
 
-## 处理异步响应
+## 处理基于任务的响应
 
-对于异步模型，请检查响应中是否包含 `status: "pending"`：
+对于图像模型，请始终检查响应是否包含 `status: "pending"`：
 
 ```python
 import requests
@@ -231,15 +231,16 @@ def generate_image(prompt, model="midjourney"):
     )
     data = response.json()
 
-    # Check if async
+    # Check if task-based
     if data.get("status") == "pending":
         task_id = data["task_id"]
-        print(f"Async task started: {task_id}")
+        poll_url = data.get("poll_url")
+        print(f"Image task started: {task_id}")
 
         # Poll for result
         while True:
             status_resp = requests.get(
-                f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/images/generations/{task_id}",
                 headers={"Authorization": "Bearer sk-your-api-key"}
             )
             status_data = status_resp.json()
@@ -251,7 +252,7 @@ def generate_image(prompt, model="midjourney"):
 
             time.sleep(3)
     else:
-        # Sync response
+        # Inline response
         return data["data"][0]["url"]
 
 # Usage

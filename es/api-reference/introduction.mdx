@@ -3,11 +3,11 @@ title: 'Referencia de la API'
 description: 'Referencia completa para la API de LemonData'
 ---
 
-## Descripción general
+## Generalidades
 
 La API de LemonData es **compatible con OpenAI**, lo que significa que puedes usar el SDK oficial de OpenAI con solo cambiar la URL base. También admitimos formatos de solicitud nativos de **Anthropic** y **Gemini**.
 
-## URL base
+## URL Base
 
 ```
 https://api.lemondata.cc
@@ -23,9 +23,16 @@ Authorization: Bearer sk-your-api-key
 
 Obtén tu clave de API desde el [Dashboard](https://lemondata.cc/dashboard).
 
-## Endpoints compatibles
+<Warning>
+**Acerca del Playground interactivo**: El playground en este sitio de documentación es solo para fines de demostración y no admite el ingreso de claves de API. Para probar la API, utiliza:
+- **cURL** - Copia los comandos de ejemplo y reemplaza `sk-your-api-key` con tu clave real
+- **Postman** - Importa nuestra [especificación OpenAPI](/openapi.json)
+- **SDK** - Utiliza el SDK de OpenAI/Anthropic con nuestra URL base
+</Warning>
 
-### Chat y generación de texto
+## Endpoints Soportados
+
+### Chat y Generación de Texto
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
@@ -46,6 +53,11 @@ Obtén tu clave de API desde el [Dashboard](https://lemondata.cc/dashboard).
 |----------|--------|-------------|
 | `/v1/images/generations` | POST | Generar imágenes a partir de texto |
 | `/v1/images/edits` | POST | Editar imágenes |
+| `/v1/images/generations/{id}` | GET | Ruta de estado de tarea de imagen para respuestas de imagen basadas en tareas |
+
+<Info>
+Algunos modelos de imagen pueden devolver resultados en línea, otros pueden devolver respuestas basadas en tareas y algunos pueden comportarse de ambas formas dependiendo de la ruta del proveedor asignada. Si la respuesta de creación incluye `poll_url`, síguela exactamente.
+</Info>
 
 ### Audio
 
@@ -59,11 +71,21 @@ Obtén tu clave de API desde el [Dashboard](https://lemondata.cc/dashboard).
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
 | `/v1/videos/generations` | POST | Crear tarea de generación de video |
-| `/v1/tasks/{id}` | GET | Obtener el estado asíncrono de tareas de video |
-| `/v1/videos/generations/{id}` | GET | Ruta de estado de video compatible con versiones anteriores |
+| `/v1/tasks/{id}` | GET | Obtener el estado de la tarea asíncrona para trabajos de video |
+| `/v1/videos/generations/{id}` | GET | Ruta de estado de tarea de video compatible con versiones anteriores (legacy) |
 
 <Info>
-Para clientes nuevos, prioriza `/v1/tasks/{id}` y sigue el `poll_url` devuelto por las respuestas de creación. Conserva `/v1/videos/generations/{id}` solo por compatibilidad hacia atrás.
+Para nuevos clientes, se recomienda `/v1/tasks/{id}` y seguir la `poll_url` devuelta por las respuestas de creación. Mantén `/v1/videos/generations/{id}` solo por compatibilidad con versiones anteriores.
+</Info>
+
+### Tareas Asíncronas
+
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/v1/tasks/{id}` | GET | Endpoint unificado de estado de tareas asíncronas. Recomendado al seguir una `poll_url` devuelta |
+
+<Info>
+Este endpoint no se limita a video, música y 3D. Algunas tareas de imagen también pueden usar `/v1/tasks/{id}` como la ruta de sondeo (polling) canónica.
 </Info>
 
 ### Música
@@ -71,14 +93,22 @@ Para clientes nuevos, prioriza `/v1/tasks/{id}` y sigue el `poll_url` devuelto p
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
 | `/v1/music/generations` | POST | Crear tarea de generación de música |
-| `/v1/music/generations/{id}` | GET | Obtener el estado de la tarea de música |
+| `/v1/music/generations/{id}` | GET | Ruta de estado específica para música |
+
+<Info>
+Para nuevos clientes, prioriza la `poll_url` devuelta. Si necesitas un endpoint de estado de tarea fijo, usa `/v1/tasks/{id}`; mantén `/v1/music/generations/{id}` para rutas de compatibilidad específicas de música.
+</Info>
 
 ### Generación 3D
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
 | `/v1/3d/generations` | POST | Crear tarea de generación de modelos 3D |
-| `/v1/3d/generations/{id}` | GET | Obtener el estado de la tarea 3D |
+| `/v1/3d/generations/{id}` | GET | Ruta de estado específica para 3D |
+
+<Info>
+Para nuevos clientes, prioriza la `poll_url` devuelta. Si necesitas un endpoint de estado de tarea fijo, usa `/v1/tasks/{id}`; mantén `/v1/3d/generations/{id}` para rutas de compatibilidad específicas de 3D.
+</Info>
 
 ### Modelos
 
@@ -87,11 +117,24 @@ Para clientes nuevos, prioriza `/v1/tasks/{id}` y sigue el `poll_url` devuelto p
 | `/v1/models` | GET | Listar todos los modelos disponibles |
 | `/v1/models/{model}` | GET | Obtener información de un modelo específico |
 
-## Formato de respuesta
+### Gemini (v1beta)
+
+Soporte nativo para el formato de la API de Google Gemini:
+
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/v1beta/models/{model}:generateContent` | POST | Generar contenido (formato Gemini) |
+| `/v1beta/models/{model}:streamGenerateContent` | POST | Generar contenido en streaming (formato Gemini) |
+
+<Note>
+Los endpoints de Gemini admiten la autenticación mediante el parámetro de consulta `?key=`, además del token Bearer estándar.
+</Note>
+
+## Formato de Respuesta
 
 Todas las respuestas siguen un formato consistente:
 
-### Respuesta exitosa
+### Respuesta Exitosa
 
 ```json
 {
@@ -108,7 +151,7 @@ Todas las respuestas siguen un formato consistente:
 }
 ```
 
-### Transparencia de enrutamiento
+### Transparencia de Enrutamiento
 
 Todas las respuestas incluyen un campo `_routing` con información del canal:
 
@@ -134,10 +177,10 @@ Todas las respuestas incluyen un campo `_routing` con información del canal:
 | `channel.id` | Identificador de canal utilizado |
 | `channel.provider` | Proveedor ascendente (openai, anthropic, etc.) |
 | `channel.channelType` | `PLATFORM` (LemonData) o `PRIVATE` (BYOK) |
-| `cached` | Si la respuesta se sirvió desde la caché |
+| `cached` | Si la respuesta fue servida desde la caché |
 | `retryCount` | Número de intentos de reintento (si los hay) |
 
-### Respuesta de error
+### Respuesta de Error
 
 ```json
 {
@@ -149,28 +192,21 @@ Todas las respuestas incluyen un campo `_routing` con información del canal:
 }
 ```
 
-## Límites de tasa (Rate Limits)
+## Límites de Tasa
 
-Los límites de tasa se basan en roles y son configurables por los administradores. Valores por defecto:
+Los límites de tasa (rate limits) se basan en roles y son configurables por los administradores. Valores por defecto:
 
 | Rol | Solicitudes/min |
 |------|-------------|
-| Usuario | 60 |
-| Socio | 300 |
+| User | 60 |
+| Partner | 300 |
 | VIP | 1,000 |
-| Admin | Ilimitado |
 
 <Note>
 Contacta con soporte para límites de tasa personalizados. Los valores exactos pueden variar según la configuración de la cuenta.
 </Note>
 
-Los encabezados de límite de tasa se incluyen en todas las respuestas:
-
-```
-X-RateLimit-Limit: 60
-X-RateLimit-Remaining: 55
-X-RateLimit-Reset: 1234567890
-```
+Cuando se exceden los límites de tasa, la API devuelve un código de estado `429` con un encabezado `Retry-After` que indica cuánto tiempo se debe esperar.
 
 ## Especificación OpenAPI
 

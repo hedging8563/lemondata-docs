@@ -42,7 +42,7 @@ description: "Creates an image given a prompt"
 
 ## Response
 
-### Synchronous Response (DALL-E, Flux Schnell, etc.)
+### Inline Response
 
 <ResponseField name="created" type="integer">
   Unix timestamp of creation.
@@ -57,9 +57,9 @@ description: "Creates an image given a prompt"
   - `revised_prompt` (string): The prompt used (DALL-E 3)
 </ResponseField>
 
-### Asynchronous Response (Midjourney, Flux Pro, Ideogram, etc.)
+### Async Task Response
 
-Some models require longer processing time and return an async response:
+Some image models return an async task immediately, and some may behave as either inline or task-based depending on the routed provider path. When the response includes `status: "pending"`, treat it as an async task response:
 
 <Info>
 Use the returned `poll_url` exactly when it is provided. Treat `task_id` as the async task identity for follow-up polling.
@@ -78,7 +78,7 @@ Use the returned `poll_url` exactly when it is provided. Treat `task_id` as the 
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  Relative URL to poll for results (e.g., `/v1/images/generations/{task_id}`).
+  Relative URL to poll for results (for example, `/v1/images/generations/{task_id}` or `/v1/tasks/{task_id}`).
 </ResponseField>
 
 <ResponseField name="data" type="array">
@@ -170,7 +170,7 @@ echo $data['data'][0]['url'];
 </RequestExample>
 
 <ResponseExample>
-```json Synchronous Response
+```json Inline Response
 {
   "created": 1706000000,
   "data": [
@@ -182,7 +182,7 @@ echo $data['data'][0]['url'];
 }
 ```
 
-```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+```json Async Task Response
 {
   "created": 1706000000,
   "task_id": "img_abc123def456",
@@ -202,21 +202,21 @@ echo $data['data'][0]['url'];
 
 | Model | Type | Features |
 |-------|------|----------|
-| `dall-e-3` | Sync | Best quality, prompt enhancement |
-| `dall-e-2` | Sync | Faster, more affordable |
-| `flux-pro` | **Async** | Photorealistic, high quality |
-| `flux-schnell` | Sync | Very fast |
-| `midjourney` | **Async** | Artistic style |
-| `ideogram-v3` | **Async** | Best text rendering |
-| `stable-diffusion-3` | Sync | Open source, customizable |
+| `dall-e-3` | Usually inline | Best quality, prompt enhancement |
+| `dall-e-2` | Usually inline | Faster, more affordable |
+| `flux-pro` | Often task-based | Photorealistic, high quality |
+| `flux-schnell` | Usually inline | Very fast |
+| `midjourney` | Often task-based | Artistic style |
+| `ideogram-v3` | Often task-based | Best text rendering |
+| `stable-diffusion-3` | Usually inline | Open source, customizable |
 
 <Tip>
-**Async models** return `status: "pending"` and require polling. See [Get Image Status](/api-reference/images/get-image-status) for how to retrieve results.
+Do not hard-code a model as always synchronous or always asynchronous. If the create response returns `status: "pending"`, follow `poll_url` and poll until completion.
 </Tip>
 
-## Handling Async Responses
+## Handling Task-Based Responses
 
-For async models, check if the response contains `status: "pending"`:
+For image models, always check whether the response contains `status: "pending"`:
 
 ```python
 import requests
@@ -231,15 +231,16 @@ def generate_image(prompt, model="midjourney"):
     )
     data = response.json()
 
-    # Check if async
+    # Check if task-based
     if data.get("status") == "pending":
         task_id = data["task_id"]
-        print(f"Async task started: {task_id}")
+        poll_url = data.get("poll_url")
+        print(f"Image task started: {task_id}")
 
         # Poll for result
         while True:
             status_resp = requests.get(
-                f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/images/generations/{task_id}",
                 headers={"Authorization": "Bearer sk-your-api-key"}
             )
             status_data = status_resp.json()
@@ -251,7 +252,7 @@ def generate_image(prompt, model="midjourney"):
 
             time.sleep(3)
     else:
-        # Sync response
+        # Inline response
         return data["data"][0]["url"]
 
 # Usage
