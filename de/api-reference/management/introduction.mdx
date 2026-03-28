@@ -3,133 +3,92 @@ title: "Verwaltungs-API"
 description: "Verwalten Sie Organisations-API-Schlüssel und rufen Sie schlüsselbezogene Nutzung und Abrechnung mit einem Management-Token ab."
 ---
 
-## Übersicht
+## Overview
 
-Mit der Verwaltungs-API können Sie Organisations-API-Schlüssel verwalten sowie Nutzung und Abrechnung für einen bestimmten Schlüssel abrufen, ohne einen normalen Inferenz-API-Schlüssel zu verwenden.
+The Management API lets you manage organization API keys and retrieve usage and billing for a specific key without using a standard inference API key.
 
-Verwenden Sie ein Management-Token aus der **Settings**-Seite im Dashboard:
+Use a management token from your Dashboard **Settings** page:
 
 ```bash
 Authorization: Bearer mt-your-management-token
 ```
 
 <Warning>
-Management-Tokens sind keine Inferenz-API-Schlüssel. Verwenden Sie `mt-...` für `/v1/management/*` und `sk-...` für Modell-Inferenz-Endpunkte wie `/v1/responses`.
+Management tokens are different from inference API keys. Use `mt-...` for `/v1/management/*`, and use `sk-...` for model inference endpoints such as `/v1/responses`.
 </Warning>
 
-## Verfügbare Endpunkte
+## Available Endpoints
 
-| Endpoint | Method | Beschreibung |
-|----------|--------|------|
-| `/v1/management/api-keys` | GET | Listet benutzerverwaltete API-Schlüssel der aktuellen Organisation auf |
-| `/v1/management/api-keys` | POST | Erstellt einen neuen Benutzer-API-Schlüssel |
-| `/v1/management/api-keys/{keyId}` | PATCH | Aktualisiert Name, Nutzungslimit, erlaubte Modelle, Ablaufdatum oder Status |
-| `/v1/management/api-keys/{keyId}/usage` | GET | Ruft paginierte Nutzungsdetails für einen bestimmten Schlüssel ab |
-| `/v1/management/api-keys/{keyId}/billing` | GET | Ruft aggregierte Abrechnungsaufschlüsselungen für einen bestimmten Schlüssel ab |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/management/api-keys` | GET | List user-managed API keys in the current organization |
+| `/v1/management/api-keys` | POST | Create a new user API key |
+| `/v1/management/api-keys/{keyId}` | PATCH | Update name, usage limit, allowed models, expiry, or status |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Retrieve paginated usage details for a specific key |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Retrieve aggregated billing breakdowns for a specific key |
 
-## Felder erklärt
+## Usage Filter Contract
 
-- angeforderter Modellname (`model`)
-- öffentlicher Modellanbieter
-- `scene`
-- `accessChannel`: `platform` bedeutet, dass die Anfrage als Plattform-Anfrage abgerechnet wurde; `byok` bedeutet, dass Ihr eigener Upstream-Provider-Schlüssel verwendet wurde
-- Nutzungsmenge, Abrechnungseinheit und Cache-Metriken
-- Kosten und Zeitstempel
+`GET /v1/management/api-keys/{keyId}/usage` supports the following query parameters:
 
-Antworten enthalten nur öffentliche Abrechnungs- und Reporting-Felder. Interne Routing-Details und physische Provider-Metadaten bleiben verborgen.
+| Parameter | Type | Default / Limits | Notes |
+|-----------|------|------------------|-------|
+| `page` | integer | default `1`, min `1` | 1-based page number |
+| `limit` | integer | default `50`, min `1`, max `100` | Page size |
+| `logicalModel` | string | max length `100` | Requested logical model name |
+| `modelVendor` | string | max length `100` | Public model vendor |
+| `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
+| `accessChannel` | enum | - | `platform` or `byok` |
+| `startDate` | string | - | Inclusive lower bound; accepts RFC3339 with timezone or `YYYY-MM-DD` |
+| `endDate` | string | - | Inclusive upper bound; accepts RFC3339 with timezone or `YYYY-MM-DD` |
 
-## Filter
+If both `startDate` and `endDate` are present, `startDate` must be earlier than or equal to `endDate`.
 
-`/usage` und `/billing` unterstützen derzeit Filter nach:
+## API Key Body Contract
 
-- Zeitraum
-- angeforderter Modell-ID
-- öffentlichem Modellanbieter
-- `scene`
-- `accessChannel`
-- Paginierung
+### POST /v1/management/api-keys
 
-## Vollständiges Anfragebeispiel
+| Field | Type | Default / Limits | Notes |
+|-------|------|------------------|-------|
+| `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
+| `limitAmount` | number \| null | min `0`, max `100000` | `null` or omitted = unlimited, `0` = zero quota, positive = USD spending cap |
+| `models` | string[] | default `[]` | Optional logical model allowlist |
+| `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
-Beginnen Sie damit, die API-Schlüssel der aktuellen Organisation über das aktuelle Management-Token aufzulisten:
+### PATCH /v1/management/api-keys/{keyId}
+
+| Field | Type | Default / Limits | Notes |
+|-------|------|------------------|-------|
+| `status` | enum | - | `active`, `inactive`, `revoked` |
+| `name` | string | length `1-50` | Updated display name |
+| `limitAmount` | number \| null | min `0`, max `100000` | `null` means unlimited, `0` means zero quota |
+| `models` | string[] | - | Updated logical model allowlist |
+| `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
+
+At least one PATCH field must be provided.
+
+## Reporting Semantics
+
+- `logicalModel` refers to the public logical model requested by the caller.
+- `modelVendor` refers to the public model vendor, not the hidden physical route.
+- `scene` is the public request scene derived from the endpoint or task type.
+- `accessChannel=platform` means the request was billed via LemonData’s platform channel.
+- `accessChannel=byok` means the request used your own upstream provider key.
+
+Responses expose public billing and reporting fields only. Internal routing details and physical provider metadata remain hidden.
+
+## Billing Pagination Note
+
+`/usage` is paginated. `/billing` is currently an aggregated breakdown endpoint and does **not** return page / limit style pagination metadata. If you need line-level records, use `/usage`.
+
+## Quick Example
+
+Start by listing the API keys available to the current management token:
 
 <RequestExample>
 ```bash cURL
 curl "https://api.lemondata.cc/v1/management/api-keys" \
   -H "Authorization: Bearer mt-your-management-token"
-```
-
-```python Python
-import requests
-
-response = requests.get(
-    "https://api.lemondata.cc/v1/management/api-keys",
-    headers={"Authorization": "Bearer mt-your-management-token"}
-)
-
-data = response.json()
-for key in data["data"]:
-    print(key["name"], key["status"], key["used_amount"])
-```
-
-```javascript JavaScript
-const response = await fetch(
-  'https://api.lemondata.cc/v1/management/api-keys',
-  {
-    headers: {
-      'Authorization': 'Bearer mt-your-management-token'
-    }
-  }
-);
-
-const data = await response.json();
-for (const key of data.data) {
-  console.log(key.name, key.status, key.used_amount);
-}
-```
-
-```go Go
-package main
-
-import (
-    "encoding/json"
-    "fmt"
-    "net/http"
-)
-
-func main() {
-    req, _ := http.NewRequest("GET", "https://api.lemondata.cc/v1/management/api-keys", nil)
-    req.Header.Set("Authorization", "Bearer mt-your-management-token")
-
-    client := &http.Client{}
-    resp, _ := client.Do(req)
-    defer resp.Body.Close()
-
-    var result map[string]interface{}
-    json.NewDecoder(resp.Body).Decode(&result)
-
-    fmt.Println(result["object"])
-}
-```
-
-```php PHP
-<?php
-$ch = curl_init("https://api.lemondata.cc/v1/management/api-keys");
-
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer mt-your-management-token'
-    ]
-]);
-
-$response = curl_exec($ch);
-curl_close($ch);
-
-$data = json_decode($response, true);
-foreach ($data['data'] as $key) {
-    echo $key["name"] . " " . $key["status"] . " " . $key["used_amount"] . PHP_EOL;
-}
 ```
 </RequestExample>
 
@@ -154,10 +113,11 @@ foreach ($data['data'] as $key) {
 }
 ```
 </ResponseExample>
-## Nächste Schritte
 
-- [API-Schlüssel auflisten](/de/api-reference/management/list-api-keys)
-- [API-Schlüssel erstellen](/de/api-reference/management/create-api-key)
-- [API-Schlüssel aktualisieren](/de/api-reference/management/update-api-key)
-- [API-Schlüssel-Nutzung abrufen](/de/api-reference/management/get-api-key-usage)
-- [API-Schlüssel-Abrechnung abrufen](/de/api-reference/management/get-api-key-billing)
+## Next Steps
+
+- [List API Keys](/api-reference/management/list-api-keys)
+- [Create API Key](/api-reference/management/create-api-key)
+- [Update API Key](/api-reference/management/update-api-key)
+- [Get API Key Usage](/api-reference/management/get-api-key-usage)
+- [Get API Key Billing](/api-reference/management/get-api-key-billing)

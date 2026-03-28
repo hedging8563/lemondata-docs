@@ -491,10 +491,25 @@
                 "image_to_video": {
                   "summary": "Image-to-Video",
                   "value": {
-                    "model": "kling-v1",
+                    "model": "hailuo-2.3-standard",
                     "prompt": "Make this image come alive with gentle movement",
+                    "operation": "image-to-video",
                     "image_url": "https://example.com/image.jpg",
-                    "duration": 5
+                    "duration": 6
+                  }
+                },
+                "reference_to_video": {
+                  "summary": "Reference-to-Video",
+                  "value": {
+                    "model": "veo3.1",
+                    "prompt": "Keep the same subject identity and palette while adding subtle motion",
+                    "operation": "reference-to-video",
+                    "reference_images": [
+                      "https://example.com/ref-a.jpg"
+                    ],
+                    "duration": 8,
+                    "aspect_ratio": "9:16",
+                    "resolution": "720p"
                   }
                 }
               }
@@ -1261,16 +1276,25 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50,
+                    "default": "Default Key",
+                    "description": "Display name for the user API key. Trimmed server-side. Length must be 1-50 characters."
                   },
                   "limitAmount": {
                     "type": [
                       "number",
                       "null"
-                    ]
+                    ],
+                    "minimum": 0,
+                    "maximum": 100000,
+                    "description": "Spending limit in USD. null or omitted means unlimited usage, 0 means zero quota, and a positive value sets the cap."
                   },
                   "models": {
                     "type": "array",
+                    "default": [],
+                    "description": "Optional logical model allowlist. Empty array means no per-key model restriction beyond organization policy.",
                     "items": {
                       "type": "string"
                     }
@@ -1280,9 +1304,13 @@
                       "string",
                       "null"
                     ],
-                    "format": "date-time"
+                    "format": "date-time",
+                    "description": "Optional RFC3339 timestamp. null means no expiry."
                   }
-                }
+                },
+                "required": [
+                  "name"
+                ]
               }
             }
           }
@@ -1346,19 +1374,27 @@
                       "active",
                       "inactive",
                       "revoked"
-                    ]
+                    ],
+                    "description": "Lifecycle status for the user API key."
                   },
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50,
+                    "description": "Updated display name. Length must be 1-50 characters after trimming."
                   },
                   "limitAmount": {
                     "type": [
                       "number",
                       "null"
-                    ]
+                    ],
+                    "minimum": 0,
+                    "maximum": 100000,
+                    "description": "Updated spending limit in USD. null means unlimited, 0 means zero quota, and a positive value sets the cap."
                   },
                   "models": {
                     "type": "array",
+                    "description": "Updated logical model allowlist.",
                     "items": {
                       "type": "string"
                     }
@@ -1368,9 +1404,12 @@
                       "string",
                       "null"
                     ],
-                    "format": "date-time"
+                    "format": "date-time",
+                    "description": "Updated RFC3339 expiry timestamp. null clears the expiry."
                   }
-                }
+                },
+                "description": "At least one field must be provided.",
+                "minProperties": 1
               }
             }
           }
@@ -1428,37 +1467,58 @@
             "in": "query",
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 1
-            }
+            },
+            "description": "1-based page number. Default is 1."
           },
           {
             "name": "limit",
             "in": "query",
             "schema": {
               "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
               "default": 50
-            }
+            },
+            "description": "Page size. Default is 50 and the maximum is 100."
           },
           {
             "name": "logicalModel",
             "in": "query",
             "schema": {
-              "type": "string"
-            }
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Filter by requested logical model name. Maximum length 100."
           },
           {
             "name": "modelVendor",
             "in": "query",
             "schema": {
-              "type": "string"
-            }
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Filter by public model vendor. Maximum length 100."
           },
           {
             "name": "scene",
             "in": "query",
             "schema": {
-              "type": "string"
-            }
+              "type": "string",
+              "enum": [
+                "chat",
+                "image",
+                "audio",
+                "video",
+                "embedding",
+                "rerank",
+                "translation",
+                "music",
+                "3d"
+              ]
+            },
+            "description": "Filter by public request scene."
           },
           {
             "name": "accessChannel",
@@ -1469,21 +1529,24 @@
                 "platform",
                 "byok"
               ]
-            }
+            },
+            "description": "Filter by access channel: platform billing or your own upstream provider key (BYOK)."
           },
           {
             "name": "startDate",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Inclusive date filter. Accepts either RFC3339 with timezone (for example 2026-03-28T00:00:00+08:00) or YYYY-MM-DD."
           },
           {
             "name": "endDate",
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Inclusive date filter. Accepts either RFC3339 with timezone (for example 2026-03-28T00:00:00+08:00) or YYYY-MM-DD."
           }
         ],
         "responses": {
@@ -2452,29 +2515,31 @@
               "reference-to-video",
               "start-end-to-video",
               "video-to-video",
+              "video-extension",
+              "audio-to-video",
               "motion-control"
             ],
-            "description": "Requested video operation. If omitted, LemonData infers the operation from the provided inputs."
+            "description": "Requested video operation. If omitted, LemonData infers the operation from the provided inputs. Explicit operation is recommended for production reliability."
           },
           "image": {
             "type": "string",
-            "description": "Base64 encoded image (for image-to-video)"
+            "description": "Inline image as a data URL (for example, data:image/png;base64,...). Prefer image_url for broader production compatibility."
           },
           "image_url": {
             "type": "string",
             "format": "uri",
-            "description": "Image URL (for image-to-video)"
+            "description": "Publicly reachable image URL for image-to-video generation. Preferred over inline base64 in production."
           },
           "video_url": {
             "type": "string",
             "format": "uri",
-            "description": "Video URL input for video-to-video, motion-control, or model-specific extension / editing flows."
+            "description": "Publicly reachable video URL for video-to-video style flows and motion-control models."
           },
           "duration": {
             "type": "integer",
             "minimum": 1,
             "maximum": 60,
-            "description": "Video duration in seconds"
+            "description": "Video duration in seconds."
           },
           "aspect_ratio": {
             "type": "string",
@@ -2498,7 +2563,7 @@
           },
           "output_audio": {
             "type": "boolean",
-            "description": "Model-dependent audio output toggle. In LemonData, Veo 3 family requests default to true when omitted. Other video models follow their governed default behavior. The camelCase alias `outputAudio` is accepted for compatibility but `output_audio` is canonical."
+            "description": "Model-dependent audio output toggle. Veo 3 family defaults to true when omitted. The camelCase alias outputAudio is accepted for compatibility."
           },
           "fps": {
             "type": "integer",
@@ -2528,15 +2593,78 @@
           },
           "start_image": {
             "type": "string",
-            "description": "First frame image"
+            "description": "First frame image input for start-end-to-video flows."
           },
           "end_image": {
             "type": "string",
-            "description": "Last frame image"
+            "description": "Last frame image input for start-end-to-video flows."
           },
           "user": {
             "type": "string",
             "description": "End-user identifier"
+          },
+          "image_urls": {
+            "type": "array",
+            "description": "Compatibility image URL array. The current public contract limits this wrapper field to a single item.",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "reference_images": {
+            "type": "array",
+            "description": "Canonical public reference-image field for reference-to-video conditioning. Provide up to 3 URLs or compatible data URLs.",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "type": "string"
+            }
+          },
+          "reference_image_type": {
+            "type": "string",
+            "enum": [
+              "asset",
+              "style"
+            ],
+            "description": "Optional reference image role for models that distinguish between asset and style references. The camelCase alias referenceImageType is accepted for compatibility."
+          },
+          "audio_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Publicly reachable audio URL for model-specific audio-conditioned video flows."
+          },
+          "task_id": {
+            "type": "string",
+            "description": "Provider-specific task ID used by some continuation, extension, or derivative flows."
+          },
+          "extend_at": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Model-specific extension start offset used by some video-extension flows."
+          },
+          "extend_times": {
+            "type": "string",
+            "description": "Model-specific extension multiplier or repeat count used by some video-extension flows."
+          },
+          "seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60,
+            "description": "Alias of duration used by some upstream-compatible request shapes."
+          },
+          "size": {
+            "type": "string",
+            "description": "Model-specific size tier used by some OpenAI-compatible video models."
+          },
+          "watermark": {
+            "type": "boolean",
+            "description": "Optional watermark toggle for models that expose it."
+          },
+          "effect_type": {
+            "type": "string",
+            "description": "Model-specific effect selector for specialized editing flows."
           }
         }
       },

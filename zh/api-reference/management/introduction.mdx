@@ -27,29 +27,61 @@ Authorization: Bearer mt-your-management-token
 | `/v1/management/api-keys/{keyId}/usage` | GET | 查询指定 Key 的分页用量明细 |
 | `/v1/management/api-keys/{keyId}/billing` | GET | 查询指定 Key 的聚合账单明细 |
 
-## 字段说明
+## 用量筛选契约
 
-- 请求中的模型名（`model`）
-- 公开模型厂商
-- `scene`
-- `accessChannel`：`platform` 表示按平台方式计费，`byok` 表示使用你自己的上游 Provider Key 计费
-- 用量、计费单位与缓存指标
-- 费用与时间
+`GET /v1/management/api-keys/{keyId}/usage` 支持以下 query 参数：
+
+| 参数 | 类型 | 默认值 / 限制 | 说明 |
+|------|------|---------------|------|
+| `page` | integer | 默认 `1`，最小 `1` | 1-based 页码 |
+| `limit` | integer | 默认 `50`，最小 `1`，最大 `100` | 每页条数 |
+| `logicalModel` | string | 最大长度 `100` | 请求时使用的逻辑模型名 |
+| `modelVendor` | string | 最大长度 `100` | 公开模型厂商 |
+| `scene` | enum | - | `chat`、`image`、`audio`、`video`、`embedding`、`rerank`、`translation`、`music`、`3d` |
+| `accessChannel` | enum | - | `platform` 或 `byok` |
+| `startDate` | string | - | 起始时间，接受带时区的 RFC3339 或 `YYYY-MM-DD` |
+| `endDate` | string | - | 结束时间，接受带时区的 RFC3339 或 `YYYY-MM-DD` |
+
+如果同时提供 `startDate` 和 `endDate`，则 `startDate` 必须早于或等于 `endDate`。
+
+## API Key Body 契约
+
+### POST /v1/management/api-keys
+
+| 字段 | 类型 | 默认值 / 限制 | 说明 |
+|------|------|---------------|------|
+| `name` | string | 必填，默认 `Default Key`，长度 `1-50` | 展示名称，服务端会先 trim |
+| `limitAmount` | number \| null | 最小 `0`，最大 `100000` | `null` 或省略 = 不限额，`0` = 零额度，正数 = 美元上限 |
+| `models` | string[] | 默认 `[]` | 可选的逻辑模型白名单 |
+| `expiresAt` | string \| null | RFC3339 datetime | `null` 表示永不过期 |
+
+### PATCH /v1/management/api-keys/{keyId}
+
+| 字段 | 类型 | 默认值 / 限制 | 说明 |
+|------|------|---------------|------|
+| `status` | enum | - | `active`、`inactive`、`revoked` |
+| `name` | string | 长度 `1-50` | 更新后的展示名称 |
+| `limitAmount` | number \| null | 最小 `0`，最大 `100000` | `null` = 不限额，`0` = 零额度 |
+| `models` | string[] | - | 更新后的逻辑模型白名单 |
+| `expiresAt` | string \| null | RFC3339 datetime | `null` 表示清除过期时间 |
+
+PATCH 请求至少需要提供一个字段。
+
+## 报表语义
+
+- `logicalModel` 表示调用方请求的公开逻辑模型。
+- `modelVendor` 表示公开模型厂商，不是隐藏的物理路由。
+- `scene` 表示公开请求场景，由接口或任务类型归一化得到。
+- `accessChannel=platform` 表示通过 LemonData 平台渠道计费。
+- `accessChannel=byok` 表示请求使用了你自己的上游 Provider Key。
 
 接口只返回公开可理解的账单与报表字段，不暴露内部路由细节或物理渠道元数据。
 
-## 筛选维度
+## Billing 分页说明
 
-`/usage` 与 `/billing` 目前支持按以下维度筛选：
+`/usage` 是分页接口；`/billing` 当前返回的是聚合账单拆分结果，不返回 `page` / `limit` 风格的分页元数据。如果你需要逐条记录，请优先使用 `/usage`。
 
-- 时间范围
-- 请求中的模型名（`model`）
-- 公开模型厂商
-- `scene`
-- `accessChannel`
-- 分页
-
-## 完整请求示例
+## 快速示例
 
 先用当前管理令牌列出这个组织下的 API Keys：
 
@@ -57,79 +89,6 @@ Authorization: Bearer mt-your-management-token
 ```bash cURL
 curl "https://api.lemondata.cc/v1/management/api-keys" \
   -H "Authorization: Bearer mt-your-management-token"
-```
-
-```python Python
-import requests
-
-response = requests.get(
-    "https://api.lemondata.cc/v1/management/api-keys",
-    headers={"Authorization": "Bearer mt-your-management-token"}
-)
-
-data = response.json()
-for key in data["data"]:
-    print(key["name"], key["status"], key["used_amount"])
-```
-
-```javascript JavaScript
-const response = await fetch(
-  'https://api.lemondata.cc/v1/management/api-keys',
-  {
-    headers: {
-      'Authorization': 'Bearer mt-your-management-token'
-    }
-  }
-);
-
-const data = await response.json();
-for (const key of data.data) {
-  console.log(key.name, key.status, key.used_amount);
-}
-```
-
-```go Go
-package main
-
-import (
-    "encoding/json"
-    "fmt"
-    "net/http"
-)
-
-func main() {
-    req, _ := http.NewRequest("GET", "https://api.lemondata.cc/v1/management/api-keys", nil)
-    req.Header.Set("Authorization", "Bearer mt-your-management-token")
-
-    client := &http.Client{}
-    resp, _ := client.Do(req)
-    defer resp.Body.Close()
-
-    var result map[string]interface{}
-    json.NewDecoder(resp.Body).Decode(&result)
-
-    fmt.Println(result["object"])
-}
-```
-
-```php PHP
-<?php
-$ch = curl_init("https://api.lemondata.cc/v1/management/api-keys");
-
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer mt-your-management-token'
-    ]
-]);
-
-$response = curl_exec($ch);
-curl_close($ch);
-
-$data = json_decode($response, true);
-foreach ($data['data'] as $key) {
-    echo $key["name"] . " " . $key["status"] . " " . $key["used_amount"] . PHP_EOL;
-}
 ```
 </RequestExample>
 
@@ -154,6 +113,7 @@ foreach ($data['data'] as $key) {
 }
 ```
 </ResponseExample>
+
 ## 下一步
 
 - [列出 API Keys](/zh/api-reference/management/list-api-keys)
