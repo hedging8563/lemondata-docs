@@ -1,18 +1,22 @@
 ---
 title: "✨ LemonData API 集成技能"
-description: "为任意 coding agent 安装共享的 LemonData API 集成技能，并具备 Agent-First 错误恢复能力。"
+description: "为任意编码代理安装共享的 LemonData API 集成技能，并具备 Agent-First 错误恢复能力。"
 ---
 
 <Note>
-这个技能会教你的 coding agent 只需通过描述你的需求，就能集成 LemonData 的 **300+ AI API**。它被打包为一个共享的 agent-first 技能，并适用于任何支持 skill 或 rules 文件的 coding agent。
+这个技能会教你的编码代理只需通过描述需求，就能集成 LemonData 的 **300+ AI API**。它被打包为一个共享的 Agent-First 技能，并适用于任何支持 skill 或 rules 文件的编码代理。
 
-该 API 是 **[Agent-First](/guides/agent-first-api)** —— 即使 agent 猜错了 model 名称，错误响应也会准确告诉它该如何修复。
+该 API 是 **[Agent-First](/guides/agent-first-api)** —— 即使代理猜错了模型名称，错误响应也会准确告诉它该如何修复。
+</Note>
+
+<Note>
+本页文档化的是可复用的技能封装层，而不是协议兼容层。如果你需要端点、SDK 或客户端配置说明，请查看对应工具的专门集成页。
 </Note>
 
 ## 工作原理
 
 1. **你描述你的需求** —— “我想在我的 Python 项目中使用 GPT-4”
-2. **agent 调用 API** —— 它可能会猜测一个 model 名称或 endpoint
+2. **代理调用 API** —— 它可能会猜测一个模型名称或端点
 3. **如果出现任何问题** —— API 会返回结构化提示（`did_you_mean`, `suggestions`, `retry_after`）
 4. **agent 自我纠正** —— 读取提示并使用正确参数重试
 5. **你获得可运行的代码** —— 通常在第一次或第二次尝试时即可完成
@@ -33,9 +37,9 @@ npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata
 
 ### 验证安装
 
-询问你的 coding agent：
+询问你的编码代理：
 ```
-What skills are available?
+有哪些可用的 skills？
 ```
 
 如果你看到了 `lemondata-api-integration`，则表示安装成功。
@@ -67,7 +71,7 @@ What skills are available?
 
 **你说：**
 ```
-I want to use GPT-4 in my Python project
+我想在我的 Python 项目中使用 GPT-4
 ```
 
 **agent 生成：**
@@ -87,7 +91,7 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-如果 agent 猜错了 model 名称（例如 `gpt5`），API 会返回：
+如果代理猜错了模型名称（例如 `gpt5`），API 会返回：
 ```json
 {
   "error": {
@@ -99,7 +103,7 @@ print(response.choices[0].message.content)
 }
 ```
 
-agent 会读取 `did_you_mean`，修正 model 名称，并重新尝试——这一切都会自动完成。
+代理会读取 `did_you_mean`，修正模型名称，并重新尝试——这一切都会自动完成。
 
 ### 图像生成
 
@@ -117,30 +121,30 @@ agent 会调用图像 API、处理错误，并生成包含下载与保存逻辑�
 Integrate speech-to-text in my app
 ```
 
-agent 会使用正确的 `/v1/audio/transcriptions` endpoint 和音频文件处理逻辑来生成代码。
+代理会使用正确的 `/v1/audio/transcriptions` 端点和音频文件处理逻辑来生成代码。
 
 ## Agent-First 错误恢复
 
-每个错误响应都包含任何 coding agent 都可以解析的结构化提示。详情请参阅[完整的 Agent-First API 参考](/guides/agent-first-api)。
+每个错误响应都包含任何编码代理都可以解析的结构化提示。详情请参阅[完整的 Agent-First API 参考](/guides/agent-first-api)。
 
-| 错误 | API 返回内容 | agent 的处理方式 |
+| 错误 | API 返回内容 | 代理的处理方式 |
 |-------|---------------------|---------------------|
-| 错误的 model 名称 | `did_you_mean` + `suggestions` | 自动纠正并重试 |
-| 余额不足 | `balance_usd` + 更便宜的 `suggestions` | 切换到可负担的 model |
-| model 不可用 | `alternatives` + `retry_after` | 切换到可用的 model |
+| 错误的模型名称 | `did_you_mean` + `suggestions` | 自动纠正并重试 |
+| 余额不足 | `balance_usd` + 更便宜的 `suggestions` | 切换到可负担的模型 |
+| 模型不可用 | `alternatives` + `retry_after` | 切换到可用的模型 |
 | 触发速率限制 | `retry_after`（精确秒数） | 等待后重试 |
 | 上下文过长 | `suggestions` 包含更大的 model | 切换到更大上下文的 model |
 
-### 原生 Endpoint 优化
+### 原生端点优化
 
-当你使用 Claude 或 Gemini model 调用 `/v1/chat/completions` 时，API 会返回优化 header：
+当你使用 Claude 或 Gemini 模型调用 `/v1/chat/completions` 时，API 会返回优化 header：
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance.
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-agent 会自动切换到原生 endpoint 以获得更好的性能（无需格式转换、支持 extended thinking、支持 prompt caching）。
+代理会自动切换到原生端点以获得更好的性能（无需格式转换、支持 extended thinking、支持 prompt caching）。
 
 ### Model 发现
 
@@ -194,7 +198,7 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
   <Accordion title="技能没有自动触发？">
     尝试在你的请求中提及 “LemonData” 或 “LemonData API”：
     ```
-    Use LemonData to integrate GPT-4 in my project
+    我想用 LemonData 把 GPT-4 集成到我的项目中
     ```
   </Accordion>
 

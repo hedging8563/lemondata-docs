@@ -1,14 +1,20 @@
 ---
 title: "IDE- & SDK-Kompatibilität"
-description: "Vollständige Kompatibilitätsreferenz für AI-Coding-Tools, SDKs und Frameworks"
+description: "Evidenzbasierter Kompatibilitätsleitfaden für AI-Coding-Tools, SDKs und Frameworks"
 ---
 
 ## Überblick
 
-Die LemonData API ist auf **Drop-in-Kompatibilität** mit allen wichtigen AI-Entwicklungstools ausgelegt. Dieser Leitfaden dokumentiert unterstützte Parameter und verifizierte Integrationen.
+LemonData stellt mehrere API-Formate bereit, sodass gängige Coding-Tools, SDKs und Frameworks mit wenig Glue-Code angebunden werden können.
+
+Diese Seite ist bewusst enger gefasst als eine Marketing-Matrix.
+
+- **Unterstützt** bedeutet, dass wir einen konkreten Setup-Pfad dokumentieren und LemonData die dafür benötigte Protocol-Shape bereitstellt.
+- **Starker nativer Pfad** bedeutet, dass das Repository direkte Adapter- oder Request-Format-Evidenz für diese Protocol-Familie enthält.
+- **Best-effort** bedeutet, dass die Integration funktionieren kann, der Upstream-Client diesen Custom-Gateway-Workflow aber nicht als stabilen Vertrag behandelt.
 
 <Note>
-  Alle Parameter werden validiert, aber an Upstream-Provider durchgereicht. Nicht unterstützte Parameter für bestimmte Modelle werden stillschweigend ignoriert, um maximale Kompatibilität sicherzustellen.
+  Nicht unterstützte Felder werden nicht einheitlich behandelt. Auf Kompatibilitätsrouten werden manche Felder ignoriert oder normalisiert. Auf nativen Responses-Routen können explizite `400`- oder `503`-Fehler zurückgegeben werden, wenn das gewählte Modell oder der geroutete Channel das erforderliche Passthrough nicht unterstützt.
 </Note>
 
 ## Unterstützte API-Formate
@@ -22,20 +28,19 @@ Die LemonData API ist auf **Drop-in-Kompatibilität** mit allen wichtigen AI-Ent
 
 ## IDE- & CLI-Kompatibilität
 
-### Verifizierte Tools
+### Dokumentierte Tool-Pfade
 
-| Tool | Status | Format | Hinweise |
-|------|--------|--------|----------|
-| **Cursor** | ✅ Vollständig | OpenAI | Anthropic-Tool-Format unterstützt |
-| **Claude Code CLI** | ✅ Vollständig | Anthropic | Extended Thinking, tool_choice |
-| **Windsurf** | ✅ Vollständig | OpenAI | Standard-OpenAI-Format |
-| **Aider** | ✅ Vollständig | OpenAI | Alle Modelle unterstützt |
-| **Continue.dev** | ✅ Vollständig | OpenAI/Anthropic | Unterstützung für beide Formate |
-| **OpenCode** | ✅ Vollständig | OpenAI | Multi-Provider-Unterstützung |
-| **Cline/Roo Code** | ✅ Vollständig | OpenAI | Über OpenRouter-Format |
-| **GitHub Copilot** | ✅ Vollständig | OpenAI | Standardformat |
-| **Codex CLI** | ✅ Vollständig | OpenAI | OpenAI Responses API |
-| **Gemini CLI** | ✅ Vollständig | Gemini | Natives Gemini-Format |
+| Tool | Support-Niveau | Format | Hinweise |
+|------|----------------|--------|----------|
+| **Cursor** | Unterstützt mit Grenzen | OpenAI-compatible | Gedacht für BYOK-Standard-Chat-/Editor-Flows, nicht als Ersatz für Cursor-eigene Funktionen wie Tab Completion |
+| **Claude Code CLI** | Starker nativer Pfad | Anthropic | Nativer `/v1/messages`-Pfad mit Adapter-Evidenz für thinking und `tool_choice` |
+| **Codex CLI** | Unterstützt, aber modell-/channelabhängig | OpenAI Responses | Am sinnvollsten mit `/v1/responses`; einige Responses-native Felder hängen von nativem Passthrough des Modells / Channels ab |
+| **Gemini CLI** | Experimentell / best-effort | Gemini | Der Custom-Base-URL-Workflow mit LemonData ist kein stabiler Upstream-Vertrag |
+| **OpenCode** | Unterstützt | OpenAI-compatible | Standardmäßig OpenAI-compatible Provider verwenden; nur bei klarem Bedarf auf einen Responses-Provider wechseln |
+
+<Note>
+  Andere OpenAI-compatible Editor- und Agent-Tools funktionieren oft mit demselben Base-URL-Muster, aber dieses Repository pflegt derzeit keine dedizierte Regressionsabdeckung für Windsurf, Aider, Continue.dev, Cline/Roo Code oder GitHub Copilot.
+</Note>
 
 ### Konfigurationsbeispiele
 
@@ -72,16 +77,16 @@ Die LemonData API ist auf **Drop-in-Kompatibilität** mit allen wichtigen AI-Ent
 
 ## SDK-Kompatibilität
 
-### Verifizierte SDKs
+### Dokumentierte SDK- / Framework-Pfade
 
-| SDK | Sprache | Status | Hinweise |
-|-----|---------|--------|----------|
-| **OpenAI SDK** | Python/JS/Go | ✅ Vollständig | Alle Parameter unterstützt |
-| **Anthropic SDK** | Python/JS | ✅ Vollständig | Extended Thinking, Tools |
-| **Vercel AI SDK** | TypeScript | ✅ Vollständig | streamText, generateObject |
-| **LangChain** | Python/JS | ✅ Vollständig | ChatOpenAI, bind_tools |
-| **LlamaIndex** | Python | ✅ Vollständig | OpenAI-kompatibel |
-| **Dify** | - | ✅ Vollständig | OpenAI-Format |
+| SDK / Framework | Sprache | Support-Niveau | Hinweise |
+|-----------------|---------|----------------|----------|
+| **OpenAI SDK** | Python/JS/Go | Kernpfad unterstützt | Dokumentiert Chat Completions, Embeddings und gängige Responses-Workflows; einige Responses-native-only Felder hängen von Model-/Channel-Passthrough ab |
+| **Anthropic SDK** | Python/JS | Starker nativer Pfad | Nativer Messages-Pfad mit direkter Evidenz für tools, thinking und prompt caching |
+| **Vercel AI SDK** | TypeScript | Empfohlenes Integrationsmuster | Zuerst `@ai-sdk/openai-compatible`, nur bei explizitem Responses-native-Bedarf `@ai-sdk/openai` |
+| **LangChain** | Python/JS | Standardsurface unterstützt | Der beabsichtigte Umfang umfasst `ChatOpenAI` und `OpenAIEmbeddings`; vendor-native Extras sind nicht eingeschlossen |
+| **LlamaIndex** | Python | Über `OpenAILike` unterstützt | Für Third-Party-Gateways wie LemonData sollte `OpenAILike` statt der eingebauten OpenAI-Klassen verwendet werden |
+| **Dify** | - | Unterstützt mit Grenzen | Gedacht für OpenAI-Provider und chat-completions-orientierte Flows; keine Zusage für Codex-spezifische Responses / WebSocket-Verhalten |
 
 ## Chat-Completions-Parameter
 

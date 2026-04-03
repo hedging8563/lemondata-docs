@@ -1,19 +1,25 @@
 ---
 title: "IDE 및 SDK 호환성"
-description: "AI 코딩 도구, SDK 및 프레임워크를 위한 전체 호환성 참조"
+description: "AI 코딩 도구, SDK, 프레임워크를 위한 근거 기반 호환성 가이드"
 ---
 
 ## 개요
 
-LemonData API는 모든 주요 AI 개발 도구와 **즉시 대체 가능한 호환성**을 제공하도록 설계되었습니다. 이 가이드는 지원되는 parameter와 검증된 integration을 문서화합니다.
+LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK, framework를 최소한의 glue code로 연결할 수 있습니다.
+
+이 페이지는 marketing matrix보다 의도적으로 더 좁은 의미를 사용합니다.
+
+- **지원**: 명확한 설정 경로를 문서화했고, 그 경로에 필요한 protocol shape를 LemonData가 노출한다는 뜻입니다.
+- **강한 native path**: 해당 protocol family에 대해 이 저장소에 직접적인 adapter / request-format 근거가 있다는 뜻입니다.
+- **Best-effort**: 통합은 가능할 수 있지만, 상위 클라이언트가 이 custom gateway workflow를 안정적인 계약으로 보지 않는다는 뜻입니다.
 
 <Note>
-  모든 parameter는 검증되지만 upstream provider로 그대로 전달됩니다. 특정 model에서 지원되지 않는 parameter는 조용히 무시되어 최대 호환성을 보장합니다.
+  미지원 필드는 일괄적으로 처리되지 않습니다. 호환 경로에서는 무시되거나 정규화될 수 있고, native Responses 경로에서는 선택한 model 또는 routed channel이 필요한 passthrough를 지원하지 않으면 명시적인 `400` 또는 `503` 오류가 반환될 수 있습니다.
 </Note>
 
 ## 지원되는 API 형식
 
-| Endpoint | Format | Use Case |
+| Endpoint | 형식 | 용도 |
 |----------|--------|----------|
 | `/v1/chat/completions` | OpenAI Chat | 범용 호환성 |
 | `/v1/responses` | OpenAI Responses | 상태 유지 대화 |
@@ -22,20 +28,19 @@ LemonData API는 모든 주요 AI 개발 도구와 **즉시 대체 가능한 호
 
 ## IDE 및 CLI 호환성
 
-### 검증된 도구
+### 문서화된 도구 경로
 
-| Tool | Status | Format | Notes |
-|------|--------|--------|-------|
-| **Cursor** | ✅ Full | OpenAI | Anthropic tool 형식 지원 |
-| **Claude Code CLI** | ✅ Full | Anthropic | Extended thinking, tool_choice |
-| **Windsurf** | ✅ Full | OpenAI | 표준 OpenAI 형식 |
-| **Aider** | ✅ Full | OpenAI | 모든 model 지원 |
-| **Continue.dev** | ✅ Full | OpenAI/Anthropic | 이중 형식 지원 |
-| **OpenCode** | ✅ Full | OpenAI | 다중 provider 지원 |
-| **Cline/Roo Code** | ✅ Full | OpenAI | OpenRouter 형식을 통해 지원 |
-| **GitHub Copilot** | ✅ Full | OpenAI | 표준 형식 |
-| **Codex CLI** | ✅ Full | OpenAI | OpenAI Responses API |
-| **Gemini CLI** | ✅ Full | Gemini | 기본 Gemini 형식 |
+| 도구 | 지원 수준 | 형식 | 설명 |
+|------|----------|------|------|
+| **Cursor** | 지원되지만 제약 있음 | OpenAI-compatible | BYOK 표준 chat/editor 흐름용이며, Tab Completion 같은 Cursor 관리 기능을 대체한다는 뜻은 아닙니다 |
+| **Claude Code CLI** | 강한 native path | Anthropic | native `/v1/messages` 경로. thinking과 `tool_choice`에 대한 adapter 근거가 있습니다 |
+| **Codex CLI** | 지원되지만 model / channel 의존 | OpenAI Responses | `/v1/responses` 설정이 가장 적합합니다. 일부 Responses-native 필드는 model / channel의 native passthrough에 의존합니다 |
+| **Gemini CLI** | 실험적 / best-effort | Gemini | LemonData용 custom base URL 흐름은 안정적인 upstream 계약이 아닙니다 |
+| **OpenCode** | 지원 | OpenAI-compatible | 기본은 OpenAI-compatible provider를 사용하고, Responses provider가 명확히 필요할 때만 전환합니다 |
+
+<Note>
+  다른 OpenAI-compatible editor / agent tool도 같은 base URL 패턴으로 동작하는 경우가 많지만, 이 저장소는 Windsurf, Aider, Continue.dev, Cline/Roo Code, GitHub Copilot 등에 대한 전용 회귀를 현재 유지하지 않습니다.
+</Note>
 
 ### 구성 예시
 
@@ -72,16 +77,16 @@ LemonData API는 모든 주요 AI 개발 도구와 **즉시 대체 가능한 호
 
 ## SDK 호환성
 
-### 검증된 SDK
+### 문서화된 SDK / 프레임워크 경로
 
-| SDK | Language | Status | Notes |
-|-----|----------|--------|-------|
-| **OpenAI SDK** | Python/JS/Go | ✅ Full | 모든 parameter 지원 |
-| **Anthropic SDK** | Python/JS | ✅ Full | Extended thinking, tools |
-| **Vercel AI SDK** | TypeScript | ✅ Full | streamText, generateObject |
-| **LangChain** | Python/JS | ✅ Full | ChatOpenAI, bind_tools |
-| **LlamaIndex** | Python | ✅ Full | OpenAI 호환 |
-| **Dify** | - | ✅ Full | OpenAI 형식 |
+| SDK / 프레임워크 | 언어 | 지원 수준 | 설명 |
+|-----------------|----------|---------------|-------|
+| **OpenAI SDK** | Python/JS/Go | 핵심 경로 지원 | Chat Completions, Embeddings, 일반적인 Responses 워크플로를 문서화합니다. 일부 Responses-native-only 필드는 model / channel passthrough에 의존합니다 |
+| **Anthropic SDK** | Python/JS | 강한 native path | native Messages 경로. tools, thinking, prompt caching에 직접적인 근거가 있습니다 |
+| **Vercel AI SDK** | TypeScript | 권장 통합 패턴 | 먼저 `@ai-sdk/openai-compatible`를 권장하며, Responses-native가 명확히 필요할 때만 `@ai-sdk/openai`를 사용합니다 |
+| **LangChain** | Python/JS | 표준 surface 지원 | 범위는 `ChatOpenAI`와 `OpenAIEmbeddings`입니다. vendor-native extras는 범위 밖입니다 |
+| **LlamaIndex** | Python | `OpenAILike` 경유 지원 | LemonData 같은 third-party gateway에서는 내장 OpenAI 클래스 대신 `OpenAILike`를 사용합니다 |
+| **Dify** | - | 지원되지만 제약 있음 | 예상 경로는 OpenAI provider와 chat-completions 지향 흐름입니다. Codex 전용 Responses / WebSocket 보장은 아닙니다 |
 
 ## Chat Completions Parameters
 

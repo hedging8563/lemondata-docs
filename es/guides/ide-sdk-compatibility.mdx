@@ -1,19 +1,25 @@
 ---
 title: "Compatibilidad de IDE y SDK"
-description: "Referencia completa de compatibilidad para herramientas de codificación con AI, SDKs y frameworks"
+description: "Guía de compatibilidad basada en evidencias para herramientas de codificación IA, SDK y frameworks"
 ---
 
 ## Resumen general
 
-La API de LemonData está diseñada para ofrecer **compatibilidad inmediata** con todas las principales herramientas de desarrollo de AI. Esta guía documenta los parámetros admitidos y las integraciones verificadas.
+LemonData expone varios formatos de API para que las herramientas de coding, SDK y frameworks más comunes puedan integrarse con poco glue code.
+
+Esta página es intencionalmente más estricta que una simple matriz de marketing.
+
+- **Compatible** significa que documentamos una ruta de configuración concreta y que LemonData expone la forma de protocolo que esa ruta espera.
+- **Ruta nativa fuerte** significa que el repositorio también contiene evidencia directa a nivel de adapter / request-format para esa familia de protocolos.
+- **Best-effort** significa que la integración puede funcionar, pero el cliente upstream no trata este workflow de gateway personalizada como un contrato estable.
 
 <Note>
-  Todos los parámetros se validan, pero se transfieren a los proveedores upstream. Los parámetros no admitidos para modelos específicos se ignoran silenciosamente, lo que garantiza la máxima compatibilidad.
+  Los campos no soportados no se manejan de manera uniforme. En rutas de compatibilidad algunos campos se ignoran o normalizan. En rutas Responses nativas pueden devolverse errores explícitos `400` o `503` si el modelo elegido o el canal enrutado no soportan el passthrough requerido.
 </Note>
 
 ## Formatos de API compatibles
 
-| Endpoint | Format | Use Case |
+| Endpoint | Formato | Caso de uso |
 |----------|--------|----------|
 | `/v1/chat/completions` | OpenAI Chat | Compatibilidad universal |
 | `/v1/responses` | OpenAI Responses | Conversaciones con estado |
@@ -22,20 +28,19 @@ La API de LemonData está diseñada para ofrecer **compatibilidad inmediata** co
 
 ## Compatibilidad con IDE y CLI
 
-### Herramientas verificadas
+### Rutas de herramientas documentadas
 
-| Tool | Status | Format | Notes |
-|------|--------|--------|-------|
-| **Cursor** | ✅ Full | OpenAI | Se admite el formato de herramientas de Anthropic |
-| **Claude Code CLI** | ✅ Full | Anthropic | Pensamiento extendido, `tool_choice` |
-| **Windsurf** | ✅ Full | OpenAI | Formato estándar de OpenAI |
-| **Aider** | ✅ Full | OpenAI | Todos los modelos compatibles |
-| **Continue.dev** | ✅ Full | OpenAI/Anthropic | Compatibilidad con doble formato |
-| **OpenCode** | ✅ Full | OpenAI | Compatibilidad con múltiples proveedores |
-| **Cline/Roo Code** | ✅ Full | OpenAI | A través del formato OpenRouter |
-| **GitHub Copilot** | ✅ Full | OpenAI | Formato estándar |
-| **Codex CLI** | ✅ Full | OpenAI | API de OpenAI Responses |
-| **Gemini CLI** | ✅ Full | Gemini | Formato nativo de Gemini |
+| Herramienta | Nivel de soporte | Formato | Notas |
+|-------------|------------------|---------|-------|
+| **Cursor** | Compatible con límites | OpenAI-compatible | Pensado para flujos BYOK estándar de chat / editor, no como reemplazo de funciones gestionadas por Cursor como Tab Completion |
+| **Claude Code CLI** | Ruta nativa fuerte | Anthropic | Ruta nativa `/v1/messages` con evidencia de adapter para thinking y `tool_choice` |
+| **Codex CLI** | Compatible, pero dependiente de modelo / canal | OpenAI Responses | Mejor configurado sobre `/v1/responses`; algunos campos Responses-native dependen del passthrough nativo del modelo / canal |
+| **Gemini CLI** | Experimental / best-effort | Gemini | El flujo de base URL personalizada con LemonData no es un contrato upstream estable |
+| **OpenCode** | Compatible | OpenAI-compatible | Usa primero un provider OpenAI-compatible y cambia a uno basado en Responses solo cuando realmente lo necesites |
+
+<Note>
+  Otros editores y agent tools OpenAI-compatible suelen funcionar con el mismo patrón de base URL, pero este repositorio no mantiene por ahora regresiones dedicadas para Windsurf, Aider, Continue.dev, Cline/Roo Code o GitHub Copilot.
+</Note>
 
 ### Ejemplos de configuración
 
@@ -72,16 +77,16 @@ La API de LemonData está diseñada para ofrecer **compatibilidad inmediata** co
 
 ## Compatibilidad con SDK
 
-### SDK verificados
+### Rutas documentadas de SDK / frameworks
 
-| SDK | Language | Status | Notes |
-|-----|----------|--------|-------|
-| **OpenAI SDK** | Python/JS/Go | ✅ Full | Todos los parámetros compatibles |
-| **Anthropic SDK** | Python/JS | ✅ Full | Pensamiento extendido, tools |
-| **Vercel AI SDK** | TypeScript | ✅ Full | `streamText`, `generateObject` |
-| **LangChain** | Python/JS | ✅ Full | `ChatOpenAI`, `bind_tools` |
-| **LlamaIndex** | Python | ✅ Full | Compatible con OpenAI |
-| **Dify** | - | ✅ Full | Formato OpenAI |
+| SDK / Framework | Lenguaje | Nivel de soporte | Notas |
+|-----------------|----------|------------------|-------|
+| **OpenAI SDK** | Python/JS/Go | Ruta principal compatible | Documenta Chat Completions, Embeddings y flujos Responses comunes; algunos campos Responses-native-only dependen del passthrough de modelo / canal |
+| **Anthropic SDK** | Python/JS | Ruta nativa fuerte | Ruta Messages nativa con evidencia directa para tools, thinking y prompt caching |
+| **Vercel AI SDK** | TypeScript | Patrón de integración recomendado | Prefiere `@ai-sdk/openai-compatible` y usa `@ai-sdk/openai` solo cuando necesites Responses-native explícitamente |
+| **LangChain** | Python/JS | Surface estándar compatible | El alcance previsto cubre `ChatOpenAI` y `OpenAIEmbeddings`; los extras vendor-native quedan fuera |
+| **LlamaIndex** | Python | Compatible vía `OpenAILike` | Para gateways de terceros como LemonData, usa `OpenAILike` en lugar de las clases OpenAI integradas |
+| **Dify** | - | Compatible con límites | La ruta prevista es el provider OpenAI y los flujos orientados a chat-completions; no garantiza comportamientos Codex-specific Responses / WebSocket |
 
 ## Parámetros de Chat Completions
 

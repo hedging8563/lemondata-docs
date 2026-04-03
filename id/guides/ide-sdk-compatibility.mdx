@@ -1,14 +1,20 @@
 ---
 title: "Kompatibilitas IDE & SDK"
-description: "Referensi kompatibilitas lengkap untuk alat coding AI, SDK, dan framework"
+description: "Panduan kompatibilitas berbasis bukti untuk alat coding AI, SDK, dan framework"
 ---
 
 ## Ikhtisar
 
-LemonData API dirancang untuk **kompatibilitas drop-in** dengan semua alat pengembangan AI utama. Panduan ini mendokumentasikan parameter yang didukung dan integrasi yang telah diverifikasi.
+LemonData menyediakan beberapa format API sehingga coding tool, SDK, dan framework umum dapat terintegrasi dengan sedikit glue code.
+
+Halaman ini sengaja lebih sempit daripada sekadar matriks marketing.
+
+- **Didukung** berarti kami mendokumentasikan jalur konfigurasi yang konkret dan LemonData mengekspos protocol shape yang dibutuhkan jalur tersebut.
+- **Jalur native yang kuat** berarti repo juga memiliki bukti langsung pada level adapter / request-format untuk keluarga protokol itu.
+- **Best-effort** berarti integrasi bisa berjalan, tetapi klien upstream tidak memperlakukan workflow custom gateway ini sebagai kontrak yang stabil.
 
 <Note>
-  Semua parameter divalidasi tetapi diteruskan ke provider upstream. Parameter yang tidak didukung untuk model tertentu akan diabaikan secara diam-diam, memastikan kompatibilitas maksimum.
+  Field yang tidak didukung tidak ditangani secara seragam. Pada jalur kompatibilitas, beberapa field bisa diabaikan atau dinormalisasi. Pada jalur Responses native, error `400` atau `503` yang eksplisit dapat dikembalikan jika model yang dipilih atau channel yang dirutekan tidak mendukung passthrough yang dibutuhkan.
 </Note>
 
 ## Format API yang Didukung
@@ -22,20 +28,19 @@ LemonData API dirancang untuk **kompatibilitas drop-in** dengan semua alat penge
 
 ## Kompatibilitas IDE & CLI
 
-### Alat yang Terverifikasi
+### Jalur alat yang didokumentasikan
 
-| Tool | Status | Format | Catatan |
-|------|--------|--------|-------|
-| **Cursor** | ✅ Full | OpenAI | Format tool Anthropic didukung |
-| **Claude Code CLI** | ✅ Full | Anthropic | Extended thinking, `tool_choice` |
-| **Windsurf** | ✅ Full | OpenAI | Format OpenAI standar |
-| **Aider** | ✅ Full | OpenAI | Semua model didukung |
-| **Continue.dev** | ✅ Full | OpenAI/Anthropic | Dukungan format ganda |
-| **OpenCode** | ✅ Full | OpenAI | Dukungan multi-provider |
-| **Cline/Roo Code** | ✅ Full | OpenAI | Melalui format OpenRouter |
-| **GitHub Copilot** | ✅ Full | OpenAI | Format standar |
-| **Codex CLI** | ✅ Full | OpenAI | OpenAI Responses API |
-| **Gemini CLI** | ✅ Full | Gemini | Format Gemini native |
+| Alat | Tingkat dukungan | Format | Catatan |
+|------|------------------|--------|---------|
+| **Cursor** | Didukung dengan batasan | OpenAI-compatible | Cocok untuk alur BYOK standar chat / editor, bukan berarti menggantikan fitur yang dikelola Cursor seperti Tab Completion |
+| **Claude Code CLI** | Jalur native yang kuat | Anthropic | Jalur native `/v1/messages` dengan bukti adapter untuk thinking dan `tool_choice` |
+| **Codex CLI** | Didukung tetapi bergantung pada model / channel | OpenAI Responses | Paling cocok dikonfigurasi ke `/v1/responses`; beberapa field Responses-native bergantung pada native passthrough model / channel |
+| **Gemini CLI** | Eksperimental / best-effort | Gemini | Alur custom base URL dengan LemonData bukan kontrak upstream yang stabil |
+| **OpenCode** | Didukung | OpenAI-compatible | Gunakan provider OpenAI-compatible terlebih dahulu, lalu pindah ke provider Responses hanya jika benar-benar dibutuhkan |
+
+<Note>
+  Banyak editor / agent tool OpenAI-compatible lain juga sering bekerja dengan pola base URL yang sama, tetapi repo ini saat ini tidak memelihara regression khusus untuk Windsurf, Aider, Continue.dev, Cline/Roo Code, atau GitHub Copilot.
+</Note>
 
 ### Contoh Konfigurasi
 
@@ -72,16 +77,16 @@ LemonData API dirancang untuk **kompatibilitas drop-in** dengan semua alat penge
 
 ## Kompatibilitas SDK
 
-### SDK yang Terverifikasi
+### Jalur SDK / framework yang didokumentasikan
 
-| SDK | Language | Status | Catatan |
-|-----|----------|--------|-------|
-| **OpenAI SDK** | Python/JS/Go | ✅ Full | Semua parameter didukung |
-| **Anthropic SDK** | Python/JS | ✅ Full | Extended thinking, tools |
-| **Vercel AI SDK** | TypeScript | ✅ Full | `streamText`, `generateObject` |
-| **LangChain** | Python/JS | ✅ Full | `ChatOpenAI`, `bind_tools` |
-| **LlamaIndex** | Python | ✅ Full | Kompatibel dengan OpenAI |
-| **Dify** | - | ✅ Full | Format OpenAI |
+| SDK / Framework | Bahasa | Tingkat dukungan | Catatan |
+|-----------------|--------|------------------|---------|
+| **OpenAI SDK** | Python/JS/Go | Jalur inti didukung | Mendokumentasikan Chat Completions, Embeddings, dan alur Responses umum; beberapa field Responses-native-only bergantung pada model / channel passthrough |
+| **Anthropic SDK** | Python/JS | Jalur native yang kuat | Jalur Messages native dengan bukti langsung untuk tools, thinking, dan prompt caching |
+| **Vercel AI SDK** | TypeScript | Pola integrasi yang direkomendasikan | Utamakan `@ai-sdk/openai-compatible`, dan gunakan `@ai-sdk/openai` hanya saat benar-benar memerlukan Responses-native |
+| **LangChain** | Python/JS | Surface standar didukung | Cakupan yang dimaksud adalah `ChatOpenAI` dan `OpenAIEmbeddings`; extra vendor-native berada di luar cakupan |
+| **LlamaIndex** | Python | Didukung melalui `OpenAILike` | Untuk gateway pihak ketiga seperti LemonData, gunakan `OpenAILike` alih-alih kelas OpenAI bawaan |
+| **Dify** | - | Didukung dengan batasan | Jalur yang diharapkan adalah provider OpenAI dan alur berorientasi chat-completions; tidak menjamin perilaku Codex-specific Responses / WebSocket |
 
 ## Parameter Chat Completions
 

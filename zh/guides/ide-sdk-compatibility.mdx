@@ -1,14 +1,20 @@
 ---
 title: "IDE 与 SDK 兼容性"
-description: "AI 编码工具、SDK 和框架的完整兼容性参考"
+description: "基于证据的 AI 编码工具、SDK 和框架兼容性指引"
 ---
 
 ## 概述
 
-LemonData API 的设计目标是与所有主流 AI 开发工具实现**即插即用兼容**。本指南记录了受支持的参数和已验证的集成。
+LemonData 暴露了多种 API 格式，让常见 coding 工具、SDK 和框架可以用较少胶水代码接入。
+
+本页刻意比 marketing matrix 更收敛：
+
+- **支持**：表示我们文档化了一条明确配置路径，且 LemonData 暴露了这条路径所需的协议形状。
+- **强原生路径**：表示仓库里还存在该协议族的直接 adapter / request-format 证据。
+- **Best-effort**：表示这条集成路径可能可用，但上游客户端并未把这种自定义网关工作流视为稳定契约。
 
 <Note>
-  所有参数都会被验证，但会透传给上游提供商。特定模型不支持的参数会被静默忽略，以确保最大兼容性。
+  不支持的字段并不是统一处理的。在兼容路由上，有些字段会被忽略或归一化；在原生 Responses 路径上，如果所选模型或路由到的渠道不支持所需 passthrough，可能会返回明确的 `400` 或 `503` 错误。
 </Note>
 
 ## 支持的 API 格式
@@ -22,20 +28,19 @@ LemonData API 的设计目标是与所有主流 AI 开发工具实现**即插即
 
 ## IDE 与 CLI 兼容性
 
-### 已验证工具
+### 已文档化的工具路径
 
-| 工具 | 状态 | 格式 | 说明 |
-|------|--------|--------|-------|
-| **Cursor** | ✅ 完整 | OpenAI | 支持 Anthropic 工具格式 |
-| **Claude Code CLI** | ✅ 完整 | Anthropic | Extended thinking、tool_choice |
-| **Windsurf** | ✅ 完整 | OpenAI | 标准 OpenAI 格式 |
-| **Aider** | ✅ 完整 | OpenAI | 支持所有模型 |
-| **Continue.dev** | ✅ 完整 | OpenAI/Anthropic | 双格式支持 |
-| **OpenCode** | ✅ 完整 | OpenAI | 多提供商支持 |
-| **Cline/Roo Code** | ✅ 完整 | OpenAI | 通过 OpenRouter 格式 |
-| **GitHub Copilot** | ✅ 完整 | OpenAI | 标准格式 |
-| **Codex CLI** | ✅ 完整 | OpenAI | OpenAI Responses API |
-| **Gemini CLI** | ✅ 完整 | Gemini | 原生 Gemini 格式 |
+| 工具 | 支持级别 | 格式 | 说明 |
+|------|----------|------|------|
+| **Cursor** | 支持，但有边界 | OpenAI-compatible | 适用于 BYOK 标准 chat/editor 流，不等于可以替代 Cursor 托管功能（如 Tab Completion） |
+| **Claude Code CLI** | 强原生路径 | Anthropic | 原生 `/v1/messages` 路径，对 thinking 和 `tool_choice` 有 adapter 证据 |
+| **Codex CLI** | 支持，但依赖模型 / 渠道 | OpenAI Responses | 最适合配置到 `/v1/responses`；部分 Responses-native 字段依赖所选模型与渠道的 native passthrough 支持 |
+| **Gemini CLI** | 实验性 / best-effort | Gemini | 自定义 LemonData base URL 工作流不是稳定 upstream contract |
+| **OpenCode** | 支持 | OpenAI-compatible | 默认使用 OpenAI-compatible provider；只有在你明确需要 Responses provider 路径时才切换 |
+
+<Note>
+  其他 OpenAI-compatible 编辑器和 agent 工具通常也能沿用同样的 base URL 模式，但当前仓库并没有为 Windsurf、Aider、Continue.dev、Cline/Roo Code、GitHub Copilot 等客户端维护专门的回归覆盖。
+</Note>
 
 ### 配置示例
 
@@ -72,16 +77,16 @@ LemonData API 的设计目标是与所有主流 AI 开发工具实现**即插即
 
 ## SDK 兼容性
 
-### 已验证 SDK
+### 已文档化的 SDK / 框架路径
 
-| SDK | 语言 | 状态 | 说明 |
-|-----|----------|--------|-------|
-| **OpenAI SDK** | Python/JS/Go | ✅ 完整 | 支持所有参数 |
-| **Anthropic SDK** | Python/JS | ✅ 完整 | Extended thinking、tools |
-| **Vercel AI SDK** | TypeScript | ✅ 完整 | streamText、generateObject |
-| **LangChain** | Python/JS | ✅ 完整 | ChatOpenAI、bind_tools |
-| **LlamaIndex** | Python | ✅ 完整 | 与 OpenAI 兼容 |
-| **Dify** | - | ✅ 完整 | OpenAI 格式 |
+| SDK / 框架 | 语言 | 支持级别 | 说明 |
+|------------|------|----------|------|
+| **OpenAI SDK** | Python/JS/Go | 核心路径支持 | 已文档化 Chat Completions、Embeddings 与常见 Responses 工作流；部分仅限 Responses-native 的字段依赖 model/channel passthrough 支持 |
+| **Anthropic SDK** | Python/JS | 强原生路径 | 原生 Messages 路径，对 tools、thinking 和 prompt caching 有直接证据 |
+| **Vercel AI SDK** | TypeScript | 推荐集成模式 | 优先使用 `@ai-sdk/openai-compatible`；仅在明确需要 Responses-native 行为时使用 `@ai-sdk/openai` |
+| **LangChain** | Python/JS | 支持标准 surface | 预期范围是 `ChatOpenAI` 与 `OpenAIEmbeddings`；vendor-native extras 不在此页承诺范围 |
+| **LlamaIndex** | Python | 通过 `OpenAILike` 支持 | 对 LemonData 这类第三方 gateway，应使用 `OpenAILike`，而不是内置 OpenAI 类 |
+| **Dify** | - | 支持，但有边界 | 预期路径是 OpenAI provider 与 chat-completions 导向流程；不适合承诺 Codex 专用 Responses / WebSocket 行为 |
 
 ## Chat Completions 参数
 

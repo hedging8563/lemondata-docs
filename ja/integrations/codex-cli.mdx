@@ -5,7 +5,17 @@ description: "OpenAI Codex CLI を LemonData API で使用するように設定�
 
 ## 概要
 
+<Note>
+**種類**: コーディングツール
+
+**主要パス**: OpenAI Responses
+
+**サポートレベル**: model / channel 依存でサポート
+</Note>
+
 OpenAI Codex は、軽量なコーディングエージェントとして機能するオープンソースのコマンドラインツール（CLI）であり、ターミナル上でコードの読み取り、変更、実行が可能です。GPT モデル上に構築されており、コード生成向けに最適化されています。
+
+LemonData では、Codex CLI は `/v1/responses` に向けて使うのが最も適しています。この経路は概ね安定していますが、一部の Responses-native 機能は、選択したモデルとルーティング先チャネルが native passthrough をサポートしているかに依存します。
 
 ## システム要件
 
@@ -82,12 +92,16 @@ responses_websockets_v2 = true
 ```
 
 <Note>
-config ファイルが存在しない場合は、まず `codex` を一度実行して生成し、その後ファイルを編集してください。`config.toml` を変更した後は、新しい provider 設定が再読み込みされるように Codex を完全に再起動してください。
+config ファイルが存在しない場合は、まず `codex` を一度実行して生成し、その後ファイルを編集してください。`config.toml` を変更した後は、新しいプロバイダー設定が再読み込みされるように Codex を完全に再起動してください。
 </Note>
 
 <Warning>
-Codex は custom provider に対する `chat/completions` のサポートを非推奨にしています。意図的に古い互換パスを使用している場合を除き、LemonData では `wire_api = "responses"` を維持してください。
+Codex は custom プロバイダーに対する `chat/completions` のサポートを非推奨にしています。意図的に古い互換パスを使用している場合を除き、LemonData では `wire_api = "responses"` を維持してください。
 </Warning>
+
+<Note>
+選択したモデルまたはルーティング先チャネルがサポートしない Responses-native-only フィールドを使った場合、LemonData はリクエストを黙って downgrade せず、明示的なエラーを返します。
+</Note>
 
 ## 基本的な使い方
 
@@ -111,7 +125,7 @@ codex -m gpt-5.4 "Build a REST API server"
 
 ## 推奨モデル
 
-| Model | Best For |
+| モデル | 向いている用途 |
 |-------|----------|
 | `gpt-5.4` | コーディングと推論のための最適なデフォルト選択 |
 | `gpt-5-mini` | コーディングワークフロー向けの、より高速で低コストなフォールバック |
@@ -120,14 +134,14 @@ codex -m gpt-5.4 "Build a REST API server"
 
 ## 対話コマンド
 
-| Command | Description |
+| コマンド | 説明 |
 |---------|-------------|
 | `/help` | ヘルプを表示 |
 | `/exit` or `Ctrl+C` | 終了 |
 | `/clear` | 会話をクリア |
 | `/config` | 設定を表示 |
 | `/model <name>` | モデルを切り替え |
-| `/tokens` | token 使用量を表示 |
+| `/tokens` | トークン使用量を表示 |
 
 ## 設定を確認する
 
@@ -188,4 +202,10 @@ cat main.py | codex "Explain what this code does"
     - モデル名が正確に一致していることを確認してください
     - [lemondata.cc/en/models](https://lemondata.cc/ja/models) でモデルの利用可否を確認してください
   </Accordion>
+
+<Accordion title="Responses-native フィールドが拒否された場合">
+    - 一部のフィールドは、選択した model とルーティング先チャネル が native `/v1/responses` passthrough をサポートしている場合にのみ利用できます
+    - `unsupported_request_field` や native passthrough に関するエラーが出たら、そのフィールドを外すか、互換性のある model / channel に切り替えてください
+  </Accordion>
+
 </AccordionGroup>
