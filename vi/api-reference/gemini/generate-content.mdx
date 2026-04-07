@@ -30,9 +30,14 @@ Các endpoint của Gemini hỗ trợ nhiều phương thức xác thực:
 <ParamField body="contents" type="array" required>
   Nội dung cuộc hội thoại.
 
-  Mỗi đối tượng nội dung bao gồm:
-  - `role` (string): `user` hoặc `model`
-  - `parts` (array): Các phần nội dung (văn bản hoặc dữ liệu inline)
+  Each content object contains:
+  - `role` (string): `user` or `model`
+  - `parts` (array): Content parts. LemonData supports:
+    - text parts: `{ "text": "..." }`
+    - inline media parts: `inlineData` / `inline_data`
+    - URL-based file parts: `fileData` / `file_data`
+
+  For media parts, LemonData currently accepts image, audio, and video MIME types and forwards them through the Gemini-compatible public contract.
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -183,9 +188,22 @@ echo $data['candidates'][0]['content']['parts'][0]['text'];
 ```
 </RequestExample>
 
-## Vision Input Example
 
-For Gemini vision requests, place images inside `contents[].parts[]` as structured `inline_data` parts. The `data` field should contain Base64-encoded file bytes, and `mime_type` should match the uploaded image format.
+
+## Multimodal Input Examples
+
+For Gemini multimodal requests, place media inside `contents[].parts[]` using either inline bytes or URL-based file references.
+
+Supported media categories in the public Gemini contract:
+- image
+- audio
+- video
+
+For inline media, use either `inlineData` or `inline_data` and pass Base64-encoded file bytes.
+
+For URL-based media, use either `fileData` or `file_data` and pass a public `https` URL.
+
+### Image Input Example
 
 ```json
 {
@@ -195,9 +213,51 @@ For Gemini vision requests, place images inside `contents[].parts[]` as structur
       "parts": [
         { "text": "Please describe this image." },
         {
-          "inline_data": {
-            "mime_type": "image/jpeg",
+          "inlineData": {
+            "mimeType": "image/jpeg",
             "data": "/9j/4AAQSkZJRgABAQ..."
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Audio Input Example
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Transcribe and summarize this audio." },
+        {
+          "file_data": {
+            "mime_type": "audio/mpeg",
+            "file_uri": "https://example.com/sample.mp3"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Video Input Example
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Describe this video briefly." },
+        {
+          "fileData": {
+            "mimeType": "video/mp4",
+            "fileUri": "https://example.com/sample.mp4"
           }
         }
       ]
