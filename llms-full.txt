@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: 2026-03-28
+Generated: 2026-04-07
 Source: https://docs.lemondata.cc
 
 ---
@@ -315,6 +315,25 @@ The `did_you_mean` resolution uses:
 1. Static alias mapping (from production error data)
 2. Normalized string matching (strips hyphens, case-insensitive)
 3. Edit distance matching (threshold ≤ 3)
+
+### model_price_not_configured (400)
+
+When a model exists internally but is not currently exposed for public requests:
+
+```json
+{
+  "error": {
+    "message": "Model 'example-model' is not currently available for public requests.",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_price_not_configured",
+    "retryable": false,
+    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
+  }
+}
+```
+
+Agents should treat this as a platform availability signal, not as a typo. Retry the same model only after it appears in `GET /v1/models`.
 
 ### insufficient_balance (402)
 
@@ -1243,6 +1262,8 @@ URL: https://docs.lemondata.cc/integrations/coding-agent-skill
 
 The API is **[Agent-First](/guides/agent-first-api)** — even if the agent guesses a model name wrong, the error response tells it exactly how to fix it.
 
+> Note: This page documents a reusable skill packaging layer, not a protocol-compatibility surface. If you need endpoint, SDK, or client setup guidance, use the dedicated integration pages for those tools.
+
 ## How It Works
 
 1. **You describe what you need** — "I want to use GPT-4 in my Python project"
@@ -1663,6 +1684,7 @@ except APIStatusError as e:
 | `invalid_request_error` | Request parameters are invalid |
 | `context_length_exceeded` | Input too long for model |
 | `model_not_found` | Requested model doesn't exist |
+| `model_price_not_configured` | Model exists internally but is not currently available for public requests |
 
 ```json
 {
@@ -1674,6 +1696,21 @@ except APIStatusError as e:
     "did_you_mean": "gpt-5.4",
     "suggestions": [{"id": "gpt-5.4"}, {"id": "gpt-5-mini"}],
     "hint": "Did you mean 'gpt-5.4'? Use GET https://api.lemondata.cc/v1/models to list all available models."
+  }
+}
+```
+
+When a model exists in internal governance or pricing workflows but is not exposed as a public request target yet, LemonData returns:
+
+```json
+{
+  "error": {
+    "message": "Model 'example-model' is not currently available for public requests.",
+    "type": "invalid_request_error",
+    "param": "model",
+    "code": "model_price_not_configured",
+    "retryable": false,
+    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
   }
 }
 ```
@@ -2955,7 +2992,7 @@ Settings → Models → OpenAI API Key: `sk-your-key`, Base URL: `https://api.le
 
 ```bash
     export GEMINI_API_KEY="sk-your-lemondata-key"
-    export GEMINI_API_BASE_URL="https://api.lemondata.cc/v1beta"
+    export GOOGLE_GEMINI_BASE_URL="https://api.lemondata.cc"
     ```
     [Full setup guide →](/integrations/gemini-cli)
 
@@ -3047,16 +3084,16 @@ This happens transparently — your coding agent sees a normal response.
 
 ### Native Format Routing
 
-LemonData routes each model through its native API format for best compatibility:
+When the selected model and routed channel support it, LemonData can route requests through the model family's native API format for better compatibility:
 
 | Model Family | API Format | Base URL |
 |-------------|------------|----------|
 | Claude | Anthropic Messages | `https://api.lemondata.cc` |
 | GPT | OpenAI Responses | `https://api.lemondata.cc/v1` |
-| Gemini | Gemini Native | `https://api.lemondata.cc/v1beta` |
+| Gemini | Gemini Native API | `https://api.lemondata.cc` or `https://api.lemondata.cc/v1beta` depending on client path |
 | DeepSeek | OpenAI Chat | `https://api.lemondata.cc/v1` |
 
-This means Claude Code talks Anthropic-native, Gemini CLI talks Gemini-native — no format translation overhead.
+Claude Code is a strong native Anthropic path. Gemini-native APIs exist too, but Gemini CLI itself remains a best-effort compatibility path rather than a guaranteed long-term workflow.
 
 ## Configuration per Tool
 
@@ -3096,8 +3133,10 @@ In Settings → Models:
 
 ```bash
     export GEMINI_API_KEY="sk-your-lemondata-key"
-    export GEMINI_API_BASE_URL="https://api.lemondata.cc/v1beta"
+    export GOOGLE_GEMINI_BASE_URL="https://api.lemondata.cc"
     ```
+
+    Treat this as best-effort compatibility rather than a stable upstream contract.
 
     [Full guide →](/integrations/gemini-cli)
 
@@ -3569,6 +3608,61 @@ This endpoint provides native Anthropic Messages API compatibility. Use this for
 
 ## Response
 
+## Vision Input Example
+
+For Claude models with vision support, place images inside `messages[].content` as structured image blocks.
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Please describe this image."
+        },
+        {
+          "type": "image",
+          "source": {
+            "type": "url",
+            "url": "https://example.com/demo.jpg"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Please describe this image."
+        },
+        {
+          "type": "image",
+          "source": {
+            "type": "base64",
+            "media_type": "image/jpeg",
+            "data": "/9j/4AAQSkZJRgABAQ..."
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## Extended Thinking Example
 
 ```python
@@ -3588,6 +3682,25 @@ for block in message.content:
     elif block.type == "text":
         print(f"Response: {block.text}")
 ```
+
+## Anthropic Message Batches
+
+LemonData now exposes the native Anthropic Message Batches flow alongside `/v1/messages`.
+
+Available routes:
+
+- `POST /v1/messages/batches`
+- `GET /v1/messages/batches`
+- `GET /v1/messages/batches/:message_batch_id`
+- `GET /v1/messages/batches/:message_batch_id/results`
+- `POST /v1/messages/batches/:message_batch_id/cancel`
+- `DELETE /v1/messages/batches/:message_batch_id`
+
+Operational notes:
+
+- Use the same LemonData API key plus Anthropic-native headers.
+- If batch items reference `file_id`, also include `anthropic-beta: files-api-2025-04-14`.
+- Batch jobs keep Anthropic-native request/response shapes while LemonData tracks their internal settlement lifecycle.
 
 ---
 
@@ -3675,6 +3788,15 @@ Use the interactive OpenAPI panel above for the exact schema.
 - Use `custom_id` for idempotent downstream reconciliation.
 - Expect `output_file_id` and `error_file_id` only after the worker finalizes the batch.
 - Batch pricing may differ from synchronous pricing because `isBatchRequest=true` discount rules apply.
+
+## Anthropic Files API Mode
+
+This same `/v1/files` route also supports the Anthropic Files API path.
+
+- Add `anthropic-beta: files-api-2025-04-14` to switch the route into Anthropic mode.
+- In Anthropic mode, upload the original file directly and do not send `purpose=batch`.
+- The returned `file_id` is bound to the same official Anthropic channel/workspace and should be reused from `/v1/messages` requests.
+- If you plan to reference the uploaded file from Anthropic message content, keep using Anthropic-native headers (`x-api-key`, `anthropic-version`, and the beta header when required).
 
 ---
 
@@ -4599,6 +4721,29 @@ Gemini endpoints support multiple authentication methods:
 
 ## Response
 
+## Vision Input Example
+
+For Gemini vision requests, place images inside `contents[].parts[]` as structured `inline_data` parts. The `data` field should contain Base64-encoded file bytes, and `mime_type` should match the uploaded image format.
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Please describe this image." },
+        {
+          "inline_data": {
+            "mime_type": "image/jpeg",
+            "data": "/9j/4AAQSkZJRgABAQ..."
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
 ---
 
 ### Stream Generate Content
@@ -4615,7 +4760,7 @@ Streaming version of the Gemini generateContent endpoint. Returns Server-Sent Ev
 
 ## Request Body
 
-Same as [Generate Content](/api-reference/gemini/generate-content).
+Same as [Generate Content](/api-reference/gemini/generate-content). This includes multimodal `parts` arrays with structured `inline_data` image parts for vision requests.
 
 ## Response
 
@@ -4679,6 +4824,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 |-------|------|------------------|-------|
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
 | `limitAmount` | number \| null | min `0`, max `100000` | `null` or omitted = unlimited, `0` = zero quota, positive = USD spending cap |
+| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
 | `models` | string[] | default `[]` | Optional logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
@@ -4689,10 +4835,17 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 | `status` | enum | - | `active`, `inactive`, `revoked` |
 | `name` | string | length `1-50` | Updated display name |
 | `limitAmount` | number \| null | min `0`, max `100000` | `null` means unlimited, `0` means zero quota |
+| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
 | `models` | string[] | - | Updated logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
 
 At least one PATCH field must be provided.
+
+## Monetary Contract
+
+- By default, request-side `limitAmount` is interpreted as USD. Set `limitCurrency: "CNY"` to submit an RMB cap; the server converts it to USD using the current exchange rate before storage.
+- Response-side monetary fields keep the original USD field and add an RMB companion with `_cny`.
+- `exchange_rate` is returned alongside API key metadata and is the USD→CNY rate used for every `*_cny` value in that response.
 
 ## Reporting Semantics
 
@@ -4735,6 +4888,8 @@ Returns user API keys in the organization associated with the current management
 ## Notes
 
 - System-managed keys such as Playground and Claw keys are excluded.
+- Monetary response fields are returned in both USD and RMB display form: `limit_amount` / `limit_amount_cny`, `used_amount` / `used_amount_cny`.
+- `exchange_rate` indicates the USD→CNY rate used for the RMB display fields.
 
 ## Request / Response
 
@@ -4758,6 +4913,7 @@ Creates a new `type=user` API key in the organization associated with the curren
 |-------|------|------------------|-------|
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
 | `limitAmount` | number \| null | min `0`, max `100000` | `null` or omitted = unlimited, `0` = zero quota, positive = USD spending cap |
+| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
 | `models` | string[] | default `[]` | Optional logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
@@ -4766,6 +4922,8 @@ Creates a new `type=user` API key in the organization associated with the curren
 - The full API key value is shown only once in the response.
 - `models: []` means the key has no additional model restriction beyond organization policy.
 - `limitAmount: 0` creates a key that is valid but cannot spend quota until updated.
+- The response includes `exchange_rate`, plus RMB display companions `limit_amount_cny` and `used_amount_cny`.
+- By default, `limitAmount` is interpreted as USD. Set `limitCurrency: "CNY"` to submit an RMB cap that will be converted to USD using the current exchange rate before storage.
 
 ## Example
 
@@ -4794,6 +4952,7 @@ At least one field must be provided.
 | `status` | enum | - | `active`, `inactive`, `revoked` |
 | `name` | string | length `1-50` | Updated display name |
 | `limitAmount` | number \| null | min `0`, max `100000` | `null` = unlimited, `0` = zero quota, positive = USD cap |
+| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
 | `models` | string[] | - | Updated logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
 
@@ -4801,6 +4960,8 @@ At least one field must be provided.
 
 - Hard delete is intentionally not supported in Management API v1.
 - `revoked` is terminal for ordinary operational use; create a new key instead of expecting a future un-revoke flow.
+- The response includes `exchange_rate`, plus RMB display companions `limit_amount_cny` and `used_amount_cny`.
+- By default, `limitAmount` is interpreted as USD. Set `limitCurrency: "CNY"` to submit an RMB cap that will be converted to USD using the current exchange rate before storage.
 
 ## Example
 
@@ -4840,6 +5001,8 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 - The response is paginated.
 - The response includes public billing and reporting fields only.
 - Internal routing and physical channel metadata are intentionally hidden.
+- All monetary response fields remain available in USD and now also include RMB display companions: `cost_cny`, `total_cost_cny`, and `cost_cny` inside every breakdown entry.
+- `api_key.exchange_rate` is the USD→CNY rate used for all `*_cny` values in that response.
 
 ## Example
 
@@ -4862,6 +5025,8 @@ This endpoint returns consumption-only billing aggregates for the selected API k
 ## Notes
 
 - Recharge, invoices, and other organization-level financial records are intentionally excluded.
+- Monetary response fields remain available in USD and now also include RMB display companions such as `total_cost_cny` and per-breakdown `cost_cny`.
+- `api_key.exchange_rate` is the USD→CNY rate used for all `*_cny` values in that response.
 
 ## Request / Response
 
@@ -6259,739 +6424,25 @@ Connect DingTalk (钉钉) to your LemonClaw instance using Stream mode — a Web
 # Integrations
 
 
-## Coding Tools
-
-### Cursor
-
-> Use LemonData with Cursor AI code editor
-
-URL: https://docs.lemondata.cc/integrations/cursor
-
-## Overview
-
-[Cursor](https://cursor.sh) supports bring-your-own-key (BYOK) providers, but custom API keys only work with standard chat models. Use LemonData here as an OpenAI-compatible endpoint for chat-style editor workflows, not as a full replacement for every Cursor model feature.
-
-## Configuration
-
-1. Open Cursor Settings (`Cmd/Ctrl + ,`)
-2. Navigate to **Models** in the left sidebar
-3. Scroll down to the **OpenAI API Key** section
-4. Enter your LemonData API key
-5. Enable **Override OpenAI Base URL**
-6. Set the Base URL to:
-
-```
-https://api.lemondata.cc/v1
-```
-
-> Warning: Cursor custom API keys only apply to standard chat models. Tab Completion and other Cursor-managed specialized features will continue using Cursor's built-in providers.
-
-> Warning: Cursor’s custom API key flow only applies to standard chat models. Features that require specialized Cursor-managed models, such as Tab Completion and some reasoning-specific flows, will continue using Cursor’s built-in providers. Cursor also notes that requests still pass through its backend for final prompt assembly.
-
-## Model Selection
-
-After configuration, prefer standard chat models exposed through LemonData:
-
-### Recommended Models for Coding
-
-| Model | Best For |
-|-------|----------|
-| `gpt-5.4` | General coding, debugging, chat |
-| `gpt-5-mini` | Fast edits and lightweight prompts |
-
-## What Works Best
-
-### Chat and editor flows
-
-Use LemonData through Cursor for:
-
-- Code explanations
-- Bug fixing
-- Refactoring suggestions
-- Documentation generation
-
-### What stays on Cursor-managed models
-
-These features do not reliably switch to your LemonData endpoint:
-
-- Tab Completion
-- Specialized non-standard chat models
-- Provider-specific features that Cursor only enables on built-in models
-
-## Troubleshooting
-
-#### Models not showing up
-
-Cursor caches model and provider state. Restart Cursor after configuring the API key and base URL.
-
-  
-#### Model unsupported in BYOK mode
-
-Custom API keys only work with standard chat models. If a model uses specialized Cursor infrastructure, switch to a standard chat model such as `gpt-5.4`.
-
-  
-#### Authentication errors
-
-Verify your API key is correct and has sufficient balance.
-
-  
-#### Another provider stopped working after enabling LemonData
-
-Cursor’s BYOK configuration can affect other provider flows. If another model path breaks after enabling the OpenAI base URL override, disable the override and restart Cursor.
-
-## Tips
-
----
-
-### Claude Code
-
-> Use LemonData with Anthropic
-
-URL: https://docs.lemondata.cc/integrations/claude-code
-
-## Overview
-
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code) is Anthropic's official CLI tool for AI-assisted coding. You can configure it to use LemonData as the API provider.
-
-## Installation
-
-Anthropic now recommends the native installer. npm installation still exists for compatibility, but it is deprecated upstream.
-
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-```
-
-If you specifically need the npm package, use:
-
-```bash
-npm install -g @anthropic-ai/claude-code
-```
-
-> Warning: Do not use `sudo npm install -g` for Claude Code.
-
-## Configuration
-
-### Environment Variables
-
-Set the following environment variables:
-
-```bash
-export ANTHROPIC_API_KEY="sk-your-lemondata-key"
-export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
-```
-
-Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) for persistence.
-
-> Note: For LemonData, keep `ANTHROPIC_BASE_URL` at `https://api.lemondata.cc` without a `/v1` suffix. This matches the Anthropic-style endpoint shape and the unified gateway pattern documented by Claude Code.
-
-### Configuration File
-
-Alternatively, create or edit `~/.claude/settings.json`:
-
-```json
-{
-  "env": {
-    "ANTHROPIC_API_KEY": "sk-your-lemondata-key",
-    "ANTHROPIC_BASE_URL": "https://api.lemondata.cc"
-  }
-}
-```
-
-## Usage
-
-After configuration, use Claude Code normally:
-
-```bash
-# Start an interactive session
-claude
-
-# Run a single command
-claude "Explain this code" < main.py
-
-# Chat mode
-claude chat
-```
-
-Verify the installation if needed:
-
-```bash
-claude --version
-claude doctor
-```
-
-## Available Models
-
-LemonData supports all Claude models:
-
-| Model | Description |
-|-------|-------------|
-| `claude-opus-4-6` | Most capable, complex reasoning |
-| `claude-sonnet-4-6` | Balanced performance, excellent for coding |
-| `claude-haiku-4-5` | Fastest, cost-effective |
-
-## Model Selection
-
-Specify a model with the `--model` flag:
-
-```bash
-claude --model claude-sonnet-4-6 "Review this PR"
-```
-
-Or set a default in your configuration:
-
-```json
-{
-  "env": {
-    "ANTHROPIC_API_KEY": "sk-your-lemondata-key",
-    "ANTHROPIC_BASE_URL": "https://api.lemondata.cc"
-  },
-  "model": "claude-sonnet-4-6"
-}
-```
-
-## Extended Thinking
-
-For complex reasoning tasks, use models with extended thinking:
-
-```bash
-claude --model claude-opus-4-6 "Design a microservices architecture for..."
-```
-
-## Troubleshooting
-
-#### Connection errors
-
-Verify the base URL is exactly `https://api.lemondata.cc` (no `/v1` suffix for Anthropic-style requests).
-
-  
-#### Invalid API key
-
-Ensure your LemonData API key starts with `sk-` and has sufficient balance.
-
-  
-#### Gateway requires Authorization bearer token
-
-Claude Code's gateway mode also supports `ANTHROPIC_AUTH_TOKEN`. Keep using `ANTHROPIC_API_KEY` for the standard LemonData setup unless you intentionally switched your gateway auth behavior.
-
-  
-#### Model not found
-
-Check the model name is correct. Use `claude-sonnet-4-6` format.
-
----
-
-### Codex CLI
-
-> Configure OpenAI Codex CLI to use LemonData API
-
-URL: https://docs.lemondata.cc/integrations/codex-cli
-
-## Overview
-
-OpenAI Codex is an open-source command-line tool (CLI) that serves as a lightweight coding agent, capable of reading, modifying, and running code in the terminal. It's built on GPT models and optimized for code generation.
-
-## System Requirements
-
-- **OS**: macOS, Linux (official support), Windows via WSL
-- **Node.js**: Version 18+
-- **npm**: Version 10.x.x or higher
-
-## Installation
-
-```bash
-npm install -g @openai/codex
-```
-
-Verify installation:
-
-```bash
-codex --version
-```
-
-## Configuration
-
-### Step 1: Set API Key
-
-**Temporary (current session):**
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-```
-
-**Permanent configuration:**
-
-Add to `~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`:
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-```
-
-Then reload:
-
-```bash
-source ~/.zshrc  # or source ~/.bashrc
-```
-
-### Step 2: Configure config.toml
-
-Edit `~/.codex/config.toml`:
-
-```toml
-model_provider = "lemondata"
-model = "gpt-5.4"
-model_reasoning_effort = "xhigh"
-plan_mode_reasoning_effort = "xhigh"
-fast_mode = true
-model_context_window = 1000000
-model_auto_compact_token_limit = 900000
-sandbox_mode = "danger-full-access"
-approval_policy = "never"
-
-disable_response_storage = false
-personality = "friendly"
-service_tier = "fast"
-
-[model_providers.lemondata]
-env_key = "OPENAI_API_KEY"
-name = "lemondata"
-base_url = "https://api.lemondata.cc/v1"
-wire_api = "responses"
-supports_websockets = true
-websocket_connect_timeout_ms = 15000
-
-[features]
-responses_websockets = true
-responses_websockets_v2 = true
-```
-
-> Note: If the config file doesn't exist, run `codex` once to generate it, then edit the file. Restart Codex completely after changing `config.toml` so the new provider settings are reloaded.
-
-> Warning: Codex is deprecating `chat/completions` support for custom providers. Keep `wire_api = "responses"` for LemonData unless you are intentionally using an older compatibility path.
-
-## Basic Usage
-
-**Start interactive mode:**
-
-```bash
-codex
-```
-
-**Direct command:**
-
-```bash
-codex "Fix the bug in main.py line 42"
-```
-
-**Specify model:**
-
-```bash
-codex -m gpt-5.4 "Build a REST API server"
-```
-
-## Recommended Models
-
-| Model | Best For |
-|-------|----------|
-| `gpt-5.4` | Best default choice for coding and reasoning |
-| `gpt-5-mini` | Faster, cheaper fallback for coding workflows |
-| `claude-sonnet-4-6` | Code review, documentation |
-| `deepseek-r1` | Algorithm design, reasoning |
-
-## Interactive Commands
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Display help |
-| `/exit` or `Ctrl+C` | Exit |
-| `/clear` | Clear conversation |
-| `/config` | View configuration |
-| `/model ` | Switch model |
-| `/tokens` | View token usage |
-
-## Verify Configuration
-
-```bash
-# Check environment variable
-echo $OPENAI_API_KEY
-
-# Test API connection
-codex "Hello, Codex!"
-
-# View configuration
-cat ~/.codex/config.toml
-```
-
-## Common Use Cases
-
-**Code review:**
-
-```bash
-git diff | codex "Review these code changes"
-```
-
-**Generate commit messages:**
-
-```bash
-git diff --staged | codex "Generate a commit message for these changes"
-```
-
-**Fix errors:**
-
-```bash
-codex "Fix the TypeScript errors in src/components/"
-```
-
-**Explain code:**
-
-```bash
-cat main.py | codex "Explain what this code does"
-```
-
-## Troubleshooting
-
-#### Connection Error
-
-- Verify `base_url` in config.toml is exactly `https://api.lemondata.cc/v1`
-    - Check network connectivity
-    - Ensure no proxy interference
-
-  
-#### Authentication Failed
-
-- Verify `env_key = "OPENAI_API_KEY"` is present in `~/.codex/config.toml`
-    - Verify `OPENAI_API_KEY` environment variable is set
-    - Check that the key starts with `sk-`
-    - Ensure the key is active in LemonData dashboard
-
-  
-#### Model Not Found
-
-- Check model name matches exactly
-    - Verify model availability at [lemondata.cc/en/models](https://lemondata.cc/en/models)
-
----
-
-### Gemini CLI
-
-> Configure Google Gemini CLI to use LemonData API
-
-URL: https://docs.lemondata.cc/integrations/gemini-cli
-
-## Overview
-
-Google Gemini CLI is a command-line tool for interacting with Gemini models. LemonData compatibility here is experimental: Gemini CLI officially documents Google-native authentication and settings, but does not currently document a stable custom LemonData-style base URL workflow.
-
-> Warning: Treat this integration as best-effort compatibility, not a guaranteed long-term setup. If you need a stable LemonData terminal coding workflow, prefer Codex CLI, Claude Code, or OpenCode.
-
-## System Requirements
-
-- **Node.js**: Version 20.0+
-- **OS**: Windows 10/11, macOS 10.15+, Ubuntu 20.04+, or Debian 10+
-
-## Installation
-
-```bash
-npm install -g @google/gemini-cli
-```
-
-Verify installation:
-
-```bash
-gemini --version
-```
-
-## Configuration
-
-### Step 1: Get Your API Key
-
-1. Log into [LemonData Dashboard](https://lemondata.cc/dashboard)
-2. Navigate to [API Keys](https://lemondata.cc/dashboard/api)
-3. Create and copy your API key (format: `sk-...`)
-
-### Step 2: Set Environment Variables
-
-The following setup is the current compatibility path people use with proxy or gateway endpoints, but it is not a stable upstream contract:
-
-**Temporary (current session):**
-
-```bash
-export GEMINI_API_KEY="sk-your-lemondata-key"
-export GOOGLE_GEMINI_BASE_URL="https://api.lemondata.cc"
-```
-
-**Permanent configuration:**
-
-Add to your shell configuration file:
-
-  
-  
-
-> Warning: Restart your terminal after configuration for changes to take effect.
-
-> Note: Known limitation: Gemini CLI may ignore `GOOGLE_GEMINI_BASE_URL` in some situations, especially when an existing Google login or cached auth flow takes precedence. If this happens, start a fresh terminal session, clear cached auth, or use another client.
-
-## Basic Usage
-
-Start Gemini CLI from your project directory:
-
-```bash
-cd your-project
-gemini
-```
-
-On first run, you'll:
-1. Choose a theme
-2. Confirm safety notice
-3. Trust the working directory
-
-## Available Models
-
-| Model | Description |
-|-------|-------------|
-| `gemini-2.5-pro` | Most capable Gemini model |
-| `gemini-2.5-flash` | Fast, efficient for most tasks |
-| `gemini-2.0-flash` | Previous generation, stable |
-
-## Common Commands
-
-**Ask a question:**
-
-```
-> What is the best way to structure a React app?
-```
-
-**Analyze code:**
-
-```
-> Explain the code in src/main.ts
-```
-
-**Generate code:**
-
-```
-> Create a Python function to parse JSON files
-```
-
-**Review changes:**
-
-```
-> Review the recent git changes and suggest improvements
-```
-
-## Verify Configuration
-
-```bash
-# Check environment variables
-echo $GEMINI_API_KEY
-echo $GOOGLE_GEMINI_BASE_URL
-
-# Test connection
-gemini
-```
-
-## Troubleshooting
-
-#### Connection Error
-
-- Verify `GOOGLE_GEMINI_BASE_URL` is set to `https://api.lemondata.cc`
-    - Note: Do not add `/v1` for this compatibility path
-    - Check network connectivity
-
-  
-#### Authentication Failed
-
-- Verify `GEMINI_API_KEY` environment variable is set
-    - Check that the key starts with `sk-`
-    - Ensure the key is active in LemonData dashboard
-
-  
-#### Model Not Available
-
-- Check Gemini models availability at [lemondata.cc/en/models](https://lemondata.cc/en/models)
-    - Try a different Gemini model variant
-
-  
-#### Need a more stable coding workflow
-
-- Gemini CLI's custom gateway compatibility can regress between releases
-    - Prefer Codex CLI, Claude Code, or OpenCode if you need a documented LemonData path
-
-## Best Practices
-
-#### Use in project directory
-
-Always run Gemini CLI from your project root for better context understanding.
-
-  
-#### Trust directories carefully
-
-Only trust directories you own. Gemini CLI can read and modify files.
-
-  
-#### Review generated code
-
-Always review AI-generated code before committing to your project.
-
----
-
-### OpenCode
-
-> Configure OpenCode to use LemonData API
-
-URL: https://docs.lemondata.cc/integrations/opencode
-
-## Overview
-
-OpenCode is an open-source AI coding assistant that runs in your terminal. It supports multiple LLM providers and can be configured to use LemonData's API for access to 300+ models.
-
-## Installation
-
-  
-  
-
-Verify installation:
-
-```bash
-opencode --version
-```
-
-## Configuration
-
-### Step 1: Set Environment Variables
-
-```bash
-export OPENAI_API_KEY="sk-your-lemondata-key"
-```
-
-For permanent configuration, add to `~/.bashrc` or `~/.zshrc`:
-
-```bash
-echo 'export OPENAI_API_KEY="sk-your-lemondata-key"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-### Step 2: Configure OpenCode
-
-OpenCode's current docs recommend configuring providers through `opencode.json` or `opencode.jsonc`. For LemonData, use a custom provider instead of overloading the built-in `openai` provider:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "lemondata": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "LemonData",
-      "options": {
-        "baseURL": "https://api.lemondata.cc/v1",
-        "apiKey": "{env:OPENAI_API_KEY}"
-      },
-      "models": {
-        "gpt-5.4": {
-          "name": "GPT-5.4"
-        },
-        "gpt-5-mini": {
-          "name": "GPT-5 Mini"
-        }
-      }
-    }
-  },
-  "model": "lemondata/gpt-5.4"
-}
-```
-
-> Note: Use `@ai-sdk/openai-compatible` for chat-completions style compatibility. If you specifically need a provider path built on `/v1/responses`, OpenCode's provider docs recommend switching the package to `@ai-sdk/openai`.
-
-## Basic Usage
-
-**Start interactive mode:**
-
-```bash
-opencode
-```
-
-**Run with a prompt:**
-
-```bash
-opencode "Explain this codebase"
-```
-
-**Specify model:**
-
-```bash
-opencode --model lemondata/gpt-5.4 "Fix the bugs in main.py"
-```
-
-## Available Models
-
-| Model | Best For |
-|-------|----------|
-| `gpt-5.4` | Complex tasks, code architecture |
-| `gpt-5-mini` | Quick fixes, simple queries |
-| `claude-sonnet-4-6` | Code review, documentation |
-| `claude-opus-4-6` | Complex reasoning |
-| `gemini-2.5-flash` | Fast responses |
-| `deepseek-r1` | Algorithm design |
-
-## Common Commands
-
-**Analyze code:**
-
-```bash
-opencode "What does this function do?" ` | Switch to a different model |
-| `/clear` | Clear conversation history |
-| `/exit` | Exit OpenCode |
-
-## Troubleshooting
-
-#### Connection Error
-
-- Verify `options.baseURL` is set to `https://api.lemondata.cc/v1`
-    - Check network connectivity
-    - Try `curl https://api.lemondata.cc/v1/models` to test
-
-  
-#### Authentication Failed
-
-- Verify `OPENAI_API_KEY` environment variable is set
-    - Verify `options.apiKey` references `{env:OPENAI_API_KEY}` or another valid secret source
-    - Check that the key starts with `sk-`
-    - Ensure the key is active in LemonData dashboard
-
-  
-#### Model Not Found
-
-- Check model name in config matches exactly
-    - Verify model availability at [lemondata.cc/en/models](https://lemondata.cc/en/models)
-
-## Best Practices
-
-#### Use project context
-
-Run OpenCode from your project root for better understanding of your codebase.
-
-  
-#### Choose appropriate models
-
-Use faster models (`gpt-5-mini`) for simple tasks and stronger models (`gpt-5.4`, `claude-sonnet-4-6`) for complex ones.
-
-  
-#### Review generated code
-
-Always review AI-generated code before applying changes to your project.
-
----
+## Compatibility Matrix
 
 ### IDE & SDK Compatibility
 
-> Full compatibility reference for AI coding tools, SDKs, and frameworks
+> Evidence-backed compatibility guidance for AI coding tools, SDKs, and frameworks
 
 URL: https://docs.lemondata.cc/guides/ide-sdk-compatibility
 
 ## Overview
 
-LemonData API is designed for **drop-in compatibility** with all major AI development tools. This guide documents supported parameters and verified integrations.
+LemonData exposes multiple API formats so common coding tools, SDKs, and frameworks can integrate with minimal glue code.
 
-> Note: All parameters are validated but passed through to upstream providers. Unsupported parameters for specific models are silently ignored, ensuring maximum compatibility.
+This page is intentionally narrower than a marketing matrix:
+
+- **Supported** means we document a concrete setup path and LemonData exposes the protocol shape that path expects.
+- **Strong native path** means the repo also has direct adapter or request-format evidence for that protocol family.
+- **Best-effort** means the integration can work, but the upstream client does not treat this custom gateway workflow as a stable contract.
+
+> Note: Unsupported fields are not handled uniformly. On compatibility routes, some fields are ignored or normalized. On native Responses paths, unsupported fields can return explicit `400` or `503` errors when the selected model or routed channel does not support the required passthrough behavior.
 
 ## Supported API Formats
 
@@ -7004,20 +6455,17 @@ LemonData API is designed for **drop-in compatibility** with all major AI develo
 
 ## IDE & CLI Compatibility
 
-### Verified Tools
+### Documented Tool Paths
 
-| Tool | Status | Format | Notes |
-|------|--------|--------|-------|
-| **Cursor** | ✅ Full | OpenAI | Anthropic tool format supported |
-| **Claude Code CLI** | ✅ Full | Anthropic | Extended thinking, tool_choice |
-| **Windsurf** | ✅ Full | OpenAI | Standard OpenAI format |
-| **Aider** | ✅ Full | OpenAI | All models supported |
-| **Continue.dev** | ✅ Full | OpenAI/Anthropic | Dual format support |
-| **OpenCode** | ✅ Full | OpenAI | Multi-provider support |
-| **Cline/Roo Code** | ✅ Full | OpenAI | Via OpenRouter format |
-| **GitHub Copilot** | ✅ Full | OpenAI | Standard format |
-| **Codex CLI** | ✅ Full | OpenAI | OpenAI Responses API |
-| **Gemini CLI** | ✅ Full | Gemini | Native Gemini format |
+| Tool | Support Level | Format | Notes |
+|------|---------------|--------|-------|
+| **Cursor** | Supported with limits | OpenAI-compatible | Works for BYOK standard chat/editor flows, not as a replacement for Cursor-managed features like Tab Completion |
+| **Claude Code CLI** | Strong native path | Anthropic | Native `/v1/messages` route with adapter coverage for thinking and `tool_choice` |
+| **Codex CLI** | Supported with model/channel limits | OpenAI Responses | Best when configured for `/v1/responses`; some Responses-native fields require native passthrough support from the selected model and channel |
+| **Gemini CLI** | Best-effort / experimental | Gemini | Custom LemonData base URL flow is not a stable upstream contract |
+| **OpenCode** | Supported | OpenAI-compatible | Use an OpenAI-compatible provider by default; move to a Responses-based provider only when you explicitly need it |
+
+> Note: Other OpenAI-compatible editors and agent tools often work with the same base URL pattern, but this repo does not currently maintain tool-specific regression coverage for Windsurf, Aider, Continue.dev, Cline/Roo Code, GitHub Copilot, and similar clients.
 
 ### Configuration Examples
 
@@ -7027,16 +6475,16 @@ LemonData API is designed for **drop-in compatibility** with all major AI develo
 
 ## SDK Compatibility
 
-### Verified SDKs
+### Documented SDK & Framework Paths
 
-| SDK | Language | Status | Notes |
-|-----|----------|--------|-------|
-| **OpenAI SDK** | Python/JS/Go | ✅ Full | All parameters supported |
-| **Anthropic SDK** | Python/JS | ✅ Full | Extended thinking, tools |
-| **Vercel AI SDK** | TypeScript | ✅ Full | streamText, generateObject |
-| **LangChain** | Python/JS | ✅ Full | ChatOpenAI, bind_tools |
-| **LlamaIndex** | Python | ✅ Full | OpenAI-compatible |
-| **Dify** | - | ✅ Full | OpenAI format |
+| SDK / Framework | Language | Support Level | Notes |
+|-----------------|----------|---------------|-------|
+| **OpenAI SDK** | Python/JS/Go | Supported core path | Chat Completions, Embeddings, and common Responses workflows are documented; some Responses-native-only fields depend on model/channel passthrough support |
+| **Anthropic SDK** | Python/JS | Strong native path | Native Messages route with direct evidence for tools, thinking, and prompt caching |
+| **Vercel AI SDK** | TypeScript | Recommended integration pattern | Prefer `@ai-sdk/openai-compatible`; use `@ai-sdk/openai` only when you explicitly want Responses-native behavior |
+| **LangChain** | Python/JS | Supported standard surfaces | `ChatOpenAI` and `OpenAIEmbeddings` are the intended scope; vendor-native extras are out of scope |
+| **LlamaIndex** | Python | Supported via `OpenAILike` | Use `OpenAILike`, not the built-in OpenAI classes, for third-party gateways such as LemonData |
+| **Dify** | - | Supported with scope limits | OpenAI provider and chat-completions-oriented flows are the intended path; not a fit for Codex-specific Responses or WebSocket behavior |
 
 ## Chat Completions Parameters
 
@@ -7310,8 +6758,954 @@ Match your SDK's expected format. LemonData accepts both OpenAI and Anthropic fo
 
 ---
 
+### SDKs & Libraries
 
-## SDKs & Frameworks
+> Recommended SDKs and libraries for LemonData integrations
+
+URL: https://docs.lemondata.cc/guides/sdks
+
+## Overview
+
+LemonData is easiest to integrate through:
+- official **OpenAI SDKs** for OpenAI-compatible and Responses-style usage
+- official **Anthropic SDKs** for Claude-native `/v1/messages`
+- official **Gemini / Google AI** tooling when you specifically need Gemini-native request shapes
+
+Use the integration pages for support boundaries. In this docs set, "recommended" or "supported" means a documented setup path exists; it does not automatically mean every framework helper or provider-specific feature is regression-tested end-to-end in this repo.
+
+## Recommended SDKs
+
+  
+  
+  
+
+## OpenAI SDK Example
+
+Use this as the default starting point for new projects:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc/v1"
+)
+
+response = client.responses.create(
+    model="gpt-5.4",
+    input="Explain LemonData in one sentence."
+)
+
+print(response.output_text)
+```
+
+## OpenAI Go Example
+
+```go
+package main
+
+import (
+    openai "github.com/openai/openai-go/v3"
+    "github.com/openai/openai-go/v3/option"
+)
+
+func main() {
+    client := openai.NewClient(
+        option.WithAPIKey("sk-your-api-key"),
+        option.WithBaseURL("https://api.lemondata.cc/v1"),
+    )
+
+    _ = client
+}
+```
+
+## Anthropic SDK Example
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="sk-your-api-key",
+    base_url="https://api.lemondata.cc"
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+## Which SDK Should You Use?
+
+| Goal | Recommended SDK |
+|------|------------------|
+| New app, general default | OpenAI SDK |
+| Claude-native features | Anthropic SDK |
+| Gemini-native request shapes | Gemini-native API / SDK |
+| LangChain / LlamaIndex / Vercel AI SDK | Use the dedicated integration pages |
+
+## Best Practices
+
+#### Prefer Responses for new projects
+
+If your SDK supports both `responses` and `chat.completions`, start with `responses`.
+
+  
+#### Keep base URLs explicit
+
+Pass LemonData base URLs directly in your client configuration instead of relying on older environment-variable aliases.
+
+  
+#### Use native SDKs only when native features matter
+
+Use the Anthropic SDK for Claude-native features such as extended thinking, and otherwise prefer the OpenAI SDK for broad compatibility.
+
+---
+
+
+## Coding Tools
+
+### Cursor
+
+> Use LemonData with Cursor AI code editor
+
+URL: https://docs.lemondata.cc/integrations/cursor
+
+## Overview
+
+> Note: **Type**: Coding Tool
+
+**Primary Path**: OpenAI-compatible
+
+**Support Confidence**: Supported with limits
+
+[Cursor](https://cursor.sh) supports bring-your-own-key (BYOK) providers, but custom API keys only work with standard chat models. Use LemonData here as an OpenAI-compatible endpoint for chat-style editor workflows, not as a full replacement for every Cursor model feature.
+
+## Configuration
+
+1. Open Cursor Settings (`Cmd/Ctrl + ,`)
+2. Navigate to **Models** in the left sidebar
+3. Scroll down to the **OpenAI API Key** section
+4. Enter your LemonData API key
+5. Enable **Override OpenAI Base URL**
+6. Set the Base URL to:
+
+```
+https://api.lemondata.cc/v1
+```
+
+> Warning: Cursor custom API keys only apply to standard chat models. Tab Completion and other Cursor-managed specialized features will continue using Cursor's built-in providers.
+
+> Warning: Cursor’s custom API key flow only applies to standard chat models. Features that require specialized Cursor-managed models, such as Tab Completion and some reasoning-specific flows, will continue using Cursor’s built-in providers. Cursor also notes that requests still pass through its backend for final prompt assembly.
+
+## Model Selection
+
+After configuration, prefer standard chat models exposed through LemonData:
+
+### Recommended Models for Coding
+
+| Model | Best For |
+|-------|----------|
+| `gpt-5.4` | General coding, debugging, chat |
+| `gpt-5-mini` | Fast edits and lightweight prompts |
+
+## What Works Best
+
+### Chat and editor flows
+
+Use LemonData through Cursor for:
+
+- Code explanations
+- Bug fixing
+- Refactoring suggestions
+- Documentation generation
+
+### What stays on Cursor-managed models
+
+These features do not reliably switch to your LemonData endpoint:
+
+- Tab Completion
+- Specialized non-standard chat models
+- Provider-specific features that Cursor only enables on built-in models
+
+## Troubleshooting
+
+#### Models not showing up
+
+Cursor caches model and provider state. Restart Cursor after configuring the API key and base URL.
+
+  
+#### Model unsupported in BYOK mode
+
+Custom API keys only work with standard chat models. If a model uses specialized Cursor infrastructure, switch to a standard chat model such as `gpt-5.4`.
+
+  
+#### Authentication errors
+
+Verify your API key is correct and has sufficient balance.
+
+  
+#### Another provider stopped working after enabling LemonData
+
+Cursor’s BYOK configuration can affect other provider flows. If another model path breaks after enabling the OpenAI base URL override, disable the override and restart Cursor.
+
+## Tips
+
+---
+
+### Claude Code
+
+> Use LemonData with Anthropic
+
+URL: https://docs.lemondata.cc/integrations/claude-code
+
+## Overview
+
+> Note: **Type**: Coding Tool
+
+**Primary Path**: Anthropic-native
+
+**Support Confidence**: Strong native path
+
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) is Anthropic's official CLI tool for AI-assisted coding. You can configure it to use LemonData as the API provider.
+
+## Installation
+
+Anthropic now recommends the native installer. npm installation still exists for compatibility, but it is deprecated upstream.
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+If you specifically need the npm package, use:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+> Warning: Do not use `sudo npm install -g` for Claude Code.
+
+## Configuration
+
+### Environment Variables
+
+Set the following environment variables:
+
+```bash
+export ANTHROPIC_API_KEY="sk-your-lemondata-key"
+export ANTHROPIC_BASE_URL="https://api.lemondata.cc"
+```
+
+Add these to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) for persistence.
+
+> Note: For LemonData, keep `ANTHROPIC_BASE_URL` at `https://api.lemondata.cc` without a `/v1` suffix. This matches the Anthropic-style endpoint shape and the unified gateway pattern documented by Claude Code.
+
+### Configuration File
+
+Alternatively, create or edit `~/.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "sk-your-lemondata-key",
+    "ANTHROPIC_BASE_URL": "https://api.lemondata.cc"
+  }
+}
+```
+
+## Usage
+
+After configuration, use Claude Code normally:
+
+```bash
+# Start an interactive session
+claude
+
+# Run a single command
+claude "Explain this code" < main.py
+
+# Chat mode
+claude chat
+```
+
+Verify the installation if needed:
+
+```bash
+claude --version
+claude doctor
+```
+
+## Available Models
+
+LemonData supports all Claude models:
+
+| Model | Description |
+|-------|-------------|
+| `claude-opus-4-6` | Most capable, complex reasoning |
+| `claude-sonnet-4-6` | Balanced performance, excellent for coding |
+| `claude-haiku-4-5` | Fastest, cost-effective |
+
+## Model Selection
+
+Specify a model with the `--model` flag:
+
+```bash
+claude --model claude-sonnet-4-6 "Review this PR"
+```
+
+Or set a default in your configuration:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "sk-your-lemondata-key",
+    "ANTHROPIC_BASE_URL": "https://api.lemondata.cc"
+  },
+  "model": "claude-sonnet-4-6"
+}
+```
+
+## Extended Thinking
+
+For complex reasoning tasks, use models with extended thinking:
+
+```bash
+claude --model claude-opus-4-6 "Design a microservices architecture for..."
+```
+
+## Troubleshooting
+
+#### Connection errors
+
+Verify the base URL is exactly `https://api.lemondata.cc` (no `/v1` suffix for Anthropic-style requests).
+
+  
+#### Invalid API key
+
+Ensure your LemonData API key starts with `sk-` and has sufficient balance.
+
+  
+#### Gateway requires Authorization bearer token
+
+Claude Code's gateway mode also supports `ANTHROPIC_AUTH_TOKEN`. Keep using `ANTHROPIC_API_KEY` for the standard LemonData setup unless you intentionally switched your gateway auth behavior.
+
+  
+#### Model not found
+
+Check the model name is correct. Use `claude-sonnet-4-6` format.
+
+---
+
+### Codex CLI
+
+> Configure OpenAI Codex CLI to use LemonData API
+
+URL: https://docs.lemondata.cc/integrations/codex-cli
+
+## Overview
+
+> Note: **Type**: Coding Tool
+
+**Primary Path**: OpenAI Responses
+
+**Support Confidence**: Supported with model/channel limits
+
+OpenAI Codex is an open-source command-line tool (CLI) that serves as a lightweight coding agent, capable of reading, modifying, and running code in the terminal. It's built on GPT models and optimized for code generation.
+
+For LemonData, Codex CLI is best used against `/v1/responses`. That path works well, but some Responses-native features still depend on whether the selected model and routed channel support native passthrough.
+
+## System Requirements
+
+- **OS**: macOS, Linux (official support), Windows via WSL
+- **Node.js**: Version 18+
+- **npm**: Version 10.x.x or higher
+
+## Installation
+
+```bash
+npm install -g @openai/codex
+```
+
+Verify installation:
+
+```bash
+codex --version
+```
+
+## Configuration
+
+### Step 1: Set API Key
+
+**Temporary (current session):**
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+```
+
+**Permanent configuration:**
+
+Add to `~/.bashrc`, `~/.zshrc`, or `~/.bash_profile`:
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+```
+
+Then reload:
+
+```bash
+source ~/.zshrc  # or source ~/.bashrc
+```
+
+### Step 2: Configure config.toml
+
+Edit `~/.codex/config.toml`:
+
+```toml
+model_provider = "lemondata"
+model = "gpt-5.4"
+model_reasoning_effort = "xhigh"
+plan_mode_reasoning_effort = "xhigh"
+fast_mode = true
+model_context_window = 1000000
+model_auto_compact_token_limit = 900000
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+
+disable_response_storage = false
+personality = "friendly"
+service_tier = "fast"
+
+[model_providers.lemondata]
+env_key = "OPENAI_API_KEY"
+name = "lemondata"
+base_url = "https://api.lemondata.cc/v1"
+wire_api = "responses"
+supports_websockets = true
+websocket_connect_timeout_ms = 15000
+
+[features]
+responses_websockets = true
+responses_websockets_v2 = true
+```
+
+> Note: If the config file doesn't exist, run `codex` once to generate it, then edit the file. Restart Codex completely after changing `config.toml` so the new provider settings are reloaded.
+
+> Warning: Codex is deprecating `chat/completions` support for custom providers. Keep `wire_api = "responses"` for LemonData unless you are intentionally using an older compatibility path.
+
+> Note: If a request uses Responses-native-only fields that your chosen model or routed channel does not support, LemonData returns an explicit error instead of silently downgrading the request.
+
+## Basic Usage
+
+**Start interactive mode:**
+
+```bash
+codex
+```
+
+**Direct command:**
+
+```bash
+codex "Fix the bug in main.py line 42"
+```
+
+**Specify model:**
+
+```bash
+codex -m gpt-5.4 "Build a REST API server"
+```
+
+## Recommended Models
+
+| Model | Best For |
+|-------|----------|
+| `gpt-5.4` | Best default choice for coding and reasoning |
+| `gpt-5-mini` | Faster, cheaper fallback for coding workflows |
+| `claude-sonnet-4-6` | Code review, documentation |
+| `deepseek-r1` | Algorithm design, reasoning |
+
+## Interactive Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Display help |
+| `/exit` or `Ctrl+C` | Exit |
+| `/clear` | Clear conversation |
+| `/config` | View configuration |
+| `/model ` | Switch model |
+| `/tokens` | View token usage |
+
+## Verify Configuration
+
+```bash
+# Check environment variable
+echo $OPENAI_API_KEY
+
+# Test API connection
+codex "Hello, Codex!"
+
+# View configuration
+cat ~/.codex/config.toml
+```
+
+## Common Use Cases
+
+**Code review:**
+
+```bash
+git diff | codex "Review these code changes"
+```
+
+**Generate commit messages:**
+
+```bash
+git diff --staged | codex "Generate a commit message for these changes"
+```
+
+**Fix errors:**
+
+```bash
+codex "Fix the TypeScript errors in src/components/"
+```
+
+**Explain code:**
+
+```bash
+cat main.py | codex "Explain what this code does"
+```
+
+## Troubleshooting
+
+#### Connection Error
+
+- Verify `base_url` in config.toml is exactly `https://api.lemondata.cc/v1`
+    - Check network connectivity
+    - Ensure no proxy interference
+
+  
+#### Authentication Failed
+
+- Verify `env_key = "OPENAI_API_KEY"` is present in `~/.codex/config.toml`
+    - Verify `OPENAI_API_KEY` environment variable is set
+    - Check that the key starts with `sk-`
+    - Ensure the key is active in LemonData dashboard
+
+  
+#### Model Not Found
+
+- Check model name matches exactly
+    - Verify model availability at [lemondata.cc/en/models](https://lemondata.cc/en/models)
+
+  
+#### Responses-native field rejected
+
+- Some fields are only available when the selected model and routed channel support native `/v1/responses` passthrough
+    - If you see an error mentioning `unsupported_request_field` or native passthrough, remove the field or switch to a compatible model/channel
+
+---
+
+### Gemini CLI
+
+> Configure Google Gemini CLI to use LemonData API
+
+URL: https://docs.lemondata.cc/integrations/gemini-cli
+
+## Overview
+
+> Note: **Type**: Coding Tool
+
+**Primary Path**: Gemini-native
+
+**Support Confidence**: Best-effort
+
+Google Gemini CLI is a command-line tool for interacting with Gemini models. LemonData compatibility here is experimental: Gemini CLI officially documents Google-native authentication and settings, but does not currently document a stable custom LemonData-style base URL workflow.
+
+> Warning: Treat this integration as best-effort compatibility, not a guaranteed long-term setup. If you need a stable LemonData terminal coding workflow, prefer Codex CLI, Claude Code, or OpenCode.
+
+## System Requirements
+
+- **Node.js**: Version 20.0+
+- **OS**: Windows 10/11, macOS 10.15+, Ubuntu 20.04+, or Debian 10+
+
+## Installation
+
+```bash
+npm install -g @google/gemini-cli
+```
+
+Verify installation:
+
+```bash
+gemini --version
+```
+
+## Configuration
+
+### Step 1: Get Your API Key
+
+1. Log into [LemonData Dashboard](https://lemondata.cc/dashboard)
+2. Navigate to [API Keys](https://lemondata.cc/dashboard/api)
+3. Create and copy your API key (format: `sk-...`)
+
+### Step 2: Set Environment Variables
+
+The following setup is the current compatibility path people use with proxy or gateway endpoints, but it is not a stable upstream contract:
+
+**Temporary (current session):**
+
+```bash
+export GEMINI_API_KEY="sk-your-lemondata-key"
+export GOOGLE_GEMINI_BASE_URL="https://api.lemondata.cc"
+```
+
+**Permanent configuration:**
+
+Add to your shell configuration file:
+
+  
+  
+
+> Warning: Restart your terminal after configuration for changes to take effect.
+
+> Note: Known limitation: Gemini CLI may ignore `GOOGLE_GEMINI_BASE_URL` in some situations, especially when an existing Google login or cached auth flow takes precedence. If this happens, start a fresh terminal session, clear cached auth, or use another client.
+
+## Basic Usage
+
+Start Gemini CLI from your project directory:
+
+```bash
+cd your-project
+gemini
+```
+
+On first run, you'll:
+1. Choose a theme
+2. Confirm safety notice
+3. Trust the working directory
+
+## Available Models
+
+| Model | Description |
+|-------|-------------|
+| `gemini-2.5-pro` | Most capable Gemini model |
+| `gemini-2.5-flash` | Fast, efficient for most tasks |
+| `gemini-2.0-flash` | Previous generation, stable |
+
+## Common Commands
+
+**Ask a question:**
+
+```
+> What is the best way to structure a React app?
+```
+
+**Analyze code:**
+
+```
+> Explain the code in src/main.ts
+```
+
+**Generate code:**
+
+```
+> Create a Python function to parse JSON files
+```
+
+**Review changes:**
+
+```
+> Review the recent git changes and suggest improvements
+```
+
+## Verify Configuration
+
+```bash
+# Check environment variables
+echo $GEMINI_API_KEY
+echo $GOOGLE_GEMINI_BASE_URL
+
+# Test connection
+gemini
+```
+
+## Troubleshooting
+
+#### Connection Error
+
+- Verify `GOOGLE_GEMINI_BASE_URL` is set to `https://api.lemondata.cc`
+    - Note: Do not add `/v1` for this compatibility path
+    - Check network connectivity
+
+  
+#### Authentication Failed
+
+- Verify `GEMINI_API_KEY` environment variable is set
+    - Check that the key starts with `sk-`
+    - Ensure the key is active in LemonData dashboard
+
+  
+#### Model Not Available
+
+- Check Gemini models availability at [lemondata.cc/en/models](https://lemondata.cc/en/models)
+    - Try a different Gemini model variant
+
+  
+#### Need a more stable coding workflow
+
+- Gemini CLI's custom gateway compatibility can regress between releases
+    - Prefer Codex CLI, Claude Code, or OpenCode if you need a documented LemonData path
+
+## Best Practices
+
+#### Use in project directory
+
+Always run Gemini CLI from your project root for better context understanding.
+
+  
+#### Trust directories carefully
+
+Only trust directories you own. Gemini CLI can read and modify files.
+
+  
+#### Review generated code
+
+Always review AI-generated code before committing to your project.
+
+---
+
+### Pi Coding Agent
+
+> Use LemonData with Pi, a minimal terminal coding harness that supports OpenAI, Anthropic, and Google-style providers
+
+URL: https://docs.lemondata.cc/integrations/pi-coding-agent
+
+## Overview
+
+> Note: **Type**: Coding Tool
+
+**Primary Path**: OpenAI-compatible
+
+**Support Confidence**: Supported path
+
+[Pi](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) is a minimal terminal coding harness. In the LemonData docs IA, it belongs under **Coding Tools**, not under native SDKs.
+
+Pi is interesting because it sits between a classic CLI tool and an embeddable runtime:
+
+- interactive terminal coding workflow
+- JSON / RPC modes for process integration
+- SDK-style embedding into your own applications
+
+For LemonData, Pi is usually easiest to configure through an **OpenAI-compatible** provider path, unless you intentionally want Anthropic-native or Google-native behavior.
+
+## Recommended LemonData Path
+
+Use LemonData as an OpenAI-compatible endpoint:
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+export OPENAI_BASE_URL="https://api.lemondata.cc/v1"
+```
+
+Then configure Pi's provider or custom model settings so its OpenAI-style path points at LemonData.
+
+> Note: Pi can also work with Anthropic-style and Google-style providers. If you want Claude-native or Gemini-native behavior, treat that as a provider-specific Pi setup rather than a generic OpenAI-compatible setup.
+
+## Why Pi Is Different
+
+Pi is not just "another SDK".
+
+- If you are using Pi as a terminal agent, evaluate it like a **coding tool**
+- If you are embedding Pi into your own app, evaluate it like an **agent runtime / harness**
+
+That is why this page focuses on the practical LemonData connection path rather than calling Pi a pure SDK.
+
+## Practical Setup Notes
+
+#### OpenAI-compatible default
+
+Start with LemonData's `https://api.lemondata.cc/v1` path unless your Pi workflow explicitly depends on a native provider protocol.
+
+  
+#### Native-provider setups are separate
+
+Claude-native or Gemini-native Pi setups should be documented and tested as separate provider-specific paths, not assumed to be identical to the OpenAI-compatible route.
+
+  
+#### Keep tool/runtime expectations realistic
+
+Pi is highly configurable. LemonData can document the connection path, but not every extension, skill, or custom harness behavior should be treated as part of the compatibility contract.
+
+## Troubleshooting
+
+#### Connection errors
+
+- Verify the configured OpenAI-style base URL is exactly `https://api.lemondata.cc/v1`
+    - Verify the key starts with `sk-`
+    - Verify the selected Pi provider path matches the protocol you intend to use
+
+  
+#### Model mismatch
+
+- Keep the LemonData model id separate from any Pi-local aliasing
+    - If you are testing provider-native behavior, confirm the Pi provider is really using that native path
+
+---
+
+### OpenCode
+
+> Configure OpenCode to use LemonData API
+
+URL: https://docs.lemondata.cc/integrations/opencode
+
+## Overview
+
+> Note: **Type**: Coding Tool
+
+**Primary Path**: OpenAI-compatible
+
+**Support Confidence**: Supported path
+
+OpenCode is an open-source AI coding assistant that runs in your terminal. It supports multiple LLM providers and can be configured to use LemonData's API for access to 300+ models.
+
+## Installation
+
+  
+  
+
+Verify installation:
+
+```bash
+opencode --version
+```
+
+## Configuration
+
+### Step 1: Set Environment Variables
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+```
+
+For permanent configuration, add to `~/.bashrc` or `~/.zshrc`:
+
+```bash
+echo 'export OPENAI_API_KEY="sk-your-lemondata-key"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Step 2: Configure OpenCode
+
+OpenCode's current docs recommend configuring providers through `opencode.json` or `opencode.jsonc`. For LemonData, use a custom provider instead of overloading the built-in `openai` provider:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "lemondata": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LemonData",
+      "options": {
+        "baseURL": "https://api.lemondata.cc/v1",
+        "apiKey": "{env:OPENAI_API_KEY}"
+      },
+      "models": {
+        "gpt-5.4": {
+          "name": "GPT-5.4"
+        },
+        "gpt-5-mini": {
+          "name": "GPT-5 Mini"
+        }
+      }
+    }
+  },
+  "model": "lemondata/gpt-5.4"
+}
+```
+
+> Note: Use `@ai-sdk/openai-compatible` for chat-completions style compatibility. If you specifically need a provider path built on `/v1/responses`, OpenCode's provider docs recommend switching the package to `@ai-sdk/openai`.
+
+## Basic Usage
+
+**Start interactive mode:**
+
+```bash
+opencode
+```
+
+**Run with a prompt:**
+
+```bash
+opencode "Explain this codebase"
+```
+
+**Specify model:**
+
+```bash
+opencode --model lemondata/gpt-5.4 "Fix the bugs in main.py"
+```
+
+## Available Models
+
+| Model | Best For |
+|-------|----------|
+| `gpt-5.4` | Complex tasks, code architecture |
+| `gpt-5-mini` | Quick fixes, simple queries |
+| `claude-sonnet-4-6` | Code review, documentation |
+| `claude-opus-4-6` | Complex reasoning |
+| `gemini-2.5-flash` | Fast responses |
+| `deepseek-r1` | Algorithm design |
+
+## Common Commands
+
+**Analyze code:**
+
+```bash
+opencode "What does this function do?" ` | Switch to a different model |
+| `/clear` | Clear conversation history |
+| `/exit` | Exit OpenCode |
+
+## Troubleshooting
+
+#### Connection Error
+
+- Verify `options.baseURL` is set to `https://api.lemondata.cc/v1`
+    - Check network connectivity
+    - Try `curl https://api.lemondata.cc/v1/models` to test
+
+  
+#### Authentication Failed
+
+- Verify `OPENAI_API_KEY` environment variable is set
+    - Verify `options.apiKey` references `{env:OPENAI_API_KEY}` or another valid secret source
+    - Check that the key starts with `sk-`
+    - Ensure the key is active in LemonData dashboard
+
+  
+#### Model Not Found
+
+- Check model name in config matches exactly
+    - Verify model availability at [lemondata.cc/en/models](https://lemondata.cc/en/models)
+
+## Best Practices
+
+#### Use project context
+
+Run OpenCode from your project root for better understanding of your codebase.
+
+  
+#### Choose appropriate models
+
+Use faster models (`gpt-5-mini`) for simple tasks and stronger models (`gpt-5.4`, `claude-sonnet-4-6`) for complex ones.
+
+  
+#### Review generated code
+
+Always review AI-generated code before applying changes to your project.
+
+---
+
+
+## Native SDKs
 
 ### OpenAI SDK
 
@@ -7325,13 +7719,23 @@ LemonData works with the official OpenAI SDKs by pointing the client to `https:/
 
 For new projects, prefer the **Responses API**. Keep **Chat Completions** only when a framework, plugin, or legacy code path still expects it.
 
+This is the default LemonData SDK path for OpenAI-compatible usage, but it is not a promise that every Responses-native-only field works identically across every model and routed channel.
+
 > Note: Python, JavaScript, and Go have official OpenAI SDKs. PHP works well with OpenAI-compatible community clients, but it is not an official OpenAI SDK.
+
+> Note: **Type**: Native SDK
+
+**Primary Path**: OpenAI-compatible / OpenAI Responses
+
+**Support Confidence**: Supported core path
 
 ## Installation
 
 ```bash Python
 pip install openai
 ```
+
+> Note: Responses-native-only fields such as some hosted tools, `include`, `service_tier`, and `truncation_strategy` can depend on native `/v1/responses` passthrough support from the selected model and routed channel. If that support is unavailable, LemonData returns an explicit `400` or `503` instead of silently pretending the field worked.
 
 ## Configure the Client
 
@@ -7475,7 +7879,15 @@ URL: https://docs.lemondata.cc/integrations/anthropic-sdk
 
 LemonData supports the native Anthropic **Messages API** path, so you can use the official Anthropic SDK directly for Claude models.
 
+Among the documented SDK routes, this is one of the strongest-supported LemonData paths for Claude-native features.
+
 > Note: For the Anthropic SDK, use `https://api.lemondata.cc` as the base URL, without appending `/v1` yourself.
+
+> Note: **Type**: Native SDK
+
+**Primary Path**: Anthropic-native
+
+**Support Confidence**: Strong native path
 
 ## Installation
 
@@ -7642,6 +8054,136 @@ for block in message.content:
 
 ---
 
+
+## Frameworks & Platforms
+
+### LiteLLM
+
+> Use LemonData with LiteLLM as either an upstream provider or an internal gateway layer
+
+URL: https://docs.lemondata.cc/integrations/litellm
+
+## Overview
+
+LiteLLM fits LemonData in two common ways:
+
+- use LemonData as an **OpenAI-compatible upstream** behind LiteLLM
+- put LiteLLM in front of LemonData when your team wants one more internal gateway layer for routing, virtual keys, or centralized observability
+
+For LemonData, the cleanest default is LiteLLM's **custom OpenAI / OpenAI-compatible** path pointed at `https://api.lemondata.cc/v1`.
+
+> Note: If you specifically need Claude-native or Gemini-native request shapes, prefer LemonData's dedicated native integrations instead of forcing those workflows through LiteLLM's OpenAI-compatible abstraction.
+
+> Note: **Type**: Framework or Platform
+
+**Primary Path**: OpenAI-compatible upstream
+
+**Support Confidence**: Supported path
+
+## Install
+
+```bash
+pip install 'litellm[proxy]'
+```
+
+## Proxy Configuration
+
+Create a `litellm-config.yaml` like this:
+
+```yaml
+model_list:
+  - model_name: lemondata-gpt-5.4
+    litellm_params:
+      model: custom_openai/gpt-5.4
+      api_base: https://api.lemondata.cc/v1
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: lemondata-claude-sonnet
+    litellm_params:
+      model: custom_openai/claude-sonnet-4-6
+      api_base: https://api.lemondata.cc/v1
+      api_key: os.environ/OPENAI_API_KEY
+```
+
+Start the proxy:
+
+```bash
+export OPENAI_API_KEY="sk-your-lemondata-key"
+litellm --config litellm-config.yaml --port 4000
+```
+
+## Call LiteLLM Through OpenAI SDK
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="anything",
+    base_url="http://127.0.0.1:4000"
+)
+
+response = client.chat.completions.create(
+    model="lemondata-gpt-5.4",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.choices[0].message.content)
+```
+
+## Direct Python Usage
+
+If you are using LiteLLM as a Python library instead of the proxy, keep the same LemonData base URL:
+
+```python
+import litellm
+
+response = litellm.completion(
+    model="custom_openai/gpt-5.4",
+    api_base="https://api.lemondata.cc/v1",
+    api_key="sk-your-lemondata-key",
+    messages=[{"role": "user", "content": "Summarize this repo."}]
+)
+```
+
+## Best Practices
+
+#### Prefer custom_openai for LemonData
+
+Treat LemonData as an OpenAI-compatible upstream unless you have a very specific reason to build a more complex provider mapping.
+
+  
+#### Use LiteLLM when you need one more gateway layer
+
+LiteLLM makes sense when your own platform wants virtual keys, extra routing policy, or centralized logs in front of LemonData.
+
+  
+#### Keep native-provider expectations realistic
+
+OpenAI-compatible translation layers are great for broad compatibility, but they are not the right place to promise every provider-native feature.
+
+## Troubleshooting
+
+#### Connection errors
+
+- Verify `api_base` is exactly `https://api.lemondata.cc/v1`
+    - Make sure LiteLLM can reach LemonData over the public internet
+    - If you run the proxy locally, verify the OpenAI client points to your LiteLLM port instead of LemonData directly
+
+  
+#### Authentication errors
+
+- Check that LiteLLM is reading the right `OPENAI_API_KEY`
+    - Confirm the LemonData key starts with `sk-`
+    - Confirm the key is active in LemonData dashboard
+
+  
+#### Model not found
+
+- Verify the LemonData model name in `custom_openai/`
+    - Keep your LiteLLM `model_name` alias separate from the real LemonData model id
+
+---
+
 ### Vercel AI SDK
 
 > Integrate LemonData with Vercel AI SDK using OpenAI-compatible or Responses-native providers
@@ -7650,9 +8192,17 @@ URL: https://docs.lemondata.cc/integrations/vercel-ai-sdk
 
 ## Overview
 
+> Note: **Type**: Framework or Platform
+
+**Primary Path**: OpenAI-compatible default
+
+**Support Confidence**: Recommended integration pattern
+
 For LemonData, the most stable default in Vercel AI SDK is the **OpenAI-compatible provider**.
 
 If you specifically need **Responses-native** behavior, you can switch to the OpenAI provider and keep the same LemonData base URL.
+
+Treat this page as a recommended integration pattern, not as a claim that every helper in Vercel AI SDK has dedicated end-to-end regression coverage in this repo.
 
 ## Recommended Default: OpenAI-Compatible Provider
 
@@ -7809,7 +8359,15 @@ URL: https://docs.lemondata.cc/integrations/langchain
 
 LemonData works well with LangChain's `ChatOpenAI` and `OpenAIEmbeddings` integrations when you stay on the standard OpenAI-compatible chat and embeddings surface.
 
+This page intentionally covers the standard OpenAI-compatible LangChain surface, not provider-native LangChain features beyond that surface.
+
 > Note: Current LangChain docs note that `ChatOpenAI` targets official OpenAI-compatible request/response shapes. If you need provider-specific, non-standard response fields, use a provider-specific LangChain integration instead of relying on `ChatOpenAI`.
+
+> Note: **Type**: Framework or Platform
+
+**Primary Path**: OpenAI-compatible standard surface
+
+**Support Confidence**: Supported standard surface
 
 ## Installation
 
@@ -7990,9 +8548,17 @@ URL: https://docs.lemondata.cc/integrations/llamaindex
 
 ## Overview
 
+> Note: **Type**: Framework or Platform
+
+**Primary Path**: OpenAI-compatible via OpenAILike
+
+**Support Confidence**: Supported via OpenAILike
+
 For LemonData, the more robust LlamaIndex setup is to use **OpenAI-compatible integrations** instead of the built-in OpenAI classes.
 
 Current LlamaIndex docs explicitly recommend `OpenAILike` for third-party OpenAI-compatible endpoints, because the built-in OpenAI classes infer metadata from official model names.
+
+In other words: treat `OpenAILike` as the supported LemonData path here, not the built-in OpenAI classes.
 
 ## Installation
 
@@ -8127,12 +8693,20 @@ URL: https://docs.lemondata.cc/integrations/dify
 
 Dify works well with LemonData through its OpenAI-compatible model provider flow.
 
+This is a chat-completions-oriented integration path. It should not be read as a guarantee that Dify exposes the same Responses or WebSocket behavior as dedicated Codex integrations.
+
 For current Dify versions, the safest path is usually:
 - choose the built-in **OpenAI** provider
 - set your LemonData API key
 - set a custom base URL of `https://api.lemondata.cc/v1`
 
 > Note: Some older Dify builds expose this as `OpenAI-API-compatible` instead of the built-in `OpenAI` provider with a custom base URL field. If your Dify UI looks different, use the closest OpenAI-compatible custom provider flow available in that version.
+
+> Note: **Type**: Framework or Platform
+
+**Primary Path**: OpenAI-compatible chat path
+
+**Support Confidence**: Supported with scope limits
 
 ## Prerequisites
 
@@ -8245,109 +8819,6 @@ Most Dify flows use OpenAI-compatible chat behavior. If you need Codex-specific 
 
 ---
 
-### SDKs & Libraries
-
-> Recommended SDKs and libraries for LemonData integrations
-
-URL: https://docs.lemondata.cc/guides/sdks
-
-## Overview
-
-LemonData is easiest to integrate through:
-- official **OpenAI SDKs** for OpenAI-compatible and Responses-style usage
-- official **Anthropic SDKs** for Claude-native `/v1/messages`
-- official **Gemini / Google AI** tooling when you specifically need Gemini-native request shapes
-
-## Recommended SDKs
-
-  
-  
-  
-
-## OpenAI SDK Example
-
-Use this as the default starting point for new projects:
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="sk-your-api-key",
-    base_url="https://api.lemondata.cc/v1"
-)
-
-response = client.responses.create(
-    model="gpt-5.4",
-    input="Explain LemonData in one sentence."
-)
-
-print(response.output_text)
-```
-
-## OpenAI Go Example
-
-```go
-package main
-
-import (
-    openai "github.com/openai/openai-go/v3"
-    "github.com/openai/openai-go/v3/option"
-)
-
-func main() {
-    client := openai.NewClient(
-        option.WithAPIKey("sk-your-api-key"),
-        option.WithBaseURL("https://api.lemondata.cc/v1"),
-    )
-
-    _ = client
-}
-```
-
-## Anthropic SDK Example
-
-```python
-from anthropic import Anthropic
-
-client = Anthropic(
-    api_key="sk-your-api-key",
-    base_url="https://api.lemondata.cc"
-)
-
-message = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-```
-
-## Which SDK Should You Use?
-
-| Goal | Recommended SDK |
-|------|------------------|
-| New app, general default | OpenAI SDK |
-| Claude-native features | Anthropic SDK |
-| Gemini-native request shapes | Gemini-native API / SDK |
-| LangChain / LlamaIndex / Vercel AI SDK | Use the dedicated integration pages |
-
-## Best Practices
-
-#### Prefer Responses for new projects
-
-If your SDK supports both `responses` and `chat.completions`, start with `responses`.
-
-  
-#### Keep base URLs explicit
-
-Pass LemonData base URLs directly in your client configuration instead of relying on older environment-variable aliases.
-
-  
-#### Use native SDKs only when native features matter
-
-Use the Anthropic SDK for Claude-native features such as extended thinking, and otherwise prefer the OpenAI SDK for broad compatibility.
-
----
-
 
 ## Chat Apps
 
@@ -8368,16 +8839,23 @@ In practice that means:
 
 > Note: General chat apps are usually **chat-completions oriented**, not Codex Responses WebSocket clients. For Codex CLI/App, Cursor, or other coding tools that need Responses-specific behavior, use the dedicated integration guides instead.
 
+> Note: **Type**: Chat App
+
+**Primary Path**: OpenAI-compatible chat-completions
+
+**Support Confidence**: Supported path
+
 ## Supported Applications
 
 | Application | Platform | Notes |
 |-------------|----------|-------|
+| Open WebUI | Web, Self-hosted | Popular self-hosted choice with OpenAI-compatible connections |
+| LibreChat | Web, Self-hosted | Multi-provider chat workspace with custom OpenAI endpoints |
 | LobeChat | Web, Desktop, Self-hosted | Strong custom-provider support |
 | Cherry Studio | Windows, macOS, Linux | Good OpenAI-compatible provider flow |
 | Chatbox | Windows, macOS, Linux | Simple OpenAI-compatible setup |
 | TypingMind | Web, Desktop | Uses a custom endpoint style |
-| BotGem | iOS, macOS | Custom provider configuration |
-| OpenCat | iOS, macOS | OpenAI-compatible custom endpoint flow |
+| NextChat | Web, Self-hosted | Lightweight ChatGPT-style client with base-URL overrides |
 | ChatWise | Windows, macOS | Standard custom provider pattern |
 
 ## Default Connection Values
@@ -8392,6 +8870,10 @@ If an app asks for a **full endpoint URL** instead of a base URL, use:
 - Chat Completions: `https://api.lemondata.cc/v1/chat/completions`
 
 ## Example App Setups
+
+  
+
+  
 
   
 
