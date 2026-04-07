@@ -30,14 +30,14 @@ Gemini 端点支持多种身份验证方法：
 <ParamField body="contents" type="array" required>
   对话内容。
 
-  Each content object contains:
-  - `role` (string): `user` or `model`
-  - `parts` (array): Content parts. LemonData supports:
-    - text parts: `{ "text": "..." }`
-    - inline media parts: `inlineData` / `inline_data`
-    - URL-based file parts: `fileData` / `file_data`
+  每个内容对象包含：
+  - `role` (string)：`user` 或 `model`
+  - `parts` (array)：内容 part。LemonData 当前支持：
+    - 文本 part：`{ "text": "..." }`
+    - 内联媒体 part：`inlineData` / `inline_data`
+    - 基于 URL 的文件 part：`fileData` / `file_data`
 
-  For media parts, LemonData currently accepts image, audio, and video MIME types and forwards them through the Gemini-compatible public contract.
+  对于媒体 part，LemonData 当前接受图片、音频、视频三类 MIME type，并通过 Gemini 兼容公共契约向下游透传。
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -188,9 +188,22 @@ echo $data['candidates'][0]['content']['parts'][0]['text'];
 ```
 </RequestExample>
 
-## 图片输入示例
+## 多模态输入示例
 
-对于 Gemini 视觉请求，请将图片放在 `contents[].parts[]` 中，作为结构化的 `inline_data` part 传入。`data` 字段应填写图片文件字节的 Base64 内容，`mime_type` 需要与图片实际格式一致。
+对于 Gemini 多模态请求，请把媒体放到 `contents[].parts[]` 中，可以使用“内联字节”或“基于 URL 的文件引用”两种方式。
+
+当前公共 Gemini 契约支持的媒体类别：
+- 图片
+- 音频
+- 视频
+
+对于内联媒体，使用 `inlineData` 或 `inline_data`，并传入文件字节的 Base64 内容。
+
+对于 URL 媒体，使用 `fileData` 或 `file_data`，并传入一个可公开访问的 `https` URL。
+
+### 图片输入示例
+
+使用内联图片字节：
 
 ```json
 {
@@ -200,9 +213,72 @@ echo $data['candidates'][0]['content']['parts'][0]['text'];
       "parts": [
         { "text": "请描述这张图片。" },
         {
-          "inline_data": {
-            "mime_type": "image/jpeg",
+          "inlineData": {
+            "mimeType": "image/jpeg",
             "data": "/9j/4AAQSkZJRgABAQ..."
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+使用图片 URL：
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "请描述这张图片。" },
+        {
+          "fileData": {
+            "mimeType": "image/jpeg",
+            "fileUri": "https://example.com/demo.jpg"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 音频输入示例
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "请转写并总结这段音频。" },
+        {
+          "file_data": {
+            "mime_type": "audio/mpeg",
+            "file_uri": "https://example.com/sample.mp3"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 视频输入示例
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "请简要描述这段视频。" },
+        {
+          "fileData": {
+            "mimeType": "video/mp4",
+            "fileUri": "https://example.com/sample.mp4"
           }
         }
       ]
