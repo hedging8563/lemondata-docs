@@ -1,5 +1,5 @@
 ---
-title: "Obter Status do Vídeo"
+title: "Obter status do vídeo"
 openapi: "GET /v1/tasks/{id}"
 description: "Recupera o status e o resultado de uma tarefa de geração de vídeo"
 ---
@@ -7,11 +7,13 @@ description: "Recupera o status e o resultado de uma tarefa de geração de víd
 ## Parâmetros de Caminho
 
 <ParamField path="id" type="string" required>
-  Identificador canônico da tarefa assíncrona. Quando `id` e `task_id` estiverem presentes juntos, trate-os como a mesma tarefa.
+  O ID da tarefa retornado pela solicitação de criação de vídeo. Considere `id` e `task_id` como a mesma identidade assíncrona.
 </ParamField>
 
 <Info>
-Se uma resposta de criação retornar `poll_url`, chame exatamente essa URL. Quando ela apontar para `/v1/tasks/{id}`, trate-a como o endpoint fixo canônico de status.
+Se uma resposta de criação retornar `poll_url`, chame exatamente essa URL. Quando ela apontar para `/v1/tasks/{id}`, trate isso como o endpoint canônico e fixo de status.
+
+Se a tarefa não existir mais ou não puder mais ser resolvida através do contrato público async-task, LemonData retorna `async_task_not_found` com a mensagem `Task not found or no longer available.`
 </Info>
 
 ## Resposta
@@ -25,7 +27,7 @@ Se uma resposta de criação retornar `poll_url`, chame exatamente essa URL. Qua
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  URL de polling prioritária retornada pela resposta de criação.
+  URL de polling preferencial quando a resposta de criação fornecer uma.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -33,7 +35,7 @@ Se uma resposta de criação retornar `poll_url`, chame exatamente essa URL. Qua
 </ResponseField>
 
 <ResponseField name="progress" type="number">
-  Porcentagem de progresso (0-100).
+  Percentual de progresso (0-100).
 </ResponseField>
 
 <ResponseField name="video_url" type="string">
@@ -41,15 +43,15 @@ Se uma resposta de criação retornar `poll_url`, chame exatamente essa URL. Qua
 </ResponseField>
 
 <ResponseField name="video" type="object">
-  Objeto único de vídeo com `url`, `duration`, `width` e `height` quando disponível.
+  Objeto único de vídeo com `url`, `duration`, `width` e `height` quando disponíveis.
 </ResponseField>
 
 <ResponseField name="videos" type="array">
-  Array de vídeos quando o upstream retorna mais de uma saída.
+  Múltiplos objetos de vídeo quando o upstream retornar mais de uma saída.
 </ResponseField>
 
 <ResponseField name="error" type="string">
-  Mensagem de erro (se houver falha).
+  Mensagem de erro (em caso de falha).
 </ResponseField>
 
 <ResponseField name="created" type="integer">
@@ -61,12 +63,12 @@ Se uma resposta de criação retornar `poll_url`, chame exatamente essa URL. Qua
 </ResponseField>
 
 <ResponseField name="model" type="string">
-  Modelo usado pela tarefa.
+  Modelo usado para a tarefa.
 </ResponseField>
 
 <RequestExample>
 ```bash cURL
-curl "https://api.lemondata.cc/v1/tasks/video_abc123" \
+curl "https://api.lemondata.cc/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
@@ -74,7 +76,7 @@ curl "https://api.lemondata.cc/v1/tasks/video_abc123" \
 import requests
 import time
 
-task_id = "video_abc123"
+task_id = "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 while True:
     response = requests.get(
@@ -96,7 +98,7 @@ while True:
 ```
 
 ```javascript JavaScript
-const taskId = 'video_abc123';
+const taskId = 'ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 async function pollForVideo() {
   while (true) {
@@ -109,7 +111,7 @@ async function pollForVideo() {
     console.log(`Status: ${data.status}, Progress: ${data.progress || 0}%`);
 
     if (data.status === 'completed') {
-      console.log(`Video URL: {data.video_url}`);
+      console.log(`Video URL: ${data.video_url}`);
       return data.video_url;
     } else if (data.status === 'failed') {
       throw new Error(data.error);
@@ -131,7 +133,7 @@ import (
 )
 
 func main() {
-    taskID := "video_abc123"
+    taskID := "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
     for {
         req, _ := http.NewRequest("GET",
@@ -162,7 +164,7 @@ func main() {
 
 ```php PHP
 <?php
-$taskId = 'video_abc123';
+$taskId = 'ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 while (true) {
     $ch = curl_init("https://api.lemondata.cc/v1/tasks/{$taskId}");
@@ -196,9 +198,9 @@ while (true) {
 <ResponseExample>
 ```json Response (pending)
 {
-  "id": "video_abc123",
-  "task_id": "video_abc123",
-  "poll_url": "/v1/tasks/video_abc123",
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "pending",
   "progress": 0,
   "model": "sora-2",
@@ -209,9 +211,9 @@ while (true) {
 
 ```json Response (processing)
 {
-  "id": "video_abc123",
-  "task_id": "video_abc123",
-  "poll_url": "/v1/tasks/video_abc123",
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "processing",
   "progress": 45,
   "model": "sora-2",
@@ -222,9 +224,9 @@ while (true) {
 
 ```json Response (completed)
 {
-  "id": "video_abc123",
-  "task_id": "video_abc123",
-  "poll_url": "/v1/tasks/video_abc123",
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "completed",
   "progress": 100,
   "video_url": "https://cdn.lemondata.cc/videos/abc123.mp4",
@@ -236,9 +238,9 @@ while (true) {
 
 ```json Response (failed)
 {
-  "id": "video_abc123",
-  "task_id": "video_abc123",
-  "poll_url": "/v1/tasks/video_abc123",
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "failed",
   "error": "Content policy violation",
   "model": "sora-2",
@@ -248,11 +250,11 @@ while (true) {
 ```
 </ResponseExample>
 
-## Melhores Práticas de Polling
+## Melhores práticas de polling
 
-- Faça polling a cada 5-10 segundos
-- Implemente exponential backoff para tarefas longas
-- Defina um tempo limite máximo (ex: 10 minutos)
+- Realizar polling a cada 5-10 segundos
+- Implemente backoff exponencial para tarefas longas
+- Defina um tempo máximo de espera (por exemplo, 10 minutos)
 - Trate o status `failed` de forma adequada
 
 ```python
