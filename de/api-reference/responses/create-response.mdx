@@ -1,10 +1,10 @@
 ---
-title: "Response erstellen"
+title: "Antwort erstellen"
 openapi: "POST /v1/responses"
-description: "Erstellt eine Response unter Verwendung des OpenAI Responses API-Formats"
+description: "Erstellt eine Antwort im OpenAI Responses API-Format"
 ---
 
-Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonData unterstützt dieses Format für kompatible Modelle.
+Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonData unterstützt dieses Format als einen fortgeschrittenen optionalen Pfad für kompatible Modelle; verwenden Sie `POST /v1/chat/completions` als den standardmäßigen OpenAI-kompatiblen Pfad, sofern Sie nicht explizit Responses-spezifisches Verhalten benötigen.
 
 ## Request Body
 
@@ -13,12 +13,19 @@ Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonD
 </ParamField>
 
 <ParamField body="input" type="array" required>
-  Eine Liste von Eingabeelementen, die die Konversation bilden.
+  Eine Liste von Input-Elementen, die die Konversation bilden.
 
   Jedes Element kann sein:
   - `message`: Eine Konversationsnachricht mit Rolle und Inhalt
-  - `function_call`: Eine Function-Call-Anfrage
-  - `function_call_output`: Ausgabe eines Function-Calls
+  - `function_call`: Eine Anfrage zum Aufruf einer Funktion
+  - `function_call_output`: Ausgabe eines Funktionsaufrufs
+
+  Für multimodalen Input kann `message.content` entweder eine einfache Zeichenkette oder ein Array von Inhaltsblöcken sein. Für bildfähige Modelle wie z. B. GPT-5.4-Varianten übergeben Sie Bilder als `input_image`-Blöcke anstatt URLs oder Base64-Strings direkt in Plaintext einzubetten.
+
+  Beispielhafte Inhaltsblöcke:
+  - `{ "type": "input_text", "text": "Describe this image" }`
+  - `{ "type": "input_image", "image_url": "https://example.com/image.jpg" }`
+  - `{ "type": "input_image", "image_url": "data:image/png;base64,..." }`
 </ParamField>
 
 <ParamField body="instructions" type="string">
@@ -26,7 +33,7 @@ Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonD
 </ParamField>
 
 <ParamField body="max_output_tokens" type="integer">
-  Maximale Anzahl von zu generierenden Tokens.
+  Maximale Anzahl Tokens, die generiert werden sollen.
 </ParamField>
 
 <ParamField body="temperature" type="number" default="1">
@@ -34,31 +41,31 @@ Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonD
 </ParamField>
 
 <ParamField body="tools" type="array">
-  Eine Liste von Tools, die das Modell aufrufen kann.
+  Eine Liste von Tools, die das Modell aufrufen darf.
 </ParamField>
 
 <ParamField body="stream" type="boolean" default="false">
-  Wenn true, wird ein Event-Stream zurückgegeben.
+  Wenn true, wird ein Stream von Events zurückgegeben.
 </ParamField>
 
 <ParamField body="previous_response_id" type="string">
-  ID einer vorherigen Response, von der aus die Konversation fortgesetzt werden soll.
+  ID einer vorherigen Response, von der die Konversation fortgesetzt werden soll.
 </ParamField>
 
 <ParamField body="store" type="boolean" default="true">
-  Gibt an, ob die Response zur späteren Abfrage gespeichert werden soll.
+  Ob die Antwort für spätere Abrufe gespeichert werden soll.
 </ParamField>
 
 <ParamField body="metadata" type="object">
-  Metadaten, die der Response zu Tracking-Zwecken angehängt werden.
+  Metadaten, die zur Nachverfolgung an die Antwort angehängt werden.
 </ParamField>
 
 <ParamField body="text" type="object">
-  Konfigurationsoptionen für die Textgenerierung.
+  Konfigurationsoptionen für die Textgenerierung. Das Verhalten von `text.format` hängt vom gewählten Modell und Pfad ab; es ist nicht durchgängig für jedes Modell garantiert.
 </ParamField>
 
 <ParamField body="parallel_tool_calls" type="boolean" default="true">
-  Gibt an, ob mehrere Tool-Calls parallel erlaubt sind.
+  Ob mehrere Tool-Aufrufe parallel erlaubt sind.
 </ParamField>
 
 <ParamField body="top_p" type="number">
@@ -66,7 +73,7 @@ Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonD
 </ParamField>
 
 <ParamField body="reasoning" type="object">
-  Reasoning-Konfiguration für Reasoning-fähige Modelle wie Varianten der GPT-5-Familie.
+  Reasoning-Konfiguration für reasoning-fähige Modelle wie die GPT-5-Familie-Varianten.
 
   - `effort` (string): Reasoning-Aufwandsstufe (`low`, `medium`, `high`)
 </ParamField>
@@ -74,7 +81,7 @@ Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonD
 ## Response
 
 <ResponseField name="id" type="string">
-  Eindeutiger Bezeichner für die Response.
+  Eindeutiger Bezeichner für die Antwort.
 </ResponseField>
 
 <ResponseField name="object" type="string">
@@ -82,7 +89,7 @@ Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonD
 </ResponseField>
 
 <ResponseField name="created" type="integer">
-  Unix-Zeitstempel, wann die Response erstellt wurde.
+  Unix-Zeitstempel, wann die Antwort erstellt wurde.
 </ResponseField>
 
 <ResponseField name="output" type="array">
@@ -90,7 +97,7 @@ Die Responses API ist OpenAIs neuere zustandsbehaftete Konversations-API. LemonD
 </ResponseField>
 
 <ResponseField name="usage" type="object">
-  Token-Nutzungsstatistiken.
+  Statistiken zur Token-Nutzung.
 </ResponseField>
 
 <RequestExample>
@@ -207,7 +214,7 @@ print_r($data['output']);
 ```
 ## Vision Input Example
 
-Use image-capable models by placing images inside `message.content` as `input_image` blocks. The `image_url` value can be either a public URL or a Base64 data URL.
+Verwenden Sie bildfähige Modelle, indem Sie Bilder innerhalb von `message.content` als `input_image`-Blöcke platzieren. Der `image_url`-Wert kann entweder eine öffentliche URL oder eine Base64-Daten-URL sein.
 
 ```json
 {

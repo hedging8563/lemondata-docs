@@ -1,11 +1,11 @@
 ---
 title: "Gestion des erreurs"
-description: "Gérez les erreurs d'API avec élégance"
+description: "Gérer les erreurs d'API de manière élégante"
 ---
 
-## Format de réponse des erreurs
+## Format de réponse d'erreur
 
-Toutes les erreurs renvoient un format JSON cohérent avec des [indices Agent-First](/guides/agent-first-api) facultatifs :
+Toutes les erreurs renvoient un format JSON cohérent avec des [Agent-First hints](/guides/agent-first-api) facultatifs :
 
 ```json
 {
@@ -23,25 +23,25 @@ Toutes les erreurs renvoient un format JSON cohérent avec des [indices Agent-Fi
 }
 ```
 
-Les champs de base (`message`, `type`, `code`, `param`) sont toujours présents. Les champs d'indice (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) sont des extensions facultatives pour l'auto-correction des agents IA. Consultez le [guide de l'API Agent-First](/guides/agent-first-api) pour plus de détails.
+Les champs de base (`message`, `type`, `code`, `param`) sont toujours présents. Les champs d'indice (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) sont des extensions optionnelles pour l'auto-correction des agents IA. Voir le [Agent-First API guide](/guides/agent-first-api) pour plus de détails.
 
-Les endpoints compatibles OpenAI utilisent les types d'erreur stables de la passerelle LemonData. Les endpoints compatibles Anthropic et compatibles Gemini utilisent leurs propres familles d'erreurs natives et formats de réponse.
+Les endpoints compatibles OpenAI utilisent les types d'erreur stables du gateway de LemonData. Les endpoints compatibles Anthropic et Gemini utilisent leurs propres familles d'erreurs natives et formats de réponse.
 
-## Codes de statut HTTP
+## Codes d'état HTTP
 
 | Code | Description |
 |------|-------------|
-| 400 | Bad Request - Paramètres invalides |
-| 401 | Unauthorized - Clé API invalide ou manquante |
-| 402 | Payment Required - Solde insuffisant |
-| 403 | Forbidden - Accès refusé ou modèle non autorisé |
-| 404 | Not Found - Modèle ou ressource introuvable |
-| 413 | Payload Too Large - Taille d'entrée ou de fichier dépassée |
-| 429 | Too Many Requests - Limite de débit dépassée |
-| 500 | Internal Server Error |
-| 502 | Bad Gateway - Erreur du fournisseur en amont |
-| 503 | Service Unavailable - Service temporairement indisponible |
-| 504 | Gateway Timeout - Délai d'attente de la requête dépassé |
+| 400 | Requête incorrecte - Paramètres invalides |
+| 401 | Non autorisé - Clé API manquante ou invalide |
+| 402 | Paiement requis - Solde insuffisant |
+| 403 | Interdit - Accès refusé ou modèle non autorisé |
+| 404 | Non trouvé - Modèle ou ressource introuvable |
+| 413 | Charge utile trop volumineuse - Taille d'entrée ou de fichier dépassée |
+| 429 | Trop de requêtes - Limite de débit dépassée |
+| 500 | Erreur interne du serveur |
+| 502 | Mauvaise passerelle - Erreur du fournisseur en amont |
+| 503 | Service indisponible - Service temporairement indisponible |
+| 504 | Délai d'attente de la passerelle - Requête expirée |
 
 ## Types d'erreurs
 
@@ -65,8 +65,8 @@ except AuthenticationError as e:
 
 | Type | Code | Description |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | Le solde du compte est trop bas (endpoints compatibles OpenAI) |
-| `insufficient_balance_error` | `insufficient_balance` | Le solde du compte est trop bas (endpoints compatibles Anthropic) |
+| `insufficient_balance` | `insufficient_balance` | Le solde du compte est trop faible (endpoints compatibles OpenAI) |
+| `insufficient_balance_error` | `insufficient_balance` | Le solde du compte est trop faible (endpoints compatibles Anthropic) |
 | `quota_exceeded` | `quota_exceeded` | Limite d'utilisation de la clé API atteinte |
 
 ```python
@@ -102,13 +102,12 @@ except APIStatusError as e:
 |------|-------------|
 | `invalid_request_error` | Les paramètres de la requête sont invalides |
 | `context_length_exceeded` | Entrée trop longue pour le modèle |
-| `model_not_found` | Le modèle demandé n'existe pas |
-| `model_price_not_configured` | Le modèle existe en interne, mais n'est pas actuellement disponible pour les requêtes publiques |
+| `model_not_found` | Le modèle demandé n'est pas disponible dans le contrat public actuel |
 
 ```json
 {
   "error": {
-    "message": "Model 'invalid-model' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -119,23 +118,9 @@ except APIStatusError as e:
 }
 ```
 
+Les routes publiques ne distinguent pas dans le corps de la réponse si un modèle est simplement mal orthographié, masqué, différé ou non public. Si un modèle n'est pas actuellement disponible via le contrat public, LemonData renvoie `model_not_found`.
 
-Lorsqu'un modèle existe dans les workflows internes de gouvernance ou de tarification mais n'est pas encore exposé comme cible publique, LemonData renvoie :
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-### Erreurs de limite de débit (429)
+### Erreurs de limitation de débit (429)
 
 Lorsque vous dépassez les limites de débit :
 
@@ -160,7 +145,7 @@ Retry-After: 8
 
 L'en-tête `Retry-After` et le champ `retry_after` indiquent tous deux le nombre exact de secondes à attendre avant de réessayer.
 
-### Payload Too Large (413)
+### Charge utile trop volumineuse (413)
 
 Lorsque la taille de l'entrée ou du fichier dépasse les limites :
 
@@ -174,7 +159,7 @@ Lorsque la taille de l'entrée ou du fichier dépasse les limites :
 }
 ```
 
-Causes fréquentes :
+Causes courantes :
 - Fichier image trop volumineux (max 20MB)
 - Fichier audio trop volumineux (max 25MB)
 - Le texte d'entrée dépasse la longueur de contexte du modèle
@@ -185,7 +170,7 @@ Causes fréquentes :
 |------|-------------|
 | `upstream_error` | Le fournisseur a renvoyé une erreur |
 | `all_channels_failed` | Aucun fournisseur disponible |
-| `timeout_error` | Le délai d'attente de la requête a été dépassé |
+| `timeout_error` | La requête a expiré |
 
 Lorsque tous les canaux échouent, la réponse inclut des modèles alternatifs :
 
@@ -270,29 +255,29 @@ async function chatWithRetry(messages, maxRetries = 3) {
 
 <AccordionGroup>
   <Accordion title="Implémenter un backoff exponentiel">
-    En cas de limitation de débit, attendez progressivement plus longtemps entre les tentatives :
+    Lorsque vous êtes limité par le débit, attendez de plus en plus longtemps entre les réessais :
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="Définir des timeouts">
-    Définissez toujours des timeouts raisonnables pour éviter que les requêtes ne restent bloquées :
+  <Accordion title="Définir des délais d'attente">
+    Définissez toujours des délais d'attente raisonnables pour éviter les requêtes bloquées :
     ```python
     client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
-  <Accordion title="Journaliser les erreurs pour le débogage">
-    Journalisez la réponse d'erreur complète, y compris l'ID de requête, pour le support :
+  <Accordion title="Consigner les erreurs pour le débogage">
+    Consignez la réponse d'erreur complète, y compris l'ID de la requête, pour le support :
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
     ```
   </Accordion>
 
-  <Accordion title="Gérer les erreurs spécifiques aux modèles">
-    Certains modèles ont des exigences spécifiques (par ex. max tokens, formats d'image).
+  <Accordion title="Gérer les erreurs spécifiques au modèle">
+    Certains modèles ont des exigences spécifiques (par ex., nombre maximal de tokens, formats d'image).
     Validez les entrées avant d'effectuer des requêtes.
   </Accordion>
 </AccordionGroup>

@@ -1,24 +1,24 @@
 ---
 title: "クイックスタート"
-description: "2分で LemonData API を使い始める"
+description: "2分でLemonData APIを始める"
 ---
 
 ## ステップ 1: API キーを取得する
 
 <Steps>
-  <Step title="アカウントを作成する">
-    メールアドレス、Gmail、または GitHub アカウントを使用して [lemondata.cc](https://lemondata.cc) でサインアップします。
+  <Step title="アカウントを作成">
+    サインアップは [lemondata.cc](https://lemondata.cc) で、メール、Gmail、または GitHub アカウントを使用して行ってください。
   </Step>
-  <Step title="クレジットを追加する">
-    ダッシュボードを開き、アカウントにクレジットを追加します。LemonData は最低利用条件なしの従量課金制を採用しています。
+  <Step title="クレジットを追加">
+    ダッシュボードを開き、アカウントにクレジットを追加してください。LemonData は従量課金制で、最低利用額の縛りはありません。
   </Step>
-  <Step title="API キーを作成する">
-    **Dashboard → API Keys** に移動して新しいキーを作成します。一度しか表示されないため、安全な場所にコピーして保管してください。
+  <Step title="APIキーを作成">
+    **ダッシュボード → API Keys** に移動して新しいキーを作成してください。キーは一度しか表示されないため、安全にコピーして保管してください。
   </Step>
 </Steps>
 
 <Warning>
-API キーは安全に管理してください。クライアントサイドのコードや公開リポジトリで絶対に公開しないでください。
+APIキーを安全に保管してください。クライアント側のコードや公開リポジトリに絶対に露出しないでください。
 </Warning>
 
 ## ステップ 2: クライアントをインストールする
@@ -43,19 +43,21 @@ composer require openai-php/client
 
 </CodeGroup>
 
-## ステップ 3: 最初のリクエストを送信する
+## ステップ 3: 最初のリクエストを行う
 
-新しいプロジェクトでは、**Responses API** から始めてください。
+ほとんどの新しい統合では、`POST /v1/chat/completions` の **Chat Completions** から始めてください。
 
 <CodeGroup>
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "What is the capital of France?"
+    "messages": [
+      {"role": "user", "content": "What is the capital of France?"}
+    ]
   }'
 ```
 
@@ -67,12 +69,12 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="What is the capital of France?"
+    messages=[{"role": "user", "content": "What is the capital of France?"}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
@@ -83,59 +85,60 @@ const client = new OpenAI({
   baseURL: 'https://api.lemondata.cc/v1'
 });
 
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'What is the capital of France?',
+  messages: [{ role: 'user', content: 'What is the capital of France?' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 </CodeGroup>
 
 <Note>
-使用しているフレームワークやツールがまだ Chat Completions を前提としている場合、LemonData は `POST /v1/chat/completions` もサポートしています。新しい統合では、`POST /v1/responses` を推奨します。
+Responses 固有の挙動が明示的に必要な場合に限り `POST /v1/responses` を使用してください。Responses 専用のフィールドの一部は、選択したモデルやルーティングされたパスに依存します。
 </Note>
 
-## 異なるモデルを試す
+## さまざまなモデルを試す
 
-LemonData は 300 以上のモデルをサポートしています。変更するのは `model` フィールドだけです。
+LemonData は300件以上のモデルをサポートしています。`model` フィールドだけを変更してください:
 
 ```python
-response = client.responses.create(model="gpt-5.4", input="Hello")
-response = client.responses.create(model="gpt-5-mini", input="Hello")
-response = client.responses.create(model="claude-sonnet-4-6", input="Hello")
-response = client.responses.create(model="gemini-2.5-flash", input="Hello")
-response = client.responses.create(model="deepseek-r1", input="Hello")
+response = client.chat.completions.create(model="gpt-5.4", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="gpt-5-mini", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="claude-sonnet-4-6", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="gemini-2.5-flash", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="deepseek-r1", messages=[{"role": "user", "content": "Hello"}])
 ```
 
 ## ストリーミングを有効にする
 
 ```python
-stream = client.responses.create(
+stream = client.chat.completions.create(
     model="gpt-5.4",
-    input="Tell me a short story.",
+    messages=[{"role": "user", "content": "Tell me a short story."}],
     stream=True
 )
 
-for event in stream:
-    if event.type == "response.output_text.delta":
-        print(event.delta, end="")
+for chunk in stream:
+    delta = chunk.choices[0].delta.content
+    if delta:
+        print(delta, end="")
 ```
 
-## 次のステップ
+## 次に行うこと
 
 <CardGroup cols={2}>
   <Card title="認証" icon="key" href="/authentication">
-    API キーの管理とセキュリティについて学びます。
+    APIキーの管理とセキュリティについて学んでください。
   </Card>
-  <Card title="OpenAI SDK" icon="code" href="/ja/integrations/openai-sdk">
-    公式の OpenAI SDK を LemonData と一緒に使用します。
+  <Card title="OpenAI SDK" icon="code" href="/integrations/openai-sdk">
+    公式の OpenAI SDK を LemonData と一緒に使用する方法を学びます。
   </Card>
-  <Card title="API リファレンス" icon="book" href="/ja/api-reference/introduction">
-    エンドポイントの完全なリファレンスを確認します。
+  <Card title="API リファレンス" icon="book" href="/api-reference/introduction">
+    エンドポイントの完全なリファレンスを参照してください。
   </Card>
   <Card title="モデル" icon="robot" href="https://lemondata.cc/ja/models">
-    現在利用可能なモデルと価格を確認します。
+    現在のモデルの利用可能性と価格を確認してください。
   </Card>
 </CardGroup>

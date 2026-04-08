@@ -1,39 +1,39 @@
 ---
-title: "✨ API موجهة للوكلاء أولاً"
-description: "تلميحات أخطاء منظَّمة لكي تتمكن وكلاء الذكاء الاصطناعي من التصحيح الذاتي عند أول إعادة محاولة"
+title: "✨ واجهة برمجة تطبيقات Agent-First"
+description: "إرشادات أخطاء مهيكلة لوكلاء الذكاء الاصطناعي ليتصحيحوا ذاتيًا في المحاولة الأولى"
 ---
 
 ## نظرة عامة
 
-تعمل API الموجهة للوكلاء أولاً من LemonData على إثراء استجابات الأخطاء بتلميحات منظَّمة يمكن لوكلاء الذكاء الاصطناعي تحليلها والتصرف بناءً عليها فورًا — بدون بحث على الويب، وبدون الرجوع إلى الوثائق، وبدون تخمين.
+تثري واجهة برمجة تطبيقات LemonData Agent-First استجابات الأخطاء بإرشادات مهيكلة يمكن لوكلاء الذكاء الاصطناعي تحليلها والتصرف بناءً عليها فورًا — دون بحث على الويب، دون الرجوع إلى الوثائق، ودون تخمين.
 
-تتضمن كل استجابة خطأ حقولًا اختيارية مثل `did_you_mean` و`suggestions` و`hint` و`retryable` و`retry_after` داخل كائن `error` القياسي. هذه الحقول متوافقة مع الإصدارات السابقة — والعملاء الذين لا يستخدمونها لن يلاحظوا أي فرق.
+تتضمن كل استجابة خطأ حقولًا اختيارية مثل `did_you_mean` و`suggestions` و`hint` و`retryable` و`retry_after` داخل كائن `error` القياسي. هذه الحقول متوافقة مع الإصدارات السابقة — العملاء الذين لا يستخدمونها لن يلاحظوا أي اختلاف.
 
-## حقول تلميحات الأخطاء
+## حقول إرشادات الخطأ
 
-جميع حقول التلميحات هي امتدادات اختيارية داخل كائن `error`:
+جميع حقول الإرشاد امتدادات اختيارية داخل كائن `error`:
 
-| Field | Type | Description |
+| الحقل | النوع | الوصف |
 |-------|------|-------------|
 | `did_you_mean` | `string` | أقرب اسم نموذج مطابق |
-| `suggestions` | `array` | النماذج الموصى بها مع البيانات الوصفية |
-| `alternatives` | `array` | النماذج البديلة المتاحة حاليًا |
-| `hint` | `string` | إرشاد للخطوة التالية قابل للقراءة من قبل الإنسان/الوكيل |
+| `suggestions` | `array` | نماذج موصى بها مع بيانات وصفية |
+| `alternatives` | `array` | نماذج بديلة متاحة حاليًا |
+| `hint` | `string` | إرشاد قابل للقراءة من قبل الإنسان/الوكيل للخطوة التالية |
 | `retryable` | `boolean` | ما إذا كانت إعادة محاولة الطلب نفسه قد تنجح |
-| `retry_after` | `number` | عدد الثواني الواجب انتظارها قبل إعادة المحاولة |
-| `balance_usd` | `number` | الرصيد الحالي للحساب بالدولار الأمريكي |
-| `estimated_cost_usd` | `number` | التكلفة التقديرية للطلب الفاشل |
+| `retry_after` | `number` | ثوانٍ للانتظار قبل إعادة المحاولة |
+| `balance_usd` | `number` | رصيد الحساب الحالي بالدولار الأمريكي |
+| `estimated_cost_usd` | `number` | التكلفة المقدرة للطلب الفاشل بالدولار الأمريكي |
 
-## أمثلة على رموز الأخطاء
+## أمثلة على رموز الخطأ
 
 ### model_not_found (400)
 
-عندما لا يتطابق اسم النموذج مع أي نموذج نشط:
+عندما لا يطابق اسم النموذج أي نموذج نشط:
 
 ```json
 {
   "error": {
-    "message": "Model 'gpt5' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -48,34 +48,16 @@ description: "تلميحات أخطاء منظَّمة لكي تتمكن وكل�
 }
 ```
 
-يستخدم حل `did_you_mean` ما يلي:
-1. تعيينًا ثابتًا للأسماء البديلة (من بيانات أخطاء الإنتاج)
-2. مطابقة سلاسل نصية مُطبَّعة (تزيل الشرطات وتكون غير حساسة لحالة الأحرف)
-3. مطابقة مسافة التحرير (الحد ≤ 3)
+يستخدم حل `did_you_mean` الأساليب التالية:
+1. تعيين الألقاب الثابت (مستند إلى بيانات أخطاء الإنتاج)
+2. مطابقة السلاسل بعد التسويّة (يزيل الشرطات، غير حساس لحالة الأحرف)
+3. مطابقة مسافة التحرير (العتبة ≤ 3)
 
-
-### model_price_not_configured (400)
-
-عندما يكون النموذج موجودًا داخليًا لكنه غير مفتوح حاليًا للطلبات العامة:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-يجب على الوكلاء التعامل مع هذا كإشارة إلى توفر المنصة، وليس كخطأ إملائي. لا تعِد المحاولة على نفس النموذج إلا بعد ظهوره في `GET /v1/models`.
+لا تكشف المسارات العامة عن رموز خطأ منفصلة للنماذج المخفية أو المؤجلة أو غير العامة. عامل النماذج العامة غير المتاحة بنفس طريقة الخطأ: افحص `did_you_mean` و`suggestions` و`hint`، ثم أعد المحاولة بنموذج عام مدعوم.
 
 ### insufficient_balance (402)
 
-عندما يكون رصيد الحساب منخفضًا جدًا مقارنة بالتكلفة التقديرية:
+عندما يكون رصيد الحساب أقل من التكلفة المقدرة:
 
 ```json
 {
@@ -94,11 +76,11 @@ description: "تلميحات أخطاء منظَّمة لكي تتمكن وكل�
 }
 ```
 
-يحتوي `suggestions` على نماذج أرخص من التكلفة التقديرية يمكن للوكيل التبديل إليها.
+يحتوي `suggestions` على نماذج أرخص من التكلفة المقدرة يمكن للوكيل التبديل إليها.
 
 ### all_channels_failed (503)
 
-عندما تكون جميع قنوات upstream لنموذج ما غير متاحة:
+عندما تكون جميع القنوات الصاعدة لنموذج غير متاحة:
 
 ```json
 {
@@ -117,7 +99,7 @@ description: "تلميحات أخطاء منظَّمة لكي تتمكن وكل�
 ```
 
 <Note>
-تكون قيمة `retryable` هي `false` عندما يكون السبب هو `no_channels` (لا توجد قنوات مُهيأة لهذا النموذج). وتكون `true` فقط في حالات الإخفاقات العابرة مثل تعثر circuit breaker أو استنفاد الحصة.
+`retryable` هو `false` عندما يكون السبب هو `no_channels` (لا توجد قنوات مكوّنة لهذا النموذج). يكون `true` فقط للفشل العابر مثل تشغيل قاطع الدائرة أو نفاد الحصة.
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -135,15 +117,15 @@ description: "تلميحات أخطاء منظَّمة لكي تتمكن وكل�
 }
 ```
 
-تُحتسب قيمة `retry_after` من وقت إعادة تعيين نافذة rate limit الفعلي.
+تُحسب قيمة `retry_after` من وقت إعادة ضبط نافذة حد المعدل الفعلي.
 
 <Note>
-تستخدم endpoints المتوافقة مع OpenAI أنواع أخطاء LemonData العامة والمستقرة مثل `rate_limit_exceeded` و`upstream_error` و`all_channels_failed`. أما endpoints المتوافقة مع Anthropic وGemini فتستخدم أشكال الاستجابة الأصلية الخاصة بها.
+تستخدم نقاط النهاية المتوافقة مع OpenAI أنواع أخطاء عامة ومستقرة من LemonData مثل `rate_limit_exceeded` و`upstream_error` و`all_channels_failed`. تستخدم نقاط النهاية المتوافقة مع Anthropic وGemini هياكل الاستجابة الأصلية الخاصة بها.
 </Note>
 
 ### context_length_exceeded (400)
 
-عندما يتجاوز الإدخال نافذة السياق الخاصة بالنموذج (خطأ upstream معزَّز بتلميحات):
+عندما يتجاوز الإدخال نافذة السياق للنموذج (خطأ صاعد، معزز بالإرشادات):
 
 ```json
 {
@@ -161,76 +143,124 @@ description: "تلميحات أخطاء منظَّمة لكي تتمكن وكل�
 }
 ```
 
-## رؤوس native endpoint
+## رؤوس نقاط النهاية الأصلية
 
-عند استدعاء `/v1/chat/completions` باستخدام نموذج لديه native endpoint (Anthropic أو Gemini)، فإن **استجابة النجاح** تتضمن رؤوس تحسين:
+عندما تنادي `/v1/chat/completions` بنموذج له نقطة نهاية أصلية (Anthropic أو Gemini)، تتضمن **استجابة النجاح** رؤوس تحسين:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Model Provider | Suggested Endpoint | Benefit |
+| مزود النموذج | نقطة النهاية المقترحة | الفائدة |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | بدون تحويل تنسيق، تفكير موسع، وتخزين مؤقت للـ prompt |
-| Google (Gemini) | `/v1beta/gemini` | بدون تحويل تنسيق، grounding، وإعدادات الأمان |
-| OpenAI | — | chat completions هو بالفعل التنسيق الأصلي |
+| Anthropic (Claude) | `/v1/messages` | لا يوجد تحويل صيغة، تفكير ممتد، تخزين مؤقت للمطالبات |
+| Google (Gemini) | `/v1beta/gemini` | لا يوجد تحويل صيغة، grounding، إعدادات الأمان |
+| OpenAI | — | Chat completions هو بالفعل الصيغة الأصلية |
 
 تظهر هذه الرؤوس في كل من الاستجابات المتدفقة وغير المتدفقة.
 
-## تحسينات /v1/models
+## تحسينات `/v1/models`
 
-ثلاثة حقول جديدة في امتداد `lemondata` لكل كائن نموذج:
+يحمل `/v1/models` الآن بيانات وصفية توصية غير محادثة يمكن للوكالات استخدامها قبل أن تستدعي نقاط النهاية الخاصة بالصور أو الفيديو أو الموسيقى أو 3D أو TTS أو STT أو embedding أو rerank أو الترجمة.
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
 ```
 
-| Field | Values | Description |
+| الحقل | القيم | الوصف |
 |-------|--------|-------------|
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | نوع النموذج |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | طريقة فوترة النموذج |
-| `cache_pricing` | object or `null` | أسعار prompt cache في upstream + خصم semantic cache على مستوى المنصة |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | كيفية تحصيل رسوم النموذج |
+| `cache_pricing` | object or `null` | أسعار ذاكرة التخزين المؤقت للمطالبات الصاعدة + خصم ذاكرة التخزين الدلالية على المنصة |
+| `agent_preferences.<scene>` | object | لقطة توصية غير محادثة لذلك المشهد |
 
-### التصفية حسب الفئة
+يُستمد `agent_preferences` من لقطة معدل نجاح مخبأة لمدة 24 ساعة:
+
+- النافذة: 24 ساعة
+- ذاكرة لقطة الشاشة: stale-while-revalidate
+- `status = "ready"` يعني أن لدى النموذج عينات حديثة كافية للمشاركة في الترتيب
+- `status = "insufficient_samples"` يعني أن النموذج يظل مرئيًا لكنه لا يُصنف قبل النماذج المُسجلة بالدرجات
+
+### تصفية حسب الفئة
 
 ```bash
-GET https://api.lemondata.cc/v1/models?category=chat          # Chat models only
-GET https://api.lemondata.cc/v1/models?category=image         # Image generation models
-GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Coding-optimized chat models
+GET https://api.lemondata.cc/v1/models?category=chat          # نماذج الدردشة فقط
+GET https://api.lemondata.cc/v1/models?category=image         # نماذج توليد الصور
+GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # نماذج دردشة محسّنة للترميز
 ```
+
+### اكتشاف التوصية
+
+بالنسبة لتدفقات العمل غير المحادثة، يجب على الوكلاء جلب القائمة القصيرة الموصى بها أولًا:
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+القيم الصالحة لـ `recommended_for` هي:
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+إذا كان كل من `category` و`recommended_for` موجودين، يجب أن يتطابقا تمامًا.
+
+تدفق الوكيل الموصى به:
+
+1. `GET /v1/models?recommended_for=<scene>`
+2. اختر أول نموذج حيث `agent_preferences.<scene>.status == "ready"`
+3. نادِ نقطة النهاية صراحةً مع `model=<selected>`
+4. عند حدوث أخطاء عابرة فقط، أعد المحاولة مع النموذج التالي `ready`
 
 ## llms.txt
 
-يتوفر ملخص API قابل للقراءة آليًا على:
+يتوفر نظرة عامة على واجهة برمجة التطبيقات بصيغة قابلة للقراءة آليًا في:
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
-ويتضمن:
-- قالب الاستدعاء الأول مع مثال عملي
+يتضمن:
+- قالب النداء الأول مع مثال عملي يعمل
 - أسماء النماذج الشائعة (مولدة ديناميكيًا من بيانات الاستخدام)
-- جميع نقاط API النهائية الاثنتي عشرة
-- معاملات التصفية لاكتشاف النماذج
+- كل نقاط النهاية الـ 12 للـ API
+- معلمات التصفية لاكتشاف النماذج
 - إرشادات التعامل مع الأخطاء
 
-يمكن لوكلاء الذكاء الاصطناعي الذين يقرؤون `llms.txt` قبل أول استدعاء API لهم أن ينجحوا عادةً من أول محاولة.
+يمكن للوكلاء الذين يقرأون `llms.txt` قبل نداءهم الأول عادةً النجاح في المحاولة الأولى.
 
 ## الاستخدام في كود الوكيل
 
-### Python (OpenAI SDK)
+### بايثون (OpenAI SDK)
 
 ```python
 from openai import OpenAI, BadRequestError
@@ -283,16 +313,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## مبادئ التصميم
 
 <CardGroup cols={2}>
-  <Card title="الفشل السريع مع معلومات مفيدة" icon="bolt">
-    تُرجع الأخطاء فورًا مع جميع البيانات التي يحتاجها الوكيل للتصحيح الذاتي.
+  <Card title="افشل بسرعة وبشكل إعلامي" icon="bolt">
+    تعيد الأخطاء فورًا كل البيانات التي يحتاجها الوكيل ليتصحيح نفسه.
   </Card>
-  <Card title="بدون توجيه تلقائي" icon="route">
-    لا تستبدل API أبدًا نموذجًا مختلفًا بشكل صامت. الوكيل هو من يقرر.
+  <Card title="لا توجيه تلقائي" icon="route">
+    لا تقوم الـ API باستبدال نموذج مختلف بصمت. الوكيل هو من يقرر.
   </Card>
-  <Card title="اقتراحات مدفوعة بالبيانات" icon="database">
-    تأتي جميع التوصيات من بيانات الإنتاج، وليس من قوائم مضمّنة بشكل ثابت.
+  <Card title="اقتراحات مستندة إلى البيانات" icon="database">
+    جميع التوصيات تأتي من بيانات الإنتاج، وليس قوائم ثابتة مشفرة.
   </Card>
   <Card title="متوافق مع الإصدارات السابقة" icon="plug">
-    جميع حقول التلميحات اختيارية. العملاء الحاليون لن يلاحظوا أي فرق.
+    جميع حقول الإرشاد اختيارية. العملاء الحاليون لن يلاحظوا أي اختلاف.
   </Card>
 </CardGroup>

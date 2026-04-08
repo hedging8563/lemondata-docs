@@ -6,22 +6,22 @@ description: "LemonData API ile 2 dakikada başlayın"
 ## Adım 1: API Anahtarınızı Alın
 
 <Steps>
-  <Step title="Bir hesap oluşturun">
-    E-posta, Gmail veya GitHub hesabınızı kullanarak [lemondata.cc](https://lemondata.cc) üzerinden kaydolun.
+  <Step title="Hesap oluşturun">
+    E-posta, Gmail veya GitHub hesabınızla [lemondata.cc](https://lemondata.cc) üzerinden kaydolun.
   </Step>
   <Step title="Kredi ekleyin">
-    Kontrol panelini açın ve hesabınıza kredi ekleyin. LemonData, minimum taahhüt olmadan kullandıkça öde fiyatlandırması kullanır.
+    Panoyu açın ve hesabınıza kredi ekleyin. LemonData, asgari taahhüt olmadan kullanıldıkça öde (pay-as-you-go) fiyatlandırması uygular.
   </Step>
   <Step title="Bir API anahtarı oluşturun">
-    **Dashboard → API Keys** bölümüne gidin ve yeni bir anahtar oluşturun. Yalnızca bir kez gösterildiği için güvenli bir şekilde kopyalayın.
+    Kontrol Paneli → API Anahtarları'na gidin ve yeni bir anahtar oluşturun. Güvenli bir şekilde kopyalayın; çünkü yalnızca bir kez gösterilir.
   </Step>
 </Steps>
 
 <Warning>
-API anahtarınızı güvende tutun. Bunu asla client-side kodda veya herkese açık depolarda açığa çıkarmayın.
+API anahtarınızı güvenli tutun. Asla istemci tarafı kodunda veya herkese açık depolarda paylaşmayın.
 </Warning>
 
-## Adım 2: Bir İstemci Kurun
+## Adım 2: Bir İstemci Yükleyin
 
 <CodeGroup>
 
@@ -45,17 +45,19 @@ composer require openai-php/client
 
 ## Adım 3: İlk İsteğinizi Yapın
 
-Yeni projeler için **Responses API** ile başlayın.
+Çoğu yeni entegrasyona başlarken, `POST /v1/chat/completions` üzerinde **Chat Completions** ile başlayın.
 
 <CodeGroup>
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "What is the capital of France?"
+    "messages": [
+      {"role": "user", "content": "What is the capital of France?"}
+    ]
   }'
 ```
 
@@ -67,12 +69,12 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="What is the capital of France?"
+    messages=[{"role": "user", "content": "What is the capital of France?"}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
@@ -83,59 +85,60 @@ const client = new OpenAI({
   baseURL: 'https://api.lemondata.cc/v1'
 });
 
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'What is the capital of France?',
+  messages: [{ role: 'user', content: 'What is the capital of France?' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 </CodeGroup>
 
 <Note>
-Framework veya aracınız hâlâ Chat Completions bekliyorsa, LemonData `POST /v1/chat/completions` desteği de sunar. Yeni entegrasyonlar için `POST /v1/responses` tercih edin.
+Sadece açıkça Responses'a özgü davranış gerekliyse `POST /v1/responses` kullanın. Bazı yalnızca Responses için olan alanlar seçilen modele ve yönlendirilen yola bağlıdır.
 </Note>
 
 ## Farklı Modelleri Deneyin
 
-LemonData 300'den fazla modeli destekler. Yalnızca `model` alanını değiştirin:
+LemonData 300+ modeli destekler. Yalnızca `model` alanını değiştirin:
 
 ```python
-response = client.responses.create(model="gpt-5.4", input="Hello")
-response = client.responses.create(model="gpt-5-mini", input="Hello")
-response = client.responses.create(model="claude-sonnet-4-6", input="Hello")
-response = client.responses.create(model="gemini-2.5-flash", input="Hello")
-response = client.responses.create(model="deepseek-r1", input="Hello")
+response = client.chat.completions.create(model="gpt-5.4", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="gpt-5-mini", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="claude-sonnet-4-6", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="gemini-2.5-flash", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="deepseek-r1", messages=[{"role": "user", "content": "Hello"}])
 ```
 
-## Streaming Etkinleştirin
+## Akışı Etkinleştirin
 
 ```python
-stream = client.responses.create(
+stream = client.chat.completions.create(
     model="gpt-5.4",
-    input="Tell me a short story.",
+    messages=[{"role": "user", "content": "Tell me a short story."}],
     stream=True
 )
 
-for event in stream:
-    if event.type == "response.output_text.delta":
-        print(event.delta, end="")
+for chunk in stream:
+    delta = chunk.choices[0].delta.content
+    if delta:
+        print(delta, end="")
 ```
 
-## Sırada Ne Var?
+## Sonraki Adımlar
 
 <CardGroup cols={2}>
   <Card title="Kimlik Doğrulama" icon="key" href="/authentication">
-    API anahtarı yönetimi ve güvenliği hakkında bilgi edinin.
+    API anahtar yönetimi ve güvenliği hakkında bilgi edinin.
   </Card>
-  <Card title="OpenAI SDK" icon="code" href="/tr/integrations/openai-sdk">
+  <Card title="OpenAI SDK" icon="code" href="/integrations/openai-sdk">
     LemonData ile resmi OpenAI SDK'larını kullanın.
   </Card>
-  <Card title="API Referansı" icon="book" href="/tr/api-reference/introduction">
-    Uç noktaların tam referansını inceleyin.
+  <Card title="API Referansı" icon="book" href="/api-reference/introduction">
+    Tüm uç nokta referansını keşfedin.
   </Card>
   <Card title="Modeller" icon="robot" href="https://lemondata.cc/tr/models">
-    Güncel model kullanılabilirliğini ve fiyatlandırmayı inceleyin.
+    Mevcut model kullanılabilirliği ve fiyatlandırmayı inceleyin.
   </Card>
 </CardGroup>

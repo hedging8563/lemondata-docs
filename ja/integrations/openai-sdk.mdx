@@ -1,27 +1,27 @@
 ---
 title: "OpenAI SDK"
-description: "公式のOpenAI SDKおよびOpenAI互換クライアントでLemonDataを使用します"
+description: "公式のOpenAI SDKおよびOpenAI互換クライアントでLemonDataを使用する"
 ---
 
 ## 概要
 
-LemonDataは、クライアントを `https://api.lemondata.cc/v1` に向けることで、公式のOpenAI SDKで動作します。
+LemonDataはクライアントのbase URLを`https://api.lemondata.cc/v1`にポイントすることで公式のOpenAI SDKと連携します。
 
-新規プロジェクトでは、**Responses API** を優先してください。フレームワーク、プラグイン、またはレガシーコードパスが引き続きそれを必要とする場合にのみ、**Chat Completions** を維持してください。
+ほとんどの新規プロジェクトでは、デフォルトのOpenAI互換パスとして**Chat Completions**を使用することを推奨します。**Responses API**は、Responses固有の動作が明確に必要な場合にのみ使用してください。
+
+Responses固有のフィールドは、すべてのモデルやルーティング経路で同一に動作することは保証されません。
 
 <Note>
-Python、JavaScript、およびGoには公式のOpenAI SDKがあります。PHPはOpenAI互換のコミュニティクライアントで問題なく動作しますが、公式のOpenAI SDKではありません。
+Python、JavaScript、Goには公式のOpenAI SDKがあります。PHPはOpenAI互換のコミュニティ製クライアントと相性が良いですが、公式のOpenAI SDKではありません。
 </Note>
 
 <Note>
-**種類**: ネイティブ SDK
+**タイプ**: ネイティブSDK
 
-**主要パス**: OpenAI互換 / OpenAI Responses
+**主要経路**: OpenAI互換 / Chat Completions
 
-**サポートレベル**: コア経路をサポート
+**サポート状況**: コア経路としてサポートされています
 </Note>
-
-これは LemonData における標準の OpenAI互換 SDK パスですが、すべての Responses-native-only フィールドがあらゆる model とルーティング先チャネル で同一に動作することを保証するものではありません。
 
 ## インストール
 
@@ -40,6 +40,10 @@ go get github.com/openai/openai-go/v3
 ```
 
 </CodeGroup>
+
+<Note>
+`POST /v1/responses`はResponses固有の動作が明確に必要な場合にのみ使用してください。Responses専用の一部フィールドは選択したモデルやルーティング経路に依存する場合があります。
+</Note>
 
 ## クライアントの設定
 
@@ -83,45 +87,47 @@ func main() {
 
 </CodeGroup>
 
-## 推奨: Responses API
+## 推奨: Chat Completions
 
 <CodeGroup>
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'Explain what LemonData does in one sentence.',
+  messages: [{ role: 'user', content: 'Explain what LemonData does in one sentence.' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-lemondata-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
 </CodeGroup>
 
-<Note>
-一部の ホスト型 tools、`include`、`service_tier`、`truncation_strategy` などの Responses-native-only フィールドは、選択した model とルーティング先チャネル の native `/v1/responses` passthrough サポートに依存します。対応していない場合、LemonData はそのフィールドが有効だったように見せるのではなく、明示的な `400` または `503` を返します。
-</Note>
+## 高度な使用法: Responses API
 
-## Responsesでのストリーミング
+この経路は、ツールやワークフローが明確にOpenAI Responsesのセマンティクスに依存している場合にのみ使用してください。
+
+### Responsesでのストリーミング
 
 <CodeGroup>
 
@@ -153,7 +159,7 @@ for await (const event of stream) {
 
 </CodeGroup>
 
-## Tools / Function Calling
+## ツール / 関数呼び出し
 
 ```python
 response = client.responses.create(
@@ -196,7 +202,7 @@ response = client.responses.create(
 print(response.output_text)
 ```
 
-## Embeddings
+## 埋め込み
 
 ```python
 response = client.embeddings.create(
@@ -207,9 +213,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## Chat Completions 互換性
+## Chat Completions
 
-フレームワークまたはプラグインが引き続きChat Completionsを必要とする場合、LemonDataは標準のOpenAI互換パスもサポートしています。
+Chat CompletionsはLemonDataのデフォルトのOpenAI互換パスです:
 
 ```python
 response = client.chat.completions.create(
@@ -223,28 +229,24 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-<Warning>
-Chat Completionsは互換性のためにのみ使用してください。新しい統合では、`client.responses.create(...)` を優先してください。
-</Warning>
-
 ## トラブルシューティング
 
 <AccordionGroup>
   <Accordion title="接続エラー">
-    - base URLが正確に `https://api.lemondata.cc/v1` であることを確認してください
-    - プロキシの干渉やカスタムHTTPクライアントのオーバーライドを確認してください
-    - プロバイダーの動作をデバッグする前に、SDKのバージョンが最新であることを確認してください
+    - ベースURLが正確に `https://api.lemondata.cc/v1` になっていることを確認してください
+    - プロキシの干渉やカスタムHTTPクライアントのオーバーライドがないか確認してください
+    - プロバイダの動作をデバッグする前にSDKのバージョンが最新であることを確認してください
   </Accordion>
 
-  <Accordion title="認証失敗">
-    - API keyが `sk-` で始まっていることを確認してください
-    - キーがLemonDataダッシュボードで有効になっていることを確認してください
+  <Accordion title="認証エラー">
+    - APIキーが `sk-` で始まっていることを確認してください
+    - LemonDataダッシュボードでキーが有効であることを確認してください
     - SDKが `Authorization: Bearer ...` を送信していることを確認してください
   </Accordion>
 
-  <Accordion title="誤ったAPIパス">
+  <Accordion title="APIパスが間違っている">
     - `responses.create(...)` は `/v1/responses` にリクエストを送信します
     - `chat.completions.create(...)` は `/v1/chat/completions` にリクエストを送信します
-    - アプリが現時点でChat Completionsのみをサポートしている場合は、その互換パスを引き続き使用してください
+    - Responses固有の動作が明確に必要な場合を除き、デフォルトでは Chat Completions を使用してください
   </Accordion>
 </AccordionGroup>

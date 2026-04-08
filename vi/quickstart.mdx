@@ -3,25 +3,25 @@ title: "Bắt đầu nhanh"
 description: "Bắt đầu với LemonData API trong 2 phút"
 ---
 
-## Bước 1: Lấy API Key của bạn
+## Bước 1: Lấy khóa API của bạn
 
 <Steps>
   <Step title="Tạo tài khoản">
-    Đăng ký tại [lemondata.cc](https://lemondata.cc) bằng email, tài khoản Gmail hoặc GitHub của bạn.
+    Đăng ký tại [lemondata.cc](https://lemondata.cc) bằng email, Gmail hoặc tài khoản GitHub của bạn.
   </Step>
-  <Step title="Nạp credits">
-    Mở dashboard và nạp credits vào tài khoản của bạn. LemonData sử dụng mô hình tính giá pay-as-you-go mà không yêu cầu cam kết tối thiểu.
+  <Step title="Thêm credits">
+    Mở dashboard và thêm credits vào tài khoản của bạn. LemonData sử dụng mô hình thanh toán pay-as-you-go và không yêu cầu cam kết tối thiểu.
   </Step>
-  <Step title="Tạo API key">
-    Đi đến **Dashboard → API Keys** và tạo một key mới. Sao chép và lưu trữ an toàn vì key này chỉ được hiển thị một lần.
+  <Step title="Tạo khóa API">
+    Đi tới **Dashboard → API Keys** và tạo một khóa mới. Sao chép nó một cách an toàn vì nó chỉ hiển thị một lần.
   </Step>
 </Steps>
 
 <Warning>
-Giữ API key của bạn an toàn. Không bao giờ để lộ nó trong code phía client hoặc các repository công khai.
+Giữ khóa API của bạn an toàn. Không bao giờ để lộ nó trong mã phía client hoặc kho lưu trữ công cộng.
 </Warning>
 
-## Bước 2: Cài đặt Client
+## Bước 2: Cài đặt client
 
 <CodeGroup>
 
@@ -45,17 +45,19 @@ composer require openai-php/client
 
 ## Bước 3: Thực hiện yêu cầu đầu tiên
 
-Đối với các dự án mới, hãy bắt đầu với **Responses API**.
+Đối với hầu hết các tích hợp mới, bắt đầu với **Chat Completions** qua `POST /v1/chat/completions`.
 
 <CodeGroup>
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "What is the capital of France?"
+    "messages": [
+      {"role": "user", "content": "What is the capital of France?"}
+    ]
   }'
 ```
 
@@ -67,12 +69,12 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="What is the capital of France?"
+    messages=[{"role": "user", "content": "What is the capital of France?"}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
@@ -83,59 +85,60 @@ const client = new OpenAI({
   baseURL: 'https://api.lemondata.cc/v1'
 });
 
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'What is the capital of France?',
+  messages: [{ role: 'user', content: 'What is the capital of France?' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 </CodeGroup>
 
 <Note>
-Nếu framework hoặc công cụ của bạn vẫn yêu cầu Chat Completions, LemonData cũng hỗ trợ `POST /v1/chat/completions`. Đối với các integration mới, ưu tiên `POST /v1/responses`.
+Chỉ sử dụng `POST /v1/responses` khi bạn thực sự cần hành vi đặc thù của Responses. Một số trường chỉ dành cho Responses phụ thuộc vào model được chọn và đường dẫn được định tuyến.
 </Note>
 
-## Thử các model khác nhau
+## Thử các mô hình khác
 
-LemonData hỗ trợ hơn 300 model. Chỉ cần thay đổi trường `model`:
+LemonData hỗ trợ hơn 300 mô hình. Chỉ thay đổi trường `model`:
 
 ```python
-response = client.responses.create(model="gpt-5.4", input="Hello")
-response = client.responses.create(model="gpt-5-mini", input="Hello")
-response = client.responses.create(model="claude-sonnet-4-6", input="Hello")
-response = client.responses.create(model="gemini-2.5-flash", input="Hello")
-response = client.responses.create(model="deepseek-r1", input="Hello")
+response = client.chat.completions.create(model="gpt-5.4", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="gpt-5-mini", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="claude-sonnet-4-6", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="gemini-2.5-flash", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="deepseek-r1", messages=[{"role": "user", "content": "Hello"}])
 ```
 
 ## Bật Streaming
 
 ```python
-stream = client.responses.create(
+stream = client.chat.completions.create(
     model="gpt-5.4",
-    input="Tell me a short story.",
+    messages=[{"role": "user", "content": "Tell me a short story."}],
     stream=True
 )
 
-for event in stream:
-    if event.type == "response.output_text.delta":
-        print(event.delta, end="")
+for chunk in stream:
+    delta = chunk.choices[0].delta.content
+    if delta:
+        print(delta, end="")
 ```
 
-## Tiếp theo là gì?
+## Tiếp theo?
 
 <CardGroup cols={2}>
   <Card title="Xác thực" icon="key" href="/authentication">
-    Tìm hiểu về quản lý và bảo mật API key.
+    Tìm hiểu về quản lý khóa API và bảo mật.
   </Card>
-  <Card title="OpenAI SDK" icon="code" href="/vi/integrations/openai-sdk">
-    Sử dụng các OpenAI SDK chính thức với LemonData.
+  <Card title="OpenAI SDK" icon="code" href="/integrations/openai-sdk">
+    Sử dụng OpenAI SDK chính thức với LemonData.
   </Card>
-  <Card title="Tài liệu tham chiếu API" icon="book" href="/vi/api-reference/introduction">
-    Khám phá tài liệu tham chiếu đầy đủ về các endpoint.
+  <Card title="Tham khảo API" icon="book" href="/api-reference/introduction">
+    Khám phá toàn bộ tham chiếu endpoint.
   </Card>
-  <Card title="Models" icon="robot" href="https://lemondata.cc/vi/models">
-    Xem danh sách model hiện có và thông tin giá.
+  <Card title="Mô hình" icon="robot" href="https://lemondata.cc/vi/models">
+    Xem các mô hình hiện có và giá cả.
   </Card>
 </CardGroup>

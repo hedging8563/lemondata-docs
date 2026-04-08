@@ -1,11 +1,11 @@
 ---
 title: "Manejo de errores"
-description: "Maneja los errores de la API correctamente"
+description: "Manejar errores de la API de forma adecuada"
 ---
 
 ## Formato de respuesta de error
 
-Todos los errores devuelven un formato JSON consistente con [pistas Agent-First](/guides/agent-first-api) opcionales:
+Todos los errores devuelven un formato JSON consistente con extensiones opcionales de [Agent-First hints](/guides/agent-first-api):
 
 ```json
 {
@@ -23,33 +23,33 @@ Todos los errores devuelven un formato JSON consistente con [pistas Agent-First]
 }
 ```
 
-Los campos base (`message`, `type`, `code`, `param`) siempre están presentes. Los campos de pistas (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) son extensiones opcionales para la autocorrección de agentes de IA. Consulta la [guía de la API Agent-First](/guides/agent-first-api) para más detalles.
+Los campos base (`message`, `type`, `code`, `param`) siempre están presentes. Los campos de sugerencias (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) son extensiones opcionales para la autocorrección de agentes de IA. Consulta la [Guía Agent-First API](/guides/agent-first-api) para más detalles.
 
-Los endpoints compatibles con OpenAI usan los tipos de error estables del gateway de LemonData. Los endpoints compatibles con Anthropic y compatibles con Gemini usan sus propias familias de errores nativas y formatos de respuesta.
+Los endpoints compatibles con OpenAI usan los tipos de error del gateway estable de LemonData. Los endpoints compatibles con Anthropic y Gemini usan sus propias familias de errores y formatos de respuesta nativos.
 
 ## Códigos de estado HTTP
 
-| Code | Description |
+| Código | Descripción |
 |------|-------------|
-| 400 | Solicitud incorrecta - Parámetros no válidos |
-| 401 | No autorizado - API key no válida o faltante |
+| 400 | Solicitud incorrecta - Parámetros inválidos |
+| 401 | No autorizado - API key inválida o ausente |
 | 402 | Pago requerido - Saldo insuficiente |
 | 403 | Prohibido - Acceso denegado o modelo no permitido |
 | 404 | No encontrado - Modelo o recurso no encontrado |
-| 413 | Payload demasiado grande - Se excedió el tamaño de entrada o archivo |
-| 429 | Demasiadas solicitudes - Se excedió el límite de tasa |
+| 413 | Carga útil demasiado grande - Tamaño de entrada o archivo excedido |
+| 429 | Demasiadas solicitudes - Límite de tasa excedido |
 | 500 | Error interno del servidor |
-| 502 | Gateway incorrecto - Error del proveedor upstream |
+| 502 | Puerta de enlace incorrecta - Error del proveedor upstream |
 | 503 | Servicio no disponible - Servicio temporalmente no disponible |
-| 504 | Tiempo de espera agotado del gateway - La solicitud agotó el tiempo de espera |
+| 504 | Tiempo de espera de la puerta de enlace - La solicitud excedió el tiempo de espera |
 
 ## Tipos de error
 
 ### Errores de autenticación (401)
 
-| Type | Code | Description |
+| Tipo | Código | Descripción |
 |------|------|-------------|
-| `invalid_api_key` | `invalid_api_key` | La API key falta o no es válida |
+| `invalid_api_key` | `invalid_api_key` | Falta la API key o no es válida |
 | `expired_api_key` | `expired_api_key` | La API key ha sido revocada |
 
 ```python
@@ -63,10 +63,10 @@ except AuthenticationError as e:
 
 ### Errores de pago (402)
 
-| Type | Code | Description |
+| Tipo | Código | Descripción |
 |------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | El saldo de la cuenta es demasiado bajo (endpoints compatibles con OpenAI) |
-| `insufficient_balance_error` | `insufficient_balance` | El saldo de la cuenta es demasiado bajo (endpoints compatibles con Anthropic) |
+| `insufficient_balance` | `insufficient_balance` | El saldo de la cuenta es insuficiente (endpoints compatibles con OpenAI) |
+| `insufficient_balance_error` | `insufficient_balance` | El saldo de la cuenta es insuficiente (endpoints compatibles con Anthropic) |
 | `quota_exceeded` | `quota_exceeded` | Se alcanzó el límite de uso de la API key |
 
 ```python
@@ -81,7 +81,7 @@ except APIStatusError as e:
 
 ### Errores de acceso (403)
 
-| Type | Code | Description |
+| Tipo | Código | Descripción |
 |------|------|-------------|
 | `access_denied` | `access_denied` | Acceso al recurso denegado |
 | `access_denied` | `model_not_allowed` | Modelo no permitido para esta API key |
@@ -98,17 +98,16 @@ except APIStatusError as e:
 
 ### Errores de validación (400)
 
-| Type | Description |
+| Tipo | Descripción |
 |------|-------------|
 | `invalid_request_error` | Los parámetros de la solicitud no son válidos |
-| `context_length_exceeded` | La entrada es demasiado larga para el modelo |
-| `model_not_found` | El modelo solicitado no existe |
-| `model_price_not_configured` | El modelo existe internamente, pero actualmente no está disponible para solicitudes públicas |
+| `context_length_exceeded` | Entrada demasiado larga para el modelo |
+| `model_not_found` | El modelo solicitado no está disponible en el contrato público actual |
 
 ```json
 {
   "error": {
-    "message": "Model 'invalid-model' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -119,23 +118,9 @@ except APIStatusError as e:
 }
 ```
 
+Las rutas públicas no distinguen en el cuerpo de la respuesta entre errores tipográficos, modelos ocultos, diferidos o no públicos. Si un modelo no está disponible actualmente a través del contrato público, LemonData devuelve `model_not_found`.
 
-Cuando un modelo existe en los flujos internos de gobierno o precios pero aún no está expuesto como destino de solicitudes públicas, LemonData devuelve lo siguiente:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-### Errores de límite de tasa (429)
+### Errores por límite de tasa (429)
 
 Cuando excedes los límites de tasa:
 
@@ -158,11 +143,11 @@ Cuando excedes los límites de tasa:
 Retry-After: 8
 ```
 
-Tanto el encabezado `Retry-After` como el campo `retry_after` indican los segundos exactos que se deben esperar antes de reintentar.
+El encabezado `Retry-After` y el campo `retry_after` indican ambos los segundos exactos que debes esperar antes de reintentar.
 
-### Payload demasiado grande (413)
+### Carga útil demasiado grande (413)
 
-Cuando la entrada o el tamaño del archivo exceden los límites:
+Cuando el tamaño de entrada o del archivo excede los límites:
 
 ```json
 {
@@ -179,13 +164,13 @@ Causas comunes:
 - Archivo de audio demasiado grande (máx. 25MB)
 - El texto de entrada excede la longitud de contexto del modelo
 
-### Errores upstream (502, 503)
+### Errores del proveedor upstream (502, 503)
 
-| Type | Description |
+| Tipo | Descripción |
 |------|-------------|
 | `upstream_error` | El proveedor devolvió un error |
 | `all_channels_failed` | No hay proveedores disponibles |
-| `timeout_error` | La solicitud agotó el tiempo de espera |
+| `timeout_error` | La solicitud excedió el tiempo de espera |
 
 Cuando todos los canales fallan, la respuesta incluye modelos alternativos:
 
@@ -269,30 +254,30 @@ async function chatWithRetry(messages, maxRetries = 3) {
 ## Mejores prácticas
 
 <AccordionGroup>
-  <Accordion title="Implementar exponential backoff">
-    Cuando se aplica limitación de tasa, espera progresivamente más tiempo entre reintentos:
+  <Accordion title="Implementar retroceso exponencial">
+    Cuando se aplica limitación de tasa, espera intervalos progresivamente mayores entre reintentos:
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="Configurar timeouts">
-    Configura siempre timeouts razonables para evitar solicitudes bloqueadas:
+  <Accordion title="Establecer timeouts">
+    Siempre establece timeouts razonables para evitar solicitudes colgadas:
     ```python
     client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
   <Accordion title="Registrar errores para depuración">
-    Registra la respuesta de error completa, incluido el ID de la solicitud, para soporte:
+    Registra la respuesta de error completa, incluyendo el ID de la solicitud, para soporte:
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
     ```
   </Accordion>
 
-  <Accordion title="Manejar errores específicos del modelo">
+  <Accordion title="Gestionar errores específicos del modelo">
     Algunos modelos tienen requisitos específicos (p. ej., max tokens, formatos de imagen).
-    Valida las entradas antes de realizar solicitudes.
+    Valida las entradas antes de realizar las solicitudes.
   </Accordion>
 </AccordionGroup>

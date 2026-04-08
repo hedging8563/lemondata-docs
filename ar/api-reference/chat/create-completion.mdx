@@ -1,128 +1,126 @@
 ---
-title: "إنشاء Chat Completion"
+title: "إنشاء استكمال المحادثة"
 openapi: "POST /v1/chat/completions"
-description: "ينشئ completion لرسالة الدردشة"
+description: "ينشئ استكمالًا لرسالة المحادثة"
 ---
 
 ## جسم الطلب
 
 <ParamField body="model" type="string" required>
-  معرّف النموذج المراد استخدامه. راجع [Models](https://lemondata.cc/ar/models) للاطلاع على الخيارات المتاحة.
+  معرف النموذج المستخدم. راجع [Models](https://lemondata.cc/ar/models) للاطلاع على الخيارات المتاحة.
+</ParamField>
 
+<ParamField body="messages" type="array" required>
+  قائمة بالرسائل التي تشكل المحادثة.
 
-  When `content` is an array, LemonData supports structured multimodal blocks for compatible models:
+  يحتوي كل كائن رسالة على:
+  - `role` (string): `system`, `user`, أو `assistant`
+  - `content` (string | array): محتوى الرسالة
+
+  عندما تكون `content` مصفوفة، يدعم LemonData كتلًا مُهيكلة متعددة الوسائط للنماذج المتوافقة:
   - text: `{ "type": "text", "text": "..." }`
   - image: `{ "type": "image_url", "image_url": { "url": "https://..." } }`
   - video: `{ "type": "video_url", "video_url": { "url": "https://..." } }`
   - audio: `{ "type": "audio_url", "audio_url": { "url": "https://..." } }`
 
-  For multimodal production traffic, prefer public `https` URLs. LemonData will translate these media blocks into the provider-specific request shape required by the routed physical model.
-
-</ParamField>
-
-<ParamField body="messages" type="array" required>
-  قائمة من الرسائل التي تكوّن المحادثة.
-
-  يحتوي كل كائن رسالة على:
-  - `role` (string): `system` أو `user` أو `assistant`
-  - `content` (string | array): محتوى الرسالة
+  لحركة المرور متعددة الوسائط في الإنتاج، يُفضّل استخدام روابط `https` عامة. سيقوم LemonData بترجمة هذه الكتل الوسائطية إلى شكل الطلب الخاص بمزود الخدمة المطلوب للنموذج الفيزيائي الموجه.
 </ParamField>
 
 <ParamField body="temperature" type="number" default="1">
-  درجة حرارة أخذ العينات بين 0 و2. تجعل القيم الأعلى المخرجات أكثر عشوائية.
+  درجة حرارة العينة بين 0 و2. القيم الأعلى تجعل المخرجات أكثر عشوائية.
 </ParamField>
 
 <ParamField body="max_tokens" type="integer">
-  الحد الأقصى لعدد tokens المطلوب إنشاؤها.
+  الحد الأقصى لعدد التوكنات التي سيتم توليدها.
 </ParamField>
 
 <ParamField body="stream" type="boolean" default="false">
-  إذا كانت القيمة true، فسيتم إرسال الفروقات الجزئية للرسائل كأحداث SSE.
+  If true، سيتم إرسال دلتا الرسائل الجزئية كأحداث SSE.
 </ParamField>
 
 <ParamField body="stream_options" type="object">
-  خيارات البث. اضبط `include_usage: true` لتلقي استخدام token ضمن أجزاء البث.
+  خيارات البث. اضبط `include_usage: true` لتلقي استخدام التوكنات في أجزاء البث.
 </ParamField>
 
 <ParamField body="top_p" type="number" default="1">
-  معلمة أخذ العينات Nucleus. نوصي بتعديل هذا أو temperature، وليس كليهما.
+  معامل Nucleus sampling. نوصي بتغيير هذا أو temperature، وليس كليهما.
 </ParamField>
 
 <ParamField body="frequency_penalty" type="number" default="0">
-  رقم بين -2.0 و2.0. تعاقب القيم الموجبة tokens المتكررة.
+  رقم بين -2.0 و2.0. القيم الإيجابية تعاقب التوكنات المكررة.
 </ParamField>
 
 <ParamField body="presence_penalty" type="number" default="0">
-  رقم بين -2.0 و2.0. تعاقب القيم الموجبة tokens الموجودة بالفعل في النص.
+  رقم بين -2.0 و2.0. القيم الإيجابية تعاقب التوكنات الموجودة بالفعل في النص.
 </ParamField>
 
 <ParamField body="stop" type="string | array">
-  ما يصل إلى 4 تسلسلات سيتوقف عندها الـ API عن إنشاء tokens.
+  حتى 4 تسلسلات تتوقف عندها الـ API عن توليد التوكنات.
 </ParamField>
 
 <ParamField body="tools" type="array">
-  قائمة بالأدوات التي قد يستدعيها النموذج (function calling).
+  قائمة بالأدوات التي قد يستدعيها النموذج (استدعاء دوال).
 </ParamField>
 
 <ParamField body="tool_choice" type="string | object">
-  يتحكم في كيفية استخدام النموذج للأدوات. الخيارات: `auto` أو `none` أو `required` أو كائن أداة محدد.
+  يتحكم في كيفية استخدام النموذج للأدوات. الخيارات: `auto`, `none`, `required`, أو كائن أداة محدد.
 </ParamField>
 
 <ParamField body="parallel_tool_calls" type="boolean" default="true">
-  ما إذا كان سيتم تمكين استدعاء الدوال بشكل متوازٍ. اضبطه على false لاستدعاء الدوال بشكل تسلسلي.
+  ما إذا كان سيتم تمكين استدعاء الدوال المتوازي. اضبط على false لاستدعاء الدوال بشكل متسلسل.
 </ParamField>
 
 <ParamField body="max_completion_tokens" type="integer">
-  الحد الأقصى لـ tokens الخاصة بالـ completion. بديل لـ `max_tokens`، ومفيد لعائلات النماذج الأحدث الممكّنة للاستدلال.
+  الحد الأقصى للتوكنات للاستكمال. بديل لـ `max_tokens`، مفيد لعائلات النماذج الأحدث الممكّنة للتفكير.
 </ParamField>
 
 <ParamField body="reasoning_effort" type="string">
-  مستوى الجهد الاستدلالي للنماذج الممكّنة للاستدلال. الخيارات: `low` أو `medium` أو `high`.
+  مستوى جهد الاستدلال للنماذج الممكّنة للتفكير. الخيارات: `low`, `medium`, `high`.
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  seed عشوائي لأخذ عينات حتمي.
+  بذرة عشوائية للعينة الحتمية.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  عدد الـ completions المطلوب إنشاؤها (1-128).
+  عدد الاستكمالات المراد توليدها (1-128).
 </ParamField>
 
 <ParamField body="logprobs" type="boolean">
-  ما إذا كان سيتم إرجاع الاحتمالات اللوغاريتمية.
+  ما إذا كان سيتم إرجاع لوغاريتمات الاحتمالات.
 </ParamField>
 
 <ParamField body="top_logprobs" type="integer">
-  عدد أعلى الاحتمالات اللوغاريتمية المطلوب إرجاعها (0-20). يتطلب `logprobs: true`.
+  عدد أعلى لوغاريتمات الاحتمالات المراد إرجاعها (0-20). يتطلب `logprobs: true`.
 </ParamField>
 
 <ParamField body="top_k" type="integer">
-  معلمة أخذ العينات Top-K (لنماذج Anthropic/Gemini).
+  معامل Top-K sampling (لنماذج Anthropic/Gemini).
 </ParamField>
 
 <ParamField body="response_format" type="object">
-  مواصفات تنسيق الاستجابة. استخدم `{"type": "json_object"}` لوضع JSON، أو `{"type": "json_schema", "json_schema": {...}}` للمخرجات المنظمة.
+  مواصفات تنسيق الاستجابة. استخدم `{"type": "json_object"}` لوضع JSON. اعتبر `{"type": "json_schema", "json_schema": {...}}` كطريق بذل أقصى جهد يعتمد على النموذج المختار والسلوك الموجَّه.
 </ParamField>
 
 <ParamField body="logit_bias" type="object">
-  عدّل احتمالية ظهور tokens محددة. اربط معرّفات token (كسلاسل نصية) بقيم انحياز من -100 إلى 100.
+  تعديل احتمال ظهور توكنات محددة. اربط معرفات التوكن (كسلاسل) بقيم تحيّز من -100 إلى 100.
 </ParamField>
 
 <ParamField body="user" type="string">
-  معرّف فريد يمثّل المستخدم النهائي لديك لمراقبة إساءة الاستخدام.
+  معرف فريد يمثل المستخدم النهائي لديك لأغراض مراقبة الإساءة.
 </ParamField>
 
 <ParamField body="cache_control" type="object">
-  خيارات التحكم في التخزين المؤقت الخاصة بـ LemonData.
+  خيارات تحكم التخزين المؤقت في LemonData.
 
-  - `type` (string): استراتيجية التخزين المؤقت - `default` أو `no_cache` أو `no_store` أو `response_only` أو `semantic_only`
-  - `max_age` (integer): مدة صلاحية التخزين المؤقت بالثواني (الحد الأقصى 86400)
+  - `type` (string): استراتيجية التخزين المؤقت - `default`, `no_cache`, `no_store`, `response_only`, `semantic_only`
+  - `max_age` (integer): مدة بقاء الخ缓存 بالثواني (الحد الأقصى 86400)
 </ParamField>
 
 ## الاستجابة
 
 <ResponseField name="id" type="string">
-  معرّف فريد للـ completion.
+  معرف فريد للاستكمال.
 </ResponseField>
 
 <ResponseField name="object" type="string">
@@ -130,28 +128,28 @@ description: "ينشئ completion لرسالة الدردشة"
 </ResponseField>
 
 <ResponseField name="created" type="integer">
-  طابع زمني Unix لوقت إنشاء الـ completion.
+  طابع زمني بنظام Unix لوقت إنشاء الاستكمال.
 </ResponseField>
 
 <ResponseField name="model" type="string">
-  النموذج المستخدم للـ completion.
+  النموذج المستخدم للاستكمال.
 </ResponseField>
 
 <ResponseField name="choices" type="array">
-  قائمة بخيارات الـ completion.
+  قائمة بخيارات الاستكمال.
 
   يحتوي كل خيار على:
-  - `index` (integer): فهرس الخيار
-  - `message` (object): الرسالة المُنشأة
-  - `finish_reason` (string): سبب توقف النموذج (`stop` أو `length` أو `tool_calls`)
+  - `index` (integer): مؤشر الخيار
+  - `message` (object): الرسالة المولدة
+  - `finish_reason` (string): سبب توقف النموذج (`stop`, `length`, `tool_calls`)
 </ResponseField>
 
 <ResponseField name="usage" type="object">
-  إحصاءات استخدام token.
+  إحصاءات استخدام التوكنات.
 
-  - `prompt_tokens` (integer): tokens في الـ prompt
-  - `completion_tokens` (integer): tokens في الـ completion
-  - `total_tokens` (integer): إجمالي tokens المستخدمة
+  - `prompt_tokens` (integer): التوكنات في المطالبة
+  - `completion_tokens` (integer): التوكنات في الاستكمال
+  - `total_tokens` (integer): إجمالي التوكنات المستخدمة
 </ResponseField>
 
 <RequestExample>
@@ -242,7 +240,7 @@ echo $data['choices'][0]['message']['content'];
 ```
 </RequestExample>
 
-## Multimodal Example
+## مثال متعدد الوسائط
 
 ```json
 {
@@ -259,7 +257,6 @@ echo $data['choices'][0]['message']['content'];
   "max_tokens": 64
 }
 ```
-
 
 <ResponseExample>
 ```json Response

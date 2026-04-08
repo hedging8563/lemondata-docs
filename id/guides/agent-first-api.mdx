@@ -1,39 +1,39 @@
 ---
-title: "✨ API Agent-First"
-description: "Petunjuk error terstruktur agar agen AI dapat melakukan koreksi mandiri pada percobaan ulang pertama"
+title: "✨ Agent-First API"
+description: "Petunjuk kesalahan terstruktur agar agen AI dapat mengoreksi diri pada percobaan ulang pertama"
 ---
 
 ## Ikhtisar
 
-API Agent-First LemonData memperkaya respons error dengan petunjuk terstruktur yang dapat diurai dan ditindaklanjuti oleh agen AI secara langsung — tanpa pencarian web, tanpa melihat dokumentasi, tanpa tebakan.
+Agent-First API LemonData memperkaya respons kesalahan dengan petunjuk terstruktur yang dapat diurai dan ditindaklanjuti langsung oleh agen AI — tanpa pencarian web, tanpa mencari dokumentasi, tanpa tebak-tebakan.
 
-Setiap respons error menyertakan field opsional seperti `did_you_mean`, `suggestions`, `hint`, `retryable`, dan `retry_after` di dalam objek `error` standar. Field ini bersifat backward-compatible — client yang tidak menggunakannya tidak akan melihat perbedaan apa pun.
+Setiap respons kesalahan menyertakan field opsional seperti `did_you_mean`, `suggestions`, `hint`, `retryable`, dan `retry_after` di dalam objek `error` standar. Field-field ini kompatibel ke belakang — klien yang tidak menggunakannya tidak akan melihat perbedaan.
 
-## Field Petunjuk Error
+## Bidang Petunjuk Kesalahan
 
 Semua field petunjuk adalah ekstensi opsional di dalam objek `error`:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `did_you_mean` | `string` | Nama model yang paling mendekati |
+| `did_you_mean` | `string` | Nama model yang paling mirip |
 | `suggestions` | `array` | Model yang direkomendasikan beserta metadata |
 | `alternatives` | `array` | Model alternatif yang saat ini tersedia |
-| `hint` | `string` | Panduan langkah berikutnya yang dapat dibaca manusia/agen |
-| `retryable` | `boolean` | Apakah mengulangi request yang sama mungkin berhasil |
-| `retry_after` | `number` | Jumlah detik untuk menunggu sebelum mencoba lagi |
+| `hint` | `string` | Panduan langkah selanjutnya yang dapat dibaca manusia/agen |
+| `retryable` | `boolean` | Apakah mengulang permintaan yang sama mungkin berhasil |
+| `retry_after` | `number` | Detik yang harus ditunggu sebelum mengulang |
 | `balance_usd` | `number` | Saldo akun saat ini dalam USD |
-| `estimated_cost_usd` | `number` | Perkiraan biaya dari request yang gagal |
+| `estimated_cost_usd` | `number` | Estimasi biaya dari permintaan yang gagal |
 
-## Contoh Kode Error
+## Contoh Kode Kesalahan
 
 ### model_not_found (400)
 
-Ketika nama model tidak cocok dengan model aktif mana pun:
+Ketika nama model tidak cocok dengan model aktif manapun:
 
 ```json
 {
   "error": {
-    "message": "Model 'gpt5' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -49,33 +49,15 @@ Ketika nama model tidak cocok dengan model aktif mana pun:
 ```
 
 Resolusi `did_you_mean` menggunakan:
-1. Pemetaan alias statis (dari data error produksi)
-2. Pencocokan string yang dinormalisasi (menghapus tanda hubung, tidak peka huruf besar/kecil)
-3. Pencocokan edit distance (ambang ≤ 3)
+1. Pemetaan alias statis (dari data kesalahan produksi)
+2. Pencocokan string ternormalisasi (menghapus tanda hubung, tidak sensitif huruf)
+3. Pencocokan jarak edit (ambang ≤ 3)
 
-
-### model_price_not_configured (400)
-
-Saat model ada secara internal tetapi saat ini belum diekspos untuk permintaan publik:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-Agen harus memperlakukan ini sebagai sinyal ketersediaan platform, bukan salah ketik. Coba lagi model yang sama hanya setelah muncul di `GET /v1/models`.
+Rute publik tidak mengekspos kode kesalahan terpisah untuk model yang tersembunyi, ditunda, atau non-publik. Perlakukan model publik yang tidak tersedia sama seperti kesalahan pencocokan: periksa `did_you_mean`, `suggestions`, dan `hint`, lalu coba ulang dengan model publik yang didukung.
 
 ### insufficient_balance (402)
 
-Ketika saldo akun terlalu rendah untuk perkiraan biaya:
+Saat saldo akun terlalu rendah untuk estimasi biaya:
 
 ```json
 {
@@ -94,11 +76,11 @@ Ketika saldo akun terlalu rendah untuk perkiraan biaya:
 }
 ```
 
-`suggestions` berisi model yang lebih murah daripada perkiraan biaya dan dapat dialihkan oleh agen.
+`suggestions` berisi model yang lebih murah daripada estimasi biaya yang dapat dipilih oleh agen.
 
 ### all_channels_failed (503)
 
-Ketika semua channel upstream untuk sebuah model tidak tersedia:
+Ketika semua saluran hulu untuk sebuah model tidak tersedia:
 
 ```json
 {
@@ -117,7 +99,7 @@ Ketika semua channel upstream untuk sebuah model tidak tersedia:
 ```
 
 <Note>
-`retryable` bernilai `false` ketika alasannya adalah `no_channels` (tidak ada channel yang dikonfigurasi untuk model ini). Nilainya `true` hanya untuk kegagalan sementara seperti circuit breaker trip atau kuota habis.
+`retryable` bernilai `false` ketika alasannya adalah `no_channels` (tidak ada saluran yang dikonfigurasi untuk model ini). Nilainya `true` hanya untuk kegagalan sementara seperti trip circuit breaker atau kehabisan kuota.
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -135,15 +117,15 @@ Ketika semua channel upstream untuk sebuah model tidak tersedia:
 }
 ```
 
-Nilai `retry_after` dihitung dari waktu reset jendela rate limit yang sebenarnya.
+Nilai `retry_after` dihitung dari waktu reset jendela batas laju yang sebenarnya.
 
 <Note>
-Endpoint yang kompatibel dengan OpenAI menggunakan tipe error publik stabil milik LemonData seperti `rate_limit_exceeded`, `upstream_error`, dan `all_channels_failed`. Endpoint yang kompatibel dengan Anthropic dan Gemini menggunakan bentuk respons native mereka sendiri.
+Endpoint yang kompatibel dengan OpenAI menggunakan tipe kesalahan publik stabil LemonData seperti `rate_limit_exceeded`, `upstream_error`, dan `all_channels_failed`. Endpoint yang kompatibel dengan Anthropic dan Gemini menggunakan bentuk respons asli mereka sendiri.
 </Note>
 
 ### context_length_exceeded (400)
 
-Ketika input melebihi context window model (error upstream, diperkaya dengan petunjuk):
+Ketika input melebihi jendela konteks model (kesalahan hulu, diperkaya dengan petunjuk):
 
 ```json
 {
@@ -163,16 +145,16 @@ Ketika input melebihi context window model (error upstream, diperkaya dengan pet
 
 ## Header Endpoint Native
 
-Ketika Anda memanggil `/v1/chat/completions` dengan model yang memiliki endpoint native (Anthropic atau Gemini), **respons sukses** menyertakan header optimisasi:
+Saat Anda memanggil `/v1/chat/completions` dengan model yang memiliki endpoint native (Anthropic atau Gemini), **respons sukses** menyertakan header optimisasi:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Model Provider | Suggested Endpoint | Benefit |
-|---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | Tanpa konversi format, extended thinking, prompt caching |
+| Penyedia Model | Endpoint yang Disarankan | Manfaat |
+|---------------|--------------------------|---------|
+| Anthropic (Claude) | `/v1/messages` | Tanpa konversi format, pemikiran diperpanjang, caching prompt |
 | Google (Gemini) | `/v1beta/gemini` | Tanpa konversi format, grounding, pengaturan keamanan |
 | OpenAI | — | Chat completions sudah merupakan format native |
 
@@ -180,18 +162,27 @@ Header ini muncul pada respons streaming maupun non-streaming.
 
 ## Peningkatan /v1/models
 
-Tiga field baru dalam ekstensi `lemondata` pada setiap objek model:
+`/v1/models` sekarang membawa metadata rekomendasi non-chat yang dapat digunakan agen sebelum mereka memanggil endpoint image, video, music, 3D, TTS, STT, embedding, rerank, atau translation.
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
@@ -199,11 +190,19 @@ Tiga field baru dalam ekstensi `lemondata` pada setiap objek model:
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Tipe model |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Cara penagihan model |
-| `cache_pricing` | object or `null` | Harga prompt cache upstream + diskon semantic cache platform |
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Jenis model |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Cara model ditagihkan |
+| `cache_pricing` | object or `null` | Harga cache prompt hulu + diskon cache semantik platform |
+| `agent_preferences.<scene>` | object | Snapshot rekomendasi non-chat untuk scene tersebut |
 
-### Pemfilteran Kategori
+`agent_preferences` diturunkan dari snapshot tingkat keberhasilan 24 jam yang di-cache:
+
+- Jendela: 24 jam
+- Snapshot cache: stale-while-revalidate
+- `status = "ready"` berarti model memiliki sampel terbaru yang cukup untuk berpartisipasi dalam perankingan
+- `status = "insufficient_samples"` berarti model tetap terlihat tetapi tidak diperingkat di atas model yang memiliki skor
+
+### Penyaringan Kategori
 
 ```bash
 GET https://api.lemondata.cc/v1/models?category=chat          # Chat models only
@@ -211,20 +210,51 @@ GET https://api.lemondata.cc/v1/models?category=image         # Image generation
 GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
 
+### Penemuan Rekomendasi
+
+Untuk alur kerja non-chat, agen harus mengambil daftar singkat rekomendasi saat ini terlebih dahulu:
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+Nilai `recommended_for` yang valid adalah:
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+Jika `category` dan `recommended_for` keduanya ada, keduanya harus cocok secara tepat.
+
+Alur agen yang direkomendasikan:
+
+1. `GET /v1/models?recommended_for=<scene>`
+2. Pilih model pertama dengan `agent_preferences.<scene>.status == "ready"`
+3. Panggil endpoint secara eksplisit dengan `model=<selected>`
+4. Untuk kesalahan sementara saja, coba ulang dengan model `ready` berikutnya
+
 ## llms.txt
 
-Ikhtisar API yang dapat dibaca mesin tersedia di:
+Ringkasan API yang dapat dibaca mesin tersedia di:
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
-Isinya mencakup:
-- Template panggilan pertama dengan contoh yang berfungsi
-- Nama model umum (dibangkitkan secara dinamis dari data penggunaan)
+Ini mencakup:
+- Template panggilan pertama dengan contoh yang bekerja
+- Nama model umum (dihasilkan secara dinamis dari data penggunaan)
 - Semua 12 endpoint API
 - Parameter filter untuk penemuan model
-- Panduan penanganan error
+- Panduan penanganan kesalahan
 
 Agen AI yang membaca `llms.txt` sebelum panggilan API pertama mereka biasanya dapat berhasil pada percobaan pertama.
 
@@ -283,16 +313,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## Prinsip Desain
 
 <CardGroup cols={2}>
-  <Card title="Gagal cepat, gagal secara informatif" icon="bolt">
-    Error langsung dikembalikan dengan semua data yang dibutuhkan agen untuk melakukan koreksi mandiri.
+  <Card title="Gagal cepat, berikan informasi" icon="bolt">
+    Kesalahan dikembalikan segera dengan semua data yang dibutuhkan agen untuk mengoreksi diri.
   </Card>
-  <Card title="Tanpa auto-routing" icon="route">
-    API tidak pernah secara diam-diam mengganti dengan model yang berbeda. Agen yang memutuskan.
+  <Card title="Tanpa pengalihan otomatis" icon="route">
+    API tidak pernah diam-diam menggantikan model dengan model lain. Agen yang memutuskan.
   </Card>
   <Card title="Saran berbasis data" icon="database">
-    Semua rekomendasi berasal dari data produksi, bukan daftar yang di-hardcode.
+    Semua rekomendasi berasal dari data produksi, bukan daftar yang dikodekan statis.
   </Card>
-  <Card title="Backward compatible" icon="plug">
-    Semua field petunjuk bersifat opsional. Client yang ada tidak melihat perbedaan apa pun.
+  <Card title="Kompatibel ke belakang" icon="plug">
+    Semua field petunjuk bersifat opsional. Klien yang ada tidak melihat perbedaan.
   </Card>
 </CardGroup>

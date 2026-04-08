@@ -1,30 +1,29 @@
 ---
 title: "OpenAI SDK"
-description: "Gunakan LemonData dengan OpenAI SDK resmi dan klien yang kompatibel dengan OpenAI"
+description: "Gunakan LemonData dengan SDK resmi OpenAI dan klien yang kompatibel dengan OpenAI"
 ---
 
-## Ringkasan
+## Overview
 
-LemonData bekerja dengan OpenAI SDK resmi dengan mengarahkan klien ke `https://api.lemondata.cc/v1`.
+LemonData bekerja dengan SDK resmi OpenAI dengan mengarahkan klien ke `https://api.lemondata.cc/v1`.
 
-Untuk proyek baru, utamakan **Responses API**. Pertahankan **Chat Completions** hanya ketika sebuah framework, plugin, atau alur kode lama masih mengharapkannya.
+Untuk sebagian besar proyek baru, lebih baik menggunakan **Chat Completions** sebagai jalur default yang kompatibel dengan OpenAI. Gunakan **Responses API** hanya ketika Anda secara eksplisit membutuhkan perilaku khusus Responses.
 
-<Note>
-Python, JavaScript, dan Go memiliki OpenAI SDK resmi. PHP bekerja dengan baik menggunakan klien komunitas yang kompatibel dengan OpenAI, tetapi itu bukan OpenAI SDK resmi.
-</Note>
-
-Ini adalah jalur SDK OpenAI-compatible default di LemonData, tetapi bukan berarti setiap field Responses-native-only akan bekerja identik di semua model dan channel yang diarahkan.
-
+Field khusus Responses tidak dijamin berperilaku identik di setiap model dan jalur yang dirutekan.
 
 <Note>
-**Jenis**: SDK native
-
-**Jalur utama**: OpenAI-compatible / OpenAI Responses
-
-**Tingkat dukungan**: Jalur inti yang didukung
+Python, JavaScript, dan Go memiliki SDK resmi OpenAI. PHP bekerja dengan baik dengan klien komunitas yang kompatibel dengan OpenAI, namun itu bukan SDK resmi OpenAI.
 </Note>
 
-## Instalasi
+<Note>
+**Tipe**: Native SDK
+
+**Jalur Utama**: OpenAI-compatible / Chat Completions
+
+**Tingkat Dukungan**: Jalur inti didukung
+</Note>
+
+## Installation
 
 <CodeGroup>
 
@@ -42,7 +41,11 @@ go get github.com/openai/openai-go/v3
 
 </CodeGroup>
 
-## Konfigurasi Klien
+<Note>
+Gunakan `POST /v1/responses` hanya ketika Anda secara eksplisit membutuhkan perilaku khusus Responses. Beberapa field yang hanya untuk Responses masih dapat bergantung pada model yang dipilih dan jalur yang dirutekan.
+</Note>
+
+## Configure the Client
 
 <CodeGroup>
 
@@ -84,45 +87,47 @@ func main() {
 
 </CodeGroup>
 
-## Direkomendasikan: Responses API
+## Recommended: Chat Completions
 
 <CodeGroup>
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'Explain what LemonData does in one sentence.',
+  messages: [{ role: 'user', content: 'Explain what LemonData does in one sentence.' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-lemondata-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
 </CodeGroup>
 
-<Note>
-Beberapa hosted tools, bersama `include`, `service_tier`, dan `truncation_strategy`, bergantung pada dukungan native `/v1/responses` passthrough dari model yang dipilih dan channel yang diarahkan. Jika dukungan itu tidak ada, LemonData mengembalikan `400` atau `503` yang eksplisit alih-alih berpura-pura field tersebut berhasil.
-</Note>
+## Advanced: Responses API
 
-## Streaming dengan Responses
+Gunakan jalur ini hanya ketika alat atau alur kerja Anda secara eksplisit bergantung pada semantik OpenAI Responses.
+
+### Streaming with Responses
 
 <CodeGroup>
 
@@ -180,7 +185,7 @@ for item in response.output:
         print(item.arguments)
 ```
 
-## Vision dengan Responses
+## Vision with Responses
 
 ```python
 response = client.responses.create(
@@ -208,9 +213,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## Kompatibilitas Chat Completions
+## Chat Completions
 
-Jika framework atau plugin Anda masih mengharapkan Chat Completions, LemonData juga mendukung path standar yang kompatibel dengan OpenAI:
+Chat Completions adalah jalur default yang kompatibel dengan OpenAI untuk LemonData:
 
 ```python
 response = client.chat.completions.create(
@@ -224,28 +229,24 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-<Warning>
-Gunakan Chat Completions hanya untuk kompatibilitas. Untuk integrasi baru, utamakan `client.responses.create(...)`.
-</Warning>
-
-## Pemecahan Masalah
+## Troubleshooting
 
 <AccordionGroup>
   <Accordion title="Kesalahan Koneksi">
-    - Verifikasi bahwa base URL adalah tepat `https://api.lemondata.cc/v1`
-    - Periksa gangguan proxy atau override klien HTTP kustom
-    - Pastikan versi SDK Anda sudah terbaru sebelum men-debug perilaku provider
+    - Pastikan base URL persis `https://api.lemondata.cc/v1`
+    - Periksa gangguan proxy atau penggantian klien HTTP kustom
+    - Pastikan versi SDK Anda terbaru sebelum men-debug perilaku provider
   </Accordion>
 
   <Accordion title="Autentikasi Gagal">
     - Periksa bahwa API key Anda diawali dengan `sk-`
-    - Verifikasi bahwa key tersebut aktif di dashboard LemonData
-    - Konfirmasi bahwa SDK mengirimkan `Authorization: Bearer ...`
+    - Verifikasi bahwa kunci aktif di dashboard LemonData
+    - Konfirmasi SDK mengirim `Authorization: Bearer ...`
   </Accordion>
 
-  <Accordion title="Path API Salah">
+  <Accordion title="Jalur API Salah">
     - `responses.create(...)` mengirim permintaan ke `/v1/responses`
     - `chat.completions.create(...)` mengirim permintaan ke `/v1/chat/completions`
-    - Jika aplikasi Anda saat ini hanya mendukung Chat Completions, pertahankan pada path kompatibilitas tersebut
+    - Gunakan Chat Completions secara default kecuali Anda secara eksplisit membutuhkan perilaku khusus Responses
   </Accordion>
 </AccordionGroup>

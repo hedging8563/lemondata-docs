@@ -1,9 +1,9 @@
 ---
 title: "Fehlerbehandlung"
-description: "API-Fehler sauber behandeln"
+description: "API-Fehler elegant behandeln"
 ---
 
-## Format der Fehlerantwort
+## Fehler-Antwortformat
 
 Alle Fehler geben ein konsistentes JSON-Format mit optionalen [Agent-First-Hinweisen](/guides/agent-first-api) zurück:
 
@@ -23,34 +23,34 @@ Alle Fehler geben ein konsistentes JSON-Format mit optionalen [Agent-First-Hinwe
 }
 ```
 
-Die Basisfelder (`message`, `type`, `code`, `param`) sind immer vorhanden. Die Hinweisfelder (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) sind optionale Erweiterungen für die Selbstkorrektur von AI-Agenten. Siehe den [Agent-First-API-Leitfaden](/guides/agent-first-api) für Details.
+Die Basisfelder (`message`, `type`, `code`, `param`) sind immer vorhanden. Die Hinweisfelder (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) sind optionale Erweiterungen zur Selbstkorrektur von AI-Agenten. Siehe den [Agent-First API-Leitfaden](/guides/agent-first-api) für Details.
 
-OpenAI-kompatible Endpunkte verwenden LemonDatas stabile Gateway-Fehlertypen. Anthropic-kompatible und Gemini-kompatible Endpunkte verwenden ihre eigenen nativen Fehlerfamilien und Antwortformate.
+OpenAI-kompatible Endpunkte verwenden LemonData's stabile Gateway-Fehlertypen. Anthropic-kompatible und Gemini-kompatible Endpunkte verwenden ihre eigenen nativen Fehlerfamilien und Antwortformate.
 
 ## HTTP-Statuscodes
 
 | Code | Beschreibung |
-|------|-------------|
+|------|--------------|
 | 400 | Bad Request - Ungültige Parameter |
-| 401 | Unauthorized - Ungültiger oder fehlender API key |
+| 401 | Unauthorized - Ungültiger oder fehlender API-Schlüssel |
 | 402 | Payment Required - Unzureichendes Guthaben |
 | 403 | Forbidden - Zugriff verweigert oder Modell nicht erlaubt |
 | 404 | Not Found - Modell oder Ressource nicht gefunden |
 | 413 | Payload Too Large - Eingabe- oder Dateigröße überschritten |
-| 429 | Too Many Requests - Rate-Limit überschritten |
+| 429 | Too Many Requests - Ratenlimit überschritten |
 | 500 | Internal Server Error |
-| 502 | Bad Gateway - Fehler beim Upstream-Provider |
+| 502 | Bad Gateway - Fehler des Upstream-Providers |
 | 503 | Service Unavailable - Dienst vorübergehend nicht verfügbar |
-| 504 | Gateway Timeout - Zeitüberschreitung bei der Anfrage |
+| 504 | Gateway Timeout - Anfrage hat zu lange gedauert |
 
 ## Fehlertypen
 
 ### Authentifizierungsfehler (401)
 
-| Type | Code | Beschreibung |
-|------|------|-------------|
-| `invalid_api_key` | `invalid_api_key` | API key fehlt oder ist ungültig |
-| `expired_api_key` | `expired_api_key` | API key wurde widerrufen |
+| Typ | Code | Beschreibung |
+|------|------|--------------|
+| `invalid_api_key` | `invalid_api_key` | API-Schlüssel fehlt oder ist ungültig |
+| `expired_api_key` | `expired_api_key` | API-Schlüssel wurde widerrufen |
 
 ```python
 from openai import OpenAI, AuthenticationError
@@ -63,11 +63,11 @@ except AuthenticationError as e:
 
 ### Zahlungsfehler (402)
 
-| Type | Code | Beschreibung |
-|------|------|-------------|
-| `insufficient_balance` | `insufficient_balance` | Kontoguthaben ist zu niedrig (OpenAI-kompatible Endpunkte) |
-| `insufficient_balance_error` | `insufficient_balance` | Kontoguthaben ist zu niedrig (Anthropic-kompatible Endpunkte) |
-| `quota_exceeded` | `quota_exceeded` | Nutzungslimit des API key erreicht |
+| Typ | Code | Beschreibung |
+|------|------|--------------|
+| `insufficient_balance` | `insufficient_balance` | Kontostand ist zu niedrig (OpenAI-kompatible Endpunkte) |
+| `insufficient_balance_error` | `insufficient_balance` | Kontostand ist zu niedrig (Anthropic-kompatible Endpunkte) |
+| `quota_exceeded` | `quota_exceeded` | Nutzungslimit des API-Schlüssels erreicht |
 
 ```python
 from openai import OpenAI, APIStatusError
@@ -81,10 +81,10 @@ except APIStatusError as e:
 
 ### Zugriffsfehler (403)
 
-| Type | Code | Beschreibung |
-|------|------|-------------|
-| `access_denied` | `access_denied` | Zugriff auf Ressource verweigert |
-| `access_denied` | `model_not_allowed` | Modell ist für diesen API key nicht erlaubt |
+| Typ | Code | Beschreibung |
+|------|------|--------------|
+| `access_denied` | `access_denied` | Zugriff auf die Ressource verweigert |
+| `access_denied` | `model_not_allowed` | Modell für diesen API-Schlüssel nicht erlaubt |
 
 ```json
 {
@@ -98,17 +98,16 @@ except APIStatusError as e:
 
 ### Validierungsfehler (400)
 
-| Type | Beschreibung |
-|------|-------------|
+| Typ | Beschreibung |
+|------|--------------|
 | `invalid_request_error` | Anfrageparameter sind ungültig |
-| `context_length_exceeded` | Eingabe ist für das Modell zu lang |
-| `model_not_found` | Angefordertes Modell existiert nicht |
-| `model_price_not_configured` | Das Modell existiert intern, ist aber derzeit nicht für öffentliche Anfragen verfügbar |
+| `context_length_exceeded` | Eingabe ist zu lang für das Modell |
+| `model_not_found` | Angefordertes Modell ist im aktuellen öffentlichen Vertrag nicht verfügbar |
 
 ```json
 {
   "error": {
-    "message": "Model 'invalid-model' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -119,25 +118,11 @@ except APIStatusError as e:
 }
 ```
 
-
-Wenn ein Modell in internen Governance- oder Preis-Workflows existiert, aber noch nicht als öffentliches Request-Ziel freigegeben ist, gibt LemonData Folgendes zurück:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
+Öffentliche Routen unterscheiden im Antwortkörper nicht zwischen Tippfehlern, versteckten, zurückgestellten oder nicht-öffentlichen Modellzuständen. Wenn ein Modell derzeit nicht über den öffentlichen Vertrag verfügbar ist, gibt LemonData `model_not_found` zurück.
 
 ### Rate-Limit-Fehler (429)
 
-Wenn Sie die Rate-Limits überschreiten:
+Wenn Sie die Ratenbegrenzungen überschreiten:
 
 ```json
 {
@@ -158,11 +143,11 @@ Wenn Sie die Rate-Limits überschreiten:
 Retry-After: 8
 ```
 
-Der `Retry-After`-Header und das Feld `retry_after` geben beide die genaue Anzahl an Sekunden an, die vor einem erneuten Versuch gewartet werden soll.
+Der `Retry-After`-Header und das Feld `retry_after` geben beide die exakte Anzahl an Sekunden an, die vor einem erneuten Versuch gewartet werden soll.
 
-### Payload Too Large (413)
+### Payload zu groß (413)
 
-Wenn die Eingabe- oder Dateigröße die Limits überschreitet:
+Wenn Eingabe oder Dateigröße die Grenzwerte überschreitet:
 
 ```json
 {
@@ -175,17 +160,17 @@ Wenn die Eingabe- oder Dateigröße die Limits überschreitet:
 ```
 
 Häufige Ursachen:
-- Bilddatei zu groß (max. 20MB)
-- Audiodatei zu groß (max. 25MB)
+- Bilddatei zu groß (max 20MB)
+- Audiodatei zu groß (max 25MB)
 - Eingabetext überschreitet die Kontextlänge des Modells
 
 ### Upstream-Fehler (502, 503)
 
-| Type | Beschreibung |
-|------|-------------|
-| `upstream_error` | Ein Anbieter hat einen Fehler zurückgegeben |
-| `all_channels_failed` | Keine verfügbaren Anbieter |
-| `timeout_error` | Zeitüberschreitung bei der Anfrage |
+| Typ | Beschreibung |
+|------|--------------|
+| `upstream_error` | Provider hat einen Fehler zurückgegeben |
+| `all_channels_failed` | Keine verfügbaren Provider |
+| `timeout_error` | Anfrage ist zeitlich überschritten |
 
 Wenn alle Kanäle fehlschlagen, enthält die Antwort alternative Modelle:
 
@@ -266,25 +251,25 @@ async function chatWithRetry(messages, maxRetries = 3) {
 }
 ```
 
-## Best Practices
+## Beste Vorgehensweisen
 
 <AccordionGroup>
-  <Accordion title="Exponentielles Backoff implementieren">
-    Wenn ein Rate-Limit greift, warten Sie zwischen Wiederholungsversuchen schrittweise länger:
+  <Accordion title="Exponential Backoff implementieren">
+    Wenn Sie rate-limited sind, warten Sie bei erneuten Versuchen schrittweise länger:
     ```python
     wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s...
     ```
   </Accordion>
 
-  <Accordion title="Timeouts festlegen">
-    Legen Sie immer sinnvolle Timeouts fest, um hängende Anfragen zu vermeiden:
+  <Accordion title="Timeouts setzen">
+    Setzen Sie immer vernünftige Timeouts, um hängende Anfragen zu vermeiden:
     ```python
     client = OpenAI(timeout=60.0)  # 60 second timeout
     ```
   </Accordion>
 
   <Accordion title="Fehler zum Debugging protokollieren">
-    Protokollieren Sie die vollständige Fehlerantwort einschließlich der Request-ID für den Support:
+    Protokollieren Sie die vollständige Fehlerantwort inklusive Request-ID für den Support:
     ```python
     except APIError as e:
         logger.error(f"API Error: {e.status_code} - {e.message}")
@@ -292,7 +277,7 @@ async function chatWithRetry(messages, maxRetries = 3) {
   </Accordion>
 
   <Accordion title="Modellspezifische Fehler behandeln">
-    Einige Modelle haben spezifische Anforderungen (z. B. maximale Token-Anzahl, Bildformate).
-    Validieren Sie die Eingaben, bevor Sie Anfragen senden.
+    Einige Modelle haben spezifische Anforderungen (z. B. maximale Tokens, Bildformate).
+    Validieren Sie Eingaben, bevor Sie Anfragen stellen.
   </Accordion>
 </AccordionGroup>

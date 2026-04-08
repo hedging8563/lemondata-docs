@@ -1,39 +1,39 @@
 ---
-title: "✨ Agent-First API"
-description: "AI agent’larının ilk yeniden denemede kendi kendini düzeltmesi için yapılandırılmış hata ipuçları"
+title: "✨ Ajan-Öncelikli API"
+description: "AI ajanlarının ilk yeniden denemede kendini düzeltmesi için yapılandırılmış hata ipuçları"
 ---
 
 ## Genel Bakış
 
-LemonData'nın Agent-First API'si, hata yanıtlarını AI agent’larının ayrıştırıp hemen işlem yapabileceği yapılandırılmış ipuçlarıyla zenginleştirir — web araması yok, doküman araması yok, tahmin yürütme yok.
+LemonData'nın Agent-First API'si, hata yanıtlarını AI ajanlarının hemen ayrıştırıp harekete geçebileceği yapılandırılmış ipuçlarıyla zenginleştirir — web aramaları yok, doküman bakışları yok, tahmin yürütme yok.
 
-Her hata yanıtı, standart `error` nesnesi içinde `did_you_mean`, `suggestions`, `hint`, `retryable` ve `retry_after` gibi isteğe bağlı alanlar içerir. Bu alanlar geriye dönük uyumludur — bunları kullanmayan istemciler hiçbir fark görmez.
+Her hata yanıtı, standart `error` nesnesi içinde isteğe bağlı alanlar olan `did_you_mean`, `suggestions`, `hint`, `retryable` ve `retry_after` gibi alanları içerir. Bu alanlar geri uyumludur — bunları kullanmayan istemciler hiçbir fark görmez.
 
 ## Hata İpucu Alanları
 
-Tüm ipucu alanları, `error` nesnesi içindeki isteğe bağlı genişletmelerdir:
+Tüm ipucu alanları `error` nesnesi içinde isteğe bağlı uzantılardır:
 
-| Alan | Tür | Açıklama |
+| Field | Type | Description |
 |-------|------|-------------|
 | `did_you_mean` | `string` | En yakın eşleşen model adı |
-| `suggestions` | `array` | Metadata ile önerilen modeller |
-| `alternatives` | `array` | Şu anda kullanılabilir alternatif modeller |
-| `hint` | `string` | İnsan/agent tarafından okunabilir sonraki adım yönlendirmesi |
-| `retryable` | `boolean` | Aynı isteğin yeniden denenmesinin başarılı olup olamayacağı |
-| `retry_after` | `number` | Yeniden denemeden önce beklenecek saniye sayısı |
-| `balance_usd` | `number` | USD cinsinden mevcut hesap bakiyesi |
-| `estimated_cost_usd` | `number` | Başarısız isteğin tahmini maliyeti |
+| `suggestions` | `array` | Meta veriye sahip önerilen modeller |
+| `alternatives` | `array` | Mevcut alternatif modeller |
+| `hint` | `string` | İnsan/ajan tarafından okunabilir sonraki adım yönlendirmesi |
+| `retryable` | `boolean` | Aynı isteğin yeniden denenmesinin başarılı olma olasılığı |
+| `retry_after` | `number` | Yeniden denemeden önce beklenmesi gereken saniye |
+| `balance_usd` | `number` | Hesap bakiyesi (USD cinsinden) |
+| `estimated_cost_usd` | `number` | Başarısız olan isteğin tahmini maliyeti (USD) |
 
 ## Hata Kodu Örnekleri
 
 ### model_not_found (400)
 
-Bir model adı etkin herhangi bir modelle eşleşmediğinde:
+Bir model adı aktif hiçbir modelle eşleşmediğinde:
 
 ```json
 {
   "error": {
-    "message": "Model 'gpt5' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -48,34 +48,16 @@ Bir model adı etkin herhangi bir modelle eşleşmediğinde:
 }
 ```
 
-`did_you_mean` çözümlemesi şunları kullanır:
-1. Statik alias eşlemesi (production hata verilerinden)
-2. Normalize edilmiş string eşleştirme (tireleri kaldırır, büyük/küçük harf duyarsız)
-3. Edit distance eşleştirmesi (eşik ≤ 3)
+`did_you_mean` çözümlemesi şu yöntemleri kullanır:
+1. Statik takma ad eşlemesi (prodüksiyon hata verilerinden)
+2. Normalleştirilmiş string eşlemesi (tireleri kaldırır, büyük/küçük harf duyarsız)
+3. Düzenleme uzaklığı eşlemesi (eşik ≤ 3)
 
-
-### model_price_not_configured (400)
-
-Model dahili olarak mevcut ancak şu anda herkese açık istekler için açılmamışsa:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-Ajanlar bunu bir yazım hatası değil, platform kullanılabilirlik sinyali olarak görmelidir. Aynı modeli ancak `GET /v1/models` içinde göründükten sonra yeniden deneyin.
+Genel erişim (public) rotaları, gizli, ertelenmiş veya herkese açık olmayan modeller için ayrı hata kodları açığa çıkarmaz. Kullanılamayan genel modelleri bir yanlış yazım gibi değerlendirin: `did_you_mean`, `suggestions` ve `hint` alanlarını inceleyin ve sonra desteklenen bir genel model ile yeniden deneyin.
 
 ### insufficient_balance (402)
 
-Hesap bakiyesi tahmini maliyet için çok düşük olduğunda:
+Hesap bakiyesi tahmini maliyet için yetersiz olduğunda:
 
 ```json
 {
@@ -94,11 +76,11 @@ Hesap bakiyesi tahmini maliyet için çok düşük olduğunda:
 }
 ```
 
-`suggestions`, agent’ın geçebileceği, tahmini maliyetten daha ucuz modelleri içerir.
+`suggestions`, ajanların geçiş yapabileceği tahmini maliyetten daha ucuz modelleri içerir.
 
 ### all_channels_failed (503)
 
-Bir model için tüm upstream kanalları kullanılamadığında:
+Bir model için tüm üst akış kanalları kullanılamaz olduğunda:
 
 ```json
 {
@@ -117,7 +99,7 @@ Bir model için tüm upstream kanalları kullanılamadığında:
 ```
 
 <Note>
-Nedeni `no_channels` olduğunda `retryable` değeri `false` olur (bu model için yapılandırılmış kanal yoktur). Yalnızca circuit breaker tetiklenmeleri veya kota tükenmesi gibi geçici hatalarda `true` olur.
+`retryable`, neden `no_channels` ise `false` olur (bu model için yapılandırılmış kanal yok). Yalnızca devre kesici atlamaları veya kota tükenmesi gibi geçici hatalar için `true` olur.
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -135,15 +117,15 @@ Nedeni `no_channels` olduğunda `retryable` değeri `false` olur (bu model için
 }
 ```
 
-`retry_after` değeri, gerçek rate limit pencere sıfırlama zamanına göre hesaplanır.
+`retry_after` değeri, gerçek hız limiti pencere sıfırlama zamanından hesaplanır.
 
 <Note>
-OpenAI uyumlu endpoint’ler, `rate_limit_exceeded`, `upstream_error` ve `all_channels_failed` gibi LemonData'nın kararlı genel hata türlerini kullanır. Anthropic uyumlu ve Gemini uyumlu endpoint’ler kendi yerel yanıt biçimlerini kullanır.
+OpenAI-uyumlu uç noktalar, `rate_limit_exceeded`, `upstream_error` ve `all_channels_failed` gibi LemonData'nın kararlı genel hata türlerini kullanır. Anthropic-uyumlu ve Gemini-uyumlu uç noktalar kendi yerel yanıt biçimlerini kullanır.
 </Note>
 
 ### context_length_exceeded (400)
 
-Girdi modelin context penceresini aştığında (upstream hatası, ipuçlarıyla zenginleştirilmiş):
+Girdi modelin bağlam penceresini aştığında (üst akış hatası, ipuçları ile zenginleştirilmiş):
 
 ```json
 {
@@ -161,55 +143,103 @@ Girdi modelin context penceresini aştığında (upstream hatası, ipuçlarıyla
 }
 ```
 
-## Yerel Endpoint Başlıkları
+## Yerel Uç Nokta Başlıkları
 
-`/v1/chat/completions` çağrısını yerel endpoint’i olan bir modelle yaptığınızda (Anthropic veya Gemini), **başarılı yanıt** optimizasyon başlıkları içerir:
+Bir modelin yerel bir uç noktası (Anthropic veya Gemini) olduğunda `/v1/chat/completions` çağrısı yaptığınızda, **başarılı yanıt** optimizasyon başlıklarını içerir:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Model Sağlayıcısı | Önerilen Endpoint | Fayda |
+| Model Provider | Suggested Endpoint | Benefit |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | Biçim dönüştürme yok, extended thinking, prompt caching |
-| Google (Gemini) | `/v1beta/gemini` | Biçim dönüştürme yok, grounding, safety settings |
-| OpenAI | — | Chat completions zaten yerel biçimdir |
+| Anthropic (Claude) | `/v1/messages` | Format dönüşümü yok, genişletilmiş düşünme, prompt önbellekleme |
+| Google (Gemini) | `/v1beta/gemini` | Format dönüşümü yok, grounding, güvenlik ayarları |
+| OpenAI | — | Chat completions zaten yerel formattır |
 
-Bu başlıklar hem streaming hem de non-streaming yanıtlarında görünür.
+Bu başlıklar hem akışlı (streaming) hem de akışsız yanıtlar için görünür.
 
-## /v1/models Geliştirmeleri
+## /v1/models İyileştirmeleri
 
-Her model nesnesinin `lemondata` uzantısındaki üç yeni alan:
+`/v1/models` artık ajanların görüntü, video, müzik, 3B, TTS, STT, embedding, rerank veya çeviri uç noktalarını çağırmadan önce kullanabileceği sohbet dışı öneri meta verilerini taşır.
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
 ```
 
-| Alan | Değerler | Açıklama |
+| Field | Values | Description |
 |-------|--------|-------------|
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Model türü |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Modelin nasıl ücretlendirildiği |
-| `cache_pricing` | nesne veya `null` | Upstream prompt cache fiyatları + platform semantic cache indirimi |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Modelin faturalama yöntemi |
+| `cache_pricing` | object or `null` | Üst akış prompt önbellek fiyatları + platform anlamsal önbellek indirimi |
+| `agent_preferences.<scene>` | object | O sahne için sohbet dışı öneri anlık görüntüsü |
+
+`agent_preferences`, önbelleğe alınmış 24 saatlik başarı oranı anlık görüntüsünden türetilir:
+
+- Pencere: 24 saat
+- Anlık görüntü önbelleği: stale-while-revalidate
+- `status = "ready"` modelin sıralamaya katılmak için yeterli güncel örneğe sahip olduğunu gösterir
+- `status = "insufficient_samples"` model görünür kalır ancak puanlanmış modellerin önüne alınmaz
 
 ### Kategori Filtreleme
 
 ```bash
-GET https://api.lemondata.cc/v1/models?category=chat          # Chat modelleri
-GET https://api.lemondata.cc/v1/models?category=image         # Görsel üretim modelleri
-GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Kodlamaya optimize edilmiş chat modelleri
+GET https://api.lemondata.cc/v1/models?category=chat          # Chat modelleri yalnızca
+GET https://api.lemondata.cc/v1/models?category=image         # Görüntü üretim modelleri
+GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Kodlama-optimze chat modelleri
 ```
+
+### Öneri Keşfi
+
+Sohbet dışı iş akışları için ajanlar önce geçerli önerilen kısa listeyi almalıdır:
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+Geçerli `recommended_for` değerleri şunlardır:
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+Hem `category` hem de `recommended_for` mevcutsa, bunların tam olarak eşleşmesi gerekir.
+
+Önerilen ajan akışı:
+
+1. `GET /v1/models?recommended_for=<scene>`
+2. İlk `agent_preferences.<scene>.status == "ready"` olan modeli seçin
+3. Uç noktayı açıkça `model=<selected>` ile çağırın
+4. Yalnızca geçici hatalarda, bir sonraki `ready` model ile yeniden deneyin
 
 ## llms.txt
 
@@ -219,16 +249,16 @@ Makine tarafından okunabilir bir API genel bakışı şu adreste mevcuttur:
 GET https://api.lemondata.cc/llms.txt
 ```
 
-Şunları içerir:
+İçerir:
 - Çalışan bir örnekle ilk çağrı şablonu
-- Yaygın model adları (kullanım verilerinden dinamik olarak üretilir)
-- 12 API endpoint’inin tamamı
+- Yaygın model adları (kullanım verilerinden dinamik olarak oluşturulur)
+- Tüm 12 API uç noktası
 - Model keşfi için filtre parametreleri
-- Hata yönetimi yönlendirmesi
+- Hata işleme rehberi
 
-İlk API çağrılarından önce `llms.txt` okuyan AI agent’ları genellikle ilk denemede başarılı olabilir.
+`llms.txt` dosyasını ilk API çağrılarından önce okuyan AI ajanları tipik olarak ilk denemede başarılı olabilir.
 
-## Agent Kodunda Kullanım
+## Ajan Kodunda Kullanım
 
 ### Python (OpenAI SDK)
 
@@ -283,16 +313,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## Tasarım İlkeleri
 
 <CardGroup cols={2}>
-  <Card title="Hızlı başarısız ol, bilgilendirici başarısız ol" icon="bolt">
-    Hatalar, bir agent’ın kendi kendini düzeltmesi için ihtiyaç duyduğu tüm verilerle birlikte anında döner.
+  <Card title="Hızlı başarısızlık, bilgilendirici hata" icon="bolt">
+    Hatalar, bir ajanın kendi kendini düzeltmesi için ihtiyaç duyduğu tüm verilerle hemen döner.
   </Card>
   <Card title="Otomatik yönlendirme yok" icon="route">
-    API hiçbir zaman sessizce farklı bir modeli yerine koymaz. Kararı agent verir.
+    API asla sessizce farklı bir model ikamesi yapmaz. Kararı ajan verir.
   </Card>
   <Card title="Veri odaklı öneriler" icon="database">
-    Tüm öneriler hardcoded listelerden değil, production verilerinden gelir.
+    Tüm öneriler sert kodlanmış listelerden değil, prodüksiyon verilerinden gelir.
   </Card>
-  <Card title="Geriye dönük uyumlu" icon="plug">
+  <Card title="Geriye uyumlu" icon="plug">
     Tüm ipucu alanları isteğe bağlıdır. Mevcut istemciler hiçbir fark görmez.
   </Card>
 </CardGroup>

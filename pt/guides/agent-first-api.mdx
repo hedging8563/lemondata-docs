@@ -1,39 +1,39 @@
 ---
 title: "✨ API Agent-First"
-description: "Dicas estruturadas de erro para agentes de IA se autocorrigirem na primeira tentativa de retry"
+description: "Dicas de erro estruturadas para agentes de IA se auto-corrigirem na primeira nova tentativa"
 ---
 
 ## Visão geral
 
-A API Agent-First da LemonData enriquece respostas de erro com dicas estruturadas que agentes de IA podem analisar e executar imediatamente — sem buscas na web, sem consultar documentação, sem adivinhação.
+A Agent-First API da LemonData enriquece respostas de erro com dicas estruturadas que agentes de IA podem analisar e agir imediatamente — sem buscas na web, sem consultas à documentação, sem suposições.
 
-Toda resposta de erro inclui campos opcionais como `did_you_mean`, `suggestions`, `hint`, `retryable` e `retry_after` dentro do objeto padrão `error`. Esses campos são compatíveis com versões anteriores — clientes que não os utilizam não veem nenhuma diferença.
+Cada resposta de erro inclui campos opcionais como `did_you_mean`, `suggestions`, `hint`, `retryable` e `retry_after` dentro do objeto padrão `error`. Esses campos são compatíveis retroativamente — clientes que não os utilizam não perceberão diferença.
 
-## Campos de Dicas de Erro
+## Campos de dica de erro
 
 Todos os campos de dica são extensões opcionais dentro do objeto `error`:
 
-| Campo | Tipo | Descrição |
+| Field | Type | Description |
 |-------|------|-------------|
-| `did_you_mean` | `string` | Nome do model com correspondência mais próxima |
-| `suggestions` | `array` | Models recomendados com metadados |
-| `alternatives` | `array` | Models alternativos atualmente disponíveis |
-| `hint` | `string` | Orientação legível por humanos/agentes para o próximo passo |
-| `retryable` | `boolean` | Se repetir a mesma requisição pode ter sucesso |
-| `retry_after` | `number` | Segundos de espera antes de tentar novamente |
-| `balance_usd` | `number` | Saldo atual da conta em USD |
-| `estimated_cost_usd` | `number` | Custo estimado da requisição que falhou |
+| `did_you_mean` | `string` | Closest matching model name |
+| `suggestions` | `array` | Recommended models with metadata |
+| `alternatives` | `array` | Currently available alternative models |
+| `hint` | `string` | Human/agent-readable next-step guidance |
+| `retryable` | `boolean` | Whether retrying the same request may succeed |
+| `retry_after` | `number` | Seconds to wait before retrying |
+| `balance_usd` | `number` | Current account balance in USD |
+| `estimated_cost_usd` | `number` | Estimated cost of the failed request |
 
-## Exemplos de Códigos de Erro
+## Exemplos de código de erro
 
 ### model_not_found (400)
 
-Quando um nome de model não corresponde a nenhum model ativo:
+Quando um nome de modelo não corresponde a nenhum modelo ativo:
 
 ```json
 {
   "error": {
-    "message": "Model 'gpt5' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -48,34 +48,16 @@ Quando um nome de model não corresponde a nenhum model ativo:
 }
 ```
 
-A resolução de `did_you_mean` usa:
-1. Mapeamento estático de aliases (a partir de dados de erro de produção)
-2. Correspondência de string normalizada (remove hífens, sem diferenciar maiúsculas de minúsculas)
+A resolução de `did_you_mean` utiliza:
+1. Mapeamento de alias estático (a partir de dados de erro em produção)
+2. Correspondência de string normalizada (remove hífens, sem distinção entre maiúsculas/minúsculas)
 3. Correspondência por distância de edição (limite ≤ 3)
 
-
-### model_price_not_configured (400)
-
-Quando um modelo existe internamente, mas no momento não está exposto para requisições públicas:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-Os agentes devem tratar isso como um sinal de disponibilidade da plataforma, e não como um erro de digitação. Tente novamente o mesmo modelo apenas depois que ele aparecer em `GET /v1/models`.
+Rotas públicas não expõem códigos de erro separados para modelos ocultos, adiados ou não públicos. Trate modelos públicos indisponíveis da mesma forma que um erro de correspondência: verifique `did_you_mean`, `suggestions` e `hint`, e então tente novamente com um modelo público suportado.
 
 ### insufficient_balance (402)
 
-Quando o saldo da conta é muito baixo para o custo estimado:
+Quando o saldo da conta é insuficiente para o custo estimado:
 
 ```json
 {
@@ -94,11 +76,11 @@ Quando o saldo da conta é muito baixo para o custo estimado:
 }
 ```
 
-`suggestions` contém models mais baratos do que o custo estimado para os quais o agente pode alternar.
+`suggestions` contém modelos mais baratos que o custo estimado para os quais o agente pode alternar.
 
 ### all_channels_failed (503)
 
-Quando todos os canais upstream de um model estão indisponíveis:
+Quando todos os canais upstream para um modelo estão indisponíveis:
 
 ```json
 {
@@ -117,7 +99,7 @@ Quando todos os canais upstream de um model estão indisponíveis:
 ```
 
 <Note>
-`retryable` é `false` quando o motivo é `no_channels` (nenhum canal configurado para este model). É `true` apenas para falhas transitórias, como acionamentos de circuit breaker ou esgotamento de quota.
+`retryable` é `false` quando a razão é `no_channels` (nenhum canal configurado para esse modelo). É `true` apenas para falhas transitórias como disparos de circuito ou esgotamento de cota.
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -135,15 +117,15 @@ Quando todos os canais upstream de um model estão indisponíveis:
 }
 ```
 
-O valor de `retry_after` é calculado a partir do tempo real de reset da janela de rate limit.
+O valor de `retry_after` é calculado a partir do tempo real de reset da janela de limite de taxa.
 
 <Note>
-Endpoints compatíveis com OpenAI usam os tipos de erro públicos estáveis da LemonData, como `rate_limit_exceeded`, `upstream_error` e `all_channels_failed`. Endpoints compatíveis com Anthropic e Gemini usam seus próprios formatos nativos de resposta.
+Endpoints compatíveis com OpenAI usam os tipos de erro públicos estáveis da LemonData, como `rate_limit_exceeded`, `upstream_error` e `all_channels_failed`. Endpoints compatíveis com Anthropic e Gemini usam suas próprias formas de resposta nativas.
 </Note>
 
 ### context_length_exceeded (400)
 
-Quando a entrada excede a janela de contexto do model (erro upstream, enriquecido com dicas):
+Quando a entrada excede a janela de contexto do modelo (erro upstream, enriquecido com dicas):
 
 ```json
 {
@@ -161,49 +143,66 @@ Quando a entrada excede a janela de contexto do model (erro upstream, enriquecid
 }
 ```
 
-## Headers de Endpoint Nativo
+## Cabeçalhos de endpoint nativo
 
-Quando você chama `/v1/chat/completions` com um model que possui um endpoint nativo (Anthropic ou Gemini), a **resposta de sucesso** inclui headers de otimização:
+Quando você chama `/v1/chat/completions` com um modelo que possui um endpoint nativo (Anthropic ou Gemini), a resposta de **sucesso** inclui cabeçalhos de otimização:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Provedor de Model | Endpoint Sugerido | Benefício |
+| Model Provider | Suggested Endpoint | Benefit |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | Sem conversão de formato, pensamento estendido, prompt caching |
-| Google (Gemini) | `/v1beta/gemini` | Sem conversão de formato, grounding, configurações de segurança |
-| OpenAI | — | Chat completions já é o formato nativo |
+| Anthropic (Claude) | `/v1/messages` | No format conversion, extended thinking, prompt caching |
+| Google (Gemini) | `/v1beta/gemini` | No format conversion, grounding, safety settings |
+| OpenAI | — | Chat completions is already the native format |
 
-Esses headers aparecem tanto em respostas com streaming quanto sem streaming.
+Esses cabeçalhos aparecem tanto em respostas streaming quanto em respostas não-streaming.
 
 ## Melhorias em /v1/models
 
-Três novos campos na extensão `lemondata` de cada objeto de model:
+`/v1/models` agora carrega metadados de recomendação não-chat que agentes podem usar antes de chamar endpoints de imagem, vídeo, música, 3D, TTS, STT, embedding, rerank ou tradução.
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
 ```
 
-| Campo | Valores | Descrição |
+| Field | Values | Description |
 |-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Tipo de model |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Como o model é cobrado |
-| `cache_pricing` | object ou `null` | Preços de prompt cache upstream + desconto de cache semântico da plataforma |
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Tipo de modelo |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | Como o modelo é cobrado |
+| `cache_pricing` | object or `null` | Preços do cache de prompt upstream + desconto do cache semântico da plataforma |
+| `agent_preferences.<scene>` | object | Snapshot de recomendação não-chat para essa cena |
 
-### Filtragem por Categoria
+`agent_preferences` é derivado de um snapshot de taxa de sucesso em cache de 24 horas:
+
+- Janela: 24 horas
+- Cache do snapshot: stale-while-revalidate
+- `status = "ready"` significa que o modelo tem amostras recentes suficientes para participar do ranqueamento
+- `status = "insufficient_samples"` significa que o modelo permanece visível, mas não é ranqueado à frente de modelos pontuados
+
+### Filtragem por categoria
 
 ```bash
 GET https://api.lemondata.cc/v1/models?category=chat          # Chat models only
@@ -211,24 +210,55 @@ GET https://api.lemondata.cc/v1/models?category=image         # Image generation
 GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
 
+### Descoberta de recomendações
+
+Para fluxos não-chat, agentes devem buscar primeiro a lista recomendada atual:
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+Valores válidos para `recommended_for` são:
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+Se `category` e `recommended_for` estiverem presentes, eles devem corresponder exatamente.
+
+Fluxo recomendado para agentes:
+
+1. `GET /v1/models?recommended_for=<scene>`
+2. Escolher o primeiro modelo com `agent_preferences.<scene>.status == "ready"`
+3. Chamar o endpoint explicitamente com `model=<selected>`
+4. Em erros transitórios apenas, tentar novamente com o próximo modelo `ready`
+
 ## llms.txt
 
-Uma visão geral da API legível por máquina está disponível em:
+Uma visão geral da API em formato legível por máquina está disponível em:
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
 Inclui:
-- Template de primeira chamada com um exemplo funcional
-- Nomes comuns de models (gerados dinamicamente a partir de dados de uso)
+- Template para a primeira chamada com um exemplo funcional
+- Nomes comuns de modelos (gerados dinamicamente a partir dos dados de uso)
 - Todos os 12 endpoints da API
-- Parâmetros de filtro para descoberta de models
-- Orientações de tratamento de erro
+- Parâmetros de filtro para descoberta de modelos
+- Orientações de tratamento de erros
 
 Agentes de IA que leem `llms.txt` antes da primeira chamada à API normalmente conseguem ter sucesso na primeira tentativa.
 
-## Uso em Código de Agente
+## Uso no código do agente
 
 ### Python (OpenAI SDK)
 
@@ -280,19 +310,19 @@ async function smartChat(messages, model = 'gpt-4o') {
 }
 ```
 
-## Princípios de Design
+## Princípios de design
 
 <CardGroup cols={2}>
   <Card title="Falhe rápido, falhe de forma informativa" icon="bolt">
-    Os erros retornam imediatamente com todos os dados de que um agente precisa para se autocorrigir.
+    Erros retornam imediatamente com todos os dados que um agente precisa para se auto-corrigir.
   </Card>
-  <Card title="Sem auto-routing" icon="route">
-    A API nunca substitui silenciosamente por um model diferente. O agente decide.
+  <Card title="Sem roteamento automático" icon="route">
+    A API nunca substitui silenciosamente um modelo diferente. O agente decide.
   </Card>
   <Card title="Sugestões orientadas por dados" icon="database">
-    Todas as recomendações vêm de dados de produção, não de listas hardcoded.
+    Todas as recomendações vêm de dados de produção, não de listas codificadas.
   </Card>
   <Card title="Compatível com versões anteriores" icon="plug">
-    Todos os campos de dica são opcionais. Clientes existentes não veem nenhuma diferença.
+    Todos os campos de dica são opcionais. Clientes existentes não veem diferença.
   </Card>
 </CardGroup>

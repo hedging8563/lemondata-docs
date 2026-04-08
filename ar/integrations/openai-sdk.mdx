@@ -1,27 +1,27 @@
 ---
 title: "OpenAI SDK"
-description: "استخدم LemonData مع حزم SDK الرسمية الخاصة بـ OpenAI والعملاء المتوافقين مع OpenAI"
+description: "استخدم LemonData مع OpenAI SDKs الرسمية والعملاء المتوافقين مع OpenAI"
 ---
 
 ## نظرة عامة
 
-يعمل LemonData مع حزم SDK الرسمية الخاصة بـ OpenAI من خلال توجيه العميل إلى `https://api.lemondata.cc/v1`.
+تعمل LemonData مع OpenAI SDKs الرسمية عن طريق توجيه العميل إلى `https://api.lemondata.cc/v1`.
 
-بالنسبة للمشاريع الجديدة، فضّل **Responses API**. أبقِ **Chat Completions** فقط عندما يظل إطار عمل أو إضافة أو مسار كود قديم يتوقعه.
+لمعظم المشاريع الجديدة، يفضّل استخدام **Chat Completions** كمسار OpenAI المتوافق الافتراضي. استخدم **Responses API** فقط عندما تحتاج صراحةً إلى سلوك مخصّص لـ Responses.
+
+لا تُضمن المطابقة التامة لسلوك الحقول الخاصة بـ Responses عبر كل نموذج ومسار موجه.
 
 <Note>
-تتوفر حزم SDK رسمية من OpenAI للغات Python وJavaScript وGo. يعمل PHP بشكل جيد مع عملاء المجتمع المتوافقين مع OpenAI، لكنه ليس SDK رسميًا من OpenAI.
+Python و JavaScript و Go لديها OpenAI SDKs رسمية. تعمل PHP بشكل جيد مع عملاء المجتمع المتوافقين مع OpenAI، لكنها ليست OpenAI SDK رسمية.
 </Note>
 
 <Note>
-**النوع**: SDK أصلي
+**النوع**: Native SDK
 
-**المسار الرئيسي**: OpenAI-compatible / OpenAI Responses
+**المسار الأساسي**: OpenAI-compatible / Chat Completions
 
-**مستوى الدعم**: المسار الأساسي مدعوم
+**درجة الدعم**: Supported core path
 </Note>
-
-هذا هو مسار SDK المتوافق مع OpenAI الافتراضي في LemonData، لكنه لا يعني أن كل حقل من نوع Responses-native-only سيعمل بالطريقة نفسها عبر جميع النماذج والقنوات الموجّهة.
 
 ## التثبيت
 
@@ -40,6 +40,10 @@ go get github.com/openai/openai-go/v3
 ```
 
 </CodeGroup>
+
+<Note>
+استخدم `POST /v1/responses` فقط عندما تحتاج صراحةً إلى سلوك مخصّص لـ Responses. بعض الحقول الخاصة بـ Responses قد تعتمد أيضًا على النموذج والمسار الموجه.
+</Note>
 
 ## تكوين العميل
 
@@ -83,45 +87,47 @@ func main() {
 
 </CodeGroup>
 
-## الموصى به: Responses API
+## موصى به: Chat Completions
 
 <CodeGroup>
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'Explain what LemonData does in one sentence.',
+  messages: [{ role: 'user', content: 'Explain what LemonData does in one sentence.' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-lemondata-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
 </CodeGroup>
 
-<Note>
-بعض hosted tools بالإضافة إلى `include` و`service_tier` و`truncation_strategy` تعتمد على دعم passthrough الأصلي `/v1/responses` من النموذج المختار والقناة الموجّهة. إذا لم يتوفر هذا الدعم، يعيد LemonData خطأ `400` أو `503` صريحًا بدلًا من الإيحاء بأن الحقل نجح.
-</Note>
+## متقدم: Responses API
 
-## البث باستخدام Responses
+استخدم هذا المسار فقط عندما تعتمد أداتك أو سير عملك صراحةً على دلالات OpenAI Responses.
+
+### البث مع Responses
 
 <CodeGroup>
 
@@ -179,7 +185,7 @@ for item in response.output:
         print(item.arguments)
 ```
 
-## الرؤية باستخدام Responses
+## الرؤية مع Responses
 
 ```python
 response = client.responses.create(
@@ -196,7 +202,7 @@ response = client.responses.create(
 print(response.output_text)
 ```
 
-## Embeddings
+## التجسيدات (Embeddings)
 
 ```python
 response = client.embeddings.create(
@@ -207,9 +213,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## التوافق مع Chat Completions
+## Chat Completions
 
-إذا كان إطار العمل أو الإضافة لديك لا يزال يتوقع Chat Completions، فإن LemonData يدعم أيضًا المسار القياسي المتوافق مع OpenAI:
+يعد Chat Completions هو مسار OpenAI المتوافق الافتراضي لـ LemonData:
 
 ```python
 response = client.chat.completions.create(
@@ -223,28 +229,24 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-<Warning>
-استخدم Chat Completions للتوافق فقط. بالنسبة لعمليات التكامل الجديدة، فضّل `client.responses.create(...)`.
-</Warning>
-
 ## استكشاف الأخطاء وإصلاحها
 
 <AccordionGroup>
   <Accordion title="خطأ في الاتصال">
     - تحقق من أن base URL هو بالضبط `https://api.lemondata.cc/v1`
-    - تحقق من عدم وجود تداخل من proxy أو عمليات override مخصصة لعميل HTTP
-    - تأكد من أن إصدار SDK لديك حديث قبل تصحيح سلوك المزوّد
+    - تحقق من وجود تداخل بروكسي أو تجاوزات مخصصة لعميل HTTP
+    - تأكد من أن إصدار SDK لديك محدث قبل استكشاف سلوك المزود
   </Accordion>
 
   <Accordion title="فشل المصادقة">
-    - تحقق من أن مفتاح API الخاص بك يبدأ بـ `sk-`
+    - تحقق من أن مفتاح API يبدأ بـ `sk-`
     - تحقق من أن المفتاح نشط في لوحة تحكم LemonData
-    - تأكد من أن SDK يرسل `Authorization: Bearer ...`
+    - أكد أن SDK يرسل `Authorization: Bearer ...`
   </Accordion>
 
-  <Accordion title="مسار API غير صحيح">
-    - `responses.create(...)` يرسل الطلبات إلى `/v1/responses`
-    - `chat.completions.create(...)` يرسل الطلبات إلى `/v1/chat/completions`
-    - إذا كان تطبيقك يدعم Chat Completions فقط حاليًا، فأبقِه على مسار التوافق هذا
+  <Accordion title="مسار API خاطئ">
+    - `responses.create(...)` يرسل طلبات إلى `/v1/responses`
+    - `chat.completions.create(...)` يرسل طلبات إلى `/v1/chat/completions`
+    - استخدم Chat Completions بشكل افتراضي ما لم تكن بحاجة صراحةً إلى سلوك خاص بـ Responses
   </Accordion>
 </AccordionGroup>

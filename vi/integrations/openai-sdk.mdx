@@ -1,29 +1,29 @@
 ---
-title: "SDK OpenAI"
-description: "Sử dụng LemonData với các SDK OpenAI chính thức và các client tương thích OpenAI"
+title: "OpenAI SDK"
+description: "Sử dụng LemonData với các OpenAI SDK chính thức và các client tương thích với OpenAI"
 ---
 
-## Tổng quan
+## Overview
 
-LemonData hoạt động với các SDK OpenAI chính thức bằng cách trỏ client đến `https://api.lemondata.cc/v1`.
+LemonData hoạt động với các OpenAI SDK chính thức bằng cách trỏ client tới `https://api.lemondata.cc/v1`.
 
-Đối với các dự án mới, ưu tiên **Responses API**. Chỉ giữ **Chat Completions** khi framework, plugin hoặc luồng mã legacy vẫn còn yêu cầu.
+Đối với hầu hết các dự án mới, ưu tiên **Chat Completions** làm đường dẫn tương thích OpenAI mặc định. Chỉ sử dụng **Responses API** khi bạn thực sự cần hành vi đặc thù của Responses.
+
+Các trường riêng cho Responses không được đảm bảo sẽ hoạt động giống hệt trên mọi mô hình và đường dẫn được định tuyến.
 
 <Note>
-Python, JavaScript và Go có các SDK OpenAI chính thức. PHP hoạt động tốt với các client cộng đồng tương thích OpenAI, nhưng đây không phải là SDK OpenAI chính thức.
+Python, JavaScript và Go có các OpenAI SDK chính thức. PHP hoạt động tốt với các client cộng đồng tương thích OpenAI, nhưng nó không phải là một OpenAI SDK chính thức.
 </Note>
 
 <Note>
-**Loại**: SDK native
+**Loại**: SDK gốc
 
-**Đường chính**: OpenAI-compatible / OpenAI Responses
+**Đường dẫn chính**: Tương thích OpenAI / Chat Completions
 
-**Mức hỗ trợ**: Đường lõi được hỗ trợ
+**Độ tin cậy hỗ trợ**: Đường dẫn lõi được hỗ trợ
 </Note>
 
-Đây là đường SDK OpenAI-compatible mặc định trên LemonData, nhưng không có nghĩa là mọi trường Responses-native-only sẽ hoạt động giống hệt nhau trên mọi model và kênh được định tuyến.
-
-## Cài đặt
+## Installation
 
 <CodeGroup>
 
@@ -41,7 +41,11 @@ go get github.com/openai/openai-go/v3
 
 </CodeGroup>
 
-## Cấu hình Client
+<Note>
+Sử dụng `POST /v1/responses` chỉ khi bạn thực sự cần hành vi đặc thù của Responses. Một số trường chỉ dành cho Responses vẫn có thể phụ thuộc vào mô hình được chọn và đường dẫn được định tuyến.
+</Note>
+
+## Configure the Client
 
 <CodeGroup>
 
@@ -83,45 +87,47 @@ func main() {
 
 </CodeGroup>
 
-## Khuyến nghị: Responses API
+## Recommended: Chat Completions
 
 <CodeGroup>
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'Explain what LemonData does in one sentence.',
+  messages: [{ role: 'user', content: 'Explain what LemonData does in one sentence.' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-lemondata-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
 </CodeGroup>
 
-<Note>
-Một số hosted tools, cùng với `include`, `service_tier` và `truncation_strategy`, phụ thuộc vào hỗ trợ native `/v1/responses` passthrough của model đã chọn và channel được route. Nếu thiếu hỗ trợ này, LemonData sẽ trả về `400` hoặc `503` rõ ràng thay vì giả như trường đó đã hoạt động.
-</Note>
+## Advanced: Responses API
 
-## Streaming với Responses
+Sử dụng đường dẫn này chỉ khi công cụ hoặc quy trình làm việc của bạn phụ thuộc rõ ràng vào ngữ nghĩa của OpenAI Responses.
+
+### Streaming with Responses
 
 <CodeGroup>
 
@@ -153,7 +159,7 @@ for await (const event of stream) {
 
 </CodeGroup>
 
-## Công cụ / Function Calling
+## Tools / Function Calling
 
 ```python
 response = client.responses.create(
@@ -179,7 +185,7 @@ for item in response.output:
         print(item.arguments)
 ```
 
-## Vision với Responses
+## Vision with Responses
 
 ```python
 response = client.responses.create(
@@ -207,9 +213,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## Tương thích Chat Completions
+## Chat Completions
 
-Nếu framework hoặc plugin của bạn vẫn yêu cầu Chat Completions, LemonData cũng hỗ trợ đường dẫn chuẩn tương thích OpenAI:
+Chat Completions là đường dẫn tương thích OpenAI mặc định cho LemonData:
 
 ```python
 response = client.chat.completions.create(
@@ -223,28 +229,24 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-<Warning>
-Chỉ sử dụng Chat Completions cho mục đích tương thích. Đối với các tích hợp mới, ưu tiên `client.responses.create(...)`.
-</Warning>
-
-## Khắc phục sự cố
+## Troubleshooting
 
 <AccordionGroup>
-  <Accordion title="Lỗi kết nối">
-    - Xác minh base URL chính xác là `https://api.lemondata.cc/v1`
-    - Kiểm tra sự can thiệp của proxy hoặc các ghi đè custom HTTP client
-    - Đảm bảo phiên bản SDK của bạn là phiên bản hiện tại trước khi debug hành vi của provider
+  <Accordion title="Connection Error">
+    - Xác minh rằng base URL chính xác là `https://api.lemondata.cc/v1`
+    - Kiểm tra xem có proxy can thiệp hoặc các ghi đè client HTTP tùy chỉnh hay không
+    - Đảm bảo phiên bản SDK của bạn là mới nhất trước khi gỡ lỗi hành vi của nhà cung cấp
   </Accordion>
 
-  <Accordion title="Xác thực thất bại">
-    - Kiểm tra API key của bạn bắt đầu bằng `sk-`
-    - Xác minh key đang hoạt động trong bảng điều khiển LemonData
+  <Accordion title="Authentication Failed">
+    - Kiểm tra rằng khóa API của bạn bắt đầu với `sk-`
+    - Xác minh rằng khóa đang hoạt động trên bảng điều khiển LemonData
     - Xác nhận SDK đang gửi `Authorization: Bearer ...`
   </Accordion>
 
-  <Accordion title="Sai đường dẫn API">
-    - `responses.create(...)` gửi request đến `/v1/responses`
-    - `chat.completions.create(...)` gửi request đến `/v1/chat/completions`
-    - Nếu ứng dụng của bạn hiện chỉ hỗ trợ Chat Completions, hãy giữ nó trên đường dẫn tương thích đó
+  <Accordion title="Wrong API Path">
+    - `responses.create(...)` gửi yêu cầu tới `/v1/responses`
+    - `chat.completions.create(...)` gửi yêu cầu tới `/v1/chat/completions`
+    - Sử dụng Chat Completions theo mặc định trừ khi bạn thực sự cần hành vi riêng của Responses
   </Accordion>
 </AccordionGroup>

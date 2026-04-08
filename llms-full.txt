@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: 2026-04-07
+Generated: 2026-04-08
 Source: https://docs.lemondata.cc
 
 ---
@@ -42,15 +42,17 @@ LemonData is an AI API aggregation platform that gives you unified access to **3
 
 ## A Good Default Starting Point
 
-For new projects, start with the OpenAI SDK plus the **Responses API**:
+For most new projects, start with the OpenAI SDK plus **Chat Completions**:
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
@@ -97,44 +99,47 @@ pip install openai
 
 ## Step 3: Make Your First Request
 
-For new projects, start with the **Responses API**.
+For most new integrations, start with **Chat Completions** on `POST /v1/chat/completions`.
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "What is the capital of France?"
+    "messages": [
+      {"role": "user", "content": "What is the capital of France?"}
+    ]
   }'
 ```
 
-> Note: If your framework or tool still expects Chat Completions, LemonData also supports `POST /v1/chat/completions`. For new integrations, prefer `POST /v1/responses`.
+> Note: Use `POST /v1/responses` only when you explicitly need Responses-specific behavior. Some Responses-only fields depend on the selected model and routed path.
 
 ## Try Different Models
 
 LemonData supports 300+ models. Change only the `model` field:
 
 ```python
-response = client.responses.create(model="gpt-5.4", input="Hello")
-response = client.responses.create(model="gpt-5-mini", input="Hello")
-response = client.responses.create(model="claude-sonnet-4-6", input="Hello")
-response = client.responses.create(model="gemini-2.5-flash", input="Hello")
-response = client.responses.create(model="deepseek-r1", input="Hello")
+response = client.chat.completions.create(model="gpt-5.4", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="gpt-5-mini", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="claude-sonnet-4-6", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="gemini-2.5-flash", messages=[{"role": "user", "content": "Hello"}])
+response = client.chat.completions.create(model="deepseek-r1", messages=[{"role": "user", "content": "Hello"}])
 ```
 
 ## Enable Streaming
 
 ```python
-stream = client.responses.create(
+stream = client.chat.completions.create(
     model="gpt-5.4",
-    input="Tell me a short story.",
+    messages=[{"role": "user", "content": "Tell me a short story."}],
     stream=True
 )
 
-for event in stream:
-    if event.type == "response.output_text.delta":
-        print(event.delta, end="")
+for chunk in stream:
+    delta = chunk.choices[0].delta.content
+    if delta:
+        print(delta, end="")
 ```
 
 ## What’s Next?
@@ -296,7 +301,7 @@ When a model name doesn't match any active model:
 ```json
 {
   "error": {
-    "message": "Model 'gpt5' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -316,24 +321,7 @@ The `did_you_mean` resolution uses:
 2. Normalized string matching (strips hyphens, case-insensitive)
 3. Edit distance matching (threshold ≤ 3)
 
-### model_price_not_configured (400)
-
-When a model exists internally but is not currently exposed for public requests:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-Agents should treat this as a platform availability signal, not as a typo. Retry the same model only after it appears in `GET /v1/models`.
+Public routes do not expose separate error codes for hidden, deferred, or non-public models. Treat unavailable public models the same way as a miss: inspect `did_you_mean`, `suggestions`, and `hint`, then retry with a supported public model.
 
 ### insufficient_balance (402)
 
@@ -626,7 +614,7 @@ LemonData supports **three native API formats** with a single API key. Choose th
 
 ## OpenAI Format
 
-The most widely compatible format. Works with all LemonData models.
+The most widely compatible format and the default starting point for most new integrations. Works across the broadest set of LemonData models.
 
 ```python
 from openai import OpenAI
@@ -1683,13 +1671,12 @@ except APIStatusError as e:
 |------|-------------|
 | `invalid_request_error` | Request parameters are invalid |
 | `context_length_exceeded` | Input too long for model |
-| `model_not_found` | Requested model doesn't exist |
-| `model_price_not_configured` | Model exists internally but is not currently available for public requests |
+| `model_not_found` | Requested model is not available in the current public contract |
 
 ```json
 {
   "error": {
-    "message": "Model 'invalid-model' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -1700,20 +1687,7 @@ except APIStatusError as e:
 }
 ```
 
-When a model exists in internal governance or pricing workflows but is not exposed as a public request target yet, LemonData returns:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
+Public routes do not distinguish typo, hidden, deferred, or non-public model states in the response body. If a model is not currently available through the public contract, LemonData returns `model_not_found`.
 
 ### Rate Limit Errors (429)
 
@@ -3169,7 +3143,7 @@ URL: https://docs.lemondata.cc/api-reference/introduction
 
 ## Overview
 
-The LemonData API is **OpenAI-compatible**, which means you can use the official OpenAI SDK with just a base URL change. We also support native **Anthropic** and **Gemini** request formats.
+The LemonData API is **OpenAI-compatible**, which means you can use the official OpenAI SDK with just a base URL change. For most integrations, start with `POST /v1/chat/completions`. We also support native **Anthropic** and **Gemini** request formats, plus `POST /v1/responses` as an advanced optional path.
 
 ## Base URL
 
@@ -3574,6 +3548,24 @@ URL: https://docs.lemondata.cc/api-reference/chat/create-completion
 
 ## Response
 
+## Multimodal Example
+
+```json
+{
+  "model": "gemini-2.5-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "Describe this video briefly." },
+        { "type": "video_url", "video_url": { "url": "https://example.com/demo.mp4" } }
+      ]
+    }
+  ],
+  "max_tokens": 64
+}
+```
+
 ---
 
 ### Create Response
@@ -3582,7 +3574,7 @@ URL: https://docs.lemondata.cc/api-reference/chat/create-completion
 
 URL: https://docs.lemondata.cc/api-reference/responses/create-response
 
-The Responses API is OpenAI's newer stateful conversation API. LemonData supports this format for compatible models.
+The Responses API is OpenAI's newer stateful conversation API. LemonData supports this format as an advanced optional path for compatible models; use `POST /v1/chat/completions` as the default OpenAI-compatible route unless you explicitly need Responses-specific behavior.
 
 ## Request Body
 
@@ -4723,7 +4715,62 @@ Gemini endpoints support multiple authentication methods:
 
 ## Vision Input Example
 
-For Gemini vision requests, place images inside `contents[].parts[]` as structured `inline_data` parts. The `data` field should contain Base64-encoded file bytes, and `mime_type` should match the uploaded image format.
+For Gemini multimodal requests, place media inside `contents[].parts[]` using either inline bytes or URL-based file references.
+
+Supported media categories in the public Gemini contract:
+- image
+- audio
+- video
+
+For inline media, use either `inlineData` or `inline_data` and pass Base64-encoded file bytes.
+
+For URL-based media, use either `fileData` or `file_data` and pass a public `https` URL.
+
+## Video Input Example
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Please describe this video." },
+        {
+          "fileData": {
+            "mimeType": "video/mp4",
+            "fileUri": "https://example.com/demo.mp4"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Audio Input Example
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Please describe this audio." },
+        {
+          "fileData": {
+            "mimeType": "audio/mpeg",
+            "fileUri": "https://example.com/demo.mp3"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Image Input Example
+
+Use inline image bytes:
 
 ```json
 {
@@ -4733,9 +4780,76 @@ For Gemini vision requests, place images inside `contents[].parts[]` as structur
       "parts": [
         { "text": "Please describe this image." },
         {
-          "inline_data": {
-            "mime_type": "image/jpeg",
+          "inlineData": {
+            "mimeType": "image/jpeg",
             "data": "/9j/4AAQSkZJRgABAQ..."
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+Use an image URL:
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Please describe this image." },
+        {
+          "fileData": {
+            "mimeType": "image/jpeg",
+            "fileUri": "https://example.com/demo.jpg"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Audio Input Example
+
+Use an audio URL:
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Transcribe and summarize this audio." },
+        {
+          "file_data": {
+            "mime_type": "audio/mpeg",
+            "file_uri": "https://example.com/sample.mp3"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Video Input Example
+
+Use a video URL:
+
+```json
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Describe this video briefly." },
+        {
+          "fileData": {
+            "mimeType": "video/mp4",
+            "fileUri": "https://example.com/sample.mp4"
           }
         }
       ]
@@ -5279,7 +5393,7 @@ URL: https://docs.lemondata.cc/claw/lemondata-provider
 
 For current OpenClaw versions, the recommended approach is to configure LemonData through `models.providers`.
 
-If you just want to get started quickly, configuring `lemondata` alone is enough. Add the other providers only when you need **Responses API**, **Claude native**, **Gemini native**, or **MiniMax native** behavior.
+If you just want to get started quickly, configuring `lemondata` alone is enough. Add the other providers only when you explicitly need **Responses API**, **Claude native**, **Gemini native**, or **MiniMax native** behavior.
 
 | Provider | OpenClaw `api` | Best for | baseUrl |
 |----------|----------------|----------|---------|
@@ -6442,7 +6556,7 @@ This page is intentionally narrower than a marketing matrix:
 - **Strong native path** means the repo also has direct adapter or request-format evidence for that protocol family.
 - **Best-effort** means the integration can work, but the upstream client does not treat this custom gateway workflow as a stable contract.
 
-> Note: Unsupported fields are not handled uniformly. On compatibility routes, some fields are ignored or normalized. On native Responses paths, unsupported fields can return explicit `400` or `503` errors when the selected model or routed channel does not support the required passthrough behavior.
+> Note: Unsupported fields are not handled uniformly. On compatibility routes, some fields are ignored or normalized. On `/v1/responses`, unsupported fields can return explicit `400` or `503` errors when that route cannot guarantee the requested behavior.
 
 ## Supported API Formats
 
@@ -6461,7 +6575,7 @@ This page is intentionally narrower than a marketing matrix:
 |------|---------------|--------|-------|
 | **Cursor** | Supported with limits | OpenAI-compatible | Works for BYOK standard chat/editor flows, not as a replacement for Cursor-managed features like Tab Completion |
 | **Claude Code CLI** | Strong native path | Anthropic | Native `/v1/messages` route with adapter coverage for thinking and `tool_choice` |
-| **Codex CLI** | Supported with model/channel limits | OpenAI Responses | Best when configured for `/v1/responses`; some Responses-native fields require native passthrough support from the selected model and channel |
+| **Codex CLI** | Supported with model/path limits | OpenAI Responses | Treat `/v1/responses` as an advanced path for Codex-specific workflows; some Responses-only fields are not guaranteed across every model and routed path |
 | **Gemini CLI** | Best-effort / experimental | Gemini | Custom LemonData base URL flow is not a stable upstream contract |
 | **OpenCode** | Supported | OpenAI-compatible | Use an OpenAI-compatible provider by default; move to a Responses-based provider only when you explicitly need it |
 
@@ -6479,7 +6593,7 @@ This page is intentionally narrower than a marketing matrix:
 
 | SDK / Framework | Language | Support Level | Notes |
 |-----------------|----------|---------------|-------|
-| **OpenAI SDK** | Python/JS/Go | Supported core path | Chat Completions, Embeddings, and common Responses workflows are documented; some Responses-native-only fields depend on model/channel passthrough support |
+| **OpenAI SDK** | Python/JS/Go | Supported core path | Chat Completions and Embeddings are the default documented path; some Responses-only fields are not guaranteed across every model and routed path |
 | **Anthropic SDK** | Python/JS | Strong native path | Native Messages route with direct evidence for tools, thinking, and prompt caching |
 | **Vercel AI SDK** | TypeScript | Recommended integration pattern | Prefer `@ai-sdk/openai-compatible`; use `@ai-sdk/openai` only when you explicitly want Responses-native behavior |
 | **LangChain** | Python/JS | Supported standard surfaces | `ChatOpenAI` and `OpenAIEmbeddings` are the intended scope; vendor-native extras are out of scope |
@@ -7107,13 +7221,13 @@ URL: https://docs.lemondata.cc/integrations/codex-cli
 
 > Note: **Type**: Coding Tool
 
-**Primary Path**: OpenAI Responses
+**Primary Path**: OpenAI Responses (advanced optional path)
 
-**Support Confidence**: Supported with model/channel limits
+**Support Confidence**: Supported with model/path limits
 
 OpenAI Codex is an open-source command-line tool (CLI) that serves as a lightweight coding agent, capable of reading, modifying, and running code in the terminal. It's built on GPT models and optimized for code generation.
 
-For LemonData, Codex CLI is best used against `/v1/responses`. That path works well, but some Responses-native features still depend on whether the selected model and routed channel support native passthrough.
+For LemonData, Codex CLI can use `/v1/responses`, but you should treat it as an advanced compatibility path. Some Responses-only features are not guaranteed across every model and routed path.
 
 ## System Requirements
 
@@ -7193,7 +7307,7 @@ responses_websockets_v2 = true
 
 > Warning: Codex is deprecating `chat/completions` support for custom providers. Keep `wire_api = "responses"` for LemonData unless you are intentionally using an older compatibility path.
 
-> Note: If a request uses Responses-native-only fields that your chosen model or routed channel does not support, LemonData returns an explicit error instead of silently downgrading the request.
+> Note: If a request uses Responses-only fields that are not supported on the selected model or route, LemonData returns an explicit error instead of silently downgrading the request.
 
 ## Basic Usage
 
@@ -7299,8 +7413,8 @@ cat main.py | codex "Explain what this code does"
   
 #### Responses-native field rejected
 
-- Some fields are only available when the selected model and routed channel support native `/v1/responses` passthrough
-    - If you see an error mentioning `unsupported_request_field` or native passthrough, remove the field or switch to a compatible model/channel
+- Some fields are only available on `/v1/responses` when LemonData can guarantee that behavior for the selected model and route
+    - If you see `unsupported_request_field`, remove that field or switch to a workflow that does not depend on it
 
 ---
 
@@ -7717,15 +7831,15 @@ URL: https://docs.lemondata.cc/integrations/openai-sdk
 
 LemonData works with the official OpenAI SDKs by pointing the client to `https://api.lemondata.cc/v1`.
 
-For new projects, prefer the **Responses API**. Keep **Chat Completions** only when a framework, plugin, or legacy code path still expects it.
+For most new projects, prefer **Chat Completions** as the default OpenAI-compatible path. Use **Responses API** only when you explicitly need Responses-specific behavior.
 
-This is the default LemonData SDK path for OpenAI-compatible usage, but it is not a promise that every Responses-native-only field works identically across every model and routed channel.
+Responses-specific fields are not guaranteed to behave identically across every model and routed path.
 
 > Note: Python, JavaScript, and Go have official OpenAI SDKs. PHP works well with OpenAI-compatible community clients, but it is not an official OpenAI SDK.
 
 > Note: **Type**: Native SDK
 
-**Primary Path**: OpenAI-compatible / OpenAI Responses
+**Primary Path**: OpenAI-compatible / Chat Completions
 
 **Support Confidence**: Supported core path
 
@@ -7735,7 +7849,7 @@ This is the default LemonData SDK path for OpenAI-compatible usage, but it is no
 pip install openai
 ```
 
-> Note: Responses-native-only fields such as some hosted tools, `include`, `service_tier`, and `truncation_strategy` can depend on native `/v1/responses` passthrough support from the selected model and routed channel. If that support is unavailable, LemonData returns an explicit `400` or `503` instead of silently pretending the field worked.
+> Note: Use `POST /v1/responses` only when you explicitly need Responses-specific behavior. Some Responses-only fields can still depend on the selected model and routed path.
 
 ## Configure the Client
 
@@ -7748,18 +7862,22 @@ client = OpenAI(
 )
 ```
 
-## Recommended: Responses API
+## Recommended: Chat Completions
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
-## Streaming with Responses
+## Advanced: Responses API
+
+Use this path only when your tool or workflow explicitly depends on OpenAI Responses semantics.
+
+### Streaming with Responses
 
 ```python Python
 stream = client.responses.create(
@@ -7827,9 +7945,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## Chat Completions Compatibility
+## Chat Completions
 
-If your framework or plugin still expects Chat Completions, LemonData also supports the standard OpenAI-compatible path:
+Chat Completions is the default OpenAI-compatible path for LemonData:
 
 ```python
 response = client.chat.completions.create(
@@ -7842,8 +7960,6 @@ response = client.chat.completions.create(
 
 print(response.choices[0].message.content)
 ```
-
-> Warning: Use Chat Completions for compatibility only. For new integrations, prefer `client.responses.create(...)`.
 
 ## Troubleshooting
 
@@ -7865,7 +7981,7 @@ print(response.choices[0].message.content)
 
 - `responses.create(...)` sends requests to `/v1/responses`
     - `chat.completions.create(...)` sends requests to `/v1/chat/completions`
-    - If your app only supports Chat Completions today, keep it on that compatibility path
+    - Use Chat Completions by default unless you explicitly need Responses-specific behavior
 
 ---
 

@@ -1,27 +1,27 @@
 ---
 title: "OpenAI SDK"
-description: "搭配官方 OpenAI SDK 與 OpenAI 相容用戶端使用 LemonData"
+description: "在官方 OpenAI SDK 及相容客戶端中使用 LemonData"
 ---
 
 ## 概覽
 
-LemonData 可透過將用戶端指向 `https://api.lemondata.cc/v1` 來搭配官方 OpenAI SDK 使用。
+LemonData 可與官方 OpenAI SDK 一起使用，方法是將客戶端指向 `https://api.lemondata.cc/v1`。
 
-對於新專案，建議優先使用 **Responses API**。僅當某個框架、plugin 或舊版程式碼路徑仍需要 **Chat Completions** 時才保留使用。
+對於大多數新專案，預設建議使用 **Chat Completions** 作為 OpenAI 相容路徑。僅在你明確需要 Responses 特定行為時才使用 **Responses API**。
+
+Responses 特有的欄位不保證在每個模型與路由的路徑中行為一致。
 
 <Note>
-Python、JavaScript 與 Go 擁有官方 OpenAI SDK。PHP 可良好搭配 OpenAI 相容的社群用戶端使用，但它不是官方 OpenAI SDK。
+Python、JavaScript 和 Go 有官方的 OpenAI SDK。PHP 與 OpenAI 相容的社群客戶端相容性良好，但 PHP 並不是官方的 OpenAI SDK。
 </Note>
 
 <Note>
-**類型**: 原生 SDK
+**類型**: Native SDK
 
-**主要路徑**: OpenAI-compatible / OpenAI Responses
+**主要路徑**: OpenAI-compatible / Chat Completions
 
-**支援級別**: 核心路徑支援
+**支援信心**: Supported core path
 </Note>
-
-這是 LemonData 預設的 OpenAI-compatible SDK 路徑，但這並不意味著每個 Responses-native-only 欄位都會在所有模型與路由到的渠道上表現完全一致。
 
 ## 安裝
 
@@ -40,6 +40,10 @@ go get github.com/openai/openai-go/v3
 ```
 
 </CodeGroup>
+
+<Note>
+僅在你明確需要 Responses 特定行為時使用 `POST /v1/responses`。有些僅限 Responses 的欄位仍可能依賴所選模型與路由路徑。
+</Note>
 
 ## 設定用戶端
 
@@ -83,45 +87,47 @@ func main() {
 
 </CodeGroup>
 
-## 建議使用：Responses API
+## 建議：Chat Completions
 
 <CodeGroup>
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'Explain what LemonData does in one sentence.',
+  messages: [{ role: 'user', content: 'Explain what LemonData does in one sentence.' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-lemondata-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
 </CodeGroup>
 
-<Note>
-部分 hosted tools、`include`、`service_tier`、`truncation_strategy` 等 Responses-native-only 欄位，依賴所選模型與路由到的渠道具備原生 `/v1/responses` passthrough 支援。如果這類支援不可用，LemonData 會明確回傳 `400` 或 `503`，而不是假裝該欄位已經生效。
-</Note>
+## 進階：Responses API
 
-## 使用 Responses 進行串流
+僅在你的工具或工作流程明確依賴 OpenAI Responses 語意時使用此路徑。
+
+### 使用 Responses 進行串流
 
 <CodeGroup>
 
@@ -153,7 +159,7 @@ for await (const event of stream) {
 
 </CodeGroup>
 
-## Tools / Function Calling
+## 工具 / 函數調用
 
 ```python
 response = client.responses.create(
@@ -179,7 +185,7 @@ for item in response.output:
         print(item.arguments)
 ```
 
-## 使用 Responses 處理 Vision
+## Responses 的視覺功能
 
 ```python
 response = client.responses.create(
@@ -207,9 +213,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## Chat Completions 相容性
+## Chat Completions
 
-如果你的框架或 plugin 仍需要 Chat Completions，LemonData 也支援標準的 OpenAI 相容路徑：
+Chat Completions 是 LemonData 的預設 OpenAI 相容路徑：
 
 ```python
 response = client.chat.completions.create(
@@ -223,28 +229,24 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-<Warning>
-僅為了相容性才使用 Chat Completions。對於新的整合，請優先使用 `client.responses.create(...)`。
-</Warning>
-
 ## 疑難排解
 
 <AccordionGroup>
   <Accordion title="連線錯誤">
-    - 確認 base URL 完全為 `https://api.lemondata.cc/v1`
-    - 檢查是否有 proxy 干擾或自訂 HTTP 用戶端覆寫
-    - 在除錯 provider 行為前，請先確認你的 SDK 版本為最新
+    - 驗證 base URL 是否完全為 `https://api.lemondata.cc/v1`
+    - 檢查是否有代理干擾或自訂的 HTTP 客戶端覆寫
+    - 在偵錯供應商行為前，確保你的 SDK 版本是最新的
   </Accordion>
 
   <Accordion title="驗證失敗">
     - 檢查你的 API key 是否以 `sk-` 開頭
-    - 確認該 key 已在 LemonData dashboard 中啟用
-    - 確認 SDK 有送出 `Authorization: Bearer ...`
+    - 驗證該金鑰在 LemonData 控制台中是否為啟用狀態
+    - 確認 SDK 是否傳送 `Authorization: Bearer ...`
   </Accordion>
 
   <Accordion title="錯誤的 API 路徑">
-    - `responses.create(...)` 會將請求送至 `/v1/responses`
-    - `chat.completions.create(...)` 會將請求送至 `/v1/chat/completions`
-    - 如果你的應用程式目前只支援 Chat Completions，請繼續使用該相容路徑
+    - `responses.create(...)` 會發送請求到 `/v1/responses`
+    - `chat.completions.create(...)` 會發送請求到 `/v1/chat/completions`
+    - 預設使用 Chat Completions，除非你明確需要 Responses 特定行為
   </Accordion>
 </AccordionGroup>

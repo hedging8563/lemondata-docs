@@ -1,39 +1,39 @@
 ---
-title: "✨ Agent-First API"
-description: "提供給 AI agent 在第一次重試時即可自我修正的結構化錯誤提示"
+title: "✨ 代理優先 API"
+description: "為 AI 代理提供結構化的錯誤提示，讓其在第一次重試時即可自我修正"
 ---
 
 ## 概覽
 
-LemonData 的 Agent-First API 會以結構化提示強化錯誤回應，讓 AI agent 可以立即解析並採取行動——無需網頁搜尋、無需查閱文件、無需猜測。
+LemonData 的 Agent-First API 在錯誤回應中加入了可結構化的提示，AI 代理可以立即解析並採取行動——不需網路搜尋、不需查文件、也不需猜測。
 
-每個錯誤回應都會在標準的 `error` 物件中包含可選欄位，例如 `did_you_mean`、`suggestions`、`hint`、`retryable` 和 `retry_after`。這些欄位具備向後相容性——未使用它們的客戶端不會感受到任何差異。
+每個錯誤回應的標準 `error` 物件內都可能包含像 `did_you_mean`、`suggestions`、`hint`、`retryable` 和 `retry_after` 類型的可選欄位。這些欄位向後相容——不使用它們的客戶端不會看到差異。
 
 ## 錯誤提示欄位
 
-所有提示欄位都是 `error` 物件中的可選擴充欄位：
+所有提示欄位都是 `error` 物件內的可選擴充：
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `did_you_mean` | `string` | 最接近的模型名稱 |
-| `suggestions` | `array` | 附帶中繼資料的推薦模型 |
-| `alternatives` | `array` | 目前可用的替代模型 |
-| `hint` | `string` | 人類/agent 可讀的下一步指引 |
-| `retryable` | `boolean` | 重新嘗試相同請求是否可能成功 |
-| `retry_after` | `number` | 重試前應等待的秒數 |
-| `balance_usd` | `number` | 目前帳戶餘額（USD） |
-| `estimated_cost_usd` | `number` | 失敗請求的預估成本 |
+| 欄位 | 類型 | 說明 |
+|------|------|------|
+| `did_you_mean` | `string` | 最相近的模型名稱 |
+| `suggestions` | `array` | 含 metadata 的建議模型清單 |
+| `alternatives` | `array` | 當前可用的替代模型 |
+| `hint` | `string` | 可供人類或代理閱讀的下一步指引 |
+| `retryable` | `boolean` | 是否重試相同請求可能會成功 |
+| `retry_after` | `number` | 在重試前應等待的秒數 |
+| `balance_usd` | `number` | 帳戶當前美元餘額 |
+| `estimated_cost_usd` | `number` | 失敗請求的估計費用（美元） |
 
 ## 錯誤代碼範例
 
 ### model_not_found (400)
 
-當模型名稱與任何啟用中的模型都不相符時：
+當模型名稱未匹配到任何啟用中的模型時：
 
 ```json
 {
   "error": {
-    "message": "Model 'gpt5' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -48,34 +48,16 @@ LemonData 的 Agent-First API 會以結構化提示強化錯誤回應，讓 AI a
 }
 ```
 
-`did_you_mean` 的解析方式使用：
-1. 靜態別名映射（來自正式環境的錯誤資料）
-2. 正規化字串比對（移除連字號、忽略大小寫）
+`did_you_mean` 的解析使用：
+1. 靜態別名對應（來自生產錯誤資料）
+2. 正規化字串比對（去除連字號、大小寫不敏感）
 3. 編輯距離比對（閾值 ≤ 3）
 
-
-### model_price_not_configured (400)
-
-當模型在內部存在，但目前尚未對公開請求開放時：
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-Agent 應將其視為平台可用性訊號，而不是拼寫錯誤。只有在它出現在 `GET /v1/models` 後，才應重試同一個模型。
+公開路由不會針對隱藏、延遲或非公開模型暴露不同的錯誤代碼。將不可用的公開模型視為一個 miss：檢查 `did_you_mean`、`suggestions` 與 `hint`，然後使用受支援的公開模型重試。
 
 ### insufficient_balance (402)
 
-當帳戶餘額低於預估成本時：
+當帳戶餘額不足以支付估計費用時：
 
 ```json
 {
@@ -94,11 +76,11 @@ Agent 應將其視為平台可用性訊號，而不是拼寫錯誤。只有在�
 }
 ```
 
-`suggestions` 包含成本低於預估成本、agent 可切換使用的模型。
+`suggestions` 包含比估計費用更便宜且代理可以切換的模型。
 
 ### all_channels_failed (503)
 
-當某個模型的所有上游通道皆不可用時：
+當模型的所有上游通道都不可用時：
 
 ```json
 {
@@ -117,7 +99,7 @@ Agent 應將其視為平台可用性訊號，而不是拼寫錯誤。只有在�
 ```
 
 <Note>
-當原因為 `no_channels`（此模型未配置任何通道）時，`retryable` 為 `false`。只有在像是 circuit breaker 觸發或 quota 耗盡這類暫時性失敗時，才會是 `true`。
+當原因為 `no_channels`（此模型未配置任何通道）時，`retryable` 為 `false`。只有在像是電路斷路器觸發或額度耗盡等暫時性失敗時才會是 `true`。
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -135,15 +117,15 @@ Agent 應將其視為平台可用性訊號，而不是拼寫錯誤。只有在�
 }
 ```
 
-`retry_after` 的值是根據實際 rate limit 視窗的重置時間計算而來。
+`retry_after` 的值是根據實際速率限制窗口重置時間計算得出。
 
 <Note>
-OpenAI 相容端點使用 LemonData 穩定的公開錯誤類型，例如 `rate_limit_exceeded`、`upstream_error` 與 `all_channels_failed`。Anthropic 相容與 Gemini 相容端點則使用各自原生的回應格式。
+與 OpenAI 相容的端點使用 LemonData 穩定的公開錯誤類型，例如 `rate_limit_exceeded`、`upstream_error` 和 `all_channels_failed`。與 Anthropic 相容與 Gemini 相容的端點則使用它們各自的原生回應格式。
 </Note>
 
 ### context_length_exceeded (400)
 
-當輸入超過模型的 context window 時（上游錯誤，並附加提示強化）：
+當輸入超過模型的上下文窗口（上游錯誤，並附加提示）時：
 
 ```json
 {
@@ -161,47 +143,64 @@ OpenAI 相容端點使用 LemonData 穩定的公開錯誤類型，例如 `rate_l
 }
 ```
 
-## 原生端點標頭
+## Native Endpoint Headers
 
-當你使用具有原生端點的模型（Anthropic 或 Gemini）呼叫 `/v1/chat/completions` 時，**成功回應** 會包含最佳化標頭：
+當你使用具有原生端點（Anthropic 或 Gemini）的模型呼叫 `/v1/chat/completions` 時，**成功回應** 會包含優化用的標頭：
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Model Provider | Suggested Endpoint | Benefit |
-|---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | 無需格式轉換、延伸思考、prompt 快取 |
-| Google (Gemini) | `/v1beta/gemini` | 無需格式轉換、grounding、安全性設定 |
-| OpenAI | — | Chat completions 已經是原生格式 |
+| 模型供應商 | 建議端點 | 好處 |
+|------------|----------|------|
+| Anthropic (Claude) | `/v1/messages` | 無格式轉換、延伸思考、提示快取 |
+| Google (Gemini) | `/v1beta/gemini` | 無格式轉換、地面化、安控設定 |
+| OpenAI | — | Chat completions 已是原生格式 |
 
-這些標頭會同時出現在串流與非串流回應中。
+這些標頭會出現在串流與非串流的回應中。
 
-## /v1/models 增強功能
+## /v1/models 增強
 
-每個模型物件中的 `lemondata` 擴充新增了三個欄位：
+`/v1/models` 現在會攜帶非 chat 的推薦 metadata，代理可以在呼叫 image、video、music、3D、TTS、STT、embedding、rerank 或 translation 端點之前使用這些資訊。
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
 ```
 
-| Field | Values | Description |
-|-------|--------|-------------|
+| 欄位 | 值 | 說明 |
+|------|----|------|
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | 模型類型 |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | 模型的計費方式 |
-| `cache_pricing` | object or `null` | 上游 prompt cache 價格 + 平台語意快取折扣 |
+| `cache_pricing` | object or `null` | 上游提示快取價格 + 平台語意快取折抵 |
+| `agent_preferences.<scene>` | object | 該情境的非 chat 推薦快照 |
+
+`agent_preferences` 來源於快取的 24 小時成功率快照：
+
+- 窗口：24 小時
+- 快照快取：stale-while-revalidate
+- `status = "ready"` 表示模型有足夠的近期樣本參與排序
+- `status = "insufficient_samples"` 表示該模型仍可見但不會排在有分數模型之前
 
 ### 類別篩選
 
@@ -211,24 +210,55 @@ GET https://api.lemondata.cc/v1/models?category=image         # Image generation
 GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
 
+### 推薦探索
+
+對於非 chat 的工作流程，代理應先取得當前的推薦候選清單：
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+有效的 `recommended_for` 值為：
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+如果同時存在 `category` 與 `recommended_for`，兩者必須完全匹配。
+
+推薦的代理流程：
+
+1. `GET /v1/models?recommended_for=<scene>`
+2. 選擇第一個 `agent_preferences.<scene>.status == "ready"` 的模型
+3. 在呼叫端點時明確使用 `model=<selected>`
+4. 僅在暫時性錯誤時，改用下一個 `ready` 模型重試
+
 ## llms.txt
 
-可供機器讀取的 API 概覽可於下列位置取得：
+可機器解析的 API 概覽位於：
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
-其中包含：
-- 附帶可運作範例的首次呼叫範本
-- 常見模型名稱（根據使用資料動態產生）
-- 全部 12 個 API 端點
-- 用於模型探索的篩選參數
+它包含：
+- 首次呼叫範本與可運作的範例
+- 常見的模型名稱（根據使用資料動態產生）
+- 所有 12 個 API 端點
+- 模型探索的篩選參數
 - 錯誤處理指引
 
-在第一次 API 呼叫之前先讀取 `llms.txt` 的 AI agent，通常可以在第一次嘗試時就成功。
+在第一次 API 呼叫前先讀取 `llms.txt` 的 AI 代理，通常可以在第一次嘗試就成功。
 
-## 在 Agent 程式碼中的使用方式
+## 在代理程式碼中的使用範例
 
 ### Python (OpenAI SDK)
 
@@ -283,16 +313,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## 設計原則
 
 <CardGroup cols={2}>
-  <Card title="快速失敗，並提供明確資訊" icon="bolt">
-    錯誤會立即回傳，並附上 agent 自我修正所需的全部資料。
+  <Card title="快速失敗、資訊充足" icon="bolt">
+    錯誤會立即回傳代理自我修正所需的所有資料。
   </Card>
   <Card title="不自動路由" icon="route">
-    API 絕不會靜默替換成其他模型。由 agent 自行決定。
+    API 不會在背後偷偷替換成其他模型。由代理來決定。
   </Card>
-  <Card title="以資料驅動的建議" icon="database">
-    所有建議皆來自正式環境資料，而非硬編碼清單。
+  <Card title="資料驅動的建議" icon="database">
+    所有推薦皆來自生產資料，而非硬編碼清單。
   </Card>
   <Card title="向後相容" icon="plug">
-    所有提示欄位皆為可選。現有客戶端不會感受到任何差異。
+    所有提示欄位均為可選。現有客戶端看不到差異。
   </Card>
 </CardGroup>

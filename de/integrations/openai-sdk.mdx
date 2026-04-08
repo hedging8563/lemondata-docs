@@ -1,27 +1,27 @@
 ---
 title: "OpenAI SDK"
-description: "Verwenden Sie LemonData mit offiziellen OpenAI SDKs und OpenAI-kompatiblen Clients"
+description: "Verwenden Sie LemonData mit offiziellen OpenAI-SDKs und OpenAI-kompatiblen Clients"
 ---
 
-## Überblick
+## Übersicht
 
-LemonData funktioniert mit den offiziellen OpenAI SDKs, indem der Client auf `https://api.lemondata.cc/v1` verweist.
+LemonData funktioniert mit den offiziellen OpenAI-SDKs, indem der Client auf `https://api.lemondata.cc/v1` zeigt.
 
-Für neue Projekte sollten Sie die **Responses API** bevorzugen. Verwenden Sie **Chat Completions** nur dann weiter, wenn ein Framework, Plugin oder ein veralteter Codepfad dies noch voraussetzt.
+Bei den meisten neuen Projekten sollten Sie **Chat Completions** als standardmäßigen OpenAI-kompatiblen Pfad bevorzugen. Verwenden Sie die **Responses API** nur, wenn Sie explizit Responses-spezifisches Verhalten benötigen.
+
+Responses-spezifische Felder verhalten sich nicht zwangsläufig in jedem Modell und über jeden gerouteten Pfad identisch.
 
 <Note>
-Python, JavaScript und Go verfügen über offizielle OpenAI SDKs. PHP funktioniert gut mit OpenAI-kompatiblen Community-Clients, ist jedoch kein offizielles OpenAI SDK.
+Python, JavaScript und Go haben offizielle OpenAI-SDKs. PHP funktioniert gut mit OpenAI-kompatiblen Community-Clients, ist jedoch kein offizielles OpenAI-SDK.
 </Note>
 
 <Note>
 **Typ**: Native SDK
 
-**Primärer Pfad**: OpenAI-kompatibel / OpenAI Responses
+**Primärer Pfad**: OpenAI-kompatibel / Chat Completions
 
-**Support-Niveau**: Kernpfad unterstützt
+**Unterstützungszuverlässigkeit**: Unterstützter Kernpfad
 </Note>
-
-Dies ist der Standardpfad für OpenAI-kompatible SDK 利用 mit LemonData, aber es ist kein Versprechen, dass jedes Responses-native-only-Feld über alle Modelle und gerouteten Kanälen hinweg identisch funktioniert.
 
 ## Installation
 
@@ -41,7 +41,11 @@ go get github.com/openai/openai-go/v3
 
 </CodeGroup>
 
-## Den Client konfigurieren
+<Note>
+Verwenden Sie `POST /v1/responses` nur, wenn Sie explizit Responses-spezifisches Verhalten benötigen. Einige nur für Responses bestimmte Felder können weiterhin vom ausgewählten Modell und dem gerouteten Pfad abhängen.
+</Note>
+
+## Client konfigurieren
 
 <CodeGroup>
 
@@ -83,45 +87,47 @@ func main() {
 
 </CodeGroup>
 
-## Empfohlen: Responses API
+## Empfohlen: Chat Completions
 
 <CodeGroup>
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'Explain what LemonData does in one sentence.',
+  messages: [{ role: 'user', content: 'Explain what LemonData does in one sentence.' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-lemondata-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
 </CodeGroup>
 
-<Note>
-Einige hosted tools sowie `include`, `service_tier` und `truncation_strategy` hängen von der nativen `/v1/responses`-Passthrough-Unterstützung des gewählten Modells und des gerouteten Kanälen ab. Wenn diese Unterstützung fehlt, gibt LemonData einen expliziten `400`- oder `503`-Fehler zurück, statt so zu tun, als hätte das Feld funktioniert.
-</Note>
+## Erweitert: Responses API
 
-## Streaming mit Responses
+Verwenden Sie diesen Pfad nur, wenn Ihr Tool oder Workflow ausdrücklich von den OpenAI Responses-Semantiken abhängt.
+
+### Streaming mit Responses
 
 <CodeGroup>
 
@@ -153,7 +159,7 @@ for await (const event of stream) {
 
 </CodeGroup>
 
-## Tools / Function Calling
+## Tools / Funktionsaufrufe
 
 ```python
 response = client.responses.create(
@@ -207,9 +213,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## Chat Completions-Kompatibilität
+## Chat Completions
 
-Wenn Ihr Framework oder Plugin weiterhin Chat Completions erwartet, unterstützt LemonData auch den standardmäßigen OpenAI-kompatiblen Pfad:
+Chat Completions ist der standardmäßige OpenAI-kompatible Pfad für LemonData:
 
 ```python
 response = client.chat.completions.create(
@@ -223,28 +229,24 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-<Warning>
-Verwenden Sie Chat Completions nur zur Kompatibilität. Für neue Integrationen sollten Sie `client.responses.create(...)` bevorzugen.
-</Warning>
-
 ## Fehlerbehebung
 
 <AccordionGroup>
   <Accordion title="Verbindungsfehler">
-    - Vergewissern Sie sich, dass die base URL exakt `https://api.lemondata.cc/v1` ist
-    - Prüfen Sie, ob ein Proxy oder benutzerdefinierte HTTP-Client-Überschreibungen stören
+    - Überprüfen Sie, ob die Basis-URL genau `https://api.lemondata.cc/v1` ist
+    - Prüfen Sie auf Proxy-Interferenzen oder benutzerdefinierte HTTP-Client-Überschreibungen
     - Stellen Sie sicher, dass Ihre SDK-Version aktuell ist, bevor Sie das Verhalten des Providers debuggen
   </Accordion>
 
   <Accordion title="Authentifizierung fehlgeschlagen">
-    - Prüfen Sie, dass Ihr API key mit `sk-` beginnt
-    - Vergewissern Sie sich, dass der Schlüssel im LemonData-Dashboard aktiv ist
+    - Prüfen Sie, ob Ihr API-Schlüssel mit `sk-` beginnt
+    - Überprüfen Sie, ob der Schlüssel im LemonData-Dashboard aktiv ist
     - Bestätigen Sie, dass das SDK `Authorization: Bearer ...` sendet
   </Accordion>
 
   <Accordion title="Falscher API-Pfad">
     - `responses.create(...)` sendet Anfragen an `/v1/responses`
     - `chat.completions.create(...)` sendet Anfragen an `/v1/chat/completions`
-    - Wenn Ihre App heute nur Chat Completions unterstützt, behalten Sie diesen Kompatibilitätspfad bei
+    - Verwenden Sie standardmäßig Chat Completions, es sei denn, Sie benötigen explizit Responses-spezifisches Verhalten
   </Accordion>
 </AccordionGroup>

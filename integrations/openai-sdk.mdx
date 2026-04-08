@@ -7,9 +7,9 @@ description: "Use LemonData with official OpenAI SDKs and OpenAI-compatible clie
 
 LemonData works with the official OpenAI SDKs by pointing the client to `https://api.lemondata.cc/v1`.
 
-For new projects, prefer the **Responses API**. Keep **Chat Completions** only when a framework, plugin, or legacy code path still expects it.
+For most new projects, prefer **Chat Completions** as the default OpenAI-compatible path. Use **Responses API** only when you explicitly need Responses-specific behavior.
 
-This is the default LemonData SDK path for OpenAI-compatible usage, but it is not a promise that every Responses-native-only field works identically across every model and routed channel.
+Responses-specific fields are not guaranteed to behave identically across every model and routed path.
 
 <Note>
 Python, JavaScript, and Go have official OpenAI SDKs. PHP works well with OpenAI-compatible community clients, but it is not an official OpenAI SDK.
@@ -18,7 +18,7 @@ Python, JavaScript, and Go have official OpenAI SDKs. PHP works well with OpenAI
 <Note>
 **Type**: Native SDK
 
-**Primary Path**: OpenAI-compatible / OpenAI Responses
+**Primary Path**: OpenAI-compatible / Chat Completions
 
 **Support Confidence**: Supported core path
 </Note>
@@ -42,7 +42,7 @@ go get github.com/openai/openai-go/v3
 </CodeGroup>
 
 <Note>
-Responses-native-only fields such as some hosted tools, `include`, `service_tier`, and `truncation_strategy` can depend on native `/v1/responses` passthrough support from the selected model and routed channel. If that support is unavailable, LemonData returns an explicit `400` or `503` instead of silently pretending the field worked.
+Use `POST /v1/responses` only when you explicitly need Responses-specific behavior. Some Responses-only fields can still depend on the selected model and routed path.
 </Note>
 
 ## Configure the Client
@@ -87,41 +87,47 @@ func main() {
 
 </CodeGroup>
 
-## Recommended: Responses API
+## Recommended: Chat Completions
 
 <CodeGroup>
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'Explain what LemonData does in one sentence.',
+  messages: [{ role: 'user', content: 'Explain what LemonData does in one sentence.' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-lemondata-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
 </CodeGroup>
 
-## Streaming with Responses
+## Advanced: Responses API
+
+Use this path only when your tool or workflow explicitly depends on OpenAI Responses semantics.
+
+### Streaming with Responses
 
 <CodeGroup>
 
@@ -207,9 +213,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## Chat Completions Compatibility
+## Chat Completions
 
-If your framework or plugin still expects Chat Completions, LemonData also supports the standard OpenAI-compatible path:
+Chat Completions is the default OpenAI-compatible path for LemonData:
 
 ```python
 response = client.chat.completions.create(
@@ -222,10 +228,6 @@ response = client.chat.completions.create(
 
 print(response.choices[0].message.content)
 ```
-
-<Warning>
-Use Chat Completions for compatibility only. For new integrations, prefer `client.responses.create(...)`.
-</Warning>
 
 ## Troubleshooting
 
@@ -245,6 +247,6 @@ Use Chat Completions for compatibility only. For new integrations, prefer `clien
   <Accordion title="Wrong API Path">
     - `responses.create(...)` sends requests to `/v1/responses`
     - `chat.completions.create(...)` sends requests to `/v1/chat/completions`
-    - If your app only supports Chat Completions today, keep it on that compatibility path
+    - Use Chat Completions by default unless you explicitly need Responses-specific behavior
   </Accordion>
 </AccordionGroup>

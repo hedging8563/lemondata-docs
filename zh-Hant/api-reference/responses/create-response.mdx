@@ -1,36 +1,43 @@
 ---
-title: "建立 Response"
+title: "建立回應"
 openapi: "POST /v1/responses"
-description: "使用 OpenAI Responses API 格式建立 response"
+description: "使用 OpenAI Responses API 格式建立回應"
 ---
 
-Responses API 是 OpenAI 較新的有狀態對話 API。LemonData 支援此格式以相容的模型使用。
+The Responses API is OpenAI's newer stateful conversation API. LemonData supports this format as an advanced optional path for compatible models; use `POST /v1/chat/completions` as the default OpenAI-compatible route unless you explicitly need Responses-specific behavior.
 
 ## 請求主體
 
 <ParamField body="model" type="string" required>
-  要使用的模型 ID。可用選項請參閱 [Models](https://lemondata.cc/zh-Hant/models)。
+  要使用的模型 ID。請參見 [Models](https://lemondata.cc/zh-Hant/models) 以了解可用選項。
 </ParamField>
 
 <ParamField body="input" type="array" required>
-  構成對話的輸入項目清單。
+  由對話組成的輸入項目清單。
 
   每個項目可以是：
-  - `message`：包含角色與內容的對話訊息
-  - `function_call`：函式呼叫請求
-  - `function_call_output`：函式呼叫的輸出
+  - `message`: 含有 role 與 content 的對話訊息
+  - `function_call`: 一個函式呼叫請求
+  - `function_call_output`: 函式呼叫的輸出
+
+  對於多模態輸入，`message.content` 可以是純字串或內容區塊的陣列。對於支援影像的模型（例如 GPT-5.4 變體），請將影像作為 `input_image` 區塊傳遞，而非將 URL 或 Base64 字串直接嵌入純文字中。
+
+  Example content blocks:
+  - `{ "type": "input_text", "text": "Describe this image" }`
+  - `{ "type": "input_image", "image_url": "https://example.com/image.jpg" }`
+  - `{ "type": "input_image", "image_url": "data:image/png;base64,..." }`
 </ParamField>
 
 <ParamField body="instructions" type="string">
-  模型的系統指令（等同於 system message）。
+  提供給模型的系統指示（等同於 system message）。
 </ParamField>
 
 <ParamField body="max_output_tokens" type="integer">
-  要生成的最大 token 數量。
+  可生成的最大 token 數。
 </ParamField>
 
 <ParamField body="temperature" type="number" default="1">
-  介於 0 到 2 之間的取樣溫度。
+  抽樣溫度，範圍 0 到 2。
 </ParamField>
 
 <ParamField body="tools" type="array">
@@ -42,55 +49,55 @@ Responses API 是 OpenAI 較新的有狀態對話 API。LemonData 支援此格�
 </ParamField>
 
 <ParamField body="previous_response_id" type="string">
-  先前 response 的 ID，用於從該處延續對話。
+  先前回應的 ID，用於從該回應延續對話。
 </ParamField>
 
 <ParamField body="store" type="boolean" default="true">
-  是否儲存 response 以供稍後擷取。
+  是否儲存回應以便日後擷取。
 </ParamField>
 
 <ParamField body="metadata" type="object">
-  附加到 response 上、用於追蹤的中繼資料。
+  附加至回應的 metadata 以供追蹤使用。
 </ParamField>
 
 <ParamField body="text" type="object">
-  文字生成的設定選項。
+  文字生成的設定選項。`text.format` 的行為取決於所選模型與路由路徑；各模型之間不保證一致。
 </ParamField>
 
 <ParamField body="parallel_tool_calls" type="boolean" default="true">
-  是否允許並行進行多個工具呼叫。
+  是否允許多個工具並行呼叫。
 </ParamField>
 
 <ParamField body="top_p" type="number">
-  Nucleus sampling 參數（0-1）。
+  Nucleus 抽樣參數（0-1）。
 </ParamField>
 
 <ParamField body="reasoning" type="object">
-  適用於啟用 reasoning 的模型（例如 GPT-5 系列變體）的 reasoning 設定。
+  針對支援推理的模型（例如 GPT-5 系列變體）的推理設定。
 
-  - `effort` (string)：reasoning 強度等級（`low`、`medium`、`high`）
+  - `effort` (string): 推理努力等級（`low`, `medium`, `high`）
 </ParamField>
 
 ## 回應
 
 <ResponseField name="id" type="string">
-  Response 的唯一識別碼。
+  回應的唯一識別碼。
 </ResponseField>
 
 <ResponseField name="object" type="string">
-  一律為 `response`。
+  恆為 `response`。
 </ResponseField>
 
 <ResponseField name="created" type="integer">
-  Response 建立時間的 Unix 時間戳。
+  回應建立的 Unix 時間戳。
 </ResponseField>
 
 <ResponseField name="output" type="array">
-  由模型生成的輸出項目清單。
+  模型產生的輸出項目清單。
 </ResponseField>
 
 <ResponseField name="usage" type="object">
-  Token 使用統計資訊。
+  Token 使用統計。
 </ResponseField>
 
 <RequestExample>
@@ -205,9 +212,9 @@ curl_close($ch);
 $data = json_decode($response, true);
 print_r($data['output']);
 ```
-## 圖片輸入示例
+## 視覺輸入範例
 
-對於支援圖片理解的模型，請將圖片放在 `message.content` 中，作為 `input_image` 內容區塊傳入。`image_url` 可以是公開 URL，也可以是 Base64 Data URL。
+對於支援影像的模型，請將影像放在 `message.content` 中，使用 `input_image` 區塊。`image_url` 的值可以是公開 URL 或 Base64 資料 URL。
 
 ```json
 {
@@ -219,7 +226,7 @@ print_r($data['output']);
       "content": [
         {
           "type": "input_text",
-          "text": "請描述這張圖片。"
+          "text": "Please describe this image."
         },
         {
           "type": "input_image",
@@ -241,7 +248,7 @@ print_r($data['output']);
       "content": [
         {
           "type": "input_text",
-          "text": "請描述這張圖片。"
+          "text": "Please describe this image."
         },
         {
           "type": "input_image",

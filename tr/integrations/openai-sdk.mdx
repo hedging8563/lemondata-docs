@@ -1,27 +1,27 @@
 ---
 title: "OpenAI SDK"
-description: "LemonData'yı resmi OpenAI SDK'leri ve OpenAI-uyumlu client'larla kullanın"
+description: "LemonData'ı resmi OpenAI SDK'ları ve OpenAI-uyumlu istemcilerle kullanın"
 ---
 
 ## Genel Bakış
 
-LemonData, client'ı `https://api.lemondata.cc/v1` adresine yönlendirerek resmi OpenAI SDK'leri ile çalışır.
+LemonData, istemciyi `https://api.lemondata.cc/v1` adresine yönlendirerek resmi OpenAI SDK'ları ile çalışır.
 
-Yeni projelerde **Responses API** tercih edin. Bir framework, plugin veya eski kod yolu hâlâ buna ihtiyaç duyuyorsa **Chat Completions**'ı yalnızca o durumda kullanın.
+Çoğu yeni proje için varsayılan OpenAI-uyumlu yol olarak **Chat Completions** tercih edin. **Responses API** yalnızca açıkça Responses'a özgü davranışa ihtiyaç duyduğunuzda kullanın.
+
+Responses'a özgü alanların her model ve yönlendirilen yol arasında tamamen aynı şekilde davranacağı garanti edilmez.
 
 <Note>
-Python, JavaScript ve Go için resmi OpenAI SDK'leri vardır. PHP, OpenAI-uyumlu topluluk client'ları ile iyi çalışır, ancak resmi bir OpenAI SDK değildir.
+Python, JavaScript ve Go'nun resmi OpenAI SDK'ları vardır. PHP, OpenAI-uyumlu topluluk istemcileri ile iyi çalışır, ancak resmi bir OpenAI SDK'sı değildir.
 </Note>
 
 <Note>
-**Tür**: Native SDK
+**Tür**: Yerel SDK
 
-**Birincil yol**: OpenAI uyumlu / OpenAI Responses
+**Birincil Yol**: OpenAI-uyumlu / Chat Completions
 
-**Destek seviyesi**: Çekirdek yol desteklenir
+**Destek Güveni**: Desteklenen temel yol
 </Note>
-
-Bu, LemonData üzerindeki varsayılan OpenAI-compatible SDK yoludur; ancak her Responses-native-only alanın tüm modeller ve yönlendirilen kanallar üzerinde aynı şekilde çalışacağı anlamına gelmez.
 
 ## Kurulum
 
@@ -41,7 +41,11 @@ go get github.com/openai/openai-go/v3
 
 </CodeGroup>
 
-## Client'ı Yapılandırın
+<Note>
+`POST /v1/responses` yalnızca açıkça Responses'a özgü davranışa ihtiyaç duyduğunuzda kullanın. Bazı yalnızca Responses alanları hala seçilen modele ve yönlendirilen yola bağlı olabilir.
+</Note>
+
+## İstemciyi Yapılandırma
 
 <CodeGroup>
 
@@ -83,45 +87,47 @@ func main() {
 
 </CodeGroup>
 
-## Önerilen: Responses API
+## Önerilen: Chat Completions
 
 <CodeGroup>
 
 ```python Python
-response = client.responses.create(
+response = client.chat.completions.create(
     model="gpt-5.4",
-    input="Explain what LemonData does in one sentence."
+    messages=[{"role": "user", "content": "Explain what LemonData does in one sentence."}]
 )
 
-print(response.output_text)
+print(response.choices[0].message.content)
 ```
 
 ```javascript JavaScript
-const response = await client.responses.create({
+const response = await client.chat.completions.create({
   model: 'gpt-5.4',
-  input: 'Explain what LemonData does in one sentence.',
+  messages: [{ role: 'user', content: 'Explain what LemonData does in one sentence.' }],
 });
 
-console.log(response.output_text);
+console.log(response.choices[0].message.content);
 ```
 
 ```bash cURL
-curl https://api.lemondata.cc/v1/responses \
+curl https://api.lemondata.cc/v1/chat/completions \
   -H "Authorization: Bearer sk-your-lemondata-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "input": "Explain what LemonData does in one sentence."
+    "messages": [
+      {"role": "user", "content": "Explain what LemonData does in one sentence."}
+    ]
   }'
 ```
 
 </CodeGroup>
 
-<Note>
-Bazı hosted tools ile birlikte `include`, `service_tier` ve `truncation_strategy`, seçilen modelin ve yönlendirilen kanalın native `/v1/responses` passthrough desteğine bağlıdır. Bu destek yoksa LemonData, alan çalışmış gibi davranmak yerine açık bir `400` veya `503` hatası döndürür.
-</Note>
+## Gelişmiş: Responses API
 
-## Responses ile Streaming
+Bu yolu yalnızca aracınız veya iş akışınız açıkça OpenAI Responses anlambilimine bağımlıysa kullanın.
+
+### Responses ile Akış (Streaming)
 
 <CodeGroup>
 
@@ -153,7 +159,7 @@ for await (const event of stream) {
 
 </CodeGroup>
 
-## Tools / Function Calling
+## Araçlar / Fonksiyon Çağırma
 
 ```python
 response = client.responses.create(
@@ -179,7 +185,7 @@ for item in response.output:
         print(item.arguments)
 ```
 
-## Responses ile Vision
+## Responses ile Görüntü İşleme
 
 ```python
 response = client.responses.create(
@@ -207,9 +213,9 @@ response = client.embeddings.create(
 print(response.data[0].embedding[:5])
 ```
 
-## Chat Completions Uyumluluğu
+## Chat Completions
 
-Framework'ünüz veya plugin'iniz hâlâ Chat Completions bekliyorsa, LemonData standart OpenAI-uyumlu yolu da destekler:
+Chat Completions, LemonData için varsayılan OpenAI-uyumlu yoldur:
 
 ```python
 response = client.chat.completions.create(
@@ -223,28 +229,24 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-<Warning>
-Chat Completions'ı yalnızca uyumluluk için kullanın. Yeni entegrasyonlar için `client.responses.create(...)` tercih edin.
-</Warning>
-
 ## Sorun Giderme
 
 <AccordionGroup>
   <Accordion title="Bağlantı Hatası">
-    - base URL'nin tam olarak `https://api.lemondata.cc/v1` olduğunu doğrulayın
-    - Proxy müdahalesi veya özel HTTP client override'ları olup olmadığını kontrol edin
-    - Sağlayıcı davranışını debug etmeden önce SDK sürümünüzün güncel olduğundan emin olun
+    - Base URL'nin tam olarak `https://api.lemondata.cc/v1` olduğunu doğrulayın
+    - Proxy müdahalesi veya özel HTTP istemcisi geçersiz kılmaları olup olmadığını kontrol edin
+    - Sağlayıcı davranışını hata ayıklamadan önce SDK sürümünüzün güncel olduğundan emin olun
   </Accordion>
 
   <Accordion title="Kimlik Doğrulama Başarısız">
-    - API key'inizin `sk-` ile başladığını kontrol edin
-    - Key'in LemonData dashboard'da aktif olduğunu doğrulayın
-    - SDK'nin `Authorization: Bearer ...` gönderdiğini onaylayın
+    - API anahtarınızın `sk-` ile başladığını kontrol edin
+    - Anahtarın LemonData kontrol panelinde aktif olduğunu doğrulayın
+    - SDK'nın `Authorization: Bearer ...` başlığını gönderdiğini onaylayın
   </Accordion>
 
   <Accordion title="Yanlış API Yolu">
-    - `responses.create(...)` istekleri `/v1/responses` adresine gönderir
-    - `chat.completions.create(...)` istekleri `/v1/chat/completions` adresine gönderir
-    - Uygulamanız bugün yalnızca Chat Completions destekliyorsa, onu bu uyumluluk yolunda tutun
+    - `responses.create(...)` istekleri `/v1/responses` yoluna gönderir
+    - `chat.completions.create(...)` istekleri `/v1/chat/completions` yoluna gönderir
+    - Açıkça Responses'a özgü davranışa ihtiyaç duymuyorsanız varsayılan olarak Chat Completions kullanın
   </Accordion>
 </AccordionGroup>

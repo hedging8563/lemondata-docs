@@ -1,39 +1,39 @@
 ---
-title: "✨ Agent-First API"
-description: "AI agent が最初の再試行で自己修正できるようにする構造化エラーヒント"
+title: "✨ エージェントファーストAPI"
+description: "AIエージェントが最初の再試行で自己修正できるようにする構造化されたエラー・ヒント"
 ---
 
 ## 概要
 
-LemonData の Agent-First API は、AI agent が即座に解析して対応できる構造化ヒントでエラーレスポンスを拡張します — Web 検索も、ドキュメント確認も、推測も不要です。
+LemonData の Agent-First API は、エラー応答を AI エージェントが即座に解析して対処できる構造化ヒントで拡張します — ウェブ検索もドキュメント参照も推測も不要です。
 
-すべてのエラーレスポンスには、標準の `error` object 内に `did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after` などの任意フィールドが含まれます。これらのフィールドは後方互換です — 利用しない client には違いはありません。
+すべてのエラー応答は、標準の `error` オブジェクト内に任意フィールドとして `did_you_mean`、`suggestions`、`hint`、`retryable`、`retry_after` などを含みます。これらのフィールドは後方互換性があり、それらを使用しないクライアントには違いが見えません。
 
-## エラーヒントフィールド
+## エラー・ヒントフィールド
 
-すべてのヒントフィールドは `error` object 内の任意拡張です:
+すべてのヒントフィールドは `error` オブジェクト内の任意の拡張です:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `did_you_mean` | `string` | 最も近い一致の model 名 |
-| `suggestions` | `array` | metadata 付きの推奨 model |
-| `alternatives` | `array` | 現在利用可能な代替 model |
-| `hint` | `string` | 人間/agent が読める次の手順のガイダンス |
-| `retryable` | `boolean` | 同じ request を再試行すると成功する可能性があるか |
-| `retry_after` | `number` | 再試行前に待機すべき秒数 |
-| `balance_usd` | `number` | 現在の アカウント 残高（USD） |
-| `estimated_cost_usd` | `number` | 失敗した request の推定コスト |
+| `did_you_mean` | `string` | 最も近い一致のモデル名 |
+| `suggestions` | `array` | メタデータ付きの推奨モデル |
+| `alternatives` | `array` | 現在利用可能な代替モデル |
+| `hint` | `string` | 人間／エージェントが読める次の手順ガイダンス |
+| `retryable` | `boolean` | 同一リクエストの再試行で成功する可能性があるか |
+| `retry_after` | `number` | 再試行までの待機秒数 |
+| `balance_usd` | `number` | 現在の口座残高（USD） |
+| `estimated_cost_usd` | `number` | 失敗したリクエストの推定コスト（USD） |
 
-## エラーコードの例
+## エラーコード例
 
 ### model_not_found (400)
 
-model 名がどのアクティブな model とも一致しない場合:
+モデル名がアクティブなモデルに一致しない場合:
 
 ```json
 {
   "error": {
-    "message": "Model 'gpt5' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -49,33 +49,15 @@ model 名がどのアクティブな model とも一致しない場合:
 ```
 
 `did_you_mean` の解決には以下を使用します:
-1. 静的 alias マッピング（本番エラーデータ由来）
-2. 正規化文字列マッチング（ハイフン除去、大文字小文字を区別しない）
-3. 編集距離マッチング（しきい値 ≤ 3）
+1. 本番エラーデータに基づく静的エイリアスマッピング
+2. 正規化された文字列マッチ（ハイフンを削除、大小文字を区別しない）
+3. 編集距離マッチ（閾値 ≤ 3）
 
-
-### model_price_not_configured (400)
-
-モデルが内部的には存在しているものの、現在は公開リクエスト向けに公開されていない場合:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-エージェントはこれをタイプミスではなく、プラットフォーム側の公開可用性シグナルとして扱うべきです。同じモデルを再試行するのは、`GET /v1/models` に現れてからにしてください。
+公開ルートは、非公開・遅延・隠蔽モデルに対して別個のエラーコードを公開しません。公開されていないモデルはミスと同様に扱ってください: `did_you_mean`、`suggestions`、`hint` を確認し、サポートされている公開モデルで再試行してください。
 
 ### insufficient_balance (402)
 
-推定コストに対して アカウント 残高が低すぎる場合:
+口座残高が推定コストに対して不足している場合:
 
 ```json
 {
@@ -94,11 +76,11 @@ model 名がどのアクティブな model とも一致しない場合:
 }
 ```
 
-`suggestions` には、推定コストより安価で、agent が切り替え可能な model が含まれます。
+`suggestions` には、推定コストより安価でエージェントが切り替え可能なモデルが含まれます。
 
 ### all_channels_failed (503)
 
-ある model のすべての upstream channel が利用不可の場合:
+あるモデルの全てのアップストリームチャネルが利用不可の場合:
 
 ```json
 {
@@ -117,7 +99,7 @@ model 名がどのアクティブな model とも一致しない場合:
 ```
 
 <Note>
-理由が `no_channels`（この model に設定された channel がない）の場合、`retryable` は `false` です。`true` になるのは、circuit breaker の発動や quota 枯渇のような一時的障害の場合のみです。
+`retryable` は理由が `no_channels`（このモデルにチャネルが設定されていない） の場合は `false` になります。サーキットブレーカーの発動やクォータ枯渇のような一時的な障害の場合にのみ `true` になります。
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -135,15 +117,15 @@ model 名がどのアクティブな model とも一致しない場合:
 }
 ```
 
-`retry_after` の値は、実際の rate limit window のリセット時刻から計算されます。
+`retry_after` の値は、実際のレート制限ウィンドウのリセット時間から算出されます。
 
 <Note>
-OpenAI 互換 endpoint は、`rate_limit_exceeded`、`upstream_error`、`all_channels_failed` などの LemonData の安定した公開 error type を使用します。Anthropic 互換および Gemini 互換 endpoint は、それぞれ独自の native response 形式を使用します。
+OpenAI-compatible endpoints は `rate_limit_exceeded`、`upstream_error`、`all_channels_failed` などの LemonData の安定した公開エラータイプを使用します。Anthropic-compatible および Gemini-compatible エンドポイントはそれぞれのネイティブなレスポンス形式を使用します。
 </Note>
 
 ### context_length_exceeded (400)
 
-入力が model の context window を超えた場合（upstream error、ヒントで拡張済み）:
+入力がモデルのコンテキストウィンドウを超えた場合（アップストリームエラー、ヒントを付与）:
 
 ```json
 {
@@ -161,37 +143,46 @@ OpenAI 互換 endpoint は、`rate_limit_exceeded`、`upstream_error`、`all_cha
 }
 ```
 
-## Native Endpoint ヘッダー
+## ネイティブエンドポイントヘッダー
 
-`/v1/chat/completions` を native endpoint（Anthropic または Gemini）を持つ model で呼び出すと、**成功レスポンス** には最適化ヘッダーが含まれます:
+モデルにネイティブエンドポイント（Anthropic または Gemini）がある状態で `/v1/chat/completions` を呼び出すと、**成功レスポンス** に最適化ヘッダーが含まれます:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Model プロバイダー | Suggested Endpoint | Benefit |
+| Model Provider | Suggested Endpoint | Benefit |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | フォーマット変換なし、extended thinking、prompt caching |
-| Google (Gemini) | `/v1beta/gemini` | フォーマット変換なし、grounding、安全設定 |
-| OpenAI | — | Chat completions はすでに ネイティブ形式 |
+| Anthropic (Claude) | `/v1/messages` | フォーマット変換不要、拡張思考、プロンプトキャッシュ |
+| Google (Gemini) | `/v1beta/gemini` | フォーマット変換不要、grounding、セーフティ設定 |
+| OpenAI | — | Chat completions は既にネイティブフォーマットです |
 
-これらのヘッダーは streaming と non-streaming の両方のレスポンスに含まれます。
+これらのヘッダーはストリーミングおよび非ストリーミングの両方のレスポンスに出現します。
 
 ## /v1/models の拡張
 
-各 model object の `lemondata` 拡張に 3 つの新しいフィールドが追加されています:
+`/v1/models` は、エージェントが画像、ビデオ、音楽、3D、TTS、STT、embedding、rerank、翻訳エンドポイントを呼ぶ前に利用できる非チャットの推奨メタデータを持つようになりました。
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
@@ -199,11 +190,19 @@ X-LemonData-Native-Endpoint: /v1/messages
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | model のタイプ |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | model の課金単位 |
-| `cache_pricing` | object or `null` | upstream prompt cache の価格 + platform semantic cache 割引 |
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | モデルの種類 |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | モデルの課金単位 |
+| `cache_pricing` | object or `null` | アップストリームのプロンプトキャッシュ料金 + プラットフォームのセマンティックキャッシュ割引 |
+| `agent_preferences.<scene>` | object | そのシーン向けの非チャット推奨スナップショット |
 
-### Category フィルタリング
+`agent_preferences` は 24 時間の成功率スナップショットのキャッシュから派生します:
+
+- ウィンドウ: 24 時間
+- スナップショットキャッシュ: stale-while-revalidate
+- `status = "ready"` はモデルが最近のサンプルを十分に持ち、ランキングに参加できることを意味します
+- `status = "insufficient_samples"` はモデルが表示はされるが、スコア付きモデルよりも優先されないことを意味します
+
+### カテゴリフィルタリング
 
 ```bash
 GET https://api.lemondata.cc/v1/models?category=chat          # Chat models only
@@ -211,24 +210,55 @@ GET https://api.lemondata.cc/v1/models?category=image         # Image generation
 GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
 
+### 推奨の発見フロー
+
+非チャットのワークフローでは、エージェントはまず現在の推奨ショートリストを取得するべきです:
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+有効な `recommended_for` の値は次のとおりです:
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+`category` と `recommended_for` の両方が存在する場合、それらは完全に一致する必要があります。
+
+推奨されるエージェントのフロー:
+
+1. `GET /v1/models?recommended_for=<scene>`
+2. 最初の `agent_preferences.<scene>.status == "ready"` のモデルを選択する
+3. 明示的に `model=<selected>` でエンドポイントを呼び出す
+4. 一時的なエラーに限り、次の `ready` モデルで再試行する
+
 ## llms.txt
 
-機械可読な API 概要は以下で利用できます:
+機械可読の API 概要は次で取得できます:
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
-含まれる内容:
-- 動作する例を含む初回呼び出しテンプレート
-- 一般的な model 名（使用データから動的生成）
-- 12 個すべての API endpoint
-- model 検索用の filter parameter
+これには以下が含まれます:
+- 最初の呼び出しテンプレートと動作する例
+- 一般的なモデル名（使用データから動的生成）
+- 全12の API エンドポイント
+- モデル発見のためのフィルタパラメータ
 - エラーハンドリングのガイダンス
 
-最初の API 呼び出し前に `llms.txt` を読む AI agent は、通常、最初の試行で成功できます。
+最初の API 呼び出しの前に `llms.txt` を参照するエージェントは、通常、最初の試行で成功できます。
 
-## Agent コードでの利用
+## エージェントコードでの使用例
 
 ### Python (OpenAI SDK)
 
@@ -283,16 +313,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## 設計原則
 
 <CardGroup cols={2}>
-  <Card title="早く失敗し、情報豊富に失敗する" icon="bolt">
-    エラーは、agent が自己修正するために必要なすべてのデータを含めて即座に返されます。
+  <Card title="Fail fast, fail informatively" icon="bolt">
+    エラーはエージェントが自己修正するために必要なすべてのデータを即座に返します。
   </Card>
-  <Card title="自動ルーティングなし" icon="route">
-    API が別の model を黙って置き換えることはありません。判断するのは agent です。
+  <Card title="No auto-routing" icon="route">
+    API は別のモデルを黙って代替することは決してしません。エージェント自身が決定します。
   </Card>
-  <Card title="データ駆動の提案" icon="database">
-    すべての推奨は、ハードコードされたリストではなく、本番データに基づいています。
+  <Card title="Data-driven suggestions" icon="database">
+    すべての推奨はハードコードされたリストではなく、本番データに基づきます。
   </Card>
-  <Card title="後方互換" icon="plug">
-    すべてのヒントフィールドは任意です。既存の client に違いはありません。
+  <Card title="Backward compatible" icon="plug">
+    すべてのヒントフィールドは任意です。既存のクライアントには違いが見えません。
   </Card>
 </CardGroup>

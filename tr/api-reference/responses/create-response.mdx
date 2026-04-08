@@ -4,21 +4,28 @@ openapi: "POST /v1/responses"
 description: "OpenAI Responses API formatını kullanarak bir yanıt oluşturur"
 ---
 
-Responses API, OpenAI'nin daha yeni durum bilgili konuşma API'sidir. LemonData, uyumlu modeller için bu formatı destekler.
+Responses API, OpenAI'nin daha yeni durumlu konuşma API'sidir. LemonData bu formatı uyumlu modeller için gelişmiş isteğe bağlı bir yol olarak destekler; Responses'a özgü davranışlara açıkça ihtiyacınız olmadıkça varsayılan OpenAI-uyumlu yol olarak `POST /v1/chat/completions` kullanın.
 
 ## İstek Gövdesi
 
 <ParamField body="model" type="string" required>
-  Kullanılacak modelin ID'si. Kullanılabilir seçenekler için [Models](https://lemondata.cc/tr/models) sayfasına bakın.
+  Kullanılacak modelin ID'si. Mevcut seçenekler için [Models](https://lemondata.cc/tr/models) sayfasına bakın.
 </ParamField>
 
 <ParamField body="input" type="array" required>
-  Konuşmayı oluşturan girdi öğelerinin listesi.
+  Konuşmayı oluşturan giriş öğelerinin listesi.
 
   Her öğe şunlardan biri olabilir:
-  - `message`: Rol ve içerik içeren bir konuşma mesajı
-  - `function_call`: Bir fonksiyon çağrısı isteği
-  - `function_call_output`: Bir fonksiyon çağrısının çıktısı
+  - `message`: rol ve içerik içeren bir konuşma mesajı
+  - `function_call`: bir fonksiyon çağrısı isteği
+  - `function_call_output`: bir fonksiyon çağrısından gelen çıktı
+
+  Multimodal giriş için, `message.content` ya düz bir string ya da içerik blokları dizisi olabilir. GPT-5.4 gibi görsel işleme yeteneği olan modeller için resimleri doğrudan düz metin içine URL veya Base64 dizeleri yerleştirmek yerine `input_image` blokları olarak iletin.
+
+  Örnek içerik blokları:
+  - `{ "type": "input_text", "text": "Describe this image" }`
+  - `{ "type": "input_image", "image_url": "https://example.com/image.jpg" }`
+  - `{ "type": "input_image", "image_url": "data:image/png;base64,..." }`
 </ParamField>
 
 <ParamField body="instructions" type="string">
@@ -26,7 +33,7 @@ Responses API, OpenAI'nin daha yeni durum bilgili konuşma API'sidir. LemonData,
 </ParamField>
 
 <ParamField body="max_output_tokens" type="integer">
-  Oluşturulacak maksimum token sayısı.
+  Üretilmesi gereken maksimum token sayısı.
 </ParamField>
 
 <ParamField body="temperature" type="number" default="1">
@@ -38,37 +45,37 @@ Responses API, OpenAI'nin daha yeni durum bilgili konuşma API'sidir. LemonData,
 </ParamField>
 
 <ParamField body="stream" type="boolean" default="false">
-  True ise, event akışı döndürür.
+  Eğer true ise, olayların bir akışını döndürür.
 </ParamField>
 
 <ParamField body="previous_response_id" type="string">
-  Konuşmayı devam ettirmek için önceki bir yanıtın ID'si.
+  Konuşmaya devam etmek için önceki bir yanıtın ID'si.
 </ParamField>
 
 <ParamField body="store" type="boolean" default="true">
-  Yanıtın daha sonra alınmak üzere saklanıp saklanmayacağı.
+  Yanıtın daha sonra alınmak üzere depolanıp depolanmayacağı.
 </ParamField>
 
 <ParamField body="metadata" type="object">
-  İzleme amaçları için yanıta eklenecek metadata.
+  İzleme amaçlı yanıtla iliştirilecek metadata.
 </ParamField>
 
 <ParamField body="text" type="object">
-  Metin üretimi yapılandırma seçenekleri.
+  Metin üretimi yapılandırma seçenekleri. `text.format` davranışı seçilen model ve yönlendirilen yola bağlıdır; her modelde aynı şekilde garanti edilmez.
 </ParamField>
 
 <ParamField body="parallel_tool_calls" type="boolean" default="true">
-  Paralel olarak birden fazla araç çağrısına izin verilip verilmeyeceği.
+  Birden fazla araç çağrısına paralel izin verilip verilmeyeceği.
 </ParamField>
 
 <ParamField body="top_p" type="number">
-  Nucleus sampling parametresi (0-1).
+  Nucleus örnekleme parametresi (0-1).
 </ParamField>
 
 <ParamField body="reasoning" type="object">
-  GPT-5 ailesi varyantları gibi reasoning destekli modeller için reasoning yapılandırması.
+  GPT-5 ailesi varyantları gibi akıl yürütme etkin modeller için akıl yürütme yapılandırması.
 
-  - `effort` (string): Reasoning çaba seviyesi (`low`, `medium`, `high`)
+  - `effort` (string): Akıl yürütme çabası seviyesi (`low`, `medium`, `high`)
 </ParamField>
 
 ## Yanıt
@@ -82,7 +89,7 @@ Responses API, OpenAI'nin daha yeni durum bilgili konuşma API'sidir. LemonData,
 </ResponseField>
 
 <ResponseField name="created" type="integer">
-  Yanıtın oluşturulduğu zamanın Unix timestamp değeri.
+  Yanıtın oluşturulduğu zamanın Unix zaman damgası.
 </ResponseField>
 
 <ResponseField name="output" type="array">
@@ -205,9 +212,9 @@ curl_close($ch);
 $data = json_decode($response, true);
 print_r($data['output']);
 ```
-## Vision Input Example
+## Görsel Girdi Örneği
 
-Use image-capable models by placing images inside `message.content` as `input_image` blocks. The `image_url` value can be either a public URL or a Base64 data URL.
+Görsel işleme yeteneği olan modelleri, resimleri `message.content` içinde `input_image` blokları olarak yerleştirerek kullanın. `image_url` değeri ya herkese açık bir URL ya da Base64 veri URL'si olabilir.
 
 ```json
 {

@@ -1,28 +1,28 @@
 ---
 title: "IDE 및 SDK 호환성"
-description: "AI 코딩 도구, SDK, 프레임워크를 위한 근거 기반 호환성 가이드"
+description: "AI 코딩 도구, SDK 및 프레임워크에 대한 근거 기반 호환성 가이드"
 ---
 
 ## 개요
 
-LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK, 프레임워크를 최소한의 glue code로 연결할 수 있습니다.
+LemonData는 일반적인 코딩 도구, SDK, 프레임워크가 최소한의 연결 코드로 통합할 수 있도록 여러 API 형식을 노출합니다.
 
-이 페이지는 marketing matrix보다 의도적으로 더 좁은 의미를 사용합니다.
+이 페이지는 마케팅 매트릭스보다 의도적으로 범위를 좁혔습니다:
 
-- **지원**: 명확한 설정 경로를 문서화했고, 그 경로에 필요한 protocol shape를 LemonData가 노출한다는 뜻입니다.
-- **강한 네이티브 경로**: 해당 protocol family에 대해 이 저장소에 직접적인 adapter / request-format 근거가 있다는 뜻입니다.
-- **Best-effort**: 통합은 가능할 수 있지만, 상위 클라이언트가 이 custom gateway workflow를 안정적인 계약으로 보지 않는다는 뜻입니다.
+- **Supported**는 구체적인 설정 경로를 문서화하고 LemonData가 해당 경로가 기대하는 프로토콜 형태를 노출함을 의미합니다.
+- **Strong native path**는 리포지토리에 해당 프로토콜 계열에 대한 직접적인 어댑터 또는 요청 형식의 증거가 있음을 의미합니다.
+- **Best-effort**는 통합이 작동할 수 있으나, 업스트림 클라이언트가 이 커스텀 게이트웨이 워크플로우를 안정적인 계약으로 취급하지 않음을 의미합니다.
 
 <Note>
-  미지원 필드는 일괄적으로 처리되지 않습니다. 호환 경로에서는 무시되거나 정규화될 수 있고, native Responses 경로에서는 선택한 model 또는 routed channel이 필요한 passthrough를 지원하지 않으면 명시적인 `400` 또는 `503` 오류가 반환될 수 있습니다.
+  지원되지 않는 필드는 일관되게 처리되지 않습니다. 호환성 경로에서는 일부 필드가 무시되거나 정규화됩니다. `/v1/responses` 경로에서는 요청된 동작을 보장할 수 없을 때 해당 경로가 명시적으로 `400` 또는 `503` 오류를 반환할 수 있습니다.
 </Note>
 
 ## 지원되는 API 형식
 
-| Endpoint | 형식 | 용도 |
+| Endpoint | Format | Use Case |
 |----------|--------|----------|
 | `/v1/chat/completions` | OpenAI Chat | 범용 호환성 |
-| `/v1/responses` | OpenAI Responses | 상태 유지 대화 |
+| `/v1/responses` | OpenAI Responses | 상태 저장 대화 |
 | `/v1/messages` | Anthropic Messages | Claude 고유 기능 |
 | `/v1beta/models/:model:generateContent` | Google Gemini | Gemini 고유 기능 |
 
@@ -30,16 +30,16 @@ LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK,
 
 ### 문서화된 도구 경로
 
-| 도구 | 지원 수준 | 형식 | 설명 |
-|------|----------|------|------|
-| **Cursor** | 지원되지만 제약 있음 | OpenAI-compatible | BYOK 표준 chat/editor 흐름용이며, Tab Completion 같은 Cursor 관리 기능을 대체한다는 뜻은 아닙니다 |
-| **Claude Code CLI** | 강한 네이티브 경로 | Anthropic | native `/v1/messages` 경로. thinking과 `tool_choice`에 대한 adapter 근거가 있습니다 |
-| **Codex CLI** | 지원되지만 model / channel 의존 | OpenAI Responses | `/v1/responses` 설정이 가장 적합합니다. 일부 Responses-native 필드는 model / channel의 native passthrough에 의존합니다 |
-| **Gemini CLI** | 실험적 / best-effort | Gemini | LemonData용 custom base URL 흐름은 안정적인 upstream 계약이 아닙니다 |
-| **OpenCode** | 지원 | OpenAI-compatible | 기본은 OpenAI-compatible 제공자를 사용하고, Responses 제공자가 명확히 필요할 때만 전환합니다 |
+| Tool | Support Level | Format | Notes |
+|------|---------------|--------|-------|
+| **Cursor** | Supported with limits | OpenAI-compatible | BYOK 표준 채팅/편집기 흐름에서는 작동하며, Tab Completion 같은 Cursor가 관리하는 기능을 대체하지는 않습니다 |
+| **Claude Code CLI** | Strong native path | Anthropic | thinking 및 `tool_choice`에 대한 어댑터 적용을 포함한 네이티브 `/v1/messages` 경로 |
+| **Codex CLI** | Supported with model/path limits | OpenAI Responses | Codex 전용 워크플로우를 위한 고급 경로로 `/v1/responses`를 취급; 일부 Responses 전용 필드는 모든 모델과 라우팅 경로에서 보장되지 않습니다 |
+| **Gemini CLI** | Best-effort / experimental | Gemini | Custom LemonData base URL 흐름은 안정적인 업스트림 계약이 아닙니다 |
+| **OpenCode** | Supported | OpenAI-compatible | 기본적으로 OpenAI 호환 제공자를 사용하십시오; 명시적으로 필요할 때만 Responses 기반 제공자로 전환하십시오 |
 
 <Note>
-  다른 OpenAI-compatible editor / agent tool도 같은 base URL 패턴으로 동작하는 경우가 많지만, 이 저장소는 Windsurf, Aider, Continue.dev, Cline/Roo Code, GitHub Copilot 등에 대한 전용 회귀를 현재 유지하지 않습니다.
+  다른 OpenAI 호환 편집기 및 에이전트 도구들도 동일한 기본 URL 패턴에서 작동하는 경우가 많지만, 이 리포지토리는 현재 Windsurf, Aider, Continue.dev, Cline/Roo Code, GitHub Copilot 등 유사 클라이언트에 대한 도구별 회귀(regression) 테스트 커버리지를 유지하고 있지 않습니다.
 </Note>
 
 ### 구성 예시
@@ -50,9 +50,9 @@ LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK,
     Base URL: https://api.lemondata.cc/v1
     API Key: sk-your-lemondata-key
     ```
-    Cursor는 내부적으로 Anthropic 스타일 tool 형식을 사용합니다. LemonData는 둘 다 지원합니다:
-    - OpenAI 형식: `{ type: "function", function: { name, parameters } }`
-    - Anthropic 형식: `{ name, input_schema }` (type field 없음)
+    Cursor는 내부적으로 Anthropic 스타일의 도구 형식을 사용합니다. LemonData는 다음 두 형식을 모두 지원합니다:
+    - OpenAI format: `{ type: "function", function: { name, parameters } }`
+    - Anthropic format: `{ name, input_schema }` (no type field)
   </Tab>
   <Tab title="Claude Code">
     ```bash
@@ -77,31 +77,31 @@ LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK,
 
 ## SDK 호환성
 
-### 문서화된 SDK / 프레임워크 경로
+### 문서화된 SDK & 프레임워크 경로
 
-| SDK / 프레임워크 | 언어 | 지원 수준 | 설명 |
+| SDK / Framework | Language | Support Level | Notes |
 |-----------------|----------|---------------|-------|
-| **OpenAI SDK** | Python/JS/Go | 핵심 경로 지원 | Chat Completions, Embeddings, 일반적인 Responses 워크플로를 문서화합니다. 일부 Responses-native-only 필드는 model / channel passthrough에 의존합니다 |
-| **Anthropic SDK** | Python/JS | 강한 네이티브 경로 | native Messages 경로. tools, thinking, prompt caching에 직접적인 근거가 있습니다 |
-| **Vercel AI SDK** | TypeScript | 권장 통합 패턴 | 먼저 `@ai-sdk/openai-compatible`를 권장하며, Responses-native가 명확히 필요할 때만 `@ai-sdk/openai`를 사용합니다 |
-| **LangChain** | Python/JS | 표준 surface 지원 | 범위는 `ChatOpenAI`와 `OpenAIEmbeddings`입니다. vendor-native extras는 범위 밖입니다 |
-| **LlamaIndex** | Python | `OpenAILike` 경유 지원 | LemonData 같은 third-party gateway에서는 내장 OpenAI 클래스 대신 `OpenAILike`를 사용합니다 |
-| **Dify** | - | 지원되지만 제약 있음 | 예상 경로는 OpenAI 제공자와 chat-completions 지향 흐름입니다. Codex 전용 Responses / WebSocket 보장은 아닙니다 |
+| **OpenAI SDK** | Python/JS/Go | Supported core path | Chat Completions 및 Embeddings가 기본 문서화된 경로입니다; 일부 Responses 전용 필드는 모든 모델과 라우팅 경로에서 보장되지 않습니다 |
+| **Anthropic SDK** | Python/JS | Strong native path | 도구, thinking, 프롬프트 캐싱에 대한 직접 증거가 있는 네이티브 Messages 경로 |
+| **Vercel AI SDK** | TypeScript | Recommended integration pattern | `@ai-sdk/openai-compatible`를 선호하십시오; Responses-네이티브 동작이 명시적으로 필요할 때만 `@ai-sdk/openai`를 사용하십시오 |
+| **LangChain** | Python/JS | Supported standard surfaces | `ChatOpenAI` 및 `OpenAIEmbeddings`가 의도된 범위입니다; 벤더 네이티브 확장은 범위에서 제외됩니다 |
+| **LlamaIndex** | Python | Supported via `OpenAILike` | LemonData와 같은 서드파티 게이트웨이에는 내장 OpenAI 클래스가 아닌 `OpenAILike`를 사용하십시오 |
+| **Dify** | - | Supported with scope limits | OpenAI 제공자 및 chat-completions 지향 흐름이 의도된 경로입니다; Codex 전용 Responses 또는 WebSocket 동작에는 적합하지 않습니다 |
 
-## Chat Completions Parameters
+## Chat Completions 매개변수
 
-### 핵심 Parameters
+### 핵심 매개변수
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `model` | string | Model 식별자 (필수) |
-| `messages` | array | 대화 message (필수) |
-| `max_tokens` | integer | 최대 출력 token 수 |
-| `temperature` | number | 샘플링 temperature (0-2) |
+| `model` | string | Model identifier (required) |
+| `messages` | array | Conversation messages (required) |
+| `max_tokens` | integer | Maximum output tokens |
+| `temperature` | number | Sampling temperature (0-2) |
 | `top_p` | number | Nucleus sampling (0-1) |
-| `stream` | boolean | streaming 활성화 |
+| `stream` | boolean | Enable streaming |
 
-### Tool Calling
+### 도구 호출
 
 ```json
 {
@@ -131,35 +131,35 @@ LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK,
 | Format | Example | Description |
 |--------|---------|-------------|
 | String | `"auto"`, `"none"`, `"required"` | 단순 선택 |
-| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | 특정 function 강제 |
-| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Anthropic 기본 형식 |
+| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | 특정 함수 강제 지정 |
+| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Anthropic 네이티브 형식 |
 
-### 고급 Parameters
+### 고급 매개변수
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `stream_options` | object | token 수를 위한 `{ include_usage: true }` |
-| `reasoning_effort` | string | reasoning이 활성화된 GPT-5 model용 `"low"`, `"medium"`, `"high"` |
-| `service_tier` | string | `"auto"` 또는 `"default"` |
-| `seed` | integer | 결정론적 출력 |
-| `logprobs` | boolean | log probability 반환 |
-| `top_logprobs` | integer | 상위 logprobs 개수 (0-20) |
-| `logit_bias` | object | token bias map (-100 ~ 100) |
-| `frequency_penalty` | number | 반복 penalty (-2 ~ 2) |
-| `presence_penalty` | number | 주제 penalty (-2 ~ 2) |
-| `stop` | string/array | 중지 sequence |
-| `n` | integer | completion 개수 (1-128) |
-| `user` | string | 추적용 사용자 식별자 |
+| `stream_options` | object | `{ include_usage: true }` for token counts |
+| `reasoning_effort` | string | `"low"`, `"medium"`, `"high"` for reasoning-enabled GPT-5 models |
+| `service_tier` | string | `"auto"` or `"default"` |
+| `seed` | integer | Deterministic outputs |
+| `logprobs` | boolean | Return log probabilities |
+| `top_logprobs` | integer | Number of top logprobs (0-20) |
+| `logit_bias` | object | Token bias map (-100 to 100) |
+| `frequency_penalty` | number | Repetition penalty (-2 to 2) |
+| `presence_penalty` | number | Topic penalty (-2 to 2) |
+| `stop` | string/array | Stop sequences |
+| `n` | integer | Number of completions (1-128) |
+| `user` | string | User identifier for tracking |
 
 ### OpenAI 고급 기능
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `modalities` | array | multi모달용 `["text", "audio"]` |
-| `audio` | object | 오디오 출력 config (voice, format) |
-| `prediction` | object | 더 빠른 completion을 위한 예측 출력 |
-| `metadata` | object | 추적용 key-value 쌍 |
-| `store` | boolean | 나중에 조회할 수 있도록 저장 |
+| `modalities` | array | `["text", "audio"]` for multimodal |
+| `audio` | object | Audio output config (voice, format) |
+| `prediction` | object | Predicted output for faster completion |
+| `metadata` | object | Key-value pairs for tracking |
+| `store` | boolean | Store for later retrieval |
 
 ### 제공자별 옵션
 
@@ -180,19 +180,19 @@ LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK,
 }
 ```
 
-## Anthropic Messages Parameters
+## Anthropic Messages 매개변수
 
-### 핵심 Parameters
+### 핵심 매개변수
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `model` | string | Model 식별자 |
-| `messages` | array | 대화 message |
-| `max_tokens` | integer | 최대 출력 (최대 128000) |
-| `system` | string/array | 시스템 prompt |
-| `stream` | boolean | streaming 활성화 |
+| `model` | string | Model identifier |
+| `messages` | array | Conversation messages |
+| `max_tokens` | integer | Maximum output (up to 128000) |
+| `system` | string/array | System prompt |
+| `stream` | boolean | Enable streaming |
 
-### Tool Calling
+### 도구 호출
 
 ```json
 {
@@ -215,7 +215,7 @@ LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK,
 }
 ```
 
-### Extended Thinking
+### 확장된 Thinking
 
 ```json
 {
@@ -227,30 +227,30 @@ LemonData는 여러 API 형식을 제공하므로 일반적인 coding tool, SDK,
 }
 ```
 
-## Responses API Parameters
+## Responses API 매개변수
 
-### 핵심 Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model` | string | Model 식별자 |
-| `input` | string/array | 입력 content |
-| `instructions` | string | 시스템 instruction |
-| `max_output_tokens` | integer | 최대 출력 token 수 |
-| `previous_response_id` | string | 대화 이어가기 |
-
-### 고급 Parameters
+### 핵심 매개변수
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `truncation_strategy` | string | `"auto"` 또는 `"disabled"` |
+| `model` | string | Model identifier |
+| `input` | string/array | Input content |
+| `instructions` | string | System instructions |
+| `max_output_tokens` | integer | Maximum output tokens |
+| `previous_response_id` | string | Continue conversation |
+
+### 고급 매개변수
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `truncation_strategy` | string | `"auto"` or `"disabled"` |
 | `include` | array | `["reasoning.encrypted_content"]` |
-| `reasoning_effort` | string | reasoning model용 |
-| `service_tier` | string | 우선순위 tier |
+| `reasoning_effort` | string | For reasoning models |
+| `service_tier` | string | Priority tier |
 
-### Tool 형식
+### 도구 형식
 
-OpenAI 및 Anthropic tool 형식을 모두 지원합니다:
+OpenAI 및 Anthropic 도구 형식을 모두 지원합니다:
 
 ```json
 // OpenAI format
@@ -260,17 +260,17 @@ OpenAI 및 Anthropic tool 형식을 모두 지원합니다:
 { "name": "fn", "input_schema": {...} }
 ```
 
-## Gemini API Parameters
+## Gemini API 매개변수
 
-### 핵심 Parameters
+### 핵심 매개변수
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `contents` | array | 대화 content |
-| `systemInstruction` | object | 시스템 prompt |
-| `generationConfig` | object | 생성 설정 |
+| `contents` | array | Conversation content |
+| `systemInstruction` | object | System prompt |
+| `generationConfig` | object | Generation settings |
 
-### Tools
+### 도구
 
 ```json
 {
@@ -291,7 +291,7 @@ OpenAI 및 Anthropic tool 형식을 모두 지원합니다:
 }
 ```
 
-### Safety Settings
+### 안전 설정
 
 ```json
 {
@@ -304,17 +304,17 @@ OpenAI 및 Anthropic tool 형식을 모두 지원합니다:
 }
 ```
 
-### 추가 Parameters
+### 추가 매개변수
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `cachedContent` | string | 캐시된 content 참조 |
-| `responseMimeType` | string | `"text/plain"` 또는 `"application/json"` |
-| `responseSchema` | object | 구조화된 출력을 위한 JSON schema |
+| `cachedContent` | string | Cached content reference |
+| `responseMimeType` | string | `"text/plain"` or `"application/json"` |
+| `responseSchema` | object | JSON schema for structured output |
 
-## Streaming
+## 스트리밍
 
-모든 endpoint는 Server-Sent Events (SSE) streaming을 지원합니다:
+모든 엔드포인트는 Server-Sent Events (SSE) 스트리밍을 지원합니다:
 
 ```bash
 # Chat Completions
@@ -340,20 +340,20 @@ LemonData는 OpenAI 호환 오류 응답을 반환합니다:
 }
 ```
 
-자세한 내용은 [오류 처리 가이드](/guides/error-handling)를 참조하세요.
+자세한 내용은 [Error Handling Guide](/guides/error-handling)를 참조하십시오.
 
-## 모범 사례
+## 권장 모범 사례
 
 <AccordionGroup>
-  <Accordion title="알 수 없는 parameter에는 passthrough 사용">
-    모든 schema는 `.passthrough()`를 사용합니다 - 알 수 없는 parameter는 업스트림 제공자로 전달됩니다.
+  <Accordion title="알 수 없는 매개변수에 대해서는 passthrough 사용">
+    모든 스키마는 `.passthrough()`를 사용합니다 - 알 수 없는 매개변수는 업스트림 제공자로 전달됩니다.
   </Accordion>
 
-  <Accordion title="정확한 과금을 위해 stream_options 사용 선호">
-    streaming 응답에서 정확한 token 수를 위해 `stream_options.include_usage`를 활성화하세요.
+  <Accordion title="정확한 청구를 위해 stream_options 사용 권장">
+    스트리밍 응답의 정확한 토큰 수를 위해 `stream_options.include_usage`를 활성화하십시오.
   </Accordion>
 
   <Accordion title="적절한 tool_choice 형식 사용">
-    사용 중인 SDK가 기대하는 형식에 맞추세요. LemonData는 OpenAI와 Anthropic 형식을 모두 허용합니다.
+    SDK가 예상하는 형식에 맞추십시오. LemonData는 OpenAI 및 Anthropic 형식 둘 다를 허용합니다.
   </Accordion>
 </AccordionGroup>

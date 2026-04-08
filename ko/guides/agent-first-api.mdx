@@ -1,39 +1,39 @@
 ---
-title: "✨ Agent-First API"
-description: "AI agent가 첫 번째 재시도에서 스스로 수정할 수 있도록 구조화된 error 힌트 제공"
+title: "✨ 에이전트 우선 API"
+description: "AI 에이전트가 첫 번째 재시도에서 자체 수정할 수 있도록 구조화된 오류 힌트"
 ---
 
 ## 개요
 
-LemonData의 Agent-First API는 AI agent가 즉시 파싱하고 조치할 수 있는 구조화된 힌트로 error 응답을 강화합니다 — 웹 검색도, 문서 조회도, 추측도 필요 없습니다.
+LemonData의 Agent-First API는 오류 응답을 AI 에이전트가 즉시 파싱하고 조치할 수 있는 구조화된 힌트로 풍부하게 합니다 — 웹 검색 없음, 문서 조회 없음, 추측 없음.
 
-모든 error 응답에는 표준 `error` 객체 내부에 `did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after` 같은 선택적 필드가 포함됩니다. 이러한 필드는 하위 호환됩니다 — 이를 사용하지 않는 클라이언트는 아무런 차이를 보지 못합니다.
+모든 오류 응답은 표준 `error` 객체 내부에 `did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`와 같은 선택적 필드를 포함합니다. 이러한 필드는 하위 호환성을 유지하므로 이를 사용하지 않는 클라이언트에는 차이가 없습니다.
 
-## Error Hint 필드
+## 오류 힌트 필드
 
-모든 hint 필드는 `error` 객체 내부의 선택적 확장 필드입니다:
+모든 힌트 필드는 `error` 객체 내부의 선택적 확장입니다:
 
-| Field | Type | Description |
+| 필드 | 타입 | 설명 |
 |-------|------|-------------|
-| `did_you_mean` | `string` | 가장 근접하게 일치하는 model 이름 |
-| `suggestions` | `array` | 메타데이터가 포함된 권장 model |
-| `alternatives` | `array` | 현재 사용 가능한 대체 model |
-| `hint` | `string` | 사람이거나 agent가 읽을 수 있는 다음 단계 안내 |
-| `retryable` | `boolean` | 동일한 요청을 재시도하면 성공할 수 있는지 여부 |
-| `retry_after` | `number` | 재시도 전 대기할 초 단위 시간 |
+| `did_you_mean` | `string` | 가장 근접한 일치 모델 이름 |
+| `suggestions` | `array` | 메타데이터가 포함된 권장 모델 목록 |
+| `alternatives` | `array` | 현재 사용 가능한 대체 모델들 |
+| `hint` | `string` | 사람/에이전트가 읽을 수 있는 다음 단계 안내 |
+| `retryable` | `boolean` | 동일한 요청을 재시도하면 성공할 가능성 여부 |
+| `retry_after` | `number` | 재시도 전에 기다려야 할 초 |
 | `balance_usd` | `number` | 현재 계정 잔액(USD) |
-| `estimated_cost_usd` | `number` | 실패한 요청의 예상 비용 |
+| `estimated_cost_usd` | `number` | 실패한 요청의 예상 비용(USD) |
 
-## Error 코드 예시
+## 오류 코드 예시
 
 ### model_not_found (400)
 
-model 이름이 어떤 활성 model과도 일치하지 않을 때:
+모델 이름이 활성 모델과 일치하지 않을 때:
 
 ```json
 {
   "error": {
-    "message": "Model 'gpt5' not found",
+    "message": "Model not found: please check the model name",
     "type": "invalid_request_error",
     "param": "model",
     "code": "model_not_found",
@@ -49,33 +49,15 @@ model 이름이 어떤 활성 model과도 일치하지 않을 때:
 ```
 
 `did_you_mean` 해석은 다음을 사용합니다:
-1. 정적 alias 매핑(프로덕션 error 데이터 기반)
+1. 정적 별칭 매핑(운영 중 수집된 오류 데이터에서 유래)
 2. 정규화된 문자열 매칭(하이픈 제거, 대소문자 구분 없음)
 3. 편집 거리 매칭(임계값 ≤ 3)
 
-
-### model_price_not_configured (400)
-
-모델이 내부적으로는 존재하지만 현재 공개 요청용으로 노출되지 않은 경우:
-
-```json
-{
-  "error": {
-    "message": "Model 'example-model' is not currently available for public requests.",
-    "type": "invalid_request_error",
-    "param": "model",
-    "code": "model_price_not_configured",
-    "retryable": false,
-    "hint": "This model is not currently available for public requests. Use GET /v1/models to list publicly available model IDs."
-  }
-}
-```
-
-에이전트는 이를 오타가 아니라 플랫폼 가용성 신호로 해석해야 합니다. 동일한 모델은 `GET /v1/models` 에 나타난 뒤에만 다시 시도하세요.
+공개 라우트는 숨김, 연기 또는 비공개 모델에 대해 별도의 오류 코드를 노출하지 않습니다. 사용 불가능한 공개 모델은 미스로 취급하세요: `did_you_mean`, `suggestions`, `hint`를 검사한 뒤 지원되는 공개 모델로 재시도하십시오.
 
 ### insufficient_balance (402)
 
-계정 잔액이 예상 비용보다 너무 낮을 때:
+계정 잔액이 예상 비용보다 부족할 때:
 
 ```json
 {
@@ -94,11 +76,11 @@ model 이름이 어떤 활성 model과도 일치하지 않을 때:
 }
 ```
 
-`suggestions`에는 agent가 전환할 수 있는, 예상 비용보다 저렴한 model이 포함됩니다.
+`suggestions`에는 에이전트가 전환할 수 있는, 예상 비용보다 저렴한 모델들이 포함됩니다.
 
 ### all_channels_failed (503)
 
-model에 대한 모든 upstream channel을 사용할 수 없을 때:
+모델의 모든 업스트림 채널이 사용 불가할 때:
 
 ```json
 {
@@ -117,7 +99,7 @@ model에 대한 모든 upstream channel을 사용할 수 없을 때:
 ```
 
 <Note>
-이유가 `no_channels`(이 model에 대해 구성된 channel이 없음)인 경우 `retryable`은 `false`입니다. circuit breaker trip 또는 quota 소진 같은 일시적 실패에 대해서만 `true`입니다.
+원인이 `no_channels`(이 모델에 대해 구성된 채널이 없음)인 경우 `retryable`은 `false`입니다. 회로 차단(circuit breaker) 트립이나 할당량 소진 같은 일시적 실패에 대해서만 `true`입니다.
 </Note>
 
 ### rate_limit_exceeded (429)
@@ -135,15 +117,15 @@ model에 대한 모든 upstream channel을 사용할 수 없을 때:
 }
 ```
 
-`retry_after` 값은 실제 rate limit window 재설정 시점으로부터 계산됩니다.
+`retry_after` 값은 실제 레이트 리미트 윈도우 재설정 시간으로부터 계산됩니다.
 
 <Note>
-OpenAI 호환 endpoint는 `rate_limit_exceeded`, `upstream_error`, `all_channels_failed`와 같은 LemonData의 안정적인 공개 error type을 사용합니다. Anthropic 호환 및 Gemini 호환 endpoint는 각자의 native 응답 형식을 사용합니다.
+OpenAI 호환 엔드포인트는 `rate_limit_exceeded`, `upstream_error`, `all_channels_failed`와 같은 LemonData의 안정적인 공개 오류 유형을 사용합니다. Anthropic 호환 및 Gemini 호환 엔드포인트는 자체 네이티브 응답 형태를 사용합니다.
 </Note>
 
 ### context_length_exceeded (400)
 
-입력이 model의 context window를 초과할 때(upstream error, 힌트로 보강됨):
+입력이 모델의 컨텍스트 창을 초과할 때(업스트림 오류, 힌트로 보강됨):
 
 ```json
 {
@@ -161,49 +143,66 @@ OpenAI 호환 endpoint는 `rate_limit_exceeded`, `upstream_error`, `all_channels
 }
 ```
 
-## Native Endpoint 헤더
+## 네이티브 엔드포인트 헤더
 
-native endpoint(Anthropic 또는 Gemini)가 있는 model로 `/v1/chat/completions`를 호출하면 **성공 응답**에 최적화 헤더가 포함됩니다:
+모델이 네이티브 엔드포인트(Anthropic 또는 Gemini)를 가진 상태에서 `/v1/chat/completions`를 호출하면, **성공 응답**에 최적화 헤더가 포함됩니다:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance (no format conversion).
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-| Model 제공자 | Suggested Endpoint | Benefit |
+| 모델 제공자 | 권장 엔드포인트 | 이점 |
 |---------------|-------------------|---------|
-| Anthropic (Claude) | `/v1/messages` | 형식 변환 없음, extended thinking, prompt caching |
-| Google (Gemini) | `/v1beta/gemini` | 형식 변환 없음, grounding, safety 설정 |
-| OpenAI | — | Chat completions가 이미 native 형식임 |
+| Anthropic (Claude) | `/v1/messages` | 포맷 변환 없음, 확장된 사고(extended thinking), 프롬프트 캐싱 |
+| Google (Gemini) | `/v1beta/gemini` | 포맷 변환 없음, 그라운딩(grounding), 안전 설정 |
+| OpenAI | — | Chat completions가 이미 네이티브 포맷입니다 |
 
-이 헤더는 streaming 및 non-streaming 응답 모두에 나타납니다.
+이 헤더는 스트리밍 및 비스트리밍 응답 모두에 나타납니다.
 
-## /v1/models 개선 사항
+## /v1/models 향상사항
 
-각 model 객체의 `lemondata` 확장에 세 가지 새로운 필드가 추가됩니다:
+`/v1/models`는 이제 에이전트가 이미지, 비디오, 음악, 3D, TTS, STT, 임베딩, 재순위(rerank), 또는 번역 엔드포인트를 호출하기 전에 사용할 수 있는 비채팅 권장 메타데이터를 제공합니다.
 
 ```json
 {
-  "id": "gpt-5.4",
+  "id": "gemini-2.5-flash-image",
   "lemondata": {
-    "category": "chat",
-    "pricing_unit": "per_token",
-    "cache_pricing": {
-      "cache_read_per_1m": "1.25",
-      "cache_write_per_1m": "2.50",
-      "platform_cache_discount": 0.9
+    "category": "image",
+    "pricing_unit": "per_request",
+    "agent_preferences": {
+      "image": {
+        "preferred_rank": 1,
+        "success_rate_24h": 0.98,
+        "sample_count_24h": 423,
+        "status": "ready",
+        "updated_at": "2026-03-28T12:00:00.000Z",
+        "basis": {
+          "score_source": "clickhouse_24h",
+          "channel_id": null,
+          "physical_model": null
+        }
+      }
     }
   }
 }
 ```
 
-| Field | Values | Description |
+| 필드 | 값 | 설명 |
 |-------|--------|-------------|
-| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | model 유형 |
-| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | model 과금 방식 |
-| `cache_pricing` | object or `null` | upstream prompt cache 가격 + platform semantic cache 할인 |
+| `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | 모델 유형 |
+| `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | 모델 과금 방식 |
+| `cache_pricing` | object or `null` | 업스트림 프롬프트 캐시 가격 + 플랫폼 의미 기반 캐시 할인 |
+| `agent_preferences.<scene>` | object | 해당 씬에 대한 비채팅 권장 스냅샷 |
 
-### Category 필터링
+`agent_preferences`는 캐시된 24시간 성공률 스냅샷에서 유도됩니다:
+
+- 윈도우: 24시간
+- 스냅샷 캐시: stale-while-revalidate
+- `status = "ready"`는 모델이 순위에 참여할 만큼 최근 샘플이 충분함을 의미합니다
+- `status = "insufficient_samples"`는 모델이 가시성은 유지하지만 점수화된 모델보다 우선 순위로 랭크되지 않음을 의미합니다
+
+### 카테고리 필터링
 
 ```bash
 GET https://api.lemondata.cc/v1/models?category=chat          # Chat models only
@@ -211,24 +210,55 @@ GET https://api.lemondata.cc/v1/models?category=image         # Image generation
 GET https://api.lemondata.cc/v1/models?tag=coding&category=chat  # Coding-optimized chat models
 ```
 
+### 권장 모델 검색
+
+비채팅 워크플로우의 경우, 에이전트는 먼저 현재 권장되는 후보 목록을 가져와야 합니다:
+
+```bash
+GET https://api.lemondata.cc/v1/models?recommended_for=image
+GET https://api.lemondata.cc/v1/models?recommended_for=translation
+GET https://api.lemondata.cc/v1/models?category=tts&recommended_for=tts
+```
+
+유효한 `recommended_for` 값은 다음과 같습니다:
+
+- `image`
+- `video`
+- `music`
+- `3d`
+- `tts`
+- `stt`
+- `embedding`
+- `rerank`
+- `translation`
+
+`category`와 `recommended_for`가 모두 제공된 경우, 두 값은 정확히 일치해야 합니다.
+
+권장 에이전트 흐름:
+
+1. `GET /v1/models?recommended_for=<scene>`
+2. 첫 번째로 `agent_preferences.<scene>.status == "ready"`인 모델을 선택
+3. `model=<selected>`로 엔드포인트를 명시적으로 호출
+4. 일시적 오류인 경우에만 다음 `ready` 모델로 재시도
+
 ## llms.txt
 
-기계가 읽을 수 있는 API 개요는 다음 위치에서 확인할 수 있습니다:
+머신 리더블 API 개요는 다음에서 확인할 수 있습니다:
 
 ```
 GET https://api.lemondata.cc/llms.txt
 ```
 
 포함 내용:
-- 동작하는 예제가 포함된 첫 호출 template
-- 일반적인 model 이름(사용 데이터에서 동적으로 생성)
-- 총 12개의 API endpoint
-- model 검색을 위한 filter parameter
-- error 처리 가이드
+- 작동 예제가 포함된 첫 호출 템플릿
+- 일반적인 모델 이름들(사용량 데이터에서 동적으로 생성)
+- 12개 API 엔드포인트 전체
+- 모델 검색을 위한 필터 파라미터
+- 오류 처리 지침
 
-첫 API 호출 전에 `llms.txt`를 읽는 AI agent는 일반적으로 첫 번째 시도에서 성공할 수 있습니다.
+첫 API 호출 전에 `llms.txt`를 읽는 AI 에이전트는 일반적으로 첫 시도에서 성공할 수 있습니다.
 
-## Agent 코드에서의 사용
+## 에이전트 코드에서의 사용
 
 ### Python (OpenAI SDK)
 
@@ -283,16 +313,16 @@ async function smartChat(messages, model = 'gpt-4o') {
 ## 설계 원칙
 
 <CardGroup cols={2}>
-  <Card title="빠르게 실패하고, 충분한 정보를 제공하며 실패" icon="bolt">
-    error는 agent가 스스로 수정하는 데 필요한 모든 데이터를 담아 즉시 반환됩니다.
+  <Card title="빠르게 실패하고, 정보 제공형 실패" icon="bolt">
+    오류는 에이전트가 자체 수정하는 데 필요한 모든 데이터를 즉시 반환합니다.
   </Card>
   <Card title="자동 라우팅 없음" icon="route">
-    API는 다른 model로 조용히 대체하지 않습니다. 결정은 agent가 내립니다.
+    API는 결코 다른 모델을 조용히 대체하지 않습니다. 결정은 에이전트가 내립니다.
   </Card>
-  <Card title="데이터 기반 제안" icon="database">
-    모든 권장 사항은 하드코딩된 목록이 아니라 프로덕션 데이터에서 나옵니다.
+  <Card title="데이터 기반 권장" icon="database">
+    모든 권장 사항은 하드코딩 목록이 아닌 운영 데이터에서 도출됩니다.
   </Card>
-  <Card title="하위 호환" icon="plug">
-    모든 hint 필드는 선택 사항입니다. 기존 클라이언트는 아무런 차이를 보지 못합니다.
+  <Card title="하위 호환성 유지" icon="plug">
+    모든 힌트 필드는 선택적입니다. 기존 클라이언트에는 변화가 없습니다.
   </Card>
 </CardGroup>
