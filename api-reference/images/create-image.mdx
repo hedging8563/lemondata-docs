@@ -8,6 +8,17 @@ description: "Creates an image given a prompt"
 For coding agents, discover the current recommended image shortlist first with `GET /v1/models?recommended_for=image`, then send the selected `model` explicitly to this endpoint.
 </Note>
 
+
+<Note>
+Google Gemini image-family models do not share the same selector contract:
+
+- `gemini-3-pro-image-preview` and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
+- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
+- `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
+
+For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
+</Note>
+
 ## Request Body
 
 <ParamField body="model" type="string" default="dall-e-3">
@@ -23,9 +34,21 @@ For coding agents, discover the current recommended image shortlist first with `
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  Image size. Options vary by model:
-  - DALL-E 3: `1024x1024`, `1792x1024`, `1024x1792`
-  - Other models: `512x512`, `1024x1024`, etc.
+  Image size. Use this for OpenAI-style image families and other models that accept exact pixel sizes.
+
+  For Google Gemini image families, `size` is treated as a compatibility alias that maps onto the model's public `aspect_ratio` and, where supported, `resolution` contract. Prefer sending `aspect_ratio` directly for those models.
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string">
+  Model-dependent aspect ratio selector.
+
+  Common Google image-family values include `1:1`, `16:9`, `9:16`, `3:2`, and `2:3`.
+</ParamField>
+
+<ParamField body="resolution" type="string">
+  Model-dependent output resolution selector.
+
+  Supported on `gemini-3-pro-image-preview`, `nano-banana-pro`, `nano-banana-2`, and similar high-resolution families. Typical values are `1k`, `2k`, and `4k`. Do not send this parameter to Gemini Flash image families unless the model explicitly documents it.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -99,10 +122,10 @@ curl -X POST "https://api.lemondata.cc/v1/images/generations" \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "dall-e-3",
-    "prompt": "A white cat sitting on a windowsill watching rain",
-    "size": "1024x1024",
-    "quality": "standard",
+    "model": "gemini-3-pro-image-preview",
+    "prompt": "A cinematic portrait of a white cat sitting on a rainy windowsill",
+    "aspect_ratio": "16:9",
+    "resolution": "2k",
     "n": 1
   }'
 ```
@@ -116,10 +139,10 @@ client = OpenAI(
 )
 
 response = client.images.generate(
-    model="dall-e-3",
-    prompt="A white cat sitting on a windowsill watching rain",
-    size="1024x1024",
-    quality="standard",
+    model="gemini-3-pro-image-preview",
+    prompt="A cinematic portrait of a white cat sitting on a rainy windowsill",
+    aspect_ratio="16:9",
+    resolution="2k",
     n=1
 )
 
@@ -135,10 +158,10 @@ const client = new OpenAI({
 });
 
 const response = await client.images.generate({
-  model: 'dall-e-3',
-  prompt: 'A white cat sitting on a windowsill watching rain',
-  size: '1024x1024',
-  quality: 'standard',
+  model: 'gemini-3-pro-image-preview',
+  prompt: 'A cinematic portrait of a white cat sitting on a rainy windowsill',
+  aspect_ratio: '16:9',
+  resolution: '2k',
   n: 1
 });
 
@@ -157,10 +180,10 @@ curl_setopt_array($ch, [
         'Authorization: Bearer sk-your-api-key'
     ],
     CURLOPT_POSTFIELDS => json_encode([
-        'model' => 'dall-e-3',
-        'prompt' => 'A white cat sitting on a windowsill watching rain',
-        'size' => '1024x1024',
-        'quality' => 'standard',
+        'model' => 'gemini-3-pro-image-preview',
+        'prompt' => 'A cinematic portrait of a white cat sitting on a rainy windowsill',
+        'aspect_ratio' => '16:9',
+        'resolution' => '2k',
         'n' => 1
     ])
 ]);
@@ -171,6 +194,19 @@ curl_close($ch);
 $data = json_decode($response, true);
 echo $data['data'][0]['url'];
 ```
+
+<Info>
+Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-preview`, send `aspect_ratio` but omit `resolution`:
+
+```json
+{
+  "model": "gemini-2.5-flash-image",
+  "prompt": "A clean editorial product shot of a citrus soda can",
+  "aspect_ratio": "16:9"
+}
+```
+</Info>
+
 </RequestExample>
 
 <ResponseExample>
