@@ -1,98 +1,98 @@
 ---
-title: "Yönetim API’si"
-description: "Kuruluş API anahtarlarını yönetin ve yönetim belirteci ile anahtar bazında kullanım ile faturalamayı görüntüleyin."
+title: "Yönetim API'si"
+description: "Kuruluş API anahtarlarını yönetin ve bir yönetim token'ıyla key düzeyinde kullanım ve faturalamayı alın."
 ---
 
-## Genel bakış
+## Genel Bakış
 
-Yönetim API’si, standart bir inference API key kullanmadan kuruluş API anahtarlarını yönetmenizi ve anahtar bazında kullanım ile faturalamayı almanızı sağlar.
+Management API, kuruluş API anahtarlarını yönetmenizi ve normal bir inference API anahtarı kullanmadan belirli bir anahtar için kullanım ve faturalama bilgilerini almanızı sağlar.
 
-Yönetim belirtecini Dashboard içindeki **Settings** sayfasından oluşturabilir ve döndürebilirsiniz.
+Dashboard'daki **Settings** sayfasından bir yönetim token'ı kullanın:
 
 ```bash
 Authorization: Bearer mt-your-management-token
 ```
 
 <Warning>
-Yönetim belirteçleri inference API key’lerden farklıdır. `/v1/management/*` için `mt-...`, `/v1/responses` gibi inference endpointleri için `sk-...` kullanın.
+Yönetim token'ları inference API anahtarlarından farklıdır. `/v1/management/*` için `mt-...`, `/v1/responses` gibi model inference endpoint'leri için `sk-...` kullanın.
 </Warning>
 
-## Kullanılabilir endpointler
+## Kullanılabilir Endpoint'ler
 
 | Endpoint | Method | Açıklama |
 |----------|--------|----------|
-| `/v1/management/api-keys` | GET | Geçerli kuruluştaki kullanıcı API anahtarlarını listeler |
-| `/v1/management/api-keys` | POST | Yeni bir kullanıcı API anahtarı oluşturur |
-| `/v1/management/api-keys/{keyId}` | PATCH | Adı, kullanım limitini, izinli modelleri, son kullanma tarihini veya durumu günceller |
-| `/v1/management/api-keys/{keyId}/usage` | GET | Belirli bir anahtar için sayfalanmış kullanım ayrıntılarını getirir |
-| `/v1/management/api-keys/{keyId}/billing` | GET | Belirli bir anahtar için toplulaştırılmış faturalama kırılımlarını getirir |
+| `/v1/management/api-keys` | GET | Geçerli kuruluştaki kullanıcı yönetimli API anahtarlarını listele |
+| `/v1/management/api-keys` | POST | Yeni bir kullanıcı API anahtarı oluştur |
+| `/v1/management/api-keys/{keyId}` | PATCH | Adı, kullanım limitini, izinli modelleri, son kullanım tarihini veya durumu güncelle |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Belirli bir anahtar için sayfalı kullanım detaylarını getir |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Belirli bir anahtar için toplulaştırılmış faturalama dökümünü getir |
 
-## Kullanım filtre sözleşmesi
+## Usage Filtre Sözleşmesi
 
-`GET /v1/management/api-keys/{keyId}/usage` aşağıdaki sorgu parametrelerini destekler.
+`GET /v1/management/api-keys/{keyId}/usage` aşağıdaki query parametrelerini destekler:
 
-| Parametre | Tür | Varsayılan / sınırlar | Açıklama |
-|-----------|-----|-----------------------|----------|
-| `page` | integer | varsayılan `1`, minimum `1` | 1’den başlayan sayfa numarası |
-| `limit` | integer | varsayılan `50`, minimum `1`, maksimum `100` | Sayfa boyutu |
-| `logicalModel` | string | maksimum uzunluk `100` | İstenen mantıksal model adı |
-| `modelVendor` | string | maksimum uzunluk `100` | Herkese açık model sağlayıcısı |
+| Parametre | Tür | Varsayılan / Sınırlar | Notlar |
+|-----------|------|----------------------|--------|
+| `page` | integer | varsayılan `1`, min `1` | 1'den başlayan sayfa numarası |
+| `limit` | integer | varsayılan `50`, min `1`, max `100` | Sayfa boyutu |
+| `logicalModel` | string | max uzunluk `100` | İstenen mantıksal model adı |
+| `modelVendor` | string | max uzunluk `100` | Herkese açık model vendor'ı |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
 | `accessChannel` | enum | - | `platform` veya `byok` |
-| `startDate` | string | - | Dahil alt sınır; zaman dilimli RFC3339 veya `YYYY-MM-DD` kabul eder |
-| `endDate` | string | - | Dahil üst sınır; zaman dilimli RFC3339 veya `YYYY-MM-DD` kabul eder |
+| `startDate` | string | - | Dahil alt sınır; timezone'lu RFC3339 veya `YYYY-MM-DD` kabul eder |
+| `endDate` | string | - | Dahil üst sınır; timezone'lu RFC3339 veya `YYYY-MM-DD` kabul eder |
 
-`startDate` ve `endDate` birlikte gönderilirse `startDate`, `endDate` değerinden erken veya eşit olmalıdır.
+Hem `startDate` hem `endDate` varsa, `startDate` `endDate`'den küçük ya da eşit olmalıdır.
 
-## API anahtarı gövde sözleşmesi
+## API Anahtarı Body Sözleşmesi
 
 ### POST /v1/management/api-keys
 
-| Alan | Tür | Varsayılan / sınırlar | Açıklama |
-|------|-----|-----------------------|----------|
-| `name` | string | zorunlu, varsayılan `Default Key`, uzunluk `1-50` | Görünen ad; baştaki ve sondaki boşluklar sunucu tarafında temizlenir |
-| `limitAmount` | number \| null | minimum `0`, maksimum `100000` | `null` veya gönderilmezse = sınırsız, `0` = sıfır kota, pozitif değer = USD harcama sınırı |
-| `limitCurrency` | enum | varsayılan `USD` | İsteğe bağlı: `USD` veya `CNY`. `CNY` gönderilirse `limitAmount` RMB olarak yorumlanır ve kaydetmeden önce sunucu tarafında USD’ye dönüştürülür |
-| `models` | string[] | varsayılan `[]` | İsteğe bağlı mantıksal model izin listesi |
-| `expiresAt` | string \| null | RFC3339 datetime | `null` son kullanma tarihi olmadığı anlamına gelir |
+| Alan | Tür | Varsayılan / Sınırlar | Notlar |
+|------|-----|----------------------|--------|
+| `name` | string | zorunlu, varsayılan `Default Key`, uzunluk `1-50` | Görünen ad, sunucu tarafında trim edilir |
+| `limitAmount` | number \| null | min `0`, input max `1000000` | `null` veya atlanırsa = limitsiz, `0` = sıfır kota. Pozitif değerler `100000` USD eşdeğerini aşamayacak şekilde depolama limiti olarak normalize edilir |
+| `limitCurrency` | enum | varsayılan `USD` | Opsiyonel: `USD` veya `CNY`. `CNY` seçilirse `limitAmount` RMB kabul edilir ve kaydetmeden önce sunucu tarafında USD'ye çevrilir |
+| `models` | string[] | varsayılan `[]` | Opsiyonel mantıksal model allowlist'i |
+| `expiresAt` | string \| null | RFC3339 datetime | `null` son kullanma olmadığı anlamına gelir |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| Alan | Tür | Varsayılan / sınırlar | Açıklama |
-|------|-----|-----------------------|----------|
-| `status` | enum | - | `active`, `inactive`, `revoked` |
+| Alan | Tür | Varsayılan / Sınırlar | Notlar |
+|------|-----|----------------------|--------|
+| `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | uzunluk `1-50` | Güncellenmiş görünen ad |
-| `limitAmount` | number \| null | minimum `0`, maksimum `100000` | `null` = sınırsız, `0` = sıfır kota |
-| `limitCurrency` | enum | varsayılan `USD` | İsteğe bağlı: `USD` veya `CNY`. `CNY` gönderilirse `limitAmount` RMB olarak yorumlanır ve kaydetmeden önce sunucu tarafında USD’ye dönüştürülür |
-| `models` | string[] | - | Güncellenmiş mantıksal model izin listesi |
-| `expiresAt` | string \| null | RFC3339 datetime | `null` son kullanma tarihini temizler |
+| `limitAmount` | number \| null | min `0`, input max `1000000` | `null` = limitsiz, `0` = sıfır kota. Pozitif değerler `100000` USD eşdeğerini aşamayacak şekilde normalize edilir |
+| `limitCurrency` | enum | varsayılan `USD` | Opsiyonel: `USD` veya `CNY`. `CNY` seçilirse `limitAmount` RMB kabul edilir ve kaydetmeden önce sunucu tarafında USD'ye çevrilir |
+| `models` | string[] | - | Güncellenmiş mantıksal model allowlist'i |
+| `expiresAt` | string \| null | RFC3339 datetime | `null` son kullanmayı kaldırır |
 
-PATCH isteğinde en az bir alan bulunmalıdır.
+PATCH için en az bir alan verilmelidir.
 
-## Para birimi sözleşmesi
+## Parasal Sözleşme
 
-- Varsayılan olarak istek tarafındaki `limitAmount` USD kabul edilir. `limitCurrency: "CNY"` ayarlanırsa RMB limiti gönderebilirsiniz; sunucu bunu kaydetmeden önce mevcut kurla USD’ye çevirir.
-- Yanıttaki parasal alanlar özgün USD alanını korur ve `_cny` son ekiyle RMB eşdeğerini ekler.
-- `exchange_rate`, API anahtarı metadatasıyla birlikte döner ve bu yanıttaki her `*_cny` değeri için kullanılan USD→CNY kurudur.
+- Varsayılan olarak, request tarafındaki `limitAmount` USD olarak yorumlanır. RMB limit göndermek için `limitCurrency: "CNY"` ayarlayın; sunucu bunu kaydetmeden önce güncel kurla USD'ye çevirir.
+- Response'taki parasal alanlar özgün USD alanını korur ve `_cny` ekli RMB karşılığını ekler.
+- `exchange_rate`, API anahtarı metadata'sıyla birlikte döner ve bu response'taki her `*_cny` değeri için kullanılan USD→CNY kurudur.
 
-## Raporlama anlamı
+## Raporlama Anlamı
 
 - `logicalModel`, çağıranın talep ettiği herkese açık mantıksal modeli ifade eder.
-- `modelVendor`, gizli fiziksel rota yerine herkese açık model sağlayıcısını ifade eder.
+- `modelVendor`, gizli fiziksel route yerine herkese açık model vendor'ını ifade eder.
 - `scene`, endpoint veya görev türünden türetilen herkese açık istek sahnesidir.
-- `accessChannel=platform`, isteğin LemonData platform kanalı üzerinden faturalandığı anlamına gelir.
-- `accessChannel=byok`, isteğin sizin upstream sağlayıcı anahtarınızı kullandığı anlamına gelir.
+- `accessChannel=platform`, isteğin LemonData'nın platform kanalından faturalandığı anlamına gelir.
+- `accessChannel=byok`, isteğin kendi upstream provider anahtarınızı kullandığı anlamına gelir.
 
-Yanıtlar yalnızca herkese açık faturalama ve raporlama alanlarını gösterir. Dahili yönlendirme ayrıntıları ve fiziksel sağlayıcı metadatası gizli kalır.
-- `/usage` satırları, alttaki istek mutabakatı tamamlandıktan sonra `billing_transaction_id` içerebilir. İstek düzeyinde mutabakat için `request_id` + `billing_transaction_id` kullanın.
+Yanıtlar yalnızca herkese açık faturalama ve raporlama alanlarını gösterir. Dahili routing ayrıntıları ve fiziksel provider metadata'sı gizli kalır.
+- `/usage` satır öğeleri, alttaki istek settlement edilmiş billing durumuna ulaştığında `billing_transaction_id` içerebilir. İstek düzeyinde mutabakat için `request_id` + `billing_transaction_id` kullanın.
 
-## Billing sayfalama notu
+## Faturalama Sayfalama Notu
 
-`/usage` sayfalanır. `/billing` şu anda toplulaştırılmış bir endpointtir ve `page` / `limit` tarzı sayfalama metadatası döndürmez. Satır düzeyinde kayıtlar gerekiyorsa `/usage` kullanın.
+`/usage` sayfalanır. `/billing` şu anda toplulaştırılmış bir breakdown endpoint'idir ve `page` / `limit` tarzı sayfalama metadata'sı döndürmez. Satır düzeyinde kayıtlara ihtiyacınız varsa `/usage` kullanın.
 
-## Hızlı örnek
+## Hızlı Örnek
 
-Önce geçerli yönetim belirteci için erişilebilir API anahtarlarını listeleyin.
+Önce mevcut yönetim token'ı için erişilebilir API anahtarlarını listeleyin:
 
 <RequestExample>
 ```bash cURL
@@ -126,7 +126,7 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 ```
 </ResponseExample>
 
-## Sonraki adımlar
+## Sonraki Adımlar
 
 - [API anahtarlarını listele](/tr/api-reference/management/list-api-keys)
 - [API anahtarı oluştur](/tr/api-reference/management/create-api-key)

@@ -56,6 +56,14 @@
     {
       "name": "Management",
       "description": "Organization API key management and key-level usage/billing via management token"
+    },
+    {
+      "name": "Files",
+      "description": "Batch file upload and retrieval"
+    },
+    {
+      "name": "Batches",
+      "description": "OpenAI-compatible asynchronous batch jobs"
     }
   ],
   "security": [
@@ -1003,8 +1011,17 @@
                     "description": "Model to use"
                   },
                   "input": {
-                    "type": "array",
-                    "description": "Input items for the conversation"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "description": "Single string input."
+                      },
+                      {
+                        "type": "array",
+                        "description": "Structured input items for the conversation."
+                      }
+                    ],
+                    "description": "Input content as a string or structured item array."
                   },
                   "instructions": {
                     "type": "string",
@@ -1019,6 +1036,75 @@
                   },
                   "stream": {
                     "type": "boolean"
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "description": "Tools available to the model."
+                  },
+                  "tool_choice": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    ],
+                    "description": "Tool choice policy or explicit tool selection."
+                  },
+                  "stream_options": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Streaming options such as usage chunk inclusion."
+                  },
+                  "reasoning_effort": {
+                    "type": "string",
+                    "description": "Reasoning effort hint for compatible models."
+                  },
+                  "include": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Additional response sections to include when supported."
+                  },
+                  "service_tier": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Service tier hint for compatible providers."
+                  },
+                  "truncation_strategy": {
+                    "type": "string",
+                    "description": "Truncation strategy for long conversations when supported."
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "description": "Seed for deterministic-compatible providers."
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "End-user identifier."
+                  },
+                  "parallel_tool_calls": {
+                    "type": "boolean",
+                    "description": "Whether the model may issue parallel tool calls."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Request metadata."
+                  },
+                  "text": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Text formatting options."
                   }
                 }
               }
@@ -1087,7 +1173,39 @@
         },
         "responses": {
           "200": {
-            "description": "Ranked results"
+            "description": "Ranked results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "results",
+                    "model"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "usage": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -1136,6 +1254,22 @@
                       "MUSIC",
                       "LYRICS"
                     ]
+                  },
+                  "mv": {
+                    "type": "string",
+                    "description": "Music/video mode hint for compatible providers."
+                  },
+                  "continue_clip_id": {
+                    "type": "string",
+                    "description": "Clip ID to continue when extending an existing generation."
+                  },
+                  "continue_at": {
+                    "type": "number",
+                    "description": "Timestamp in seconds for continuation flows."
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "End-user identifier."
                   }
                 }
               }
@@ -1229,6 +1363,18 @@
                       "standard",
                       "high"
                     ]
+                  },
+                  "style": {
+                    "type": "string",
+                    "description": "Style hint for compatible 3D model families."
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "description": "Seed for deterministic-compatible providers."
+                  },
+                  "user": {
+                    "type": "string",
+                    "description": "End-user identifier."
                   }
                 }
               }
@@ -1735,6 +1881,953 @@
           }
         }
       }
+    },
+    "/v1/models/{model}/pricing": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Get model pricing",
+        "description": "Retrieves pricing-only detail for one model. Use this endpoint for price explanation, not for non-chat request construction.",
+        "operationId": "getModelPricing",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "description": "The model ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Model pricing information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelPricingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Model not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/files": {
+      "post": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Upload file",
+        "description": "Uploads a JSONL batch input file.",
+        "operationId": "uploadFile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "purpose"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "batch"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "List files",
+        "operationId": "listFiles",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "purpose",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "batch",
+                "batch_output"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/v1/files/{file_id}": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Retrieve file",
+        "operationId": "retrieveFile",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/v1/files/{file_id}/content": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Retrieve file content",
+        "operationId": "retrieveFileContent",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File content",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/v1/batches": {
+      "post": {
+        "tags": [
+          "Batches"
+        ],
+        "summary": "Create batch",
+        "description": "Creates an OpenAI-compatible batch job.",
+        "operationId": "createBatch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Batches"
+        ],
+        "summary": "List batches",
+        "operationId": "listBatches",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of batches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/v1/batches/{batch_id}": {
+      "get": {
+        "tags": [
+          "Batches"
+        ],
+        "summary": "Retrieve batch",
+        "operationId": "retrieveBatch",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batch object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/v1/batches/{batch_id}/cancel": {
+      "post": {
+        "tags": [
+          "Batches"
+        ],
+        "summary": "Cancel batch",
+        "operationId": "cancelBatch",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled batch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/v1/pricing": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "List model pricing",
+        "description": "Returns the public pricing surface for active models, with optional provider and tag filters.",
+        "operationId": "getPricing",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "Filter by provider ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "description": "Filter by model tag.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pricing information for matching models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/translations": {
+      "post": {
+        "tags": [
+          "Text"
+        ],
+        "summary": "Translate text",
+        "description": "Translates text into a target language using the current public translation contract.",
+        "operationId": "createTranslation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranslationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Translated text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranslationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "$ref": "#/components/responses/PaymentRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/audio/translations": {
+      "post": {
+        "tags": [
+          "Audio"
+        ],
+        "summary": "Translate audio",
+        "description": "Transcribes audio and translates the result to English.",
+        "operationId": "createAudioTranslation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "model": {
+                    "type": "string",
+                    "default": "whisper-1"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "temperature": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Translated transcript",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioTranscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/images/edits": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Edit image",
+        "description": "Edits an image using either JSON image URLs or multipart uploads.",
+        "operationId": "editImage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "model",
+                  "prompt",
+                  "image_url"
+                ],
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "image_url": {
+                    "type": "string"
+                  },
+                  "n": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "string"
+                  },
+                  "aspect_ratio": {
+                    "type": "string"
+                  },
+                  "resolution": {
+                    "type": "string"
+                  },
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image",
+                  "prompt"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "mask": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "n": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "quality": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "string"
+                  },
+                  "aspect_ratio": {
+                    "type": "string"
+                  },
+                  "resolution": {
+                    "type": "string"
+                  },
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Edited image response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/images/variations": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "summary": "Create image variation",
+        "description": "Generates image variations from a multipart image upload.",
+        "operationId": "createImageVariation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "model": {
+                    "type": "string",
+                    "default": "dall-e-2"
+                  },
+                  "n": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "size": {
+                    "type": "string"
+                  },
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Variation response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1beta/models": {
+      "get": {
+        "tags": [
+          "Gemini"
+        ],
+        "summary": "List Gemini-native models",
+        "description": "Lists enabled models through the Gemini-compatible v1beta model discovery surface.",
+        "operationId": "listGeminiModels",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gemini model list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiModelListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1beta/models/{model}": {
+      "get": {
+        "tags": [
+          "Gemini"
+        ],
+        "summary": "Get Gemini-native model",
+        "description": "Retrieves model metadata through the Gemini-compatible v1beta surface.",
+        "operationId": "getGeminiModel",
+        "parameters": [
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gemini model details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiModelInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Model not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiErrorResponse"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeminiErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/cache/feedback": {
+      "post": {
+        "tags": [
+          "Cache"
+        ],
+        "summary": "Submit cache feedback",
+        "description": "Report a cached response that was incorrect, outdated, irrelevant, or otherwise unsafe to reuse.",
+        "operationId": "submitCacheFeedback",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CacheFeedbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Feedback recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheFeedbackResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/cache/feedback/{entryId}": {
+      "get": {
+        "tags": [
+          "Cache"
+        ],
+        "summary": "Get cache feedback stats",
+        "description": "Retrieve aggregate feedback statistics for one cache entry.",
+        "operationId": "getCacheFeedbackStats",
+        "parameters": [
+          {
+            "name": "entryId",
+            "in": "path",
+            "required": true,
+            "description": "Cache entry identifier.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feedback statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheFeedbackStatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1790,7 +2883,7 @@
           "n": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 10,
+            "maximum": 128,
             "default": 1,
             "description": "Number of completions to generate"
           },
@@ -1904,6 +2997,70 @@
           "user": {
             "type": "string",
             "description": "End-user identifier for abuse detection"
+          },
+          "stream_options": {
+            "type": "object",
+            "description": "Streaming options such as usage chunk inclusion.",
+            "additionalProperties": true
+          },
+          "parallel_tool_calls": {
+            "type": "boolean",
+            "description": "Whether the model may issue parallel tool calls."
+          },
+          "reasoning_effort": {
+            "type": "string",
+            "description": "Reasoning effort hint for compatible model families."
+          },
+          "logprobs": {
+            "type": "boolean",
+            "description": "Whether to return log probabilities for output tokens."
+          },
+          "top_logprobs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20,
+            "description": "Number of most likely tokens to return at each position when logprobs is enabled."
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Top-k sampling cutoff for compatible providers."
+          },
+          "logit_bias": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Per-token logit bias map."
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Requested output modalities such as text or audio."
+          },
+          "audio": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Audio output configuration when requesting audio modality."
+          },
+          "prediction": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Prediction hints for providers that support draft or speculative decoding."
+          },
+          "service_tier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Service tier hint for compatible providers."
+          },
+          "cache_control": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Cache behavior override for compatible providers."
           }
         }
       },
@@ -2231,9 +3388,24 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
               }
             ],
-            "description": "Input text(s) to embed"
+            "description": "Input text(s) or token array(s) to embed."
           },
           "encoding_format": {
             "type": "string",
@@ -2427,15 +3599,7 @@
           },
           "voice": {
             "type": "string",
-            "enum": [
-              "alloy",
-              "echo",
-              "fable",
-              "onyx",
-              "nova",
-              "shimmer"
-            ],
-            "description": "Voice to use"
+            "description": "Voice to use. Common voices include alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, and verse."
           },
           "response_format": {
             "type": "string",
@@ -2501,6 +3665,17 @@
             "minimum": 0,
             "maximum": 1,
             "description": "Sampling temperature"
+          },
+          "timestamp_granularities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "word",
+                "segment"
+              ]
+            },
+            "description": "Timestamp granularity selection. Requires verbose_json output when requesting word-level timestamps."
           }
         }
       },
@@ -2671,9 +3846,9 @@
           },
           "image_urls": {
             "type": "array",
-            "description": "Compatibility image URL array. The current public contract limits this wrapper field to a single item.",
+            "description": "Image URL array for compatible image-conditioned video flows. Route-level support currently allows up to 9 entries.",
             "minItems": 1,
-            "maxItems": 1,
+            "maxItems": 9,
             "items": {
               "type": "string",
               "format": "uri"
@@ -2681,9 +3856,9 @@
           },
           "reference_images": {
             "type": "array",
-            "description": "Canonical public reference-image field for reference-to-video conditioning. Provide up to 3 URLs or compatible data URLs.",
+            "description": "Canonical public reference-image field for reference-to-video conditioning. Route-level support currently allows up to 9 URLs or compatible data URLs.",
             "minItems": 1,
-            "maxItems": 3,
+            "maxItems": 9,
             "items": {
               "type": "string"
             }
@@ -2731,6 +3906,26 @@
           "effect_type": {
             "type": "string",
             "description": "Model-specific effect selector for specialized editing flows."
+          },
+          "video_urls": {
+            "type": "array",
+            "description": "Compatibility array for video-conditioned flows when multiple input videos are supported by the routed model family.",
+            "minItems": 1,
+            "maxItems": 9,
+            "items": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "audio_urls": {
+            "type": "array",
+            "description": "Compatibility array for audio-conditioned flows when multiple audio references are supported by the routed model family.",
+            "minItems": 1,
+            "maxItems": 9,
+            "items": {
+              "type": "string",
+              "format": "uri"
+            }
           }
         }
       },
@@ -2835,15 +4030,67 @@
             }
           },
           "error": {
-            "type": "object",
-            "properties": {
-              "code": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "message": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
               }
+            ]
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "poll_url": {
+            "type": "string"
+          },
+          "billing_transaction_id": {
+            "type": "string"
+          },
+          "video_url": {
+            "type": "string"
+          },
+          "videos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
             }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "audio_url": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "lyrics": {
+            "type": "string"
+          },
+          "model_url": {
+            "type": "string"
+          },
+          "glb_url": {
+            "type": "string"
+          },
+          "fbx_url": {
+            "type": "string"
           }
         }
       },
@@ -3075,6 +4322,45 @@
           "stream": {
             "type": "boolean",
             "default": false
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "Tool definitions available to the model."
+          },
+          "tool_choice": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": true
+              }
+            ],
+            "description": "Tool choice policy or explicit tool selection."
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Request metadata echoed into downstream logs or traces when supported."
+          },
+          "thinking": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Thinking configuration for compatible Anthropic-style models."
+          },
+          "stream_options": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Streaming options such as usage chunk inclusion."
+          },
+          "service_tier": {
+            "type": "string",
+            "description": "Service tier hint for compatible providers."
           }
         }
       },
@@ -3979,6 +5265,909 @@
           "owned_by",
           "lemondata"
         ],
+        "additionalProperties": false
+      },
+      "ModelLemondataExtension": {
+        "type": "object",
+        "description": "LemonData extension fields for the detail route, including pricing, capabilities, recommendation metadata, and the full non-chat public contract.",
+        "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pricing": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "max_input_tokens": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "max_output_tokens": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "pricing_unit": {
+            "type": "string"
+          },
+          "cache_pricing": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "has_complex_pricing": {
+            "type": "boolean"
+          },
+          "supported_operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pricing_summary": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "pricing_provenance": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "public_contract_summary": {
+            "$ref": "#/components/schemas/NonChatPublicContractSummary"
+          },
+          "public_contract": {
+            "$ref": "#/components/schemas/NonChatPublicContract"
+          }
+        },
+        "additionalProperties": true
+      },
+      "NonChatPublicContractSummary": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "public_operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supported_parameters": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "required_selectors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "optional_selectors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resolutions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "durations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "aspect_ratios": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "request_endpoint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contract_scope": {
+            "type": "string",
+            "enum": [
+              "active",
+              "deferred"
+            ]
+          },
+          "recommended_request_summary": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "NonChatPublicContract": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/NonChatPublicContractSummary"
+          },
+          {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "documented_inputs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "documented_outputs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "fallback_status_endpoints": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "truth_source": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "notes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "recommended_request": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      },
+      "ModelPricingResponse": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "pricing_unit": {
+            "type": "string"
+          },
+          "has_complex_pricing": {
+            "type": "boolean"
+          },
+          "supported_operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pricing_summary": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "pricing_provenance": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "pricing_details": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "scalar_pricing": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "FileObject": {
+        "type": "object",
+        "required": [
+          "id",
+          "object",
+          "bytes",
+          "created_at",
+          "filename",
+          "purpose",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "file-abc123"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "file"
+            ]
+          },
+          "bytes": {
+            "type": "integer",
+            "example": 1234
+          },
+          "created_at": {
+            "type": "integer",
+            "example": 1741339200
+          },
+          "filename": {
+            "type": "string",
+            "example": "batch.jsonl"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "batch",
+              "batch_output"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "processed"
+          },
+          "expires_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "example": 1741425600
+          }
+        }
+      },
+      "FileListResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "first_id",
+          "last_id",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileObject"
+            }
+          },
+          "first_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BatchRequestCounts": {
+        "type": "object",
+        "required": [
+          "total",
+          "completed",
+          "failed"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          }
+        }
+      },
+      "BatchObject": {
+        "type": "object",
+        "required": [
+          "id",
+          "object",
+          "endpoint",
+          "input_file_id",
+          "completion_window",
+          "status",
+          "request_counts"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "batch_abc123"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "batch"
+            ]
+          },
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "/v1/chat/completions",
+              "/v1/embeddings",
+              "/v1/responses"
+            ]
+          },
+          "errors": {
+            "type": [
+              "object",
+              "array",
+              "null"
+            ]
+          },
+          "input_file_id": {
+            "type": "string"
+          },
+          "completion_window": {
+            "type": "string",
+            "enum": [
+              "24h"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "validating",
+              "queued",
+              "in_progress",
+              "finalizing",
+              "completed",
+              "failed",
+              "cancelling",
+              "cancelled",
+              "expired"
+            ]
+          },
+          "output_file_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_file_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "in_progress_at": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "expires_at": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "finalizing_at": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "failed_at": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "expired_at": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cancelling_at": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cancelled_at": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "request_counts": {
+            "$ref": "#/components/schemas/BatchRequestCounts"
+          },
+          "metadata": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      },
+      "BatchListResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "first_id",
+          "last_id",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "list"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchObject"
+            }
+          },
+          "first_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BatchOutputExpiresAfter": {
+        "type": "object",
+        "required": [
+          "anchor",
+          "seconds"
+        ],
+        "properties": {
+          "anchor": {
+            "type": "string",
+            "enum": [
+              "created_at",
+              "completed_at"
+            ]
+          },
+          "seconds": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "BatchCreateRequest": {
+        "type": "object",
+        "required": [
+          "input_file_id",
+          "endpoint",
+          "completion_window"
+        ],
+        "properties": {
+          "input_file_id": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string",
+            "enum": [
+              "/v1/chat/completions",
+              "/v1/embeddings",
+              "/v1/responses"
+            ]
+          },
+          "completion_window": {
+            "type": "string",
+            "enum": [
+              "24h"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "output_expires_after": {
+            "$ref": "#/components/schemas/BatchOutputExpiresAfter"
+          }
+        }
+      },
+      "PricingEntry": {
+        "type": "object",
+        "required": [
+          "model",
+          "provider",
+          "is_lock_price",
+          "capabilities",
+          "aliases"
+        ],
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "is_lock_price": {
+            "type": "boolean"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "input_per_1m_tokens": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output_per_1m_tokens": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lock_price_per_request": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_complex_pricing": {
+            "type": "boolean"
+          },
+          "supported_operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pricing_summary": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "pricing_provenance": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "PricingResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "updated_at",
+          "currency",
+          "data"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "pricing"
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD"
+            ]
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PricingEntry"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "TranslationRequest": {
+        "type": "object",
+        "required": [
+          "model",
+          "text",
+          "target_language"
+        ],
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "source_language": {
+            "type": "string"
+          },
+          "target_language": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "text/plain",
+              "text/html"
+            ]
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TranslationResponse": {
+        "type": "object",
+        "required": [
+          "text",
+          "model",
+          "target_language"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "source_language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_language": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "GeminiModelInfo": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "GeminiModelListResponse": {
+        "type": "object",
+        "required": [
+          "models"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GeminiModelInfo"
+            }
+          },
+          "nextPageToken": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "GeminiErrorResponse": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "CacheFeedbackRequest": {
+        "type": "object",
+        "required": [
+          "cache_entry_id",
+          "feedback_type"
+        ],
+        "properties": {
+          "cache_entry_id": {
+            "type": "string",
+            "description": "Cache entry identifier."
+          },
+          "feedback_type": {
+            "type": "string",
+            "enum": [
+              "wrong_answer",
+              "outdated",
+              "irrelevant",
+              "other"
+            ],
+            "description": "Why the cached response should be reviewed."
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Optional originating request ID."
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional free-form operator context."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CacheFeedbackResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "recorded",
+          "invalidated",
+          "stats"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "cache.feedback"
+            ]
+          },
+          "recorded": {
+            "type": "boolean"
+          },
+          "invalidated": {
+            "type": "boolean"
+          },
+          "stats": {
+            "type": "object",
+            "required": [
+              "negative_feedback_count",
+              "total_hit_count",
+              "negative_feedback_rate"
+            ],
+            "properties": {
+              "negative_feedback_count": {
+                "type": "integer"
+              },
+              "total_hit_count": {
+                "type": "integer"
+              },
+              "negative_feedback_rate": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "CacheFeedbackStatsResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "entry_id",
+          "negative_feedback_count",
+          "total_hit_count",
+          "negative_feedback_rate",
+          "at_risk"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "cache.feedback.stats"
+            ]
+          },
+          "entry_id": {
+            "type": "string"
+          },
+          "negative_feedback_count": {
+            "type": "integer"
+          },
+          "total_hit_count": {
+            "type": "integer"
+          },
+          "negative_feedback_rate": {
+            "type": "number"
+          },
+          "at_risk": {
+            "type": "boolean"
+          }
+        },
         "additionalProperties": false
       }
     },

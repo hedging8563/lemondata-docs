@@ -1,40 +1,40 @@
 ---
-title: "API de administración"
-description: "Gestiona las API Keys de la organización y consulta uso y facturación por clave mediante un token de administración."
+title: "API de gestión"
+description: "Administra las claves API de la organización y consulta uso y facturación por clave mediante un token de gestión."
 ---
 
 ## Resumen
 
-La API de administración te permite gestionar las API Keys de la organización y consultar uso y facturación por clave sin usar una API Key estándar de inferencia.
+La API de gestión te permite administrar las claves API de la organización y consultar uso y facturación por clave sin usar una clave estándar de inferencia.
 
-Puedes emitir y rotar el token de administración desde la página **Settings** del Dashboard.
+Emite el token de gestión desde la página **Settings** de tu Dashboard:
 
 ```bash
 Authorization: Bearer mt-your-management-token
 ```
 
 <Warning>
-Los tokens de administración son distintos de las API Keys de inferencia. Usa `mt-...` para `/v1/management/*` y `sk-...` para endpoints de inferencia como `/v1/responses`.
+Los tokens de gestión son distintos de las claves API de inferencia. Usa `mt-...` para `/v1/management/*` y `sk-...` para endpoints de inferencia como `/v1/responses`.
 </Warning>
 
 ## Endpoints disponibles
 
 | Endpoint | Method | Descripción |
 |----------|--------|-------------|
-| `/v1/management/api-keys` | GET | Lista las API Keys de usuario de la organización actual |
-| `/v1/management/api-keys` | POST | Crea una nueva API Key de usuario |
-| `/v1/management/api-keys/{keyId}` | PATCH | Actualiza nombre, límite de uso, modelos permitidos, vencimiento o estado |
-| `/v1/management/api-keys/{keyId}/usage` | GET | Recupera el detalle de uso paginado para una clave concreta |
-| `/v1/management/api-keys/{keyId}/billing` | GET | Recupera el desglose agregado de facturación para una clave concreta |
+| `/v1/management/api-keys` | GET | Lista las claves API administradas por usuarios de la organización actual |
+| `/v1/management/api-keys` | POST | Crea una nueva clave API de usuario |
+| `/v1/management/api-keys/{keyId}` | PATCH | Actualiza nombre, límite de uso, modelos permitidos, caducidad o estado |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Devuelve el detalle paginado de uso de una clave específica |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Devuelve el desglose agregado de facturación de una clave específica |
 
 ## Contrato de filtros de uso
 
-`GET /v1/management/api-keys/{keyId}/usage` admite los siguientes parámetros de consulta.
+`GET /v1/management/api-keys/{keyId}/usage` admite los siguientes parámetros de consulta:
 
-| Parámetro | Tipo | Valores por defecto / límites | Descripción |
-|-----------|------|-------------------------------|-------------|
-| `page` | integer | valor por defecto `1`, mínimo `1` | Número de página empezando en 1 |
-| `limit` | integer | valor por defecto `50`, mínimo `1`, máximo `100` | Tamaño de página |
+| Parámetro | Tipo | Valor predeterminado / límites | Notas |
+|-----------|------|-------------------------------|-------|
+| `page` | integer | predeterminado `1`, mínimo `1` | Número de página basado en 1 |
+| `limit` | integer | predeterminado `50`, mínimo `1`, máximo `100` | Tamaño de página |
 | `logicalModel` | string | longitud máxima `100` | Nombre del modelo lógico solicitado |
 | `modelVendor` | string | longitud máxima `100` | Proveedor público del modelo |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
@@ -42,57 +42,57 @@ Los tokens de administración son distintos de las API Keys de inferencia. Usa `
 | `startDate` | string | - | Límite inferior inclusivo; acepta RFC3339 con zona horaria o `YYYY-MM-DD` |
 | `endDate` | string | - | Límite superior inclusivo; acepta RFC3339 con zona horaria o `YYYY-MM-DD` |
 
-Si `startDate` y `endDate` se envían a la vez, `startDate` debe ser anterior o igual a `endDate`.
+Si `startDate` y `endDate` están presentes, `startDate` debe ser anterior o igual a `endDate`.
 
-## Contrato del cuerpo de API Key
+## Contrato del cuerpo de la clave API
 
 ### POST /v1/management/api-keys
 
-| Campo | Tipo | Valores por defecto / límites | Descripción |
-|-------|------|-------------------------------|-------------|
-| `name` | string | obligatorio, valor por defecto `Default Key`, longitud `1-50` | Nombre visible; el servidor recorta espacios al inicio y al final |
-| `limitAmount` | number \| null | mínimo `0`, máximo `100000` | `null` u omitido = ilimitado, `0` = cuota cero, valor positivo = tope de gasto en USD |
-| `limitCurrency` | enum | valor por defecto `USD` | Opcional: `USD` o `CNY`. Si se establece en `CNY`, `limitAmount` se interpreta en RMB y el servidor lo convierte a USD antes de guardarlo |
-| `models` | string[] | valor por defecto `[]` | Lista opcional de modelos lógicos permitidos |
-| `expiresAt` | string \| null | datetime RFC3339 | `null` significa sin vencimiento |
+| Campo | Tipo | Valor predeterminado / límites | Notas |
+|-------|------|-------------------------------|-------|
+| `name` | string | requerido, predeterminado `Default Key`, longitud `1-50` | Nombre visible, recortado en el servidor |
+| `limitAmount` | number \| null | mínimo `0`, máximo de entrada `1000000` | `null` o omitido = ilimitado, `0` = cuota cero. Los valores positivos se normalizan a un límite almacenado que no puede superar `100000` USD equivalente. |
+| `limitCurrency` | enum | predeterminado `USD` | Opcional: `USD` o `CNY`. Si se establece `CNY`, `limitAmount` se interpreta como RMB y se convierte a USD en el servidor antes de almacenarse |
+| `models` | string[] | predeterminado `[]` | Lista opcional de modelos lógicos permitidos |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` significa sin caducidad |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| Campo | Tipo | Valores por defecto / límites | Descripción |
-|-------|------|-------------------------------|-------------|
-| `status` | enum | - | `active`, `inactive`, `revoked` |
+| Campo | Tipo | Valor predeterminado / límites | Notas |
+|-------|------|-------------------------------|-------|
+| `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | longitud `1-50` | Nombre visible actualizado |
-| `limitAmount` | number \| null | mínimo `0`, máximo `100000` | `null` = ilimitado, `0` = cuota cero |
-| `limitCurrency` | enum | valor por defecto `USD` | Opcional: `USD` o `CNY`. Si se establece en `CNY`, `limitAmount` se interpreta en RMB y el servidor lo convierte a USD antes de guardarlo |
+| `limitAmount` | number \| null | mínimo `0`, máximo de entrada `1000000` | `null` = ilimitado, `0` = cuota cero. Los valores positivos se normalizan a un límite almacenado que no puede superar `100000` USD equivalente. |
+| `limitCurrency` | enum | predeterminado `USD` | Opcional: `USD` o `CNY`. Si se establece `CNY`, `limitAmount` se interpreta como RMB y se convierte a USD en el servidor antes de almacenarse |
 | `models` | string[] | - | Lista actualizada de modelos lógicos permitidos |
-| `expiresAt` | string \| null | datetime RFC3339 | `null` elimina el vencimiento |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` elimina la caducidad |
 
-La solicitud PATCH debe incluir al menos un campo.
+Debe proporcionarse al menos un campo de PATCH.
 
 ## Contrato monetario
 
-- De forma predeterminada, `limitAmount` en la solicitud se interpreta en USD. Si estableces `limitCurrency: "CNY"`, puedes enviar un tope en RMB y el servidor lo convertirá a USD con el tipo de cambio actual antes de guardarlo.
-- Los campos monetarios de la respuesta conservan el valor original en USD y agregan un acompañante en RMB con el sufijo `_cny`.
-- `exchange_rate` se devuelve junto con los metadatos de la API key y representa la tasa USD→CNY usada para cada valor `*_cny` de esa respuesta.
+- Por defecto, `limitAmount` en la solicitud se interpreta como USD. Usa `limitCurrency: "CNY"` para enviar un límite en RMB; el servidor lo convierte a USD usando el tipo de cambio actual antes de almacenarlo.
+- Los campos monetarios de respuesta conservan el valor original en USD y añaden un equivalente en RMB con el sufijo `_cny`.
+- `exchange_rate` se devuelve junto a los metadatos de la API key y representa la tasa USD→CNY usada para cada valor `*_cny` de esa respuesta.
 
 ## Semántica de reporting
 
-- `logicalModel` se refiere al modelo lógico público solicitado por quien llama.
+- `logicalModel` se refiere al modelo lógico público solicitado por el llamador.
 - `modelVendor` se refiere al proveedor público del modelo, no a la ruta física oculta.
 - `scene` es la escena pública de la solicitud derivada del endpoint o del tipo de tarea.
-- `accessChannel=platform` significa que la solicitud se facturó a través del canal de plataforma de LemonData.
-- `accessChannel=byok` significa que la solicitud usó tu propia clave del proveedor upstream.
+- `accessChannel=platform` significa que la solicitud se facturó mediante el canal de plataforma de LemonData.
+- `accessChannel=byok` significa que la solicitud usó su propia clave del proveedor upstream.
 
-Las respuestas solo exponen campos públicos de facturación y reporting. Los detalles de routing interno y la metadata física del proveedor permanecen ocultos.
-- Las líneas de `/usage` pueden incluir `billing_transaction_id` cuando la solicitud subyacente ya haya quedado liquidada. Usa `request_id` + `billing_transaction_id` para la conciliación a nivel de solicitud.
+Las respuestas exponen solo campos públicos de facturación y reporting. Los detalles internos de enrutamiento y los metadatos físicos del proveedor permanecen ocultos.
+- Los elementos de `/usage` pueden incluir `billing_transaction_id` una vez que la solicitud subyacente haya alcanzado el estado de liquidación. Usa `request_id` + `billing_transaction_id` para conciliación a nivel de solicitud.
 
-## Nota sobre la paginación de billing
+## Nota sobre paginación de billing
 
-`/usage` está paginado. `/billing` es actualmente un endpoint agregado y no devuelve metadata de paginación tipo `page` / `limit`. Si necesitas registros detallados línea por línea, usa `/usage`.
+`/usage` está paginado. `/billing` es actualmente un endpoint agregado y no devuelve metadatos de paginación estilo `page` / `limit`. Si necesitas registros de línea, usa `/usage`.
 
 ## Ejemplo rápido
 
-Empieza listando las API Keys disponibles para el token de administración actual.
+Empieza listando las API keys disponibles para el token de gestión actual.
 
 <RequestExample>
 ```bash cURL
@@ -126,10 +126,10 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 ```
 </ResponseExample>
 
-## Siguientes pasos
+## Próximos pasos
 
-- [Listar API Keys](/es/api-reference/management/list-api-keys)
-- [Crear API Key](/es/api-reference/management/create-api-key)
-- [Actualizar API Key](/es/api-reference/management/update-api-key)
-- [Obtener uso de API Key](/es/api-reference/management/get-api-key-usage)
-- [Obtener facturación de API Key](/es/api-reference/management/get-api-key-billing)
+- [Listar API Keys](/api-reference/management/list-api-keys)
+- [Crear API Key](/api-reference/management/create-api-key)
+- [Actualizar API Key](/api-reference/management/update-api-key)
+- [Obtener uso de API Key](/api-reference/management/get-api-key-usage)
+- [Obtener facturación de API Key](/api-reference/management/get-api-key-billing)

@@ -4,6 +4,9 @@ openapi: "POST /v1/images/generations"
 description: "プロンプトに基づいて画像を生成します"
 ---
 
+<Note>
+コーディング agent の場合は、まず `GET /v1/models?recommended_for=image` で現在推奨される画像モデルの候補を見つけ、そのうえで選んだ `model` をこのエンドポイントに明示的に渡してください。
+</Note>
 
 <Note>
 Google Gemini image-family models do not share the same selector contract:
@@ -26,13 +29,25 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  生成する画像の数（1〜4、モデルに依存）。
+  生成する画像の数（1-10、モデルに依存）。
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  画像サイズ。オプションはモデルによって異なります：
-  - DALL-E 3: `1024x1024`、`1792x1024`、`1024x1792`
-  - その他のモデル: `512x512`、`1024x1024`など。
+  画像サイズ。OpenAI 形式の画像ファミリーや、正確なピクセルサイズを受け付ける他のモデルに使用します。
+
+  Google Gemini 画像ファミリーでは、`size` は互換用の別名として扱われ、モデルの公開 `aspect_ratio` 契約と、対応している場合は `resolution` 契約にマッピングされます。これらのモデルには `aspect_ratio` を直接送ることを推奨します。
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string">
+  モデル依存のアスペクト比セレクタ。
+
+  Google 画像ファミリーでよく使われる値には `1:1`、`16:9`、`9:16`、`3:2`、`2:3` があります。
+</ParamField>
+
+<ParamField body="resolution" type="string">
+  モデル依存の出力解像度セレクタ。
+
+  `gemini-3-pro-image-preview`、`nano-banana-pro`、`nano-banana-2`、および同種の高解像度ファミリーでサポートされます。一般的な値は `1k`、`2k`、`4k` です。モデル側で明記されていない限り、Gemini Flash 画像ファミリーには送信しないでください。
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -222,65 +237,3 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 </ResponseExample>
-
-## 利用可能なモデル
-
-| モデル | タイプ | 特徴 |
-|-------|------|----------|
-| `dall-e-3` | 通常はインライン | 最高品質、プロンプト補正 |
-| `dall-e-2` | 通常はインライン | 高速、より手頃な価格 |
-| `flux-pro` | 多くの場合タスクベース | フォトリアル、高品質 |
-| `flux-schnell` | 通常はインライン | 非常に高速 |
-| `midjourney` | 多くの場合タスクベース | 芸術的なスタイル |
-| `ideogram-v3` | 多くの場合タスクベース | 最高のテキストレンダリング |
-| `stable-diffusion-3` | 通常はインライン | オープンソース、カスタマイズ可能 |
-
-<Tip>
-モデルを常に同期または常に非同期としてハードコードしないでください。作成レスポンスが `status: "pending"` を返した場合は、`poll_url` に従い、完了するまでポーリングしてください。
-</Tip>
-
-## タスクベースのレスポンスの処理
-
-画像モデルの場合、レスポンスに `status: "pending"` が含まれているかどうかを常に確認してください：
-
-```python
-import requests
-import time
-
-def generate_image(prompt, model="midjourney"):
-    # 画像生成リクエストの作成
-    response = requests.post(
-        "https://api.lemondata.cc/v1/images/generations",
-        headers={"Authorization": "Bearer sk-your-api-key"},
-        json={"model": model, "prompt": prompt}
-    )
-    data = response.json()
-
-    # タスクベースかどうかを確認
-    if data.get("status") == "pending":
-        task_id = data["task_id"]
-        poll_url = data.get("poll_url")
-        print(f"Image task started: {task_id}")
-
-        # 結果をポーリング
-        while True:
-            status_resp = requests.get(
-                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/tasks/{task_id}",
-                headers={"Authorization": "Bearer sk-your-api-key"}
-            )
-            status_data = status_resp.json()
-
-            if status_data["status"] == "completed":
-                return status_data["data"][0]["url"]
-            elif status_data["status"] == "failed":
-                raise Exception(status_data.get("error", "Generation failed"))
-
-            time.sleep(3)
-    else:
-        # インラインレスポンス
-        return data["data"][0]["url"]
-
-# 使用例
-url = generate_image("a beautiful sunset over mountains", model="midjourney")
-print(f"Generated image: {url}")
-```

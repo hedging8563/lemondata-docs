@@ -4,6 +4,9 @@ openapi: "POST /v1/images/generations"
 description: "Erstellt ein Bild anhand eines Prompts"
 ---
 
+<Note>
+Für Coding-Agenten zuerst die aktuelle empfohlene Bild-Shortlist mit `GET /v1/models?recommended_for=image` ermitteln und dann das ausgewählte `model` explizit an diesen Endpunkt senden.
+</Note>
 
 <Note>
 Google Gemini image-family models do not share the same selector contract:
@@ -26,13 +29,25 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  Anzahl der zu generierenden Bilder (1–4, modellabhängig).
+  Anzahl der zu generierenden Bilder (1-10, modellabhängig).
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  Bildgröße. Die Optionen variieren je nach Modell:
-  - DALL-E 3: `1024x1024`, `1792x1024`, `1024x1792`
-  - Andere Modelle: `512x512`, `1024x1024`, usw.
+  Bildgröße. Verwenden Sie dies für OpenAI-ähnliche Bildfamilien und andere Modelle, die exakte Pixelgrößen akzeptieren.
+
+  Für Google-Gemini-Bildfamilien ist `size` ein Kompatibilitätsalias, der auf den öffentlichen `aspect_ratio`- und, sofern unterstützt, `resolution`-Vertrag des Modells abgebildet wird. Für diese Modelle sollten Sie `aspect_ratio` direkt senden.
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string">
+  Modellabhängiger Seitenverhältnis-Selektor.
+
+  Häufige Werte für Google-Bildfamilien sind `1:1`, `16:9`, `9:16`, `3:2` und `2:3`.
+</ParamField>
+
+<ParamField body="resolution" type="string">
+  Modellabhängiger Auflösungs-Selektor.
+
+  Unterstützt auf `gemini-3-pro-image-preview`, `nano-banana-pro`, `nano-banana-2` und ähnlichen High-Resolution-Familien. Typische Werte sind `1k`, `2k` und `4k`. Senden Sie diesen Parameter nicht an Gemini-Flash-Bildfamilien, außer das Modell dokumentiert ihn ausdrücklich.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -53,7 +68,7 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 
 ## Antwort
 
-### Synchrone Antwort (DALL-E, Flux Schnell usw.)
+### Inline-Antwort
 
 <ResponseField name="created" type="integer">
   Unix-Zeitstempel der Erstellung.
@@ -68,9 +83,13 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   - `revised_prompt` (string): Der verwendete Prompt (DALL-E 3)
 </ResponseField>
 
-### Asynchrone Antwort (Midjourney, Flux Pro, Ideogram usw.)
+### Async Task Response
 
-Einige Modelle benötigen längere Verarbeitungszeit und geben eine asynchrone Antwort zurück:
+Einige Bildmodelle liefern sofort einen asynchronen Task zurück, und manche können je nach geroutetem Providerpfad sowohl inline als auch task-basiert reagieren. Wenn die Antwort `status: "pending"` enthält, behandeln Sie sie als asynchrone Task-Antwort:
+
+<Info>
+Verwenden Sie `poll_url` exakt dann, wenn es bereitgestellt wird. Behandeln Sie `task_id` als die Identität des asynchronen Tasks für das spätere Polling.
+</Info>
 
 <ResponseField name="created" type="integer">
   Unix-Zeitstempel der Erstellung.
@@ -85,7 +104,7 @@ Einige Modelle benötigen längere Verarbeitungszeit und geben eine asynchrone A
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  Relative URL zum Abrufen der Ergebnisse per Polling (z. B. `/v1/tasks/{id}`).
+  Relative URL zum Polling der Ergebnisse (z. B. `/v1/tasks/{id}`).
 </ResponseField>
 
 <ResponseField name="data" type="array">
@@ -93,7 +112,7 @@ Einige Modelle benötigen längere Verarbeitungszeit und geben eine asynchrone A
 </ResponseField>
 
 <Note>
-Wenn Sie `status: "pending"` erhalten, verwenden Sie den Endpoint [Get Image Status](/api-reference/images/get-image-status), um das Ergebnis per Polling abzurufen.
+Wenn Sie `status: "pending"` erhalten, verwenden Sie den Endpunkt [Get Image Status](/de/api-reference/images/get-image-status), um das Ergebnis abzurufen.
 </Note>
 
 <RequestExample>
@@ -176,7 +195,7 @@ echo $data['data'][0]['url'];
 ```
 
 <Info>
-Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-preview`, send `aspect_ratio` but omit `resolution`:
+Flash-Family-Beispiel: Für `gemini-2.5-flash-image` oder `gemini-3.1-flash-image-preview` senden Sie `aspect_ratio`, aber lassen `resolution` weg:
 
 ```json
 {
@@ -190,7 +209,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 </RequestExample>
 
 <ResponseExample>
-```json Synchronous Response
+```json Inline Response
 {
   "created": 1706000000,
   "data": [
@@ -202,7 +221,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 
-```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+```json Async Task Response
 {
   "created": 1706000000,
   "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -221,62 +240,16 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 
 ## Verfügbare Modelle
 
-| Model | Type | Features |
-|-------|------|----------|
-| `dall-e-3` | Sync | Beste Qualität, Prompt-Optimierung |
-| `dall-e-2` | Sync | Schneller, kostengünstiger |
-| `flux-pro` | **Async** | Fotorealistisch, hohe Qualität |
-| `flux-schnell` | Sync | Sehr schnell |
-| `midjourney` | **Async** | Künstlerischer Stil |
-| `ideogram-v3` | **Async** | Beste Textrendering |
-| `stable-diffusion-3` | Sync | Open Source, anpassbar |
+| Modell | Typ | Merkmale |
+|-------|-----|----------|
+| `dall-e-3` | Meist inline | Beste Qualität, Prompt-Verbesserung |
+| `dall-e-2` | Meist inline | Schneller, günstiger |
+| `flux-pro` | Oft task-basiert | Fotorealistisch, hohe Qualität |
+| `flux-schnell` | Meist inline | Sehr schnell |
+| `midjourney` | Oft task-basiert | Künstlerischer Stil |
+| `ideogram-v3` | Oft task-basiert | Beste Textdarstellung |
+| `stable-diffusion-3` | Meist inline | Open Source, anpassbar |
 
 <Tip>
-**Async-Modelle** geben `status: "pending"` zurück und erfordern Polling. Siehe [Get Image Status](/api-reference/images/get-image-status), um zu erfahren, wie Ergebnisse abgerufen werden.
+Behandeln Sie ein Modell nicht statisch als immer synchron oder immer asynchron. Wenn die Create-Antwort `status: "pending"` zurückgibt, folgen Sie `poll_url` und pollen Sie bis zum Abschluss.
 </Tip>
-
-## Umgang mit asynchronen Antworten
-
-Prüfen Sie bei Async-Modellen, ob die Antwort `status: "pending"` enthält:
-
-```python
-import requests
-import time
-
-def generate_image(prompt, model="midjourney"):
-    # Create image request
-    response = requests.post(
-        "https://api.lemondata.cc/v1/images/generations",
-        headers={"Authorization": "Bearer sk-your-api-key"},
-        json={"model": model, "prompt": prompt}
-    )
-    data = response.json()
-
-    # Check if async
-    if data.get("status") == "pending":
-        task_id = data["task_id"]
-        poll_url = data.get("poll_url")
-        print(f"Async task started: {task_id}")
-
-        # Poll for result
-        while True:
-            status_resp = requests.get(
-                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/tasks/{task_id}",
-                headers={"Authorization": "Bearer sk-your-api-key"}
-            )
-            status_data = status_resp.json()
-
-            if status_data["status"] == "completed":
-                return status_data["data"][0]["url"]
-            elif status_data["status"] == "failed":
-                raise Exception(status_data.get("error", "Generation failed"))
-
-            time.sleep(3)
-    else:
-        # Sync response
-        return data["data"][0]["url"]
-
-# Usage
-url = generate_image("a beautiful sunset over mountains", model="midjourney")
-print(f"Generated image: {url}")
-```

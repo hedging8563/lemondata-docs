@@ -1,13 +1,13 @@
 ---
 title: "API de gestion"
-description: "Utilisez un jeton de gestion pour gérer les API Keys de l’organisation et consulter l’usage et la facturation par clé."
+description: "Gérez les API Keys de l’organisation et consultez l’usage et la facturation par clé avec un jeton de gestion."
 ---
 
 ## Vue d’ensemble
 
-La Management API permet de gérer les API Keys d’organisation et de consulter l’usage ainsi que la facturation par clé, sans utiliser de clé d’inférence classique.
+La Management API vous permet de gérer les API Keys d’organisation et de récupérer l’usage et la facturation d’une clé donnée sans utiliser de clé d’inférence standard.
 
-Les management tokens peuvent être créés et rotés depuis la page **Settings** du Dashboard.
+Utilisez un jeton de gestion depuis la page **Settings** de votre Dashboard :
 
 ```bash
 Authorization: Bearer mt-your-management-token
@@ -21,11 +21,11 @@ Les management tokens sont différents des API Keys d’inférence. Utilisez `mt
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/management/api-keys` | GET | Liste les API Keys utilisateur de l’organisation courante |
+| `/v1/management/api-keys` | GET | Liste les API Keys gérées par l’utilisateur dans l’organisation courante |
 | `/v1/management/api-keys` | POST | Crée une nouvelle API Key utilisateur |
-| `/v1/management/api-keys/{keyId}` | PATCH | Met à jour le nom, le plafond, les modèles autorisés, l’expiration ou le statut |
-| `/v1/management/api-keys/{keyId}/usage` | GET | Retourne les détails d’usage paginés pour une clé |
-| `/v1/management/api-keys/{keyId}/billing` | GET | Retourne un découpage agrégé de facturation pour une clé |
+| `/v1/management/api-keys/{keyId}` | PATCH | Met à jour le nom, la limite d’usage, les modèles autorisés, l’expiration ou le statut |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Récupère les détails d’usage paginés pour une clé donnée |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Récupère les ventilations de facturation agrégées pour une clé donnée |
 
 ## Contrat des filtres d’usage
 
@@ -33,16 +33,16 @@ Les management tokens sont différents des API Keys d’inférence. Utilisez `mt
 
 | Paramètre | Type | Valeurs par défaut / limites | Description |
 |-----------|------|------------------------------|-------------|
-| `page` | integer | valeur par défaut `1`, min. `1` | Numéro de page à partir de 1 |
-| `limit` | integer | valeur par défaut `50`, min. `1`, max. `100` | Nombre d’éléments par page |
-| `logicalModel` | string | longueur maximale `100` | Nom du modèle logique demandé |
-| `modelVendor` | string | longueur maximale `100` | Fournisseur public du modèle |
+| `page` | integer | défaut `1`, min. `1` | Numéro de page basé sur 1 |
+| `limit` | integer | défaut `50`, min. `1`, max. `100` | Taille de page |
+| `logicalModel` | string | longueur max. `100` | Nom du modèle logique demandé |
+| `modelVendor` | string | longueur max. `100` | Fournisseur public du modèle |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
 | `accessChannel` | enum | - | `platform` ou `byok` |
 | `startDate` | string | - | Borne inférieure incluse ; accepte RFC3339 avec fuseau horaire ou `YYYY-MM-DD` |
 | `endDate` | string | - | Borne supérieure incluse ; accepte RFC3339 avec fuseau horaire ou `YYYY-MM-DD` |
 
-Si `startDate` et `endDate` sont fournis ensemble, `startDate` doit être antérieur ou égal à `endDate`.
+Si `startDate` et `endDate` sont présents ensemble, `startDate` doit être inférieur ou égal à `endDate`.
 
 ## Contrat du body API Key
 
@@ -51,7 +51,7 @@ Si `startDate` et `endDate` sont fournis ensemble, `startDate` doit être antér
 | Champ | Type | Valeurs par défaut / limites | Description |
 |------|------|------------------------------|-------------|
 | `name` | string | requis, valeur par défaut `Default Key`, longueur `1-50` | Nom affiché ; les espaces de début et de fin sont retirés côté serveur |
-| `limitAmount` | number \| null | min. `0`, max. `100000` | `null` ou omis = illimité, `0` = aucun budget exploitable, valeur positive = plafond en USD |
+| `limitAmount` | number \| null | min. `0`, entrée max. `1000000` | `null` ou omis = illimité, `0` = quota nul. Les valeurs positives sont normalisées vers un plafond stocké qui ne peut pas dépasser l’équivalent de `100000` USD. |
 | `limitCurrency` | enum | valeur par défaut `USD` | Optionnel : `USD` ou `CNY`. Si défini sur `CNY`, `limitAmount` est interprété en RMB puis converti en USD côté serveur avant le stockage |
 | `models` | string[] | valeur par défaut `[]` | Liste d’autorisation optionnelle des modèles logiques |
 | `expiresAt` | string \| null | datetime RFC3339 | `null` signifie sans date d’expiration |
@@ -60,9 +60,9 @@ Si `startDate` et `endDate` sont fournis ensemble, `startDate` doit être antér
 
 | Champ | Type | Valeurs par défaut / limites | Description |
 |------|------|------------------------------|-------------|
-| `status` | enum | - | `active`, `inactive`, `revoked` |
+| `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | longueur `1-50` | Nom affiché mis à jour |
-| `limitAmount` | number \| null | min. `0`, max. `100000` | `null` = illimité, `0` = aucun budget exploitable |
+| `limitAmount` | number \| null | min. `0`, entrée max. `1000000` | `null` = illimité, `0` = quota nul. Les valeurs positives sont normalisées vers un plafond stocké qui ne peut pas dépasser l’équivalent de `100000` USD. |
 | `limitCurrency` | enum | valeur par défaut `USD` | Optionnel : `USD` ou `CNY`. Si défini sur `CNY`, `limitAmount` est interprété en RMB puis converti en USD côté serveur avant le stockage |
 | `models` | string[] | - | Liste d’autorisation des modèles logiques mise à jour |
 | `expiresAt` | string \| null | datetime RFC3339 | `null` efface la date d’expiration |
@@ -71,9 +71,9 @@ Au moins un champ doit être fourni dans la requête PATCH.
 
 ## Contrat monétaire
 
-- Par défaut, `limitAmount` côté requête est interprété en USD. Définissez `limitCurrency: "CNY"` pour envoyer un plafond en RMB ; le serveur le convertira en USD avec le taux actuel avant le stockage.
-- Les champs monétaires de la réponse conservent la valeur d’origine en USD et ajoutent un équivalent RMB avec le suffixe `_cny`.
-- `exchange_rate` est renvoyé avec les métadonnées de l’API key et représente le taux USD→CNY utilisé pour chaque valeur `*_cny` de cette réponse.
+- Par défaut, `limitAmount` côté requête est interprété en USD. Définissez `limitCurrency: "CNY"` pour envoyer un plafond en RMB ; le serveur le convertira en USD avec le taux de change actuel avant le stockage.
+- Les champs monétaires côté réponse conservent la valeur USD d’origine et ajoutent un équivalent RMB avec le suffixe `_cny`.
+- `exchange_rate` est renvoyé avec les métadonnées de l’API Key et correspond au taux USD→CNY utilisé pour chaque valeur `*_cny` de cette réponse.
 
 ## Sémantique des rapports
 
@@ -83,16 +83,16 @@ Au moins un champ doit être fourni dans la requête PATCH.
 - `accessChannel=platform` signifie que la requête a été facturée via le canal plateforme de LemonData.
 - `accessChannel=byok` signifie que la requête a utilisé votre propre clé de fournisseur upstream.
 
-Les réponses n’exposent que des champs publics de billing et de reporting ; les détails de routage interne et les métadonnées physiques restent masqués.
+Les réponses n’exposent que des champs publics de facturation et de reporting. Les détails de routage interne et les métadonnées physiques restent masqués.
 - Les lignes `/usage` peuvent inclure `billing_transaction_id` une fois que la requête sous-jacente est réglée. Utilisez `request_id` + `billing_transaction_id` pour le rapprochement au niveau de la requête.
 
 ## Note sur la pagination billing
 
-`/usage` est paginé. `/billing` est actuellement un endpoint agrégé et ne renvoie pas de métadonnées de pagination de type `page` / `limit`. Pour des enregistrements ligne à ligne, utilisez `/usage`.
+`/usage` est paginé. `/billing` est actuellement un endpoint de synthèse agrégée et ne renvoie pas de métadonnées de pagination de type `page` / `limit`. Pour des enregistrements ligne à ligne, utilisez `/usage`.
 
 ## Exemple rapide
 
-Commencez par lister les API Keys disponibles pour le management token courant :
+Commencez par lister les API Keys disponibles pour le jeton de gestion courant :
 
 <RequestExample>
 ```bash cURL

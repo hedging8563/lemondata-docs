@@ -1,7 +1,7 @@
 ---
 title: "Daftar Model"
 openapi: "GET /v1/models"
-description: "Mencantumkan semua model yang tersedia"
+description: "Daftar semua model yang tersedia"
 ---
 
 ## Respons
@@ -14,11 +14,44 @@ description: "Mencantumkan semua model yang tersedia"
   Array objek model.
 
   Setiap model berisi:
-  - `id` (string): Pengidentifikasi model
+  - `id` (string): Identitas model
   - `object` (string): `model`
   - `created` (integer): Timestamp pembuatan
-  - `owned_by` (string): Penyedia model
+  - `owned_by` (string): Provider model
+  - `lemondata.category` (string): Kategori model publik
+  - `lemondata.pricing_unit` (string atau `null`): Satuan harga publik jika tersedia
+  - `lemondata.capability_flags` (object atau `null`): Ringkasan kapabilitas publik
+  - `lemondata.supported_operations` (array atau `null`): Operasi non-chat publik untuk model
+  - `lemondata.pricing_provenance` (object atau `null`): Metadata sumber harga publik
+  - `lemondata.public_contract_summary` (object atau `null`): Ringkasan discovery non-chat ringan yang hanya berisi `public_operations` dan `request_endpoint`
+  - `lemondata.agent_preferences` (object): Hanya dikembalikan saat `recommended_for` ada
 </ResponseField>
+
+<Note>
+`GET /v1/models` dioptimalkan untuk discovery. Metadata khusus detail seperti `capability_flags`, `pricing_provenance`, dan `public_contract` lengkap berada di `GET /v1/models/{model}`.
+</Note>
+
+## Parameter Query
+
+<ParamField query="category" type="string">
+  Filter kategori publik opsional. Mendukung `chat`, `image`, `video`, `audio`, `tts`, `stt`, `music`, `3d`, `embedding`, `rerank`, dan `translation`.
+</ParamField>
+
+<ParamField query="recommended_for" type="string">
+  Skenario rekomendasi non-chat opsional. Mendukung `image`, `video`, `music`, `3d`, `tts`, `stt`, `embedding`, `rerank`, dan `translation`.
+</ParamField>
+
+<ParamField query="provider" type="string">
+  Filter provider opsional seperti `openai`, `anthropic`, `google`, atau `deepseek`.
+</ParamField>
+
+<ParamField query="tag" type="string">
+  Filter tag model opsional seperti `chat`, `image`, `video`, `embedding`, atau `translation`.
+</ParamField>
+
+<Note>
+Saat `recommended_for` ada, `/v1/models` mengurutkan model non-chat berdasarkan snapshot sukses 24 jam cached terbaru. Model dengan `status = "insufficient_samples"` tetap terlihat tetapi diurutkan setelah model yang sudah diberi skor.
+</Note>
 
 <RequestExample>
 ```bash cURL
@@ -135,7 +168,7 @@ foreach ($data['data'] as $model) {
 ```
 </ResponseExample>
 
-## Memfilter berdasarkan Penyedia
+## Filter Berdasarkan Provider
 
 ```python
 # Get all OpenAI models
@@ -147,7 +180,7 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 
 ## Kategori Model
 
-| Penyedia | Contoh Model |
+| Provider | Contoh Model |
 |----------|----------------|
 | `openai` | gpt-5.4, gpt-5.4-mini, gpt-5-mini, gpt-4o, dall-e-3 |
 | `anthropic` | claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5 |
@@ -157,3 +190,37 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 | `moonshot` | kimi-k2.5 |
 | `minimax` | minimax-m2.1 |
 | `meta` | llama-3.3-70b, llama-3.1-405b |
+
+## Contoh Rekomendasi Agent
+
+```json Response
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "gemini-2.5-flash-image",
+      "object": "model",
+      "created": 1706000000,
+      "owned_by": "google",
+      "lemondata": {
+        "category": "image",
+        "pricing_unit": "per_request",
+        "agent_preferences": {
+          "image": {
+            "preferred_rank": 1,
+            "success_rate_24h": 0.98,
+            "sample_count_24h": 423,
+            "status": "ready",
+            "updated_at": "2026-03-28T12:00:00.000Z",
+            "basis": {
+              "score_source": "clickhouse_24h",
+              "channel_id": null,
+              "physical_model": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```

@@ -4,6 +4,32 @@ openapi: "GET /v1/models"
 description: "Enumera todos los modelos disponibles"
 ---
 
+## Resumen
+
+`GET /v1/models` está optimizado para el descubrimiento. Los metadatos solo de detalle, como `capability_flags`, `pricing_provenance` y el `public_contract` completo, viven en `GET /v1/models/{model}`.
+
+## Parámetros de consulta
+
+<ParamField query="category" type="string">
+  Filtro opcional por categoría pública. Admite `chat`, `image`, `video`, `audio`, `tts`, `stt`, `music`, `3d`, `embedding`, `rerank` y `translation`.
+</ParamField>
+
+<ParamField query="recommended_for" type="string">
+  Escena opcional de recomendación no chat. Admite `image`, `video`, `music`, `3d`, `tts`, `stt`, `embedding`, `rerank` y `translation`.
+</ParamField>
+
+<ParamField query="provider" type="string">
+  Filtro opcional por proveedor, por ejemplo `openai`, `anthropic`, `google` o `deepseek`.
+</ParamField>
+
+<ParamField query="tag" type="string">
+  Filtro opcional por etiqueta de modelo, por ejemplo `chat`, `image`, `video`, `embedding` o `translation`.
+</ParamField>
+
+<Note>
+Cuando `recommended_for` está presente, `/v1/models` ordena los modelos no chat según la instantánea más reciente de éxito en 24 horas almacenada en caché. Los modelos con `status = "insufficient_samples"` siguen visibles, pero se muestran después de los modelos con puntuación.
+</Note>
+
 ## Respuesta
 
 <ResponseField name="object" type="string">
@@ -16,13 +42,25 @@ description: "Enumera todos los modelos disponibles"
   Cada modelo contiene:
   - `id` (string): Identificador del modelo
   - `object` (string): `model`
-  - `created` (integer): Marca de tiempo de creación
+  - `created` (integer): Marca temporal de creación
   - `owned_by` (string): Proveedor del modelo
+  - `lemondata.category` (string): Categoría pública del modelo
+  - `lemondata.pricing_unit` (string or `null`): Unidad de precio pública cuando está disponible
+  - `lemondata.capability_flags` (object or `null`): Resumen público de capacidades
+  - `lemondata.supported_operations` (array or `null`): Operaciones públicas no chat compatibles con el modelo
+  - `lemondata.pricing_provenance` (object or `null`): Metadatos públicos de procedencia de precios
+  - `lemondata.public_contract_summary` (object or `null`): Resumen ligero de descubrimiento no chat con solo `public_operations` y `request_endpoint`
+  - `lemondata.agent_preferences` (object): Solo se devuelve cuando existe `recommended_for`
 </ResponseField>
 
 <RequestExample>
 ```bash cURL
 curl "https://api.lemondata.cc/v1/models" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```bash cURL
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
@@ -138,10 +176,10 @@ foreach ($data['data'] as $model) {
 ## Filtrado por proveedor
 
 ```python
-# Get all OpenAI models
+# Obtener todos los modelos de OpenAI
 openai_models = [m for m in models.data if m.owned_by == "openai"]
 
-# Get all Anthropic models
+# Obtener todos los modelos de Anthropic
 anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 ```
 
@@ -157,3 +195,36 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 | `moonshot` | kimi-k2.5 |
 | `minimax` | minimax-m2.1 |
 | `meta` | llama-3.3-70b, llama-3.1-405b |
+
+## Ejemplo de recomendación de agente
+
+```json Response
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "gemini-2.5-flash-image",
+      "object": "model",
+      "created": 1706000000,
+      "owned_by": "google",
+      "lemondata": {
+        "category": "image",
+        "pricing_unit": "per_request",
+        "agent_preferences": {
+          "image": {
+            "preferred_rank": 1,
+            "success_rate_24h": 0.98,
+            "sample_count_24h": 423,
+            "status": "ready",
+            "updated_at": "2026-03-28T12:00:00.000Z",
+            "basis": {
+              "channel_id": null,
+              "physical_model": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```

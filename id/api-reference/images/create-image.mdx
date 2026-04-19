@@ -5,33 +5,49 @@ description: "Membuat gambar berdasarkan prompt"
 ---
 
 <Note>
-Google Gemini image-family models do not share the same selector contract:
-
-- `gemini-3-pro-image-preview` and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
-- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
-- `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
-
-For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
+Untuk coding agents, cari shortlist gambar yang direkomendasikan saat ini terlebih dahulu dengan `GET /v1/models?recommended_for=image`, lalu kirim `model` yang dipilih secara eksplisit ke endpoint ini.
 </Note>
 
-## Body Permintaan
+<Note>
+Model keluarga gambar Google Gemini tidak memakai kontrak selector yang sama:
+
+- `gemini-3-pro-image-preview` dan `nano-banana-pro` mendukung `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
+- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, dan `nano-banana-edit` mendukung `aspect_ratio` tetapi tidak menyediakan pemilihan `resolution` publik.
+- `gemini-2.0-flash-preview-image-generation` didokumentasikan di sini sebagai text-to-image yang hanya prompt.
+
+Untuk keluarga gambar Google, utamakan `aspect_ratio` dan hanya kirim `resolution` jika model secara eksplisit mendukungnya.
+</Note>
+
+## Body Request
 
 <ParamField body="model" type="string" default="dall-e-3">
-  Model yang digunakan (mis., `dall-e-3`, `flux-pro`, `midjourney`).
+  Model yang digunakan (misalnya `dall-e-3`, `flux-pro`, `midjourney`).
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  Deskripsi teks dari gambar yang diinginkan.
+  Deskripsi teks untuk gambar yang diinginkan.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  Jumlah gambar yang akan dibuat (1-4, bergantung pada model).
+  Jumlah gambar yang dibuat (1-10, tergantung model).
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  Ukuran gambar. Opsi bervariasi menurut model:
-  - DALL-E 3: `1024x1024`, `1792x1024`, `1024x1792`
-  - Model lain: `512x512`, `1024x1024`, dll.
+  Ukuran gambar. Gunakan untuk keluarga model gaya OpenAI dan model lain yang menerima ukuran piksel pasti.
+
+  Untuk keluarga gambar Google Gemini, `size` diperlakukan sebagai alias kompatibilitas yang memetakan ke kontrak publik `aspect_ratio` model dan, bila didukung, `resolution`. Untuk model-model itu, lebih baik kirim `aspect_ratio` secara langsung.
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string">
+  Pemilih rasio aspek yang bergantung pada model.
+
+  Nilai umum untuk keluarga gambar Google mencakup `1:1`, `16:9`, `9:16`, `3:2`, dan `2:3`.
+</ParamField>
+
+<ParamField body="resolution" type="string">
+  Pemilih resolusi output yang bergantung pada model.
+
+  Didukung pada `gemini-3-pro-image-preview`, `nano-banana-pro`, `nano-banana-2`, dan keluarga resolusi tinggi serupa. Nilai tipikal adalah `1k`, `2k`, dan `4k`. Jangan kirim parameter ini ke keluarga Gemini Flash image kecuali modelnya mendokumentasikannya secara eksplisit.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -43,16 +59,16 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
-  Gaya untuk DALL-E 3: `vivid` atau `natural`.
+  Style untuk DALL-E 3: `vivid` atau `natural`.
 </ParamField>
 
 <ParamField body="user" type="string">
-  Pengidentifikasi unik untuk end-user.
+  Identifier unik untuk end-user.
 </ParamField>
 
 ## Respons
 
-### Respons Sinkron (DALL-E, Flux Schnell, dll.)
+### Respons Sinkron
 
 <ResponseField name="created" type="integer">
   Unix timestamp saat pembuatan.
@@ -61,22 +77,26 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 <ResponseField name="data" type="array">
   Array gambar yang dihasilkan.
 
-  Setiap objek berisi:
+  Setiap object berisi:
   - `url` (string): URL gambar yang dihasilkan
-  - `b64_json` (string): Gambar yang dienkode Base64 (jika diminta)
-  - `revised_prompt` (string): Prompt yang digunakan (DALL-E 3)
+  - `b64_json` (string): Gambar terenkripsi Base64 (jika diminta)
+  - `revised_prompt` (string): Prompt yang dipakai (DALL-E 3)
 </ResponseField>
 
-### Respons Asinkron (Midjourney, Flux Pro, Ideogram, dll.)
+### Respons Tugas Asinkron
 
-Beberapa model memerlukan waktu pemrosesan yang lebih lama dan mengembalikan respons async:
+Beberapa model gambar langsung mengembalikan task asinkron, dan beberapa bisa berperilaku sebagai inline atau berbasis task tergantung jalur provider yang dirutekan. Ketika respons menyertakan `status: "pending"`, perlakukan itu sebagai respons task asinkron:
+
+<Info>
+Gunakan `poll_url` yang dikembalikan persis seperti adanya. Perlakukan `task_id` sebagai identitas task asinkron untuk polling lanjutan.
+</Info>
 
 <ResponseField name="created" type="integer">
   Unix timestamp saat pembuatan.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Pengidentifikasi task unik untuk polling.
+  Identifier unik task untuk polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -84,15 +104,15 @@ Beberapa model memerlukan waktu pemrosesan yang lebih lama dan mengembalikan res
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  URL relatif untuk polling hasil (mis., `/v1/tasks/{id}`).
+  URL relatif untuk polling hasil (misalnya, `/v1/tasks/{id}`).
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Array dengan data placeholder. `url` akan kosong hingga selesai.
+  Array dengan data placeholder. `url` akan kosong sampai selesai.
 </ResponseField>
 
 <Note>
-Saat Anda menerima `status: "pending"`, gunakan endpoint [Get Image Status](/api-reference/images/get-image-status) untuk melakukan polling hasilnya.
+Saat menerima `status: "pending"`, gunakan endpoint [Dapatkan Status Gambar](/id/api-reference/images/get-image-status) untuk polling hasil.
 </Note>
 
 <RequestExample>
@@ -175,7 +195,7 @@ echo $data['data'][0]['url'];
 ```
 
 <Info>
-Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-preview`, send `aspect_ratio` but omit `resolution`:
+Contoh keluarga Flash: untuk `gemini-2.5-flash-image` atau `gemini-3.1-flash-image-preview`, kirim `aspect_ratio` tetapi jangan kirim `resolution`:
 
 ```json
 {
@@ -189,7 +209,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 </RequestExample>
 
 <ResponseExample>
-```json Synchronous Response
+```json Respons Sinkron
 {
   "created": 1706000000,
   "data": [
@@ -201,7 +221,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 
-```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+```json Respons Asinkron
 {
   "created": 1706000000,
   "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -218,64 +238,22 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 ```
 </ResponseExample>
 
-## Model yang Tersedia
+## Model Tersedia
 
 | Model | Tipe | Fitur |
-|-------|------|----------|
-| `dall-e-3` | Sinkron | Kualitas terbaik, peningkatan prompt |
-| `dall-e-2` | Sinkron | Lebih cepat, lebih terjangkau |
-| `flux-pro` | **Async** | Fotorealistis, kualitas tinggi |
-| `flux-schnell` | Sinkron | Sangat cepat |
-| `midjourney` | **Async** | Gaya artistik |
-| `ideogram-v3` | **Async** | Rendering teks terbaik |
-| `stable-diffusion-3` | Sinkron | Open source, dapat dikustomisasi |
+|-------|------|-------|
+| `dall-e-3` | Biasanya inline | Kualitas terbaik, peningkatan prompt |
+| `dall-e-2` | Biasanya inline | Lebih cepat, lebih murah |
+| `flux-pro` | Sering berbasis task | Fotorealistik, kualitas tinggi |
+| `flux-schnell` | Biasanya inline | Sangat cepat |
+| `midjourney` | Sering berbasis task | Gaya artistik |
+| `ideogram-v3` | Sering berbasis task | Rendering teks terbaik |
+| `stable-diffusion-3` | Biasanya inline | Open source, dapat dikustomisasi |
 
 <Tip>
-**Model async** mengembalikan `status: "pending"` dan memerlukan polling. Lihat [Get Image Status](/api-reference/images/get-image-status) untuk cara mengambil hasil.
+Jangan hard-code model sebagai selalu sinkron atau selalu asinkron. Jika response create mengembalikan `status: "pending"`, ikuti `poll_url` dan polling sampai selesai.
 </Tip>
 
-## Menangani Respons Async
+## Menangani Respons Berbasis Task
 
-Untuk model async, periksa apakah respons berisi `status: "pending"`:
-
-```python
-import requests
-import time
-
-def generate_image(prompt, model="midjourney"):
-    # Create image request
-    response = requests.post(
-        "https://api.lemondata.cc/v1/images/generations",
-        headers={"Authorization": "Bearer sk-your-api-key"},
-        json={"model": model, "prompt": prompt}
-    )
-    data = response.json()
-
-    # Check if async
-    if data.get("status") == "pending":
-        task_id = data["task_id"]
-        poll_url = data.get("poll_url")
-        print(f"Async task started: {task_id}")
-
-        # Poll for result
-        while True:
-            status_resp = requests.get(
-                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/tasks/{task_id}",
-                headers={"Authorization": "Bearer sk-your-api-key"}
-            )
-            status_data = status_resp.json()
-
-            if status_data["status"] == "completed":
-                return status_data["data"][0]["url"]
-            elif status_data["status"] == "failed":
-                raise Exception(status_data.get("error", "Generation failed"))
-
-            time.sleep(3)
-    else:
-        # Sync response
-        return data["data"][0]["url"]
-
-# Usage
-url = generate_image("a beautiful sunset over mountains", model="midjourney")
-print(f"Generated image: {url}")
-```
+Untuk model gambar, selalu cek apakah respons berisi `status: "pending"`:

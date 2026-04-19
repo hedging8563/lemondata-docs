@@ -1,98 +1,98 @@
 ---
-title: "API manajemen"
-description: "Kelola API key organisasi dan lihat penggunaan serta penagihan per key dengan token manajemen."
+title: "API Manajemen"
+description: "Kelola API key organisasi dan ambil usage serta billing per key dengan management token."
 ---
 
 ## Ikhtisar
 
-API Manajemen memungkinkan Anda mengelola API key organisasi dan mengambil penggunaan serta penagihan per key tanpa memakai inference API key biasa.
+Management API memungkinkan Anda mengelola API key organisasi dan mengambil usage serta billing untuk key tertentu tanpa memakai inference API key biasa.
 
-Anda bisa menerbitkan dan merotasi token manajemen dari halaman **Settings** di Dashboard.
+Gunakan management token dari halaman **Settings** di Dashboard:
 
 ```bash
 Authorization: Bearer mt-your-management-token
 ```
 
 <Warning>
-Token manajemen berbeda dari inference API key. Gunakan `mt-...` untuk `/v1/management/*`, dan gunakan `sk-...` untuk endpoint inferensi seperti `/v1/responses`.
+Management token berbeda dari inference API key. Gunakan `mt-...` untuk `/v1/management/*`, dan gunakan `sk-...` untuk endpoint inferensi seperti `/v1/responses`.
 </Warning>
 
-## Endpoint yang tersedia
+## Endpoint Tersedia
 
 | Endpoint | Method | Deskripsi |
 |----------|--------|-----------|
-| `/v1/management/api-keys` | GET | Menampilkan daftar API key pengguna di organisasi saat ini |
-| `/v1/management/api-keys` | POST | Membuat API key pengguna baru |
-| `/v1/management/api-keys/{keyId}` | PATCH | Memperbarui nama, batas penggunaan, model yang diizinkan, kedaluwarsa, atau status |
-| `/v1/management/api-keys/{keyId}/usage` | GET | Mengambil detail penggunaan yang dipaginasi untuk key tertentu |
-| `/v1/management/api-keys/{keyId}/billing` | GET | Mengambil rincian penagihan teragregasi untuk key tertentu |
+| `/v1/management/api-keys` | GET | Daftar API key yang dikelola user di organisasi saat ini |
+| `/v1/management/api-keys` | POST | Buat API key user baru |
+| `/v1/management/api-keys/{keyId}` | PATCH | Perbarui nama, batas penggunaan, model yang diizinkan, masa berlaku, atau status |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Ambil detail usage berpaginasi untuk key tertentu |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Ambil breakdown billing teragregasi untuk key tertentu |
 
-## Kontrak filter penggunaan
+## Kontrak Filter Usage
 
-`GET /v1/management/api-keys/{keyId}/usage` mendukung parameter query berikut.
+`GET /v1/management/api-keys/{keyId}/usage` mendukung parameter query berikut:
 
-| Parameter | Tipe | Default / batas | Deskripsi |
-|-----------|------|-----------------|-----------|
-| `page` | integer | default `1`, minimum `1` | Nomor halaman mulai dari 1 |
-| `limit` | integer | default `50`, minimum `1`, maksimum `100` | Ukuran halaman |
-| `logicalModel` | string | panjang maksimum `100` | Nama model logis yang diminta |
-| `modelVendor` | string | panjang maksimum `100` | Vendor model publik |
+| Parameter | Tipe | Default / Batas | Catatan |
+|-----------|------|-----------------|---------|
+| `page` | integer | default `1`, min `1` | Nomor halaman mulai dari 1 |
+| `limit` | integer | default `50`, min `1`, max `100` | Ukuran halaman |
+| `logicalModel` | string | panjang maks `100` | Nama model logis yang diminta |
+| `modelVendor` | string | panjang maks `100` | Vendor model publik |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
 | `accessChannel` | enum | - | `platform` atau `byok` |
 | `startDate` | string | - | Batas bawah inklusif; menerima RFC3339 dengan timezone atau `YYYY-MM-DD` |
 | `endDate` | string | - | Batas atas inklusif; menerima RFC3339 dengan timezone atau `YYYY-MM-DD` |
 
-Jika `startDate` dan `endDate` dikirim bersamaan, `startDate` harus lebih awal atau sama dengan `endDate`.
+Jika `startDate` dan `endDate` sama-sama ada, `startDate` harus lebih kecil dari atau sama dengan `endDate`.
 
-## Kontrak body API key
+## Kontrak Body API Key
 
 ### POST /v1/management/api-keys
 
-| Field | Tipe | Default / batas | Deskripsi |
-|-------|------|-----------------|-----------|
-| `name` | string | wajib, default `Default Key`, panjang `1-50` | Nama tampilan; spasi di awal dan akhir akan dirapikan server |
-| `limitAmount` | number \| null | minimum `0`, maksimum `100000` | `null` atau dihilangkan = tanpa batas, `0` = kuota nol, nilai positif = batas belanja USD |
-| `limitCurrency` | enum | default `USD` | Opsional: `USD` atau `CNY`. Jika diatur ke `CNY`, `limitAmount` diperlakukan sebagai RMB dan dikonversi ke USD di server sebelum disimpan |
-| `models` | string[] | default `[]` | Allowlist model logis opsional |
-| `expiresAt` | string \| null | datetime RFC3339 | `null` berarti tanpa kedaluwarsa |
+| Field | Tipe | Default / Batas | Catatan |
+|-------|------|-----------------|---------|
+| `name` | string | wajib, default `Default Key`, panjang `1-50` | Nama tampilan, dipangkas di sisi server |
+| `limitAmount` | number \| null | min `0`, max input `1000000` | `null` atau dihilangkan = tidak terbatas, `0` = kuota nol. Nilai positif dinormalisasi menjadi batas simpan yang tidak melebihi setara `100000` USD |
+| `limitCurrency` | enum | default `USD` | Opsional: `USD` atau `CNY`. Jika diatur ke `CNY`, `limitAmount` dianggap RMB dan dikonversi ke USD di server sebelum disimpan |
+| `models` | string[] | default `[]` | Daftar izin model logis opsional |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` berarti tidak kedaluwarsa |
 
 ### PATCH /v1/management/api-keys/{keyId}
 
-| Field | Tipe | Default / batas | Deskripsi |
-|-------|------|-----------------|-----------|
-| `status` | enum | - | `active`, `inactive`, `revoked` |
+| Field | Tipe | Default / Batas | Catatan |
+|-------|------|-----------------|---------|
+| `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | panjang `1-50` | Nama tampilan yang diperbarui |
-| `limitAmount` | number \| null | minimum `0`, maksimum `100000` | `null` = tanpa batas, `0` = kuota nol |
-| `limitCurrency` | enum | default `USD` | Opsional: `USD` atau `CNY`. Jika diatur ke `CNY`, `limitAmount` diperlakukan sebagai RMB dan dikonversi ke USD di server sebelum disimpan |
-| `models` | string[] | - | Allowlist model logis yang diperbarui |
-| `expiresAt` | string \| null | datetime RFC3339 | `null` menghapus tanggal kedaluwarsa |
+| `limitAmount` | number \| null | min `0`, max input `1000000` | `null` = tidak terbatas, `0` = kuota nol. Nilai positif dinormalisasi menjadi batas simpan yang tidak melebihi setara `100000` USD |
+| `limitCurrency` | enum | default `USD` | Opsional: `USD` atau `CNY`. Jika diatur ke `CNY`, `limitAmount` dianggap RMB dan dikonversi ke USD di server sebelum disimpan |
+| `models` | string[] | - | Daftar izin model logis yang diperbarui |
+| `expiresAt` | string \| null | datetime RFC3339 | `null` menghapus masa kedaluwarsa |
 
-Request PATCH harus menyertakan minimal satu field.
+Setidaknya satu field PATCH harus diberikan.
 
-## Kontrak mata uang
+## Kontrak Moneter
 
-- Secara default, `limitAmount` pada request ditafsirkan sebagai USD. Setel `limitCurrency: "CNY"` untuk mengirim batas dalam RMB; server akan mengonversinya ke USD dengan kurs saat ini sebelum disimpan.
-- Field moneter pada respons mempertahankan nilai USD asli dan menambahkan pasangan tampilan RMB dengan sufiks `_cny`.
-- `exchange_rate` dikembalikan bersama metadata API key dan merupakan kurs USD→CNY yang digunakan untuk setiap nilai `*_cny` dalam respons tersebut.
+- Secara default, `limitAmount` pada request diartikan sebagai USD. Set `limitCurrency: "CNY"` untuk mengirim batas dalam RMB; server akan mengonversinya ke USD memakai kurs saat ini sebelum disimpan.
+- Field moneter pada respons mempertahankan field USD asli dan menambahkan pasangan tampilan RMB dengan akhiran `_cny`.
+- `exchange_rate` dikembalikan bersama metadata API key dan merupakan kurs USD→CNY yang dipakai untuk setiap nilai `*_cny` pada respons itu.
 
-## Semantik pelaporan
+## Semantik Pelaporan
 
-- `logicalModel` mengacu pada model logis publik yang diminta oleh pemanggil.
-- `modelVendor` mengacu pada vendor model publik, bukan rute fisik yang tersembunyi.
-- `scene` adalah scene permintaan publik yang diturunkan dari endpoint atau jenis task.
-- `accessChannel=platform` berarti permintaan ditagihkan melalui kanal platform LemonData.
-- `accessChannel=byok` berarti permintaan menggunakan key penyedia upstream milik Anda sendiri.
+- `logicalModel` merujuk ke model logis publik yang diminta caller.
+- `modelVendor` merujuk ke vendor model publik, bukan rute fisik tersembunyi.
+- `scene` adalah scene request publik yang diturunkan dari endpoint atau jenis tugas.
+- `accessChannel=platform` berarti request ditagihkan lewat channel platform LemonData.
+- `accessChannel=byok` berarti request memakai kunci upstream provider milik Anda sendiri.
 
-Respons hanya mengekspos field penagihan dan pelaporan yang bersifat publik. Detail routing internal dan metadata penyedia fisik tetap disembunyikan.
-- Item `/usage` dapat menyertakan `billing_transaction_id` setelah request dasarnya mencapai status settlement selesai. Gunakan `request_id` + `billing_transaction_id` untuk rekonsiliasi per request.
+Respons hanya menampilkan field billing dan reporting publik. Detail routing internal dan metadata provider fisik tetap tersembunyi.
+- Item `/usage` dapat menyertakan `billing_transaction_id` setelah request dasar mencapai status billing yang telah diselesaikan. Gunakan `request_id` + `billing_transaction_id` untuk rekonsiliasi level request.
 
-## Catatan pagination penagihan
+## Catatan Paginasi Billing
 
-`/usage` mendukung pagination. `/billing` saat ini merupakan endpoint agregat dan tidak mengembalikan metadata pagination bergaya `page` / `limit`. Jika Anda membutuhkan catatan rinci per baris, gunakan `/usage`.
+`/usage` dipaginasi. `/billing` saat ini adalah endpoint breakdown teragregasi dan tidak mengembalikan metadata paginasi seperti `page` / `limit`. Jika Anda butuh record level baris, gunakan `/usage`.
 
-## Contoh cepat
+## Contoh Singkat
 
-Mulailah dengan melihat daftar API key yang tersedia untuk token manajemen saat ini.
+Mulailah dengan menampilkan API key yang tersedia untuk management token saat ini:
 
 <RequestExample>
 ```bash cURL
@@ -126,10 +126,10 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
 ```
 </ResponseExample>
 
-## Langkah berikutnya
+## Langkah Berikutnya
 
-- [Lihat daftar API key](/id/api-reference/management/list-api-keys)
-- [Buat API key](/id/api-reference/management/create-api-key)
-- [Perbarui API key](/id/api-reference/management/update-api-key)
-- [Lihat penggunaan API key](/id/api-reference/management/get-api-key-usage)
-- [Lihat penagihan API key](/id/api-reference/management/get-api-key-billing)
+- [Daftar API Key](/id/api-reference/management/list-api-keys)
+- [Buat API Key](/id/api-reference/management/create-api-key)
+- [Perbarui API Key](/id/api-reference/management/update-api-key)
+- [Ambil Usage API Key](/id/api-reference/management/get-api-key-usage)
+- [Ambil Billing API Key](/id/api-reference/management/get-api-key-billing)

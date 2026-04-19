@@ -1,9 +1,12 @@
 ---
 title: "创建图像"
 openapi: "POST /v1/images/generations"
-description: "根据提示词创建图像"
+description: "根据 prompt 创建图像"
 ---
 
+<Note>
+对于编码 agent，请先通过 `GET /v1/models?recommended_for=image` 找出当前推荐的图片模型清单，然后将选定的 `model` 明确传给这个端点。
+</Note>
 
 <Note>
 Google Gemini image-family models do not share the same selector contract:
@@ -22,17 +25,29 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  所需图像的文本描述。
+  所需图片的文本描述。
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  要生成的图像数量（1-4，取决于模型）。
+  要生成的图片数量（1-10，取决于模型）。
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  图像尺寸。选项因模型而异：
-  - DALL-E 3：`1024x1024`、`1792x1024`、`1024x1792`
-  - 其他模型：`512x512`、`1024x1024` 等。
+  图片尺寸。用于 OpenAI 风格的图片家族，以及接受精确像素尺寸的其他模型。
+
+  对于 Google Gemini 图片家族，`size` 会被视为兼容别名，映射到模型公开的 `aspect_ratio` 契约，以及在支持时的 `resolution` 契约。建议对这些模型直接发送 `aspect_ratio`。
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string">
+  依模型而定的宽高比选择器。
+
+  Google 图片家族常见值包括 `1:1`、`16:9`、`9:16`、`3:2`、`2:3`。
+</ParamField>
+
+<ParamField body="resolution" type="string">
+  依模型而定的输出分辨率选择器。
+
+  支持于 `gemini-3-pro-image-preview`、`nano-banana-pro`、`nano-banana-2` 以及类似的高分辨率家族。常见值为 `1k`、`2k`、`4k`。除非模型明确说明，否则不要发送给 Gemini Flash 图片家族。
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -97,7 +112,7 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ResponseField>
 
 <Note>
-当您收到 `status: "pending"` 时，请使用 [获取图像状态](/api-reference/images/get-image-status) 接口来轮询结果。
+当您收到 `status: "pending"` 时，请使用 [Get Image Status](/api-reference/images/get-image-status) 接口来轮询结果。
 </Note>
 
 <RequestExample>
@@ -222,65 +237,3 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 </ResponseExample>
-
-## 可用模型
-
-| 模型 | 类型 | 特性 |
-|-------|------|----------|
-| `dall-e-3` | 通常为内联 | 最佳质量，提示词增强 |
-| `dall-e-2` | 通常为内联 | 更快速，更经济 |
-| `flux-pro` | 通常基于任务 | 照片级真实感，高质量 |
-| `flux-schnell` | 通常为内联 | 非常快速 |
-| `midjourney` | 通常基于任务 | 艺术风格 |
-| `ideogram-v3` | 通常基于任务 | 最佳文本渲染 |
-| `stable-diffusion-3` | 通常为内联 | 开源，可定制 |
-
-<Tip>
-不要将模型硬编码为始终同步或始终异步。如果创建响应返回 `status: "pending"`，请遵循 `poll_url` 并进行轮询直到完成。
-</Tip>
-
-## 处理基于任务的响应
-
-对于图像模型，请始终检查响应是否包含 `status: "pending"`：
-
-```python
-import requests
-import time
-
-def generate_image(prompt, model="midjourney"):
-    # Create image request
-    response = requests.post(
-        "https://api.lemondata.cc/v1/images/generations",
-        headers={"Authorization": "Bearer sk-your-api-key"},
-        json={"model": model, "prompt": prompt}
-    )
-    data = response.json()
-
-    # Check if task-based
-    if data.get("status") == "pending":
-        task_id = data["task_id"]
-        poll_url = data.get("poll_url")
-        print(f"Image task started: {task_id}")
-
-        # Poll for result
-        while True:
-            status_resp = requests.get(
-                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/tasks/{task_id}",
-                headers={"Authorization": "Bearer sk-your-api-key"}
-            )
-            status_data = status_resp.json()
-
-            if status_data["status"] == "completed":
-                return status_data["data"][0]["url"]
-            elif status_data["status"] == "failed":
-                raise Exception(status_data.get("error", "Generation failed"))
-
-            time.sleep(3)
-    else:
-        # Inline response
-        return data["data"][0]["url"]
-
-# Usage
-url = generate_image("a beautiful sunset over mountains", model="midjourney")
-print(f"Generated image: {url}")
-```

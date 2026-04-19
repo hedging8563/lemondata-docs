@@ -1,45 +1,61 @@
 ---
-title: "Tạo ảnh"
+title: "Tạo Hình Ảnh"
 openapi: "POST /v1/images/generations"
-description: "Tạo một ảnh dựa trên prompt được cung cấp"
+description: "Tạo một hình ảnh từ prompt"
 ---
 
 <Note>
-Google Gemini image-family models do not share the same selector contract:
-
-- `gemini-3-pro-image-preview` and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
-- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
-- `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
-
-For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
+Dành cho coding agents, hãy khám phá shortlist hình ảnh được khuyến nghị hiện tại trước bằng `GET /v1/models?recommended_for=image`, rồi gửi rõ `model` đã chọn đến endpoint này.
 </Note>
 
-## Nội dung yêu cầu
+<Note>
+Các model nhóm hình ảnh của Google Gemini không dùng cùng một hợp đồng selector:
+
+- `gemini-3-pro-image-preview` và `nano-banana-pro` hỗ trợ `aspect_ratio` cùng `resolution` (`1k`, `2k`, `4k`).
+- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, và `nano-banana-edit` hỗ trợ `aspect_ratio` nhưng không công khai `resolution`.
+- `gemini-2.0-flash-preview-image-generation` được tài liệu hoá ở đây như một mô hình text-to-image chỉ dùng prompt.
+
+Với các model hình ảnh của Google, hãy ưu tiên `aspect_ratio` và chỉ gửi `resolution` khi model đó hỗ trợ rõ ràng.
+</Note>
+
+## Thân Yêu Cầu
 
 <ParamField body="model" type="string" default="dall-e-3">
-  Model sẽ sử dụng (ví dụ: `dall-e-3`, `flux-pro`, `midjourney`).
+  Model sẽ dùng (ví dụ: `dall-e-3`, `flux-pro`, `midjourney`).
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
-  Mô tả văn bản của ảnh mong muốn.
+  Mô tả bằng văn bản cho hình ảnh mong muốn.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  Số lượng ảnh cần tạo (1-4, phụ thuộc vào model).
+  Số lượng hình ảnh cần tạo (1-10, tùy theo model).
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  Kích thước ảnh. Các tùy chọn thay đổi theo model:
-  - DALL-E 3: `1024x1024`, `1792x1024`, `1024x1792`
-  - Các model khác: `512x512`, `1024x1024`, v.v.
+  Kích thước hình ảnh. Dùng cho các nhóm model kiểu OpenAI và các model khác chấp nhận kích thước pixel chính xác.
+
+  Với các model hình ảnh của Google Gemini, `size` được xem là alias tương thích ánh xạ sang hợp đồng `aspect_ratio` công khai của model và, khi được hỗ trợ, cả `resolution`. Với các model đó, hãy ưu tiên gửi trực tiếp `aspect_ratio`.
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string">
+  Bộ chọn tỷ lệ khung hình theo từng model.
+
+  Các giá trị phổ biến của nhóm model hình ảnh Google gồm `1:1`, `16:9`, `9:16`, `3:2`, và `2:3`.
+</ParamField>
+
+<ParamField body="resolution" type="string">
+  Bộ chọn độ phân giải đầu ra theo từng model.
+
+  Được hỗ trợ trên `gemini-3-pro-image-preview`, `nano-banana-pro`, `nano-banana-2`, và các nhóm độ phân giải cao tương tự. Giá trị thường dùng là `1k`, `2k`, và `4k`. Không gửi tham số này cho các model Gemini Flash hình ảnh trừ khi tài liệu của model đó nói rõ.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
-  Chất lượng ảnh (`standard` hoặc `hd`). Chỉ dành cho DALL-E 3.
+  Chất lượng hình ảnh (`standard` hoặc `hd`). Chỉ dành cho DALL-E 3.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Định dạng phản hồi: `url` hoặc `b64_json`.
+  Định dạng response: `url` hoặc `b64_json`.
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -47,36 +63,40 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="user" type="string">
-  Một mã định danh duy nhất cho end-user.
+  Một định danh duy nhất cho end-user.
 </ParamField>
 
-## Phản hồi
+## Phản Hồi
 
-### Phản hồi đồng bộ (DALL-E, Flux Schnell, v.v.)
+### Phản Hồi Đồng Bộ
 
 <ResponseField name="created" type="integer">
   Unix timestamp của thời điểm tạo.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Mảng các ảnh đã được tạo.
+  Mảng các hình ảnh được tạo.
 
-  Mỗi đối tượng bao gồm:
-  - `url` (string): URL của ảnh đã tạo
-  - `b64_json` (string): Ảnh được mã hóa Base64 (nếu được yêu cầu)
-  - `revised_prompt` (string): Prompt được sử dụng (DALL-E 3)
+  Mỗi object chứa:
+  - `url` (string): URL của hình ảnh được tạo
+  - `b64_json` (string): Hình ảnh mã hoá Base64 (nếu được yêu cầu)
+  - `revised_prompt` (string): Prompt đã được dùng (DALL-E 3)
 </ResponseField>
 
-### Phản hồi bất đồng bộ (Midjourney, Flux Pro, Ideogram, v.v.)
+### Phản Hồi Tác Vụ Bất Đồng Bộ
 
-Một số model cần thời gian xử lý lâu hơn và trả về phản hồi async:
+Một số model hình ảnh trả về ngay một task bất đồng bộ, và một số có thể hoạt động theo kiểu inline hoặc task tùy theo đường route provider. Khi response có `status: "pending"`, hãy coi đó là phản hồi tác vụ bất đồng bộ:
+
+<Info>
+Hãy dùng chính xác `poll_url` được trả về khi có. Xem `task_id` như định danh tác vụ bất đồng bộ để polling tiếp theo.
+</Info>
 
 <ResponseField name="created" type="integer">
   Unix timestamp của thời điểm tạo.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Mã định danh tác vụ duy nhất để polling.
+  Định danh tác vụ duy nhất để polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
@@ -88,11 +108,11 @@ Một số model cần thời gian xử lý lâu hơn và trả về phản hồ
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Mảng chứa dữ liệu giữ chỗ. `url` sẽ trống cho đến khi hoàn tất.
+  Mảng có dữ liệu tạm. `url` sẽ rỗng cho đến khi hoàn tất.
 </ResponseField>
 
 <Note>
-Khi bạn nhận được `status: "pending"`, hãy sử dụng endpoint [Get Image Status](/api-reference/images/get-image-status) để polling kết quả.
+Khi nhận được `status: "pending"`, hãy dùng endpoint [Lấy Trạng Thái Hình Ảnh](/vi/api-reference/images/get-image-status) để polling kết quả.
 </Note>
 
 <RequestExample>
@@ -175,7 +195,7 @@ echo $data['data'][0]['url'];
 ```
 
 <Info>
-Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-preview`, send `aspect_ratio` but omit `resolution`:
+Ví dụ cho dòng Flash: với `gemini-2.5-flash-image` hoặc `gemini-3.1-flash-image-preview`, hãy gửi `aspect_ratio` nhưng bỏ qua `resolution`:
 
 ```json
 {
@@ -189,7 +209,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 </RequestExample>
 
 <ResponseExample>
-```json Synchronous Response
+```json Phản Hồi Đồng Bộ
 {
   "created": 1706000000,
   "data": [
@@ -201,7 +221,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 
-```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+```json Phản Hồi Bất Đồng Bộ
 {
   "created": 1706000000,
   "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -218,64 +238,22 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 ```
 </ResponseExample>
 
-## Các model khả dụng
+## Model Khả Dụng
 
 | Model | Loại | Tính năng |
 |-------|------|----------|
-| `dall-e-3` | Đồng bộ | Chất lượng tốt nhất, cải thiện prompt |
-| `dall-e-2` | Đồng bộ | Nhanh hơn, tiết kiệm chi phí hơn |
-| `flux-pro` | **Bất đồng bộ** | Siêu thực, chất lượng cao |
-| `flux-schnell` | Đồng bộ | Rất nhanh |
-| `midjourney` | **Bất đồng bộ** | Phong cách nghệ thuật |
-| `ideogram-v3` | **Bất đồng bộ** | Kết xuất văn bản tốt nhất |
-| `stable-diffusion-3` | Đồng bộ | Mã nguồn mở, có thể tùy chỉnh |
+| `dall-e-3` | Thường là inline | Chất lượng tốt nhất, cải thiện prompt |
+| `dall-e-2` | Thường là inline | Nhanh hơn, chi phí thấp hơn |
+| `flux-pro` | Thường là task | Photorealistic, chất lượng cao |
+| `flux-schnell` | Thường là inline | Rất nhanh |
+| `midjourney` | Thường là task | Phong cách nghệ thuật |
+| `ideogram-v3` | Thường là task | Xử lý chữ tốt nhất |
+| `stable-diffusion-3` | Thường là inline | Mã nguồn mở, tuỳ biến cao |
 
 <Tip>
-**Các model async** trả về `status: "pending"` và yêu cầu polling. Xem [Get Image Status](/api-reference/images/get-image-status) để biết cách truy xuất kết quả.
+Đừng hard-code một model là luôn đồng bộ hay luôn bất đồng bộ. Nếu response tạo ra trả về `status: "pending"`, hãy theo `poll_url` và polling đến khi hoàn tất.
 </Tip>
 
-## Xử lý phản hồi async
+## Xử Lý Phản Hồi Dựa Trên Task
 
-Đối với các model async, hãy kiểm tra xem phản hồi có chứa `status: "pending"` hay không:
-
-```python
-import requests
-import time
-
-def generate_image(prompt, model="midjourney"):
-    # Create image request
-    response = requests.post(
-        "https://api.lemondata.cc/v1/images/generations",
-        headers={"Authorization": "Bearer sk-your-api-key"},
-        json={"model": model, "prompt": prompt}
-    )
-    data = response.json()
-
-    # Check if async
-    if data.get("status") == "pending":
-        task_id = data["task_id"]
-        poll_url = data.get("poll_url")
-        print(f"Async task started: {task_id}")
-
-        # Poll for result
-        while True:
-            status_resp = requests.get(
-                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/tasks/{task_id}",
-                headers={"Authorization": "Bearer sk-your-api-key"}
-            )
-            status_data = status_resp.json()
-
-            if status_data["status"] == "completed":
-                return status_data["data"][0]["url"]
-            elif status_data["status"] == "failed":
-                raise Exception(status_data.get("error", "Generation failed"))
-
-            time.sleep(3)
-    else:
-        # Sync response
-        return data["data"][0]["url"]
-
-# Usage
-url = generate_image("a beautiful sunset over mountains", model="midjourney")
-print(f"Generated image: {url}")
-```
+Với các model hình ảnh, luôn kiểm tra xem response có chứa `status: "pending"` hay không:

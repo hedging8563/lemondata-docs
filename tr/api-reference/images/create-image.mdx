@@ -4,18 +4,21 @@ openapi: "POST /v1/images/generations"
 description: "Bir prompt verildiğinde bir görsel oluşturur"
 ---
 
-
 <Note>
-Google Gemini image-family models do not share the same selector contract:
-
-- `gemini-3-pro-image-preview` and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
-- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
-- `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
-
-For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
+Kod üreten ajanlar için önce `GET /v1/models?recommended_for=image` ile mevcut önerilen görsel shortlist'ini keşfedin, ardından seçilen `model`i bu endpoint'e açıkça gönderin.
 </Note>
 
-## Request Body
+<Note>
+Google Gemini görsel aileleri aynı selector sözleşmesini paylaşmaz:
+
+- `gemini-3-pro-image-preview` ve `nano-banana-pro`, `aspect_ratio` ile birlikte `resolution` (`1k`, `2k`, `4k`) destekler.
+- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana` ve `nano-banana-edit`, `aspect_ratio` destekler fakat public `resolution` seçimi sunmaz.
+- `gemini-2.0-flash-preview-image-generation` burada yalnızca prompt alan text-to-image olarak belgelenmiştir.
+
+Google görsel aileleri için `aspect_ratio` kullanmayı tercih edin ve `resolution`'ı yalnızca model açıkça destekliyorsa gönderin.
+</Note>
+
+## İstek Gövdesi
 
 <ParamField body="model" type="string" default="dall-e-3">
   Kullanılacak model (örn. `dall-e-3`, `flux-pro`, `midjourney`).
@@ -26,13 +29,25 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  Oluşturulacak görsel sayısı (1-4, modele bağlıdır).
+  Üretilecek görsel sayısı (1-10, modele bağlı).
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  Görsel boyutu. Seçenekler modele göre değişir:
-  - DALL-E 3: `1024x1024`, `1792x1024`, `1024x1792`
-  - Diğer modeller: `512x512`, `1024x1024` vb.
+  Görsel boyutu. Bunu OpenAI tarzı görsel aileleri ve tam piksel boyutunu kabul eden diğer modeller için kullanın.
+
+  Google Gemini görsel aileleri için `size`, modelin public `aspect_ratio` sözleşmesine ve destekleniyorsa `resolution` sözleşmesine eşlenen uyumluluk alias'ı olarak değerlendirilir. Bu modeller için doğrudan `aspect_ratio` göndermeyi tercih edin.
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string">
+  Modele bağlı en-boy oranı seçici.
+
+  Google görsel ailelerinde yaygın değerler `1:1`, `16:9`, `9:16`, `3:2` ve `2:3`'tür.
+</ParamField>
+
+<ParamField body="resolution" type="string">
+  Modele bağlı çıktı çözünürlüğü seçici.
+
+  `gemini-3-pro-image-preview`, `nano-banana-pro`, `nano-banana-2` ve benzeri yüksek çözünürlüklü ailelerde desteklenir. Tipik değerler `1k`, `2k` ve `4k`'tür. Model bunu açıkça belgelemiyorsa bu parametreyi Gemini Flash image ailelerine göndermeyin.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -40,7 +55,7 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Yanıt biçimi: `url` veya `b64_json`.
+  Yanıt formatı: `url` veya `b64_json`.
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -48,52 +63,56 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="user" type="string">
-  Son kullanıcı için benzersiz bir tanımlayıcı.
+  Son kullanıcı için benzersiz bir identifier.
 </ParamField>
 
 ## Yanıt
 
-### Eşzamanlı Yanıt (DALL-E, Flux Schnell vb.)
+### Senkron Yanıt
 
 <ResponseField name="created" type="integer">
-  Oluşturulma zamanının Unix zaman damgası.
+  Oluşturulma zamanının Unix timestamp'i.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Oluşturulan görseller dizisi.
+  Üretilen görsellerin dizisi.
 
-  Her nesne şunları içerir:
-  - `url` (string): Oluşturulan görselin URL'si
-  - `b64_json` (string): Base64 kodlanmış görsel (istenmişse)
+  Her object şunları içerir:
+  - `url` (string): Üretilen görselin URL'si
+  - `b64_json` (string): Base64 kodlanmış görsel (istenirse)
   - `revised_prompt` (string): Kullanılan prompt (DALL-E 3)
 </ResponseField>
 
-### Eşzamansız Yanıt (Midjourney, Flux Pro, Ideogram vb.)
+### Asenkron Görev Yanıtı
 
-Bazı modeller daha uzun işlem süresi gerektirir ve eşzamansız bir yanıt döndürür:
+Bazı görsel modeller hemen asenkron bir görev döndürür ve bazıları yönlendirilen provider yoluna bağlı olarak inline ya da task tabanlı davranabilir. Yanıt `status: "pending"` içerdiğinde, bunu asenkron görev yanıtı olarak değerlendirin:
+
+<Info>
+Döndürüldüğünde `poll_url`'ı aynen kullanın. `task_id`'yi takip polling'i için asenkron görev kimliği olarak değerlendirin.
+</Info>
 
 <ResponseField name="created" type="integer">
-  Oluşturulma zamanının Unix zaman damgası.
+  Oluşturulma zamanının Unix timestamp'i.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Polling için benzersiz görev tanımlayıcısı.
+  Polling için benzersiz görev kimliği.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Başlangıç durumu: `pending`.
+  İlk durum: `pending`.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  Sonuçları sorgulamak için göreli URL (örn. `/v1/tasks/{id}`).
+  Sonuçları polling yapmak için göreli URL (örneğin `/v1/tasks/{id}`).
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Yer tutucu veriler içeren dizi. İşlem tamamlanana kadar `url` boş olacaktır.
+  Placeholder veri içeren dizi. Tamamlanana kadar `url` boş kalır.
 </ResponseField>
 
 <Note>
-`status: "pending"` aldığınızda, sonucu sorgulamak için [Get Image Status](/api-reference/images/get-image-status) endpoint'ini kullanın.
+`status: "pending"` aldığınızda sonucu polling yapmak için [Görsel Durumunu Al](/tr/api-reference/images/get-image-status) endpoint'ini kullanın.
 </Note>
 
 <RequestExample>
@@ -176,7 +195,7 @@ echo $data['data'][0]['url'];
 ```
 
 <Info>
-Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-preview`, send `aspect_ratio` but omit `resolution`:
+Flash ailesi örneği: `gemini-2.5-flash-image` veya `gemini-3.1-flash-image-preview` için `aspect_ratio` gönderin ancak `resolution`'ı atlayın:
 
 ```json
 {
@@ -190,7 +209,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 </RequestExample>
 
 <ResponseExample>
-```json Synchronous Response
+```json Senkron Yanıt
 {
   "created": 1706000000,
   "data": [
@@ -202,7 +221,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 
-```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+```json Asenkron Yanıt
 {
   "created": 1706000000,
   "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -221,62 +240,20 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 
 ## Kullanılabilir Modeller
 
-| Model | Tür | Özellikler |
-|-------|------|----------|
-| `dall-e-3` | Sync | En iyi kalite, prompt iyileştirme |
-| `dall-e-2` | Sync | Daha hızlı, daha uygun maliyetli |
-| `flux-pro` | **Async** | Fotogerçekçi, yüksek kalite |
-| `flux-schnell` | Sync | Çok hızlı |
-| `midjourney` | **Async** | Sanatsal stil |
-| `ideogram-v3` | **Async** | En iyi metin işleme |
-| `stable-diffusion-3` | Sync | Açık kaynak, özelleştirilebilir |
+| Model | Tip | Özellikler |
+|-------|-----|------------|
+| `dall-e-3` | Genelde inline | En iyi kalite, prompt iyileştirme |
+| `dall-e-2` | Genelde inline | Daha hızlı, daha uygun maliyetli |
+| `flux-pro` | Sıklıkla task tabanlı | Fotogerçekçi, yüksek kalite |
+| `flux-schnell` | Genelde inline | Çok hızlı |
+| `midjourney` | Sıklıkla task tabanlı | Sanatsal stil |
+| `ideogram-v3` | Sıklıkla task tabanlı | En iyi metin oluşturma |
+| `stable-diffusion-3` | Genelde inline | Açık kaynak, özelleştirilebilir |
 
 <Tip>
-**Async modeller** `status: "pending"` döndürür ve polling gerektirir. Sonuçların nasıl alınacağını görmek için [Get Image Status](/api-reference/images/get-image-status) bölümüne bakın.
+Bir modeli her zaman senkron ya da her zaman asenkron olarak hard-code etmeyin. Create yanıtı `status: "pending"` döndürürse, `poll_url`'ı takip edin ve tamamlanana kadar polling yapın.
 </Tip>
 
-## Eşzamansız Yanıtların İşlenmesi
+## Task Tabanlı Yanıtları İşleme
 
-Async modeller için, yanıtın `status: "pending"` içerip içermediğini kontrol edin:
-
-```python
-import requests
-import time
-
-def generate_image(prompt, model="midjourney"):
-    # Create image request
-    response = requests.post(
-        "https://api.lemondata.cc/v1/images/generations",
-        headers={"Authorization": "Bearer sk-your-api-key"},
-        json={"model": model, "prompt": prompt}
-    )
-    data = response.json()
-
-    # Check if async
-    if data.get("status") == "pending":
-        task_id = data["task_id"]
-        poll_url = data.get("poll_url")
-        print(f"Async task started: {task_id}")
-
-        # Poll for result
-        while True:
-            status_resp = requests.get(
-                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/tasks/{task_id}",
-                headers={"Authorization": "Bearer sk-your-api-key"}
-            )
-            status_data = status_resp.json()
-
-            if status_data["status"] == "completed":
-                return status_data["data"][0]["url"]
-            elif status_data["status"] == "failed":
-                raise Exception(status_data.get("error", "Generation failed"))
-
-            time.sleep(3)
-    else:
-        # Sync response
-        return data["data"][0]["url"]
-
-# Usage
-url = generate_image("a beautiful sunset over mountains", model="midjourney")
-print(f"Generated image: {url}")
-```
+Görsel modeller için, yanıtın `status: "pending"` içerip içermediğini her zaman kontrol edin:

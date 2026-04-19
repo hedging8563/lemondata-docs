@@ -1,8 +1,34 @@
 ---
-title: "Listar Modelos"
+title: "Listar modelos"
 openapi: "GET /v1/models"
 description: "Lista todos os modelos disponíveis"
 ---
+
+## Resumo
+
+`GET /v1/models` é otimizado para descoberta. Metadados apenas de detalhe, como `capability_flags`, `pricing_provenance` e o `public_contract` completo, ficam em `GET /v1/models/{model}`.
+
+## Parâmetros de consulta
+
+<ParamField query="category" type="string">
+  Filtro opcional por categoria pública. Suporta `chat`, `image`, `video`, `audio`, `tts`, `stt`, `music`, `3d`, `embedding`, `rerank` e `translation`.
+</ParamField>
+
+<ParamField query="recommended_for" type="string">
+  Cena opcional de recomendação não chat. Suporta `image`, `video`, `music`, `3d`, `tts`, `stt`, `embedding`, `rerank` e `translation`.
+</ParamField>
+
+<ParamField query="provider" type="string">
+  Filtro opcional por provedor, como `openai`, `anthropic`, `google` ou `deepseek`.
+</ParamField>
+
+<ParamField query="tag" type="string">
+  Filtro opcional por tag de modelo, como `chat`, `image`, `video`, `embedding` ou `translation`.
+</ParamField>
+
+<Note>
+Quando `recommended_for` está presente, `/v1/models` ordena os modelos não chat pela captura mais recente de taxa de sucesso das últimas 24 horas em cache. Modelos com `status = "insufficient_samples"` continuam visíveis, mas aparecem depois dos modelos pontuados.
+</Note>
 
 ## Resposta
 
@@ -18,11 +44,23 @@ description: "Lista todos os modelos disponíveis"
   - `object` (string): `model`
   - `created` (integer): Timestamp de criação
   - `owned_by` (string): Provedor do modelo
+  - `lemondata.category` (string): Categoria pública do modelo
+  - `lemondata.pricing_unit` (string or `null`): Unidade pública de preço quando disponível
+  - `lemondata.capability_flags` (object or `null`): Resumo público de capacidades
+  - `lemondata.supported_operations` (array or `null`): Operações públicas não chat compatíveis com o modelo
+  - `lemondata.pricing_provenance` (object or `null`): Metadados públicos de procedência de preços
+  - `lemondata.public_contract_summary` (object or `null`): Resumo leve de descoberta não chat com apenas `public_operations` e `request_endpoint`
+  - `lemondata.agent_preferences` (object): Só é retornado quando `recommended_for` está presente
 </ResponseField>
 
 <RequestExample>
 ```bash cURL
 curl "https://api.lemondata.cc/v1/models" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+```bash cURL
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
@@ -135,19 +173,19 @@ foreach ($data['data'] as $model) {
 ```
 </ResponseExample>
 
-## Filtragem por Provedor
+## Filtragem por provedor
 
 ```python
-# Get all OpenAI models
+# Obter todos os modelos OpenAI
 openai_models = [m for m in models.data if m.owned_by == "openai"]
 
-# Get all Anthropic models
+# Obter todos os modelos Anthropic
 anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 ```
 
-## Categorias de Modelos
+## Categorias de modelos
 
-| Provedor | Modelos de Exemplo |
+| Provedor | Modelos de exemplo |
 |----------|--------------------|
 | `openai` | gpt-5.4, gpt-5.4-mini, gpt-5-mini, gpt-4o, dall-e-3 |
 | `anthropic` | claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5 |
@@ -157,3 +195,36 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 | `moonshot` | kimi-k2.5 |
 | `minimax` | minimax-m2.1 |
 | `meta` | llama-3.3-70b, llama-3.1-405b |
+
+## Exemplo de recomendação do agente
+
+```json Response
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "gemini-2.5-flash-image",
+      "object": "model",
+      "created": 1706000000,
+      "owned_by": "google",
+      "lemondata": {
+        "category": "image",
+        "pricing_unit": "per_request",
+        "agent_preferences": {
+          "image": {
+            "preferred_rank": 1,
+            "success_rate_24h": 0.98,
+            "sample_count_24h": 423,
+            "status": "ready",
+            "updated_at": "2026-03-28T12:00:00.000Z",
+            "basis": {
+              "channel_id": null,
+              "physical_model": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```

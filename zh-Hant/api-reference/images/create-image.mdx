@@ -4,6 +4,9 @@ openapi: "POST /v1/images/generations"
 description: "根據 prompt 建立圖片"
 ---
 
+<Note>
+對於 coding agent，請先透過 `GET /v1/models?recommended_for=image` 找出目前推薦的圖片模型清單，然後把選定的 `model` 明確傳給這個端點。
+</Note>
 
 <Note>
 Google Gemini image-family models do not share the same selector contract:
@@ -26,13 +29,25 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
-  要產生的圖片數量（1-4，依模型而定）。
+  要產生的圖片數量（1-10，依模型而定）。
 </ParamField>
 
 <ParamField body="size" type="string" default="1024x1024">
-  圖片尺寸。可用選項依模型而異：
-  - DALL-E 3：`1024x1024`、`1792x1024`、`1024x1792`
-  - 其他模型：`512x512`、`1024x1024` 等。
+  圖片尺寸。用於 OpenAI 風格的圖片系列，以及接受精確像素尺寸的其他模型。
+
+  對於 Google Gemini 圖片系列，`size` 會被視為相容別名，映射到模型公開的 `aspect_ratio` 契約，以及在支援時的 `resolution` 契約。建議對這些模型直接傳送 `aspect_ratio`。
+</ParamField>
+
+<ParamField body="aspect_ratio" type="string">
+  依模型而定的長寬比選擇器。
+
+  Google 圖片系列常見值包括 `1:1`、`16:9`、`9:16`、`3:2`、`2:3`。
+</ParamField>
+
+<ParamField body="resolution" type="string">
+  依模型而定的輸出解析度選擇器。
+
+  支援於 `gemini-3-pro-image-preview`、`nano-banana-pro`、`nano-banana-2` 以及類似的高解析度系列。常見值為 `1k`、`2k`、`4k`。除非模型明確說明，否則不要傳給 Gemini Flash 圖片系列。
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -53,7 +68,7 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 
 ## 回應
 
-### 同步回應（DALL-E、Flux Schnell 等）
+### 即時回應
 
 <ResponseField name="created" type="integer">
   建立時間的 Unix timestamp。
@@ -68,9 +83,13 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   - `revised_prompt`（string）：實際使用的 prompt（DALL-E 3）
 </ResponseField>
 
-### 非同步回應（Midjourney、Flux Pro、Ideogram 等）
+### 非同步任務回應
 
-某些模型需要較長的處理時間，並會返回非同步回應：
+某些圖像模型會立即返回非同步任務，而某些模型可能會根據路由的提供商路徑表現為即時或基於任務。當回應包含 `status: "pending"` 時，請將其視為非同步任務回應：
+
+<Info>
+在提供 `poll_url` 時，請準確使用它。將 `task_id` 視為後續輪詢的非同步任務標識。
+</Info>
 
 <ResponseField name="created" type="integer">
   建立時間的 Unix timestamp。
@@ -89,11 +108,11 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  包含預留資料的陣列。在完成之前，`url` 會是空的。
+  包含 placeholder 資料的陣列。在完成之前，`url` 會是空的。
 </ResponseField>
 
 <Note>
-當你收到 `status: "pending"` 時，請使用 [Get Image Status](/api-reference/images/get-image-status) endpoint 輪詢結果。
+當您收到 `status: "pending"` 時，請使用 [Get Image Status](/api-reference/images/get-image-status) 端點來輪詢結果。
 </Note>
 
 <RequestExample>
@@ -190,7 +209,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 </RequestExample>
 
 <ResponseExample>
-```json Synchronous Response
+```json Inline Response
 {
   "created": 1706000000,
   "data": [
@@ -202,7 +221,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 
-```json Asynchronous Response (Midjourney, Flux Pro, etc.)
+```json Async Task Response
 {
   "created": 1706000000,
   "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -218,65 +237,3 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 </ResponseExample>
-
-## 可用模型
-
-| Model | Type | Features |
-|-------|------|----------|
-| `dall-e-3` | 同步 | 最佳品質、prompt 強化 |
-| `dall-e-2` | 同步 | 更快、更實惠 |
-| `flux-pro` | **非同步** | 擬真風格、高品質 |
-| `flux-schnell` | 同步 | 非常快速 |
-| `midjourney` | **非同步** | 藝術風格 |
-| `ideogram-v3` | **非同步** | 最佳文字渲染 |
-| `stable-diffusion-3` | 同步 | 開源、可自訂 |
-
-<Tip>
-**非同步模型** 會返回 `status: "pending"`，並需要進行輪詢。請參閱 [Get Image Status](/api-reference/images/get-image-status) 以了解如何取得結果。
-</Tip>
-
-## 處理非同步回應
-
-對於非同步模型，請檢查回應中是否包含 `status: "pending"`：
-
-```python
-import requests
-import time
-
-def generate_image(prompt, model="midjourney"):
-    # Create image request
-    response = requests.post(
-        "https://api.lemondata.cc/v1/images/generations",
-        headers={"Authorization": "Bearer sk-your-api-key"},
-        json={"model": model, "prompt": prompt}
-    )
-    data = response.json()
-
-    # Check if async
-    if data.get("status") == "pending":
-        task_id = data["task_id"]
-        poll_url = data.get("poll_url")
-        print(f"Async task started: {task_id}")
-
-        # Poll for result
-        while True:
-            status_resp = requests.get(
-                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/tasks/{task_id}",
-                headers={"Authorization": "Bearer sk-your-api-key"}
-            )
-            status_data = status_resp.json()
-
-            if status_data["status"] == "completed":
-                return status_data["data"][0]["url"]
-            elif status_data["status"] == "failed":
-                raise Exception(status_data.get("error", "Generation failed"))
-
-            time.sleep(3)
-    else:
-        # Sync response
-        return data["data"][0]["url"]
-
-# Usage
-url = generate_image("a beautiful sunset over mountains", model="midjourney")
-print(f"Generated image: {url}")
-```

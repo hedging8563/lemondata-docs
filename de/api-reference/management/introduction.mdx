@@ -5,27 +5,27 @@ description: "Verwalten Sie Organisations-API-Keys und rufen Sie Nutzungs- und A
 
 ## Überblick
 
-Mit der Management API können Sie Organisations-API-Keys verwalten und Nutzung sowie Billing pro Key abrufen, ohne einen normalen Inference-API-Key zu verwenden.
+Mit der Management API können Sie Organisations-API-Keys verwalten und Nutzung sowie Billing für einen bestimmten Key abrufen, ohne einen normalen Inference-API-Key zu verwenden.
 
-Management-Tokens können auf der **Settings**-Seite im Dashboard erstellt und rotiert werden.
+Verwenden Sie ein Management-Token von der **Settings**-Seite im Dashboard:
 
 ```bash
 Authorization: Bearer mt-your-management-token
 ```
 
 <Warning>
-Management-Tokens sind nicht dasselbe wie Inference-API-Keys. Verwenden Sie `mt-...` für `/v1/management/*` und `sk-...` für Modellendpunkte wie `/v1/responses`.
+Management-Tokens sind nicht dasselbe wie Inference-API-Keys. Verwenden Sie `mt-...` für `/v1/management/*` und `sk-...` für Modell-Inference-Endpunkte wie `/v1/responses`.
 </Warning>
 
 ## Verfügbare Endpunkte
 
 | Endpoint | Method | Beschreibung |
 |----------|--------|--------------|
-| `/v1/management/api-keys` | GET | Zeigt die Benutzer-API-Keys der aktuellen Organisation an |
+| `/v1/management/api-keys` | GET | Listet benutzerverwaltete API-Keys in der aktuellen Organisation auf |
 | `/v1/management/api-keys` | POST | Erstellt einen neuen Benutzer-API-Key |
-| `/v1/management/api-keys/{keyId}` | PATCH | Aktualisiert Name, Limit, erlaubte Modelle, Ablaufzeit oder Status |
-| `/v1/management/api-keys/{keyId}/usage` | GET | Ruft paginierte Nutzungsdetails für einen Key ab |
-| `/v1/management/api-keys/{keyId}/billing` | GET | Ruft aggregierte Billing-Aufschlüsselungen für einen Key ab |
+| `/v1/management/api-keys/{keyId}` | PATCH | Aktualisiert Name, Nutzungslimit, erlaubte Modelle, Ablaufzeit oder Status |
+| `/v1/management/api-keys/{keyId}/usage` | GET | Ruft paginierte Nutzungsdetails für einen bestimmten Key ab |
+| `/v1/management/api-keys/{keyId}/billing` | GET | Ruft aggregierte Billing-Aufschlüsselungen für einen bestimmten Key ab |
 
 ## Vertragsdetails für Nutzungsfilter
 
@@ -34,8 +34,8 @@ Management-Tokens sind nicht dasselbe wie Inference-API-Keys. Verwenden Sie `mt-
 | Parameter | Typ | Standard / Grenzen | Beschreibung |
 |-----------|-----|--------------------|--------------|
 | `page` | integer | Standard `1`, min. `1` | Seitennummer ab 1 |
-| `limit` | integer | Standard `50`, min. `1`, max. `100` | Anzahl Einträge pro Seite |
-| `logicalModel` | string | max. Länge `100` | Angeforderter Name des logischen Modells |
+| `limit` | integer | Standard `50`, min. `1`, max. `100` | Seitengröße |
+| `logicalModel` | string | max. Länge `100` | Angeforderter logischer Modellname |
 | `modelVendor` | string | max. Länge `100` | Öffentlicher Modellanbieter |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
 | `accessChannel` | enum | - | `platform` oder `byok` |
@@ -51,7 +51,7 @@ Wenn `startDate` und `endDate` zusammen angegeben werden, muss `startDate` klein
 | Feld | Typ | Standard / Grenzen | Beschreibung |
 |------|-----|--------------------|--------------|
 | `name` | string | erforderlich, Standard `Default Key`, Länge `1-50` | Anzeigename; führende und nachgestellte Leerzeichen werden serverseitig entfernt |
-| `limitAmount` | number \| null | min. `0`, max. `100000` | `null` oder weggelassen = unbegrenzt, `0` = kein nutzbares Budget, positive Zahl = USD-Limit |
+| `limitAmount` | number \| null | min. `0`, Eingabe max. `1000000` | `null` oder weggelassen = unbegrenzt, `0` = Nullkontingent. Positive Werte werden auf ein gespeichertes Limit normalisiert, das 100000 USD Gegenwert nicht überschreiten kann. |
 | `limitCurrency` | enum | Standard `USD` | Optional: `USD` oder `CNY`. Wenn `CNY` gesetzt ist, wird `limitAmount` als RMB interpretiert und serverseitig vor dem Speichern in USD umgerechnet |
 | `models` | string[] | Standard `[]` | Optionale Allowlist für logische Modelle |
 | `expiresAt` | string \| null | RFC3339-Datetime | `null` bedeutet ohne Ablaufzeit |
@@ -60,18 +60,18 @@ Wenn `startDate` und `endDate` zusammen angegeben werden, muss `startDate` klein
 
 | Feld | Typ | Standard / Grenzen | Beschreibung |
 |------|-----|--------------------|--------------|
-| `status` | enum | - | `active`, `inactive`, `revoked` |
+| `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | Länge `1-50` | Aktualisierter Anzeigename |
-| `limitAmount` | number \| null | min. `0`, max. `100000` | `null` = unbegrenzt, `0` = kein nutzbares Budget |
+| `limitAmount` | number \| null | min. `0`, Eingabe max. `1000000` | `null` = unbegrenzt, `0` = Nullkontingent. Positive Werte werden auf ein gespeichertes Limit normalisiert, das 100000 USD Gegenwert nicht überschreiten kann. |
 | `limitCurrency` | enum | Standard `USD` | Optional: `USD` oder `CNY`. Wenn `CNY` gesetzt ist, wird `limitAmount` als RMB interpretiert und serverseitig vor dem Speichern in USD umgerechnet |
 | `models` | string[] | - | Aktualisierte Allowlist für logische Modelle |
 | `expiresAt` | string \| null | RFC3339-Datetime | `null` entfernt die Ablaufzeit |
 
-Mindestens ein Feld muss in der PATCH-Anfrage angegeben werden.
+Mindestens ein PATCH-Feld muss angegeben werden.
 
-## Währungsvertrag
+## Währungs-Vertrag
 
-- Standardmäßig wird `limitAmount` auf der Request-Seite als USD interpretiert. Mit `limitCurrency: "CNY"` kannst du ein Limit in RMB senden; der Server rechnet es vor dem Speichern mit dem aktuellen Kurs in USD um.
+- Standardmäßig wird `limitAmount` auf der Request-Seite als USD interpretiert. Mit `limitCurrency: "CNY"` können Sie ein RMB-Limit senden; der Server rechnet es vor dem Speichern mit dem aktuellen Kurs in USD um.
 - Monetäre Antwortfelder behalten das ursprüngliche USD-Feld und ergänzen einen RMB-Begleitwert mit dem Suffix `_cny`.
 - `exchange_rate` wird zusammen mit den API-Key-Metadaten zurückgegeben und ist der USD→CNY-Kurs für jeden `*_cny`-Wert in dieser Antwort.
 
@@ -83,8 +83,8 @@ Mindestens ein Feld muss in der PATCH-Anfrage angegeben werden.
 - `accessChannel=platform` bedeutet, dass die Anfrage über LemonDatas Plattformkanal abgerechnet wurde.
 - `accessChannel=byok` bedeutet, dass die Anfrage Ihren eigenen Upstream-Provider-Key verwendet hat.
 
-Die Endpunkte geben nur öffentliche Reporting- und Billing-Felder zurück; interne Routing-Details und physische Kanalmetadaten bleiben verborgen.
-- Einzelne `/usage`-Zeilen können `billing_transaction_id` enthalten, sobald die zugrunde liegende Anfrage abgerechnet wurde. Verwenden Sie `request_id` + `billing_transaction_id` für den Abgleich auf Anfrageebene.
+Die Antworten geben nur öffentliche Billing- und Reporting-Felder zurück. Interne Routing-Details und Metadaten physischer Provider bleiben verborgen.
+- Einzelne `/usage`-Zeilen können `billing_transaction_id` enthalten, sobald die zugrunde liegende Anfrage den abgerechneten Zustand erreicht hat. Verwenden Sie `request_id` + `billing_transaction_id` für den Abgleich auf Anfrageebene.
 
 ## Hinweis zur Billing-Paginierung
 
