@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: 2026-04-08
+Generated: 2026-04-22
 Source: https://docs.lemondata.cc
 
 ---
@@ -456,10 +456,10 @@ These headers appear on both streaming and non-streaming responses.
 |-------|--------|-------------|
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Model type |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | How the model is billed |
-| `cache_pricing` | object or `null` | Upstream prompt cache prices + platform semantic cache discount |
-| `agent_preferences.` | object | Non-chat recommendation snapshot for that scene |
+| `cache_pricing` | object or `null` | Model-specific upstream prompt cache prices. Pure platform semantic-cache discount no longer appears by itself on the list route. |
+| `agent_preferences.` | object | Non-chat recommendation snapshot for that scene, only on `GET /v1/models?recommended_for=` |
 
-`agent_preferences` is derived from a cached 24-hour success-rate snapshot:
+When `recommended_for` is present, `agent_preferences` is derived from a cached 24-hour success-rate snapshot:
 
 - Window: 24 hours
 - Snapshot cache: stale-while-revalidate
@@ -865,7 +865,7 @@ For deterministic requests (`temperature=0`), we cache the exact response:
 For all requests, we also check semantic similarity using a two-stage matching algorithm:
 
 - **Stage 1 (Query-only)**: ≥95% similarity on user query
-- **Stage 2 (Full context)**: ≥85% similarity including conversation context
+- **Stage 2 (Full context)**: ≥95% similarity including conversation context
 - **Best for**: FAQ-style queries, common questions
 
 ```
@@ -892,12 +892,12 @@ curl https://api.lemondata.cc/v1/chat/completions \
   }'
 ```
 
-| Type | Effect |
-|------|--------|
-| `no_cache` | Skip cache lookup, always get fresh response |
-| `no_store` | Don't store this response in cache |
-| `response_only` | Only use exact match cache (skip semantic) |
-| `semantic_only` | Only use semantic cache (skip exact match) |
+| Type            | Effect                                       |
+| --------------- | -------------------------------------------- |
+| `no_cache`      | Skip cache lookup, always get fresh response |
+| `no_store`      | Don't store this response in cache           |
+| `response_only` | Only use exact match cache (skip semantic)   |
+| `semantic_only` | Only use semantic cache (skip exact match)   |
 
 ### Response Headers
 
@@ -932,10 +932,10 @@ print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
 
 Cache hits are significantly cheaper than fresh requests:
 
-| Type | Cost |
-|------|------|
-| Cache HIT | **90% off** |
-| Cache MISS | Full price |
+| Type       | Cost        |
+| ---------- | ----------- |
+| Cache HIT  | **90% off** |
+| Cache MISS | Full price  |
 
 The exact discount is shown in your dashboard usage logs.
 
@@ -945,13 +945,14 @@ The exact discount is shown in your dashboard usage logs.
 
 Configure caching behavior in your dashboard settings:
 
-| Mode | Description |
-|------|-------------|
-| **Shared** | Cache enabled, responses may be shared across users (default for personal accounts) |
+| Mode         | Description                                                                               |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| **Shared**   | Cache enabled, responses may be shared across users (default for personal accounts)       |
 | **Isolated** | Cache enabled, but responses are private to your organization (default for organizations) |
-| **Disabled** | No caching at all |
+| **Disabled** | No caching at all                                                                         |
 
 Additional settings available:
+
 - **Similarity Threshold**: Adjust semantic matching sensitivity (default: 92%)
 - **Custom TTL**: Override cache expiration time
 - **Excluded Models**: Disable caching for specific models
@@ -988,6 +989,7 @@ curl -X POST https://api.lemondata.cc/v1/cache/feedback \
 ```
 
 **Feedback types:**
+
 - `wrong_answer` - Factually incorrect
 - `outdated` - Information is stale
 - `irrelevant` - Doesn't match the question
@@ -1001,12 +1003,10 @@ When a cache entry receives enough negative feedback, it's automatically invalid
 
 Deterministic settings maximize cache hit rates.
 
-  
 #### Standardize prompt formats
 
 Consistent formatting improves semantic matching.
 
-  
 #### Use no-cache for time-sensitive queries
 
 Current events, real-time data should skip cache.
@@ -2052,6 +2052,10 @@ task_id = response.json()["task_id"]
 # Poll poll_url for status...
 ```
 
+### Billing Transaction IDs
+
+Successful billable OpenAI-compatible non-streaming JSON responses include `billing_transaction_id` when settlement has completed before the response is finalized. The same value is also exposed as the `X-Billing-Transaction-ID` response header for browser and server integrations. Native compatibility routes, such as Gemini `/v1beta`, may expose the value via the header only to preserve the provider-native response shape. For async media tasks, poll the returned `poll_url` or `GET /v1/tasks/{id}`; the task response includes `billing_transaction_id` once settlement is complete. Streaming responses may settle after the stream has already been sent, so use the dashboard usage logs for reconciliation when the header is absent.
+
 ## Token Counting
 
 Tokens are the basic units of text processing:
@@ -2681,6 +2685,8 @@ response = requests.post(f"{BASE}/videos/generations",
 ```
 
 ### Reference-to-Video
+
+For `seedance-2.0` and `seedance-2.0-fast`, LemonData currently supports up to 9 reference images plus up to 3 reference videos and 3 reference audios. `duration` controls generated output length only; it does not define a separate reference video input duration limit.
 
 ```python
 response = requests.post(f"{BASE}/videos/generations",
@@ -3342,6 +3348,8 @@ URL: https://docs.lemondata.cc/api-reference/models/list-models
 
 ## Response
 
+> Note: `GET /v1/models` is optimized for discovery. Detail-only metadata such as `capability_flags`, `pricing_provenance`, and the full `public_contract` live on `GET /v1/models/{model}`.
+
 ## Query Parameters
 
 > Note: When `recommended_for` is present, `/v1/models` sorts non-chat models by the latest cached 24-hour success-rate snapshot. Models with `status = "insufficient_samples"` remain visible but sort after scored models.
@@ -3443,6 +3451,16 @@ Use it to inspect:
 
 The public response intentionally keeps `basis.channel_id` and `basis.physical_model` as `null` so agents can consume the recommendation signal without learning internal routing identifiers.
 
+## Public Detail Metadata
+
+Compared with `GET /v1/models`, the detail route can additionally return:
+
+- `lemondata.capability_flags`
+- `lemondata.supported_operations`
+- `lemondata.pricing_provenance`
+- `lemondata.public_contract_summary`
+- `lemondata.public_contract`
+
 ---
 
 ### Get Pricing
@@ -3451,16 +3469,74 @@ The public response intentionally keeps `basis.channel_id` and `basis.physical_m
 
 URL: https://docs.lemondata.cc/api-reference/pricing/get-pricing
 
+## Overview
+
+Use this endpoint to list the current public pricing surface for active models.
+
+For one model's full pricing detail, including structured pricing and provenance, prefer [Get Model Pricing](/api-reference/models/get-model).
+
 ## Query Parameters
 
 ## Response
 
-## Pricing Types
+> Note: Use the interactive OpenAPI panel above for the exact response schema. Public pricing entries may also expose `lock_price_per_request`, `has_complex_pricing`, `supported_operations`, `pricing_summary`, and `pricing_provenance`.
 
-| Type | Description | Example Models |
-|------|-------------|----------------|
-| **Token-based** | Charged per input/output tokens | GPT-4o, Claude, Gemini |
-| **Per-request** | Fixed price per request | DALL-E 3, Sora, Suno |
+---
+
+
+## Cache
+
+### Submit Cache Feedback
+
+> Report an incorrect cached response so LemonData can track and invalidate low-quality cache entries.
+
+URL: https://docs.lemondata.cc/api-reference/cache/submit-cache-feedback
+
+## Overview
+
+Use this endpoint to report a cached response that was incorrect, outdated, irrelevant, or otherwise unsafe to reuse.
+
+When an entry accumulates enough negative feedback, LemonData can automatically invalidate it.
+
+## Notes
+
+- Authentication requires a standard inference API key.
+- `feedback_type` accepts `wrong_answer`, `outdated`, `irrelevant`, or `other`.
+- `request_id` is optional and helps tie feedback back to the original request log.
+- `description` is optional free-form context for operators and audits.
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema and response fields.
+
+## Example
+
+---
+
+### Get Cache Feedback Stats
+
+> Inspect the feedback risk profile for one cached response entry.
+
+URL: https://docs.lemondata.cc/api-reference/cache/get-cache-feedback-stats
+
+## Overview
+
+Use this endpoint to inspect the current feedback statistics for a cache entry that has already received reports.
+
+It is useful for debugging cache quality, support workflows, and reconciliation after submitting feedback.
+
+## Notes
+
+- Authentication requires a standard inference API key.
+- `entryId` is the cache entry identifier returned or logged by the cached request flow.
+- The endpoint returns aggregate counts only; it does not expose raw feedback submissions.
+- `at_risk` indicates whether the entry is approaching invalidation thresholds.
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema and response fields.
+
+## Example
 
 ---
 
@@ -3473,6 +3549,13 @@ URL: https://docs.lemondata.cc/api-reference/cache/cache-management
 ## Overview
 
 LemonData automatically manages caching to optimize performance and reduce costs. While there is no public endpoint to clear cache entries, you have full control over caching behavior through request-level controls.
+
+This page is a usage guide for request-side cache controls.
+
+For strict API reference pages, see:
+
+- [Submit Cache Feedback](/api-reference/cache/submit-cache-feedback)
+- [Get Cache Feedback Stats](/api-reference/cache/get-cache-feedback-stats)
 
 ## Bypassing Cache
 
@@ -3794,17 +3877,20 @@ This same `/v1/files` route also supports the Anthropic Files API path.
 
 ### List Files
 
-> Lists uploaded batch files and generated output/error files.
+> Lists uploaded files for batch workflows and supported file-backed compatibility modes.
 
 URL: https://docs.lemondata.cc/api-reference/files/list-files
 
 ## Overview
 
-This endpoint is part of LemonData's OpenAI-compatible Batch API. Batch jobs use uploaded JSONL files, run asynchronously, and can return output/error files later.
+This endpoint primarily serves LemonData's OpenAI-compatible Batch API, including uploaded batch inputs and generated output or error files.
+
+When the request opts into Anthropic Files compatibility mode, the same route can also list Anthropic-style files available to the bound workspace.
 
 ## Notes
 
 - Batch input files must use `purpose=batch`.
+- Use `purpose=batch_output` to focus on generated output files.
 - `completion_window` is currently `24h`.
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
@@ -3823,13 +3909,15 @@ Use the interactive OpenAPI panel above for the exact schema.
 
 ### Retrieve File
 
-> Retrieves metadata for a single batch file.
+> Retrieves metadata for a single uploaded file.
 
 URL: https://docs.lemondata.cc/api-reference/files/retrieve-file
 
 ## Overview
 
-This endpoint is part of LemonData's OpenAI-compatible Batch API. Batch jobs use uploaded JSONL files, run asynchronously, and can return output/error files later.
+This endpoint primarily serves LemonData's OpenAI-compatible Batch API file objects.
+
+When the request opts into Anthropic Files compatibility mode, the same route can also return Anthropic-style file metadata for the bound workspace.
 
 ## Notes
 
@@ -3852,13 +3940,15 @@ Use the interactive OpenAPI panel above for the exact schema.
 
 ### Retrieve File Content
 
-> Downloads the original JSONL content for a batch file.
+> Downloads the original content for an uploaded file.
 
 URL: https://docs.lemondata.cc/api-reference/files/retrieve-file-content
 
 ## Overview
 
-This endpoint is part of LemonData's OpenAI-compatible Batch API. Batch jobs use uploaded JSONL files, run asynchronously, and can return output/error files later.
+This endpoint primarily serves LemonData's OpenAI-compatible Batch API file content retrieval.
+
+When the request opts into Anthropic Files compatibility mode, the same route can proxy the original stored file content for the bound workspace.
 
 ## Notes
 
@@ -4006,6 +4096,16 @@ URL: https://docs.lemondata.cc/api-reference/images/create-image
 
 > Note: For coding agents, discover the current recommended image shortlist first with `GET /v1/models?recommended_for=image`, then send the selected `model` explicitly to this endpoint.
 
+> Note: `gpt-image-2` is a token-priced GPT Image model. LemonData follows OpenAI's official usage breakdown for text input, image input, cached input when reported, and image output tokens; it is not billed as a fixed per-image model.
+
+> Note: Google Gemini image-family models do not share the same selector contract:
+
+- `gemini-3-pro-image-preview` and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
+- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
+- `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
+
+For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
+
 ## Request Body
 
 ## Response
@@ -4060,7 +4160,7 @@ def generate_image(prompt, model="midjourney"):
         # Poll for result
         while True:
             status_resp = requests.get(
-                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/images/generations/{task_id}",
+                f"https://api.lemondata.cc{poll_url}" if poll_url else f"https://api.lemondata.cc/v1/tasks/{task_id}",
                 headers={"Authorization": "Bearer sk-your-api-key"}
             )
             status_data = status_resp.json()
@@ -4090,7 +4190,12 @@ URL: https://docs.lemondata.cc/api-reference/images/edit-image
 
 ## Overview
 
-Creates an edited or extended image given an original image and a prompt. Requires `multipart/form-data` content type.
+Creates an edited or extended image given an original image and a prompt.
+
+The route supports both:
+
+- the classic `multipart/form-data` DALL-E style upload flow documented below
+- JSON requests that provide `image_url` for supported image-to-image families
 
 > Warning: This endpoint currently documents the DALL-E style multipart editing flow. Other supported image-to-image families on LemonData use `POST /v1/images/generations` with `operation: "image-to-image"` and JSON inputs such as `image_url` where supported.
 
@@ -4134,6 +4239,8 @@ URL: https://docs.lemondata.cc/api-reference/images/get-image-status
 
 > Info: If the create response included `poll_url`, prefer calling that exact URL for polling. Some image tasks may surface a `poll_url` under `/v1/tasks/{id}` instead of the image-specific status path.
 
+If the task no longer exists or can no longer be resolved through the public async-task contract, LemonData returns `async_task_not_found` with the message `Task not found or no longer available.`
+
 ## Response
 
 ## Polling Best Practices
@@ -4146,7 +4253,7 @@ import time
 
 def poll_image_task(task_id, api_key, max_wait=300, interval=3):
     """Poll for image generation result with timeout."""
-    url = f"https://api.lemondata.cc/v1/images/generations/{task_id}"
+    url = f"https://api.lemondata.cc/v1/tasks/{task_id}"
     headers = {"Authorization": f"Bearer {api_key}"}
 
     start_time = time.time()
@@ -4164,7 +4271,7 @@ def poll_image_task(task_id, api_key, max_wait=300, interval=3):
     raise TimeoutError(f"Task {task_id} did not complete within {max_wait}s")
 
 # Usage
-image_url = poll_image_task("img_abc123def456", "sk-your-api-key")
+image_url = poll_image_task("ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sk-your-api-key")
 print(f"Generated image: {image_url}")
 ```
 
@@ -4287,6 +4394,8 @@ Poll this endpoint to check the status of your music generation task.
 
 > Info: If the create response included `poll_url`, prefer calling that exact URL for polling. `/v1/tasks/{id}` is the canonical fixed status endpoint for music jobs, and `id` / `task_id` should be treated as the same async task identity.
 
+If the task no longer exists or can no longer be resolved through the public async-task contract, LemonData returns `async_task_not_found` with the message `Task not found or no longer available.`
+
 ## Path Parameters
 
 ## Response
@@ -4350,7 +4459,7 @@ response = requests.post(
 
 ## Reference to Video
 
-Use `operation=reference-to-video` when the model supports dedicated reference-image conditioning. For LemonData’s public contract, pass reference assets through `reference_images`.
+Use `operation=reference-to-video` when the model supports dedicated reference conditioning. In LemonData's public contract, image references use `reference_images`, while multimodal reference videos and audios use `video_urls` and `audio_urls`. For `seedance-2.0` and `seedance-2.0-fast`, LemonData currently supports up to 9 reference images plus up to 3 reference videos and 3 reference audios. `duration` controls generated output length only; it does not set a separate limit for reference video input duration.
 
 ```python
 response = requests.post(
@@ -4531,6 +4640,8 @@ URL: https://docs.lemondata.cc/api-reference/video/get-video-status
 
 > Info: If a create response returns `poll_url`, call that exact URL. When it points to `/v1/tasks/{id}`, treat that as the canonical fixed status endpoint.
 
+If the task no longer exists or can no longer be resolved through the public async-task contract, LemonData returns `async_task_not_found` with the message `Task not found or no longer available.`
+
 ## Response
 
 ## Polling Best Practices
@@ -4592,6 +4703,8 @@ Poll this endpoint to check the status of your 3D model generation task.
 
 > Info: If the create response included `poll_url`, prefer calling that exact URL for polling. `/v1/tasks/{id}` is the canonical fixed status endpoint for 3D jobs, and `id` / `task_id` should be treated as the same async task identity.
 
+If the task no longer exists or can no longer be resolved through the public async-task contract, LemonData returns `async_task_not_found` with the message `Task not found or no longer available.`
+
 ## Path Parameters
 
 ## Response
@@ -4617,17 +4730,31 @@ Use this endpoint for unified async polling across task types such as video, ima
 
 ## Response
 
+## Error Behavior
+
+If the task no longer exists, has expired, or cannot be resolved through the public async-task contract, LemonData returns:
+
+```json
+{
+  "error": {
+    "message": "Task not found or no longer available.",
+    "type": "invalid_request_error",
+    "code": "async_task_not_found"
+  }
+}
+```
+
 ## Examples
 
 ```bash cURL
-curl "https://api.lemondata.cc/v1/tasks/video_abc123" \
+curl "https://api.lemondata.cc/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
 ```python Python
 import requests
 
-poll_url = "/v1/tasks/video_abc123"
+poll_url = "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 response = requests.get(
     f"https://api.lemondata.cc{poll_url}",
     headers={"Authorization": "Bearer sk-your-api-key"},
@@ -4636,7 +4763,7 @@ print(response.json())
 ```
 
 ```javascript JavaScript
-const pollUrl = '/v1/tasks/video_abc123';
+const pollUrl = '/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const response = await fetch(`https://api.lemondata.cc${pollUrl}`, {
   headers: { Authorization: 'Bearer sk-your-api-key' },
 });
@@ -4660,12 +4787,16 @@ Returns a list of available models in Google Gemini API format.
 
 ## Authentication
 
-Optional. Supports the same authentication methods as other Gemini endpoints:
-- `?key=YOUR_API_KEY` query parameter
-- `x-goog-api-key: YOUR_API_KEY` header
-- `Authorization: Bearer YOUR_API_KEY` header
+Authentication is not required for the public model catalog read endpoints.
+
+Gemini-style auth hints such as `?key=` or `x-goog-api-key` do not change the response contract here.
 
 ## Response
+
+## Errors
+
+- Invalid `pageToken` returns `400 INVALID_ARGUMENT`.
+- Unexpected list failures return `500 INTERNAL`.
 
 ---
 
@@ -4681,12 +4812,14 @@ Returns metadata for a specific model in Google Gemini API format.
 
 ## Authentication
 
-Optional. Supports the same authentication methods as other Gemini endpoints:
-- `?key=YOUR_API_KEY` query parameter
-- `x-goog-api-key: YOUR_API_KEY` header
-- `Authorization: Bearer YOUR_API_KEY` header
+Authentication is not required for the public model metadata read endpoint.
 
 ## Response
+
+## Errors
+
+- Invalid GETs that accidentally include `:generateContent` or `:streamGenerateContent` return `405 METHOD_NOT_ALLOWED`.
+- Missing models return `404 NOT_FOUND`.
 
 ---
 
@@ -4937,7 +5070,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 | Field | Type | Default / Limits | Notes |
 |-------|------|------------------|-------|
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
-| `limitAmount` | number \| null | min `0`, max `100000` | `null` or omitted = unlimited, `0` = zero quota, positive = USD spending cap |
+| `limitAmount` | number \| null | min `0`, input max `1000000` | `null` or omitted = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
 | `models` | string[] | default `[]` | Optional logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
@@ -4946,9 +5079,9 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 
 | Field | Type | Default / Limits | Notes |
 |-------|------|------------------|-------|
-| `status` | enum | - | `active`, `inactive`, `revoked` |
+| `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | length `1-50` | Updated display name |
-| `limitAmount` | number \| null | min `0`, max `100000` | `null` means unlimited, `0` means zero quota |
+| `limitAmount` | number \| null | min `0`, input max `1000000` | `null` means unlimited, `0` means zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
 | `models` | string[] | - | Updated logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
@@ -4970,6 +5103,7 @@ At least one PATCH field must be provided.
 - `accessChannel=byok` means the request used your own upstream provider key.
 
 Responses expose public billing and reporting fields only. Internal routing details and physical provider metadata remain hidden.
+- `/usage` line items can include `billing_transaction_id` once the underlying request has reached settled billing state. Use `request_id` + `billing_transaction_id` for request-level reconciliation.
 
 ## Billing Pagination Note
 
@@ -5026,7 +5160,7 @@ Creates a new `type=user` API key in the organization associated with the curren
 | Field | Type | Default / Limits | Notes |
 |-------|------|------------------|-------|
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
-| `limitAmount` | number \| null | min `0`, max `100000` | `null` or omitted = unlimited, `0` = zero quota, positive = USD spending cap |
+| `limitAmount` | number \| null | min `0`, input max `1000000` | `null` or omitted = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
 | `models` | string[] | default `[]` | Optional logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
@@ -5063,9 +5197,9 @@ At least one field must be provided.
 
 | Field | Type | Default / Limits | Notes |
 |-------|------|------------------|-------|
-| `status` | enum | - | `active`, `inactive`, `revoked` |
+| `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | length `1-50` | Updated display name |
-| `limitAmount` | number \| null | min `0`, max `100000` | `null` = unlimited, `0` = zero quota, positive = USD cap |
+| `limitAmount` | number \| null | min `0`, input max `1000000` | `null` = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
 | `models` | string[] | - | Updated logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
@@ -5114,6 +5248,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 
 - The response is paginated.
 - The response includes public billing and reporting fields only.
+- Each usage item can include `billing_transaction_id` after the underlying request reaches settled billing state. Use it together with `request_id` for request-level reconciliation.
 - Internal routing and physical channel metadata are intentionally hidden.
 - All monetary response fields remain available in USD and now also include RMB display companions: `cost_cny`, `total_cost_cny`, and `cost_cny` inside every breakdown entry.
 - `api_key.exchange_rate` is the USD→CNY rate used for all `*_cny` values in that response.
