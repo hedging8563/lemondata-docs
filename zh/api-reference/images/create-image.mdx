@@ -5,7 +5,7 @@ description: "根据 prompt 创建图像"
 ---
 
 <Note>
-对于编码 agent，请先通过 `GET /v1/models?recommended_for=image` 找出当前推荐的图片模型清单，然后将选定的 `model` 明确传给这个端点。
+对于 coding agent，请先通过 `GET /v1/models?recommended_for=image` 找出当前推荐的图片模型清单，然后将选定的 `model` 明确传给这个端点。
 </Note>
 
 <Note>
@@ -17,13 +17,13 @@ description: "根据 prompt 创建图像"
 </Note>
 
 <Note>
-Google Gemini image-family models do not share the same selector contract:
+Google Gemini 图片模型并不共用同一套参数选择规则：
 
-- `gemini-3-pro-image-preview` and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
-- `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
-- `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
+- `gemini-3-pro-image-preview` 和 `nano-banana-pro` 支持 `aspect_ratio`，也支持 `resolution`（`1k`、`2k`、`4k`）。
+- `gemini-2.5-flash-image`、`gemini-3.1-flash-image-preview`、`nano-banana` 和 `nano-banana-edit` 支持 `aspect_ratio`，但不提供公开的 `resolution` 选择。
+- `gemini-2.0-flash-preview-image-generation` 在此端点中按仅使用 prompt 的文生图模型记录。
 
-For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
+使用 Google 图片模型时，优先发送 `aspect_ratio`；只有模型明确支持时才发送 `resolution`。
 </Note>
 
 ## 请求体
@@ -69,7 +69,7 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
-  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+  对 `gpt-image-2` 设置为 `true` 时，会创建异步图片任务。异步任务的最终结果以 URL 返回；如果需要 `b64_json`，请使用默认的同步请求。
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -97,40 +97,40 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   - `revised_prompt` (string)：使用的提示词（DALL-E 3）
 </ResponseField>
 
-### Async Task Response
+### 异步任务响应
 
-Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+对 `gpt-image-2` 设置 `async: true` 后，创建请求会先返回任务，而不是等待最终图片生成完成。响应包含 `status: "pending"`、`task_id` 和 `poll_url`。请轮询 `/v1/tasks/{task_id}`，直到任务进入 `completed` 或 `failed` 状态。
 
 <Info>
-Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+异步图片任务最终返回图片 URL。如果你需要原始 `b64_json` 图片数据，请使用默认的同步请求。
 </Info>
 
 <Note>
-Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+任务创建时可能会先预留预计费用。任务完成后按实际用量结算；失败或超时的任务会释放预留费用或退回费用。
 </Note>
 
 <ResponseField name="created" type="integer">
-  Unix timestamp of creation.
+  创建时的 Unix 时间戳。
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Unique task identifier for polling.
+  用于轮询的唯一任务 ID。
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Initial status: `pending`.
+  初始状态：`pending`。
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  Relative URL to poll for results, for example `/v1/tasks/{id}`.
+  用于轮询结果的相对 URL，例如 `/v1/tasks/{id}`。
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Empty while the task is pending. Completed image tasks return generated image URLs in `data[].url`.
+  任务处于 pending 状态时为空。图片任务完成后，生成图片的 URL 会出现在 `data[].url` 中。
 </ResponseField>
 
 <Note>
-When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
+收到 `status: "pending"` 后，请使用 `poll_url` 或 `GET /v1/tasks/{task_id}` 获取结果。
 </Note>
 
 <RequestExample>
@@ -213,7 +213,7 @@ echo $data['data'][0]['url'];
 ```
 
 <Info>
-Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-preview`, send `aspect_ratio` but omit `resolution`:
+Flash 系列示例：使用 `gemini-2.5-flash-image` 或 `gemini-3.1-flash-image-preview` 时，发送 `aspect_ratio`，不要发送 `resolution`：
 
 ```json
 {
@@ -227,7 +227,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 </RequestExample>
 
 <ResponseExample>
-```json Inline Response
+```json 内联响应
 {
   "created": 1706000000,
   "data": [
@@ -239,7 +239,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
 }
 ```
 
-```json Async Task Response
+```json 异步任务响应
 {
   "created": 1706000000,
   "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
