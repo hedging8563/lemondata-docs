@@ -5,7 +5,7 @@ description: "ينشئ صورة بناءً على prompt"
 ---
 
 <Note>
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData sends `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
+For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
 </Note>
 
 <Note>
@@ -68,6 +68,10 @@ For `gpt-image-2` image generation, supported public parameters are: `prompt`, `
   تنسيق الاستجابة: `url` أو `b64_json`.
 </ParamField>
 
+<ParamField body="async" type="boolean" default="false">
+  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+</ParamField>
+
 <ParamField body="style" type="string" default="vivid">
   النمط لـ DALL-E 3: `vivid` أو `natural`.
 </ParamField>
@@ -93,32 +97,40 @@ For `gpt-image-2` image generation, supported public parameters are: `prompt`, `
   - `revised_prompt` (string): الـ prompt المستخدم (DALL-E 3)
 </ResponseField>
 
-### الاستجابة غير المتزامنة (Midjourney, Flux Pro, Ideogram, إلخ.)
+### Async Task Response
 
-تتطلب بعض النماذج وقت معالجة أطول وتُرجع استجابة async:
+Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+
+<Info>
+Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+</Info>
+
+<Note>
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+</Note>
 
 <ResponseField name="created" type="integer">
-  الطابع الزمني Unix لوقت الإنشاء.
+  Unix timestamp of creation.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  معرّف مهمة فريد من أجل polling.
+  Unique task identifier for polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  الحالة الأولية: `pending`.
+  Initial status: `pending`.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  عنوان URL نسبي من أجل polling على النتائج (على سبيل المثال، `/v1/tasks/{id}`).
+  Relative URL to poll for results, for example `/v1/tasks/{id}`.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  مصفوفة تحتوي على بيانات placeholder. سيكون `url` فارغًا حتى الاكتمال.
+  Empty while the task is pending. Completed image tasks return generated image URLs in `data[].url`.
 </ResponseField>
 
 <Note>
-عندما تتلقى `status: "pending"`، استخدم endpoint [Get Image Status](/api-reference/images/get-image-status) لإجراء polling على النتيجة.
+When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
 </Note>
 
 <RequestExample>
@@ -234,12 +246,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
   "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "pending",
   "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "data": [
-    {
-      "url": "",
-      "revised_prompt": "a red apple"
-    }
-  ]
+  "data": []
 }
 ```
 </ResponseExample>

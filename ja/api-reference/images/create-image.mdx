@@ -5,7 +5,7 @@ description: "プロンプトに基づいて画像を生成します"
 ---
 
 <Note>
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData sends `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
+For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
 </Note>
 
 <Note>
@@ -68,6 +68,10 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   レスポンス形式：`url` または `b64_json`。
 </ParamField>
 
+<ParamField body="async" type="boolean" default="false">
+  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+</ParamField>
+
 <ParamField body="style" type="string" default="vivid">
   DALL-E 3のスタイル：`vivid` または `natural`。
 </ParamField>
@@ -93,36 +97,40 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   - `revised_prompt` (string): 使用されたプロンプト（DALL-E 3）
 </ResponseField>
 
-### 非同期タスクレスポンス
+### Async Task Response
 
-一部の画像モデルは即座に非同期タスクを返し、ルーティングされたプロバイダーのパスに応じてインラインまたはタスクベースのいずれかとして動作する場合があります。レスポンスに `status: "pending"` が含まれている場合は、非同期タスクレスポンスとして扱ってください：
+Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
 
 <Info>
-`poll_url` が提供されている場合は、そのまま使用してください。後続のポーリングには `task_id` を非同期タスクの識別子として使用します。
+Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
 </Info>
 
+<Note>
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+</Note>
+
 <ResponseField name="created" type="integer">
-  作成時のUnixタイムスタンプ。
+  Unix timestamp of creation.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  ポーリング用の一意のタスク識別子。
+  Unique task identifier for polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  初期ステータス：`pending`。
+  Initial status: `pending`.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  結果をポーリングするための相対URL（例：`/v1/tasks/{id}`）。
+  Relative URL to poll for results, for example `/v1/tasks/{id}`.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  プレースホルダーデータを含む配列。完了するまで `url` は空になります。
+  Empty while the task is pending. Completed image tasks return generated image URLs in `data[].url`.
 </ResponseField>
 
 <Note>
-`status: "pending"` を受け取った場合は、[Get Image Status](/api-reference/images/get-image-status) エンドポイントを使用して結果をポーリングしてください。
+When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
 </Note>
 
 <RequestExample>
@@ -238,12 +246,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
   "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "pending",
   "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "data": [
-    {
-      "url": "",
-      "revised_prompt": "a red apple"
-    }
-  ]
+  "data": []
 }
 ```
 </ResponseExample>

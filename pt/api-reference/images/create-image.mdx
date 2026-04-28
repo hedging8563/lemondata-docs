@@ -5,7 +5,7 @@ description: "Cria uma imagem a partir de um prompt"
 ---
 
 <Note>
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData sends `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
+For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
 </Note>
 
 <Note>
@@ -68,6 +68,10 @@ Para as famílias de imagem do Google, prefira `aspect_ratio` e envie `resolutio
   Formato da resposta: `url` ou `b64_json`.
 </ParamField>
 
+<ParamField body="async" type="boolean" default="false">
+  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+</ParamField>
+
 <ParamField body="style" type="string" default="vivid">
   Estilo para DALL-E 3: `vivid` ou `natural`.
 </ParamField>
@@ -93,36 +97,40 @@ Para as famílias de imagem do Google, prefira `aspect_ratio` e envie `resolutio
   - `revised_prompt` (string): O prompt usado (DALL-E 3)
 </ResponseField>
 
-### Resposta de tarefa assíncrona
+### Async Task Response
 
-Alguns modelos de imagem retornam imediatamente uma tarefa assíncrona, e alguns podem se comportar como resposta em linha ou baseada em tarefa dependendo do caminho do provedor roteado. Quando a resposta inclui `status: "pending"`, trate-a como uma resposta de tarefa assíncrona:
+Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
 
 <Info>
-Use exatamente o `poll_url` retornado quando ele for fornecido. Trate `task_id` como a identidade da tarefa assíncrona para polling posterior.
+Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
 </Info>
 
+<Note>
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+</Note>
+
 <ResponseField name="created" type="integer">
-  Timestamp Unix da criação.
+  Unix timestamp of creation.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Identificador único da tarefa para polling.
+  Unique task identifier for polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Status inicial: `pending`.
+  Initial status: `pending`.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  URL relativa para consultar os resultados (por exemplo, `/v1/tasks/{id}`).
+  Relative URL to poll for results, for example `/v1/tasks/{id}`.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Array com dados temporários. `url` ficará vazio até a conclusão.
+  Empty while the task is pending. Completed image tasks return generated image URLs in `data[].url`.
 </ResponseField>
 
 <Note>
-Quando receber `status: "pending"`, use o endpoint [Get Image Status](/api-reference/images/get-image-status) para consultar o resultado.
+When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
 </Note>
 
 <RequestExample>
@@ -238,12 +246,7 @@ Exemplo da família Flash: para `gemini-2.5-flash-image` ou `gemini-3.1-flash-im
   "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "pending",
   "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "data": [
-    {
-      "url": "",
-      "revised_prompt": "a red apple"
-    }
-  ]
+  "data": []
 }
 ```
 </ResponseExample>

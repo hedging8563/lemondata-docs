@@ -13,7 +13,7 @@ description: "根據 prompt 建立圖片"
 </Note>
 
 <Note>
-對於 `gpt-image-2` 圖像生成，公共參數支援 `prompt`、`n`、`size`、`quality`、`response_format`、`background`、`output_format`、`output_compression` 或 `compression`、`moderation`、`partial_images` 和 `user`。未傳 `size` 或 `quality` 時路由會依官方相容口徑送出 `auto`；自訂 `size` 必須使用下方說明的彈性 `WIDTHxHEIGHT` 契約。
+對於 `gpt-image-2` 圖像生成，公共參數支援 `prompt`、`n`、`size`、`quality`、`response_format`、`async`、`background`、`output_format`、`output_compression` 或 `compression`、`moderation`、`partial_images` 和 `user`。未傳 `size` 或 `quality` 時 LemonData 會使用 `auto`；自訂 `size` 必須使用下方說明的彈性 `WIDTHxHEIGHT` 契約。
 </Note>
 
 <Note>
@@ -68,6 +68,10 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   回應格式：`url` 或 `b64_json`。
 </ParamField>
 
+<ParamField body="async" type="boolean" default="false">
+  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+</ParamField>
+
 <ParamField body="style" type="string" default="vivid">
   DALL-E 3 的風格：`vivid` 或 `natural`。
 </ParamField>
@@ -93,36 +97,40 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   - `revised_prompt`（string）：實際使用的 prompt（DALL-E 3）
 </ResponseField>
 
-### 非同步任務回應
+### Async Task Response
 
-某些圖像模型會立即返回非同步任務，而某些模型可能會根據路由的提供商路徑表現為即時或基於任務。當回應包含 `status: "pending"` 時，請將其視為非同步任務回應：
+Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
 
 <Info>
-在提供 `poll_url` 時，請準確使用它。將 `task_id` 視為後續輪詢的非同步任務標識。
+Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
 </Info>
 
+<Note>
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+</Note>
+
 <ResponseField name="created" type="integer">
-  建立時間的 Unix timestamp。
+  Unix timestamp of creation.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  用於輪詢的唯一任務識別碼。
+  Unique task identifier for polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  初始狀態：`pending`。
+  Initial status: `pending`.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  用於輪詢結果的相對 URL（例如：`/v1/tasks/{id}`）。
+  Relative URL to poll for results, for example `/v1/tasks/{id}`.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  包含 placeholder 資料的陣列。在完成之前，`url` 會是空的。
+  Empty while the task is pending. Completed image tasks return generated image URLs in `data[].url`.
 </ResponseField>
 
 <Note>
-當您收到 `status: "pending"` 時，請使用 [Get Image Status](/api-reference/images/get-image-status) 端點來輪詢結果。
+When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
 </Note>
 
 <RequestExample>
@@ -238,12 +246,7 @@ Flash-family example: for `gemini-2.5-flash-image` or `gemini-3.1-flash-image-pr
   "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "pending",
   "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "data": [
-    {
-      "url": "",
-      "revised_prompt": "a red apple"
-    }
-  ]
+  "data": []
 }
 ```
 </ResponseExample>

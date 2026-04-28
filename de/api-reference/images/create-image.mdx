@@ -5,7 +5,7 @@ description: "Erstellt ein Bild anhand eines Prompts"
 ---
 
 <Note>
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData sends `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
+For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
 </Note>
 
 <Note>
@@ -68,6 +68,10 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   Antwortformat: `url` oder `b64_json`.
 </ParamField>
 
+<ParamField body="async" type="boolean" default="false">
+  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+</ParamField>
+
 <ParamField body="style" type="string" default="vivid">
   Stil für DALL-E 3: `vivid` oder `natural`.
 </ParamField>
@@ -95,34 +99,38 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 
 ### Async Task Response
 
-Einige Bildmodelle liefern sofort einen asynchronen Task zurück, und manche können je nach geroutetem Providerpfad sowohl inline als auch task-basiert reagieren. Wenn die Antwort `status: "pending"` enthält, behandeln Sie sie als asynchrone Task-Antwort:
+Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
 
 <Info>
-Verwenden Sie `poll_url` exakt dann, wenn es bereitgestellt wird. Behandeln Sie `task_id` als die Identität des asynchronen Tasks für das spätere Polling.
+Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
 </Info>
 
+<Note>
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+</Note>
+
 <ResponseField name="created" type="integer">
-  Unix-Zeitstempel der Erstellung.
+  Unix timestamp of creation.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Eindeutige Aufgabenkennung für das Polling.
+  Unique task identifier for polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Initialer Status: `pending`.
+  Initial status: `pending`.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  Relative URL zum Polling der Ergebnisse (z. B. `/v1/tasks/{id}`).
+  Relative URL to poll for results, for example `/v1/tasks/{id}`.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Array mit Platzhalterdaten. `url` bleibt leer, bis der Vorgang abgeschlossen ist.
+  Empty while the task is pending. Completed image tasks return generated image URLs in `data[].url`.
 </ResponseField>
 
 <Note>
-Wenn Sie `status: "pending"` erhalten, verwenden Sie den Endpunkt [Get Image Status](/de/api-reference/images/get-image-status), um das Ergebnis abzurufen.
+When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
 </Note>
 
 <RequestExample>
@@ -238,12 +246,7 @@ Flash-Family-Beispiel: Für `gemini-2.5-flash-image` oder `gemini-3.1-flash-imag
   "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "pending",
   "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "data": [
-    {
-      "url": "",
-      "revised_prompt": "a red apple"
-    }
-  ]
+  "data": []
 }
 ```
 </ResponseExample>

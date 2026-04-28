@@ -5,7 +5,7 @@ description: "Tạo một hình ảnh từ prompt"
 ---
 
 <Note>
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData sends `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
+For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
 </Note>
 
 <Note>
@@ -68,6 +68,10 @@ Với các model hình ảnh của Google, hãy ưu tiên `aspect_ratio` và ch�
   Định dạng response: `url` hoặc `b64_json`.
 </ParamField>
 
+<ParamField body="async" type="boolean" default="false">
+  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+</ParamField>
+
 <ParamField body="style" type="string" default="vivid">
   Phong cách cho DALL-E 3: `vivid` hoặc `natural`.
 </ParamField>
@@ -93,36 +97,40 @@ Với các model hình ảnh của Google, hãy ưu tiên `aspect_ratio` và ch�
   - `revised_prompt` (string): Prompt đã được dùng (DALL-E 3)
 </ResponseField>
 
-### Phản Hồi Tác Vụ Bất Đồng Bộ
+### Async Task Response
 
-Một số model hình ảnh trả về ngay một task bất đồng bộ, và một số có thể hoạt động theo kiểu inline hoặc task tùy theo đường route provider. Khi response có `status: "pending"`, hãy coi đó là phản hồi tác vụ bất đồng bộ:
+Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
 
 <Info>
-Hãy dùng chính xác `poll_url` được trả về khi có. Xem `task_id` như định danh tác vụ bất đồng bộ để polling tiếp theo.
+Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
 </Info>
 
+<Note>
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+</Note>
+
 <ResponseField name="created" type="integer">
-  Unix timestamp của thời điểm tạo.
+  Unix timestamp of creation.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Định danh tác vụ duy nhất để polling.
+  Unique task identifier for polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Trạng thái ban đầu: `pending`.
+  Initial status: `pending`.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  URL tương đối để polling kết quả (ví dụ: `/v1/tasks/{id}`).
+  Relative URL to poll for results, for example `/v1/tasks/{id}`.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Mảng có dữ liệu tạm. `url` sẽ rỗng cho đến khi hoàn tất.
+  Empty while the task is pending. Completed image tasks return generated image URLs in `data[].url`.
 </ResponseField>
 
 <Note>
-Khi nhận được `status: "pending"`, hãy dùng endpoint [Lấy Trạng Thái Hình Ảnh](/vi/api-reference/images/get-image-status) để polling kết quả.
+When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
 </Note>
 
 <RequestExample>
@@ -238,12 +246,7 @@ Ví dụ cho dòng Flash: với `gemini-2.5-flash-image` hoặc `gemini-3.1-flas
   "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "pending",
   "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "data": [
-    {
-      "url": "",
-      "revised_prompt": "a red apple"
-    }
-  ]
+  "data": []
 }
 ```
 </ResponseExample>

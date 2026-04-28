@@ -5,7 +5,7 @@ description: "Membuat gambar berdasarkan prompt"
 ---
 
 <Note>
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData sends `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
+For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
 </Note>
 
 <Note>
@@ -68,6 +68,10 @@ Untuk keluarga gambar Google, utamakan `aspect_ratio` dan hanya kirim `resolutio
   Format respons: `url` atau `b64_json`.
 </ParamField>
 
+<ParamField body="async" type="boolean" default="false">
+  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+</ParamField>
+
 <ParamField body="style" type="string" default="vivid">
   Style untuk DALL-E 3: `vivid` atau `natural`.
 </ParamField>
@@ -93,36 +97,40 @@ Untuk keluarga gambar Google, utamakan `aspect_ratio` dan hanya kirim `resolutio
   - `revised_prompt` (string): Prompt yang dipakai (DALL-E 3)
 </ResponseField>
 
-### Respons Tugas Asinkron
+### Async Task Response
 
-Beberapa model gambar langsung mengembalikan task asinkron, dan beberapa bisa berperilaku sebagai inline atau berbasis task tergantung jalur provider yang dirutekan. Ketika respons menyertakan `status: "pending"`, perlakukan itu sebagai respons task asinkron:
+Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
 
 <Info>
-Gunakan `poll_url` yang dikembalikan persis seperti adanya. Perlakukan `task_id` sebagai identitas task asinkron untuk polling lanjutan.
+Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
 </Info>
 
+<Note>
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+</Note>
+
 <ResponseField name="created" type="integer">
-  Unix timestamp saat pembuatan.
+  Unix timestamp of creation.
 </ResponseField>
 
 <ResponseField name="task_id" type="string">
-  Identifier unik task untuk polling.
+  Unique task identifier for polling.
 </ResponseField>
 
 <ResponseField name="status" type="string">
-  Status awal: `pending`.
+  Initial status: `pending`.
 </ResponseField>
 
 <ResponseField name="poll_url" type="string">
-  URL relatif untuk polling hasil (misalnya, `/v1/tasks/{id}`).
+  Relative URL to poll for results, for example `/v1/tasks/{id}`.
 </ResponseField>
 
 <ResponseField name="data" type="array">
-  Array dengan data placeholder. `url` akan kosong sampai selesai.
+  Empty while the task is pending. Completed image tasks return generated image URLs in `data[].url`.
 </ResponseField>
 
 <Note>
-Saat menerima `status: "pending"`, gunakan endpoint [Dapatkan Status Gambar](/id/api-reference/images/get-image-status) untuk polling hasil.
+When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
 </Note>
 
 <RequestExample>
@@ -238,12 +246,7 @@ Contoh keluarga Flash: untuk `gemini-2.5-flash-image` atau `gemini-3.1-flash-ima
   "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "status": "pending",
   "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "data": [
-    {
-      "url": "",
-      "revised_prompt": "a red apple"
-    }
-  ]
+  "data": []
 }
 ```
 </ResponseExample>
