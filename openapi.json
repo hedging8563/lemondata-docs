@@ -2423,7 +2423,7 @@
           "Images"
         ],
         "summary": "Edit image",
-        "description": "Edits an image using either JSON image URLs or multipart uploads.",
+        "description": "Edits an image using multipart image uploads, JSON image URLs, or the official JSON images array for supported GPT Image models.",
         "operationId": "editImage",
         "requestBody": {
           "required": true,
@@ -2433,8 +2433,7 @@
                 "type": "object",
                 "required": [
                   "model",
-                  "prompt",
-                  "image_url"
+                  "prompt"
                 ],
                 "properties": {
                   "model": {
@@ -2444,7 +2443,9 @@
                     "type": "string"
                   },
                   "image_url": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Single source image URL. Kept for LemonData compatibility; use images for the official JSON shape."
                   },
                   "n": {
                     "type": "integer",
@@ -2497,22 +2498,81 @@
                   },
                   "user": {
                     "type": "string"
+                  },
+                  "image_urls": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "description": "Multiple source image URLs. GPT Image edits accept up to 16 source images."
+                  },
+                  "images": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "description": "Official JSON image references for image edits. LemonData currently accepts image_url references in this array.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "image_url"
+                      ],
+                      "properties": {
+                        "image_url": {
+                          "type": "string",
+                          "format": "uri"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
                   }
                 },
-                "additionalProperties": true
+                "additionalProperties": true,
+                "anyOf": [
+                  {
+                    "required": [
+                      "image_url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "image_urls"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "images"
+                    ]
+                  }
+                ]
               }
             },
             "multipart/form-data": {
               "schema": {
                 "type": "object",
                 "required": [
-                  "image",
                   "prompt"
                 ],
                 "properties": {
                   "image": {
-                    "type": "string",
-                    "format": "binary"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "format": "binary"
+                      },
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 16,
+                        "items": {
+                          "type": "string",
+                          "format": "binary"
+                        }
+                      }
+                    ],
+                    "description": "Source image file(s). Repeat image for multiple source images; GPT Image edits accept up to 16 images."
                   },
                   "mask": {
                     "type": "string",
@@ -2575,9 +2635,31 @@
                   },
                   "user": {
                     "type": "string"
+                  },
+                  "image[]": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "Alternative repeated multipart field name for multiple source images."
                   }
                 },
-                "additionalProperties": true
+                "additionalProperties": true,
+                "anyOf": [
+                  {
+                    "required": [
+                      "image"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "image[]"
+                    ]
+                  }
+                ]
               }
             }
           }
