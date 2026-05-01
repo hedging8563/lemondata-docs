@@ -50,17 +50,18 @@ Görüntü, video ve ses modelleri istek başına fiyatlandırılır:
 
 ### Asenkron Görev Faturalandırması (Video/Müzik/3D ve Bazı Görüntü Modelleri)
 
-<Warning>
-  **Önemli**: Video, müzik ve 3D oluşturma görevleri tamamlandığında değil, **gönderim anında faturalandırılır**. Bazı görüntü modelleri de görev tabanlı yanıtlar döndürebilir ve bu durumda aynı şekilde değerlendirilmelidir.
-</Warning>
+<Note>
+  Görev tabanlı oluşturma sırasında görev oluşturma, tahmini maliyeti rezerve edebilir veya önceden düşebilir. Nihai mutabakat yalnızca asenkron görev polling veya finalization sırasında başarılı terminal duruma ulaştıktan sonra yapılır.
+</Note>
 
 Görev tabanlı oluşturma akışları için (video, müzik, 3D ve bazı görüntü modelleri):
 
-1. Görevi gönderdiğinizde **faturalandırma anında gerçekleşir**
-2. Durum kontrolleri için döndürülen `poll_url` yolunu izleyin ve `task_id` değerini asenkron görev kimliği olarak kabul edin
-3. Görev başarısız olursa **otomatik iade yapılmaz**
+1. Görevi gönderin. LemonData bakiye ve API Key harcama limitlerini doğrulamak için tahmini bir ön kesinti veya rezervasyon yapabilir.
+2. Görev terminal duruma ulaşana kadar dönen `poll_url` değerini sorgulayın veya `GET /v1/tasks/{id}` çağırın.
+3. Görev başarıyla tamamlandığında nihai mutabakat kullanımı kaydeder ve görev yanıtı `billing_transaction_id` içerir.
+4. Oluşturma başarısız olursa veya terminal durum failed ise bekleyen tutar iade edilir ya da serbest bırakılır ve istek faturalandırılamaz olarak işaretlenir.
 
-Bunun nedeni, üst sağlayıcıların sonuçtan bağımsız olarak görev gönderildiğinde bizi ücretlendirmesidir. Görev hataları yaşarsanız, yardım için lütfen support@lemondata.cc adresiyle iletişime geçin.
+Terminal durum görünür olduktan sonra dashboard mutabakatı veya iadeyi yansıtmıyorsa support@lemondata.cc adresiyle iletişime geçin.
 
 ```python
 # Örnek: Video oluşturma faturalandırması
@@ -68,11 +69,12 @@ response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ Video hazır olduğunda değil, ŞİMDİ faturalandırılırsınız
+# Tahmini maliyet şimdi rezerve edilebilir; nihai fatura başarıdan sonra görünür.
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Durum için poll_url'i sorgulayın...
+# Durum için poll_url'i sorgulayın; billing_transaction_id mutabakat sonrası görünür.
+```
 
 ### Faturalama işlem ID’leri
 

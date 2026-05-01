@@ -50,29 +50,31 @@ Các mô hình hình ảnh, video và âm thanh được tính giá trên mỗi 
 
 ### Thanh toán tác vụ không đồng bộ (Video/Nhạc/3D và một số mô hình hình ảnh)
 
-<Warning>
-  **Quan trọng**: Các tác vụ tạo video, nhạc và 3D được **tính phí tại thời điểm gửi yêu cầu**, không phải khi hoàn thành. Một số mô hình hình ảnh cũng có thể trả về phản hồi dựa trên tác vụ và nên được xử lý tương tự khi xảy ra.
-</Warning>
+<Note>
+  Với quy trình tạo dựa trên tác vụ, việc tạo tác vụ có thể giữ chỗ hoặc trừ trước chi phí ước tính. Việc quyết toán cuối cùng chỉ diễn ra sau khi tác vụ không đồng bộ đạt trạng thái cuối thành công trong quá trình polling hoặc finalization.
+</Note>
 
 Đối với quy trình tạo dựa trên tác vụ (video, nhạc, 3D và một số mô hình hình ảnh):
 
-1. **Việc thanh toán diễn ra ngay lập tức** khi bạn gửi tác vụ
-2. Theo dõi `poll_url` được trả về để kiểm tra trạng thái, và coi `task_id` là định danh của tác vụ không đồng bộ
-3. **Không hoàn tiền tự động** nếu tác vụ thất bại
+1. Gửi tác vụ. LemonData có thể giữ chỗ hoặc trừ trước chi phí ước tính để kiểm tra số dư và giới hạn chi tiêu của API Key.
+2. Poll `poll_url` được trả về, hoặc gọi `GET /v1/tasks/{id}`, cho đến khi tác vụ đạt trạng thái cuối.
+3. Khi tác vụ hoàn tất thành công, việc quyết toán cuối cùng ghi nhận usage và phản hồi tác vụ bao gồm `billing_transaction_id`.
+4. Nếu tạo tác vụ thất bại hoặc trạng thái cuối là failed, khoản đang chờ sẽ được hoàn lại hoặc giải phóng và request được đánh dấu là không tính phí.
 
-Điều này là do các nhà cung cấp thượng nguồn tính phí chúng tôi khi tác vụ được gửi đi, bất kể kết quả thế nào. Nếu bạn gặp lỗi tác vụ, vui lòng liên hệ support@lemondata.cc để được hỗ trợ.
+Nếu dashboard không phản ánh quyết toán hoặc hoàn tiền sau khi trạng thái cuối đã hiển thị, hãy liên hệ support@lemondata.cc để được hỗ trợ.
 
 ```python
-# Example: Video generation billing
+# Ví dụ: billing cho tạo video
 response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ You are billed NOW, not when the video is ready
+# Chi phí ước tính có thể được giữ chỗ ngay; billing cuối cùng xuất hiện sau khi thành công.
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Poll poll_url for status...
+# Poll poll_url để xem trạng thái; billing_transaction_id xuất hiện sau settlement.
+```
 
 ### ID giao dịch billing
 

@@ -50,17 +50,18 @@ Los modelos de imagen, vídeo y audio tienen un precio por solicitud:
 
 ### Facturación de tareas asíncronas (Vídeo/Música/3D y algunos modelos de imagen)
 
-<Warning>
-  **Importante**: Las tareas de generación de vídeo, música y 3D se **facturan en el momento del envío**, no al finalizar. Algunos modelos de imagen también pueden devolver respuestas basadas en tareas y deben tratarse de la misma manera cuando lo hagan.
-</Warning>
+<Note>
+  En la generación basada en tareas, crear la tarea puede reservar o predescontar el coste estimado. La liquidación final solo ocurre después de que la tarea asíncrona alcance un estado terminal exitoso durante el polling o la finalización.
+</Note>
 
 Para flujos de generación basados en tareas (vídeo, música, 3D y algunos modelos de imagen):
 
-1. **La facturación ocurre inmediatamente** al enviar la tarea
-2. Siga la `poll_url` devuelta para comprobar el estado y trate `task_id` como la identidad de la tarea asíncrona
-3. **No hay reembolsos automáticos** si la tarea falla
+1. Envía la tarea. LemonData puede aplicar una reserva o predescuento estimado para verificar el saldo y los límites de gasto de la API Key.
+2. Consulta la `poll_url` devuelta, o llama a `GET /v1/tasks/{id}`, hasta que la tarea alcance un estado terminal.
+3. Cuando la tarea se completa correctamente, la liquidación final registra el uso y la respuesta de la tarea incluye `billing_transaction_id`.
+4. Si la creación falla o el estado terminal es failed, el importe pendiente se reembolsa o libera y la solicitud se marca como no facturable.
 
-Esto se debe a que los proveedores ascendentes nos cobran cuando se envía la tarea, independientemente del resultado. Si experimenta fallos en las tareas, póngase en contacto con support@lemondata.cc para obtener ayuda.
+Si el dashboard no refleja la liquidación o el reembolso después de que el estado terminal sea visible, contacta con support@lemondata.cc.
 
 ```python
 # Ejemplo: Facturación de generación de vídeo
@@ -68,11 +69,12 @@ response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ Se le factura AHORA, no cuando el vídeo esté listo
+# El coste estimado puede reservarse ahora; la facturación final aparece después del éxito.
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Consultar poll_url para ver el estado...
+# Consulta poll_url para ver el estado; billing_transaction_id aparece tras la liquidación.
+```
 
 ### ID de transacción de facturación
 

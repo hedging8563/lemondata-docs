@@ -50,17 +50,18 @@ Image, video, and audio models are priced per request:
 
 ### Async Task Billing (Video/Music/3D and Some Image Models)
 
-<Warning>
-  **Important**: Video, music, and 3D generation tasks are **billed at submission time**, not upon completion. Some image models can also return task-based responses and should be treated the same way when they do.
-</Warning>
+<Note>
+  For task-based generation, creating the task may reserve or pre-deduct the estimated cost. Final settlement happens only after the async task reaches a terminal success state during polling or finalization.
+</Note>
 
 For task-based generation flows (video, music, 3D, and some image models):
 
-1. **Billing occurs immediately** when you submit the task
-2. Follow the returned `poll_url` for status checks, and treat `task_id` as the async task identity
-3. **No automatic refunds** if the task fails
+1. Submit the task. LemonData may place an estimated pre-deduction or reservation to verify balance and spending limits.
+2. Follow the returned `poll_url`, or call `GET /v1/tasks/{id}`, until the task reaches a terminal status.
+3. When the task completes successfully, final settlement records the usage and the task response includes `billing_transaction_id`.
+4. If creation fails or the terminal status is failed, the pending amount is refunded or released and the request is marked non-billable.
 
-This is because upstream providers charge us when the task is submitted, regardless of the outcome. If you experience task failures, please contact support@lemondata.cc for assistance.
+If the dashboard does not reflect a completed settlement or refund after terminal status is visible, contact support@lemondata.cc for assistance.
 
 ```python
 # Example: Video generation billing
@@ -68,11 +69,11 @@ response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ You are billed NOW, not when the video is ready
+# Estimated cost may be reserved now; final billing appears after success.
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Poll poll_url for status...
+# Poll poll_url for status; billing_transaction_id appears after settlement.
 ```
 
 ### Billing Transaction IDs

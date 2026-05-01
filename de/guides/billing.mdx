@@ -50,17 +50,18 @@ Bild-, Video- und Audiomodelle werden pro Anfrage abgerechnet:
 
 ### Abrechnung für asynchrone Aufgaben (Video/Musik/3D und einige Bildmodelle)
 
-<Warning>
-  **Wichtig**: Video-, Musik- und 3D-Generierungsaufgaben werden **zum Zeitpunkt der Übermittlung abgerechnet**, nicht erst nach Abschluss. Einige Bildmodelle können ebenfalls aufgabenbasierte Antworten zurückgeben und sollten in diesem Fall genauso behandelt werden.
-</Warning>
+<Note>
+  Bei aufgabenbasierter Generierung kann beim Erstellen der Aufgabe ein geschätzter Betrag reserviert oder vorab abgezogen werden. Die endgültige Abrechnung erfolgt erst, nachdem die asynchrone Aufgabe beim Polling oder bei der Finalisierung einen erfolgreichen Endstatus erreicht hat.
+</Note>
 
 Für aufgabenbasierte Generierungsabläufe (Video, Musik, 3D und einige Bildmodelle):
 
-1. **Die Abrechnung erfolgt sofort**, wenn Sie die Aufgabe übermitteln
-2. Folgen Sie der zurückgegebenen `poll_url` für Statusprüfungen und behandeln Sie `task_id` als Identität der asynchronen Aufgabe
-3. **Keine automatischen Rückerstattungen**, wenn die Aufgabe fehlschlägt
+1. Übermitteln Sie die Aufgabe. LemonData kann einen geschätzten Betrag vorab abziehen oder reservieren, um Guthaben und API-Key-Ausgabenlimits zu prüfen.
+2. Fragen Sie die zurückgegebene `poll_url` ab oder rufen Sie `GET /v1/tasks/{id}` auf, bis die Aufgabe einen Endstatus erreicht.
+3. Wenn die Aufgabe erfolgreich abgeschlossen ist, zeichnet die endgültige Abrechnung die Nutzung auf und die Task-Antwort enthält `billing_transaction_id`.
+4. Wenn die Erstellung fehlschlägt oder der Endstatus failed ist, wird der ausstehende Betrag erstattet oder freigegeben und die Anfrage als nicht abrechenbar markiert.
 
-Dies liegt daran, dass Upstream-Anbieter uns die Kosten bei Übermittlung der Aufgabe in Rechnung stellen, unabhängig vom Ergebnis. Sollten Fehler bei Aufgaben auftreten, wenden Sie sich bitte an support@lemondata.cc für Unterstützung.
+Wenn im dashboard nach sichtbarem Endstatus keine Abrechnung oder Erstattung erscheint, wenden Sie sich bitte an support@lemondata.cc.
 
 ```python
 # Beispiel: Abrechnung der Videogenerierung
@@ -68,11 +69,12 @@ response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ Die Abrechnung erfolgt JETZT, nicht erst, wenn das Video fertig ist
+# Der geschätzte Betrag kann jetzt reserviert werden; die endgültige Abrechnung erscheint nach Erfolg.
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# poll_url für Status abfragen...
+# poll_url für Status abfragen; billing_transaction_id erscheint nach der Abrechnung.
+```
 
 ### Billing-Transaktions-IDs
 

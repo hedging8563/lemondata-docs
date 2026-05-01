@@ -50,29 +50,31 @@ LemonData 採用 **按量計費 (pay-as-you-go)**。您只需為實際使用的�
 
 ### 非同步任務計費 (影片/音樂/3D 及部分圖像模型)
 
-<Warning>
-  **重要提示**：影片、音樂和 3D 生成任務在 **提交時計費**，而非完成時。某些圖像模型也可能返回基於任務的響應，在這種情況下應以相同方式處理。
-</Warning>
+<Note>
+  對於基於任務的生成，建立任務時可能會預留或預扣預估費用。最終結算只會在非同步任務透過輪詢或終態處理進入成功終態後完成。
+</Note>
 
 對於基於任務的生成流程（影片、音樂、3D 和部分圖像模型）：
 
-1. **提交任務時立即計費**
-2. 追蹤返回的 `poll_url` 以檢查狀態，並將 `task_id` 視為非同步任務標識
-3. **任務失敗不提供自動退款**
+1. 提交任務。LemonData 可能會先做預估預扣或餘額預留，用於檢查餘額與 API Key 消費限制。
+2. 按返回的 `poll_url` 輪詢，或呼叫 `GET /v1/tasks/{id}`，直到任務進入終態。
+3. 任務成功完成時，系統完成最終結算並記錄用量，任務回應會包含 `billing_transaction_id`。
+4. 如果建立失敗或終態為失敗，待處理的預扣金額會退款或釋放，並將該請求標記為非計費。
 
-這是因為上游供應商在提交任務時即向我們收費，無論結果如何。如果您遇到任務失敗，請聯繫 support@lemondata.cc 尋求協助。
+如果任務已經進入終態，但 dashboard 中沒有看到對應結算或退款，請聯繫 support@lemondata.cc 尋求協助。
 
 ```python
-# Example: Video generation billing
+# 示例：影片生成計費
 response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ You are billed NOW, not when the video is ready
+# 現在可能會預留預估費用；最終帳單會在任務成功後出現。
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Poll poll_url for status...
+# 輪詢 poll_url 查看狀態；結算後會出現 billing_transaction_id。
+```
 
 ### 帳單交易 ID
 

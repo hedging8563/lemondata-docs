@@ -50,17 +50,18 @@ Les modèles d'image, de vidéo et d'audio sont facturés par requête :
 
 ### Facturation des tâches asynchrones (Vidéo/Musique/3D et certains modèles d'image)
 
-<Warning>
-  **Important** : Les tâches de génération de vidéo, de musique et de 3D sont **facturées au moment de la soumission**, et non à la fin. Certains modèles d'image peuvent également renvoyer des réponses basées sur des tâches et doivent être traités de la même manière.
-</Warning>
+<Note>
+  Pour la génération basée sur des tâches, la création de la tâche peut réserver ou prélever le coût estimé. Le règlement final n'a lieu qu'une fois que la tâche asynchrone atteint un état terminal réussi lors du polling ou de la finalisation.
+</Note>
 
 Pour les flux de génération basés sur des tâches (vidéo, musique, 3D et certains modèles d'image) :
 
-1. **La facturation intervient immédiatement** lorsque vous soumettez la tâche
-2. Suivez l'URL `poll_url` retournée pour vérifier le statut, et traitez `task_id` comme l'identité de la tâche asynchrone
-3. **Aucun remboursement automatique** si la tâche échoue
+1. Soumettez la tâche. LemonData peut effectuer un pré-prélèvement ou une réservation estimée afin de vérifier le solde et les limites de dépense de la clé API.
+2. Interrogez le `poll_url` retourné, ou appelez `GET /v1/tasks/{id}`, jusqu'à ce que la tâche atteigne un état terminal.
+3. Quand la tâche se termine avec succès, le règlement final enregistre l'usage et la réponse de tâche inclut `billing_transaction_id`.
+4. Si la création échoue ou si l'état terminal est failed, le montant en attente est remboursé ou libéré et la requête est marquée comme non facturable.
 
-C'est parce que les fournisseurs en amont nous facturent lorsque la tâche est soumise, quel que soit le résultat. Si vous rencontrez des échecs de tâche, veuillez contacter support@lemondata.cc pour obtenir de l'aide.
+Si le dashboard ne reflète pas le règlement ou le remboursement après l'apparition de l'état terminal, contactez support@lemondata.cc.
 
 ```python
 # Exemple : Facturation de génération vidéo
@@ -68,11 +69,12 @@ response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ Vous êtes facturé MAINTENANT, pas quand la vidéo est prête
+# Le coût estimé peut être réservé maintenant ; la facturation finale apparaît après succès.
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Interroger poll_url pour le statut...
+# Interrogez poll_url pour le statut ; billing_transaction_id apparaît après règlement.
+```
 
 ### ID de transaction de facturation
 

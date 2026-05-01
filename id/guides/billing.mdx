@@ -50,29 +50,31 @@ Model gambar, video, dan audio dikenakan harga per permintaan:
 
 ### Penagihan Tugas Asinkron (Video/Musik/3D dan Beberapa Model Gambar)
 
-<Warning>
-  **Penting**: Tugas pembuatan video, musik, dan 3D **ditagih pada saat pengiriman**, bukan saat selesai. Beberapa model gambar juga dapat mengembalikan respons berbasis tugas dan harus diperlakukan dengan cara yang sama saat hal itu terjadi.
-</Warning>
+<Note>
+  Untuk pembuatan berbasis tugas, pembuatan tugas dapat mencadangkan atau memotong di muka biaya estimasi. Settlement final hanya terjadi setelah tugas asinkron mencapai status terminal sukses saat polling atau finalization.
+</Note>
 
 Untuk alur pembuatan berbasis tugas (video, musik, 3D, dan beberapa model gambar):
 
-1. **Penagihan terjadi segera** saat Anda mengirimkan tugas
-2. Ikuti `poll_url` yang dikembalikan untuk pemeriksaan status, dan perlakukan `task_id` sebagai identitas tugas asinkron
-3. **Tidak ada pengembalian dana otomatis** jika tugas gagal
+1. Kirim tugas. LemonData dapat menerapkan pre-deduction atau reservasi estimasi untuk memeriksa saldo dan batas pengeluaran API Key.
+2. Poll `poll_url` yang dikembalikan, atau panggil `GET /v1/tasks/{id}`, sampai tugas mencapai status terminal.
+3. Saat tugas selesai dengan sukses, settlement final mencatat penggunaan dan respons tugas menyertakan `billing_transaction_id`.
+4. Jika pembuatan gagal atau status terminal adalah failed, jumlah yang tertunda akan dikembalikan atau dilepaskan dan request ditandai tidak dapat ditagih.
 
-Ini karena penyedia hulu menagih kami saat tugas dikirimkan, terlepas dari hasilnya. Jika Anda mengalami kegagalan tugas, silakan hubungi support@lemondata.cc untuk bantuan.
+Jika dashboard tidak menunjukkan settlement atau refund setelah status terminal terlihat, hubungi support@lemondata.cc untuk bantuan.
 
 ```python
-# Example: Video generation billing
+# Contoh: Billing pembuatan video
 response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ You are billed NOW, not when the video is ready
+# Biaya estimasi dapat dicadangkan sekarang; billing final muncul setelah sukses.
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Poll poll_url for status...
+# Poll poll_url untuk status; billing_transaction_id muncul setelah settlement.
+```
 
 ### ID transaksi billing
 

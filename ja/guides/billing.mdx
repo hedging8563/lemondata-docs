@@ -50,29 +50,31 @@ LemonDataは**従量課金制（pay-as-you-go pricing）**を採用していま�
 
 ### 非同期タスクの課金（ビデオ/音楽/3Dおよび一部の画像モデル）
 
-<Warning>
-  **重要**: ビデオ、音楽、3D生成タスクは、完了時ではなく**送信時に課金**されます。一部の画像モデルもタスクベースのレスポンスを返す場合があり、その場合も同様に扱われます。
-</Warning>
+<Note>
+  タスクベースの生成では、タスク作成時に見積額が予約または事前控除される場合があります。最終的な課金は、ポーリングまたは最終化処理で非同期タスクが成功の終端状態になった後にのみ確定します。
+</Note>
 
 タスクベースの生成フロー（ビデオ、音楽、3D、および一部の画像モデル）の場合：
 
-1. タスクを送信すると**即座に課金が発生**します
-2. ステータス確認には返された `poll_url` を使用し、`task_id` を非同期タスクの識別子として扱ってください
-3. タスクが失敗した場合の**自動返金はありません**
+1. タスクを送信します。LemonData は残高と API Key の利用上限を確認するため、見積額を事前控除または予約する場合があります。
+2. 返された `poll_url` をポーリングするか、`GET /v1/tasks/{id}` を呼び出して、タスクが終端状態になるまで確認します。
+3. タスクが正常に完了すると、最終決済が行われ、使用量が記録され、タスクレスポンスに `billing_transaction_id` が含まれます。
+4. 作成に失敗した場合、または終端状態が failed の場合、保留中の金額は返金または解放され、そのリクエストは非課金として記録されます。
 
-これは、結果に関わらず、タスクが送信された時点でアップストリームプロバイダーから課金されるためです。タスクの失敗が発生した場合は、support@lemondata.cc までお問い合わせください。
+終端状態が確認できるにもかかわらず dashboard に決済または返金が反映されない場合は、support@lemondata.cc までお問い合わせください。
 
 ```python
-# Example: Video generation billing
+# 例: 動画生成の課金
 response = client.post("/v1/videos/generations", json={
     "model": "sora-2",
     "prompt": "A sunset over the ocean"
 })
-# ⚠️ You are billed NOW, not when the video is ready
+# 見積額がいま予約される場合があります。最終課金は成功後に表示されます。
 
 poll_url = response.json()["poll_url"]
 task_id = response.json()["task_id"]
-# Poll poll_url for status...
+# poll_url をポーリングします。決済後に billing_transaction_id が表示されます。
+```
 
 ### 請求トランザクション ID
 
