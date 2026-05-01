@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: 2026-04-23
+Generated: 2026-05-01
 Source: https://docs.lemondata.cc
 
 ---
@@ -722,6 +722,18 @@ curl "https://api.lemondata.cc/v1beta/models/gemini-2.5-flash:streamGenerateCont
 - Google Cloud integrations
 - Existing Gemini SDK code
 - Native Gemini features
+
+**Gemini Files and Cache:** `/upload/v1beta/files`, `/v1beta/files`, `/v1beta/files:register`, and `/v1beta/cachedContents` are available on the native Gemini route. Files use Gemini File API-compatible upstream channels; explicit cache resources can also route through Vertex AI channels. Resources created through LemonData are bound to the same upstream channel/key for later `generateContent` calls.
+
+## Tool Compatibility Boundary
+
+Function tools can be converted between formats when the target route supports them. Provider-native tools must stay on their native route:
+
+- OpenAI Responses hosted and native tools such as `tool_search`, `web_search`, `file_search`, `code_interpreter`, MCP, shell/apply_patch, and computer-use tools require `/v1/responses`.
+- Anthropic server/native tools such as `web_search_*`, `web_fetch_*`, `code_execution_*`, `tool_search_*`, bash, computer-use, and text-editor tools require `/v1/messages`.
+- Gemini built-in tools such as `googleSearch`, `codeExecution`, `urlContext`, `computerUse`, and similar `tools` fields require `/v1beta`.
+
+If LemonData cannot route a request with native tools to a native-capable upstream path, it returns an explicit unsupported-field error instead of dropping the tool or pretending it is a Chat Completions function. User-defined function tools remain the portable path.
 
 ## Choosing the Right Format
 
@@ -3868,6 +3880,14 @@ Use the interactive OpenAPI panel above for the exact schema.
 - Expect `output_file_id` and `error_file_id` only after the worker finalizes the batch.
 - Batch pricing may differ from synchronous pricing because `isBatchRequest=true` discount rules apply.
 
+## Image File Inputs
+
+This same `/v1/files` route can upload image reference files for `/v1/images/edits`.
+
+- Use `purpose=user_data` or `purpose=vision`.
+- Optionally include `model` to select the image-edit model; it defaults to `gpt-image-2`.
+- The returned `file_id` is bound to the selected upstream image-edit channel and can be reused in `images[].file_id`.
+
 ## Anthropic Files API Mode
 
 This same `/v1/files` route also supports the Anthropic Files API path.
@@ -4102,7 +4122,7 @@ URL: https://docs.lemondata.cc/api-reference/images/create-image
 
 > Note: `gpt-image-2` is a token-priced GPT Image model. LemonData follows OpenAI's official usage breakdown for text input, image input, cached input when reported, and image output tokens; it is not billed as a fixed per-image model.
 
-> Note: For `gpt-image-2` image generation, supported public parameters are `prompt`, `n`, `size`, `quality`, `response_format`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. Omit `size` or `quality` to let the route send `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
+> Note: For `gpt-image-2` image generation, supported public parameters are `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. Omit `size` or `quality` to let LemonData use `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
 
 > Note: Google Gemini image-family models do not share the same selector contract:
 
@@ -4120,11 +4140,13 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 
 ### Async Task Response
 
-Some image models return an async task immediately, and some may behave as either inline or task-based depending on the routed provider path. When the response includes `status: "pending"`, treat it as an async task response:
+Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
 
-> Info: Use the returned `poll_url` exactly when it is provided. Treat `task_id` as the async task identity for follow-up polling.
+> Info: Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
 
-> Note: When you receive `status: "pending"`, use the [Get Image Status](/api-reference/images/get-image-status) endpoint to poll for the result.
+> Note: Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+
+> Note: When you receive `status: "pending"`, use `poll_url` or `GET /v1/tasks/{task_id}` to retrieve the result.
 
 ## Available Models
 
@@ -4201,9 +4223,9 @@ Creates an edited or extended image given an original image and a prompt.
 The route supports both:
 
 - the classic `multipart/form-data` DALL-E style upload flow documented below
-- JSON requests that provide `image_url` for supported image-to-image families
+- JSON requests that provide `image_url`, `image_urls`, or official `images` references for supported image-to-image families
 
-> Note: `gpt-image-2` is supported on this endpoint. Send either multipart `image` or JSON `image_url`; optional parameters are `mask`, `n`, `size`, `quality`, `response_format`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. `background` remains generation-only and is not part of the current `gpt-image-2` image-edit public contract. Billing follows the upstream usage token details, including image input tokens and any image output tokens added for partial images.
+> Note: `gpt-image-2` is supported on this endpoint. Send multipart `image` uploads, JSON `image_url`, JSON `image_urls`, or the official JSON `images` array with `image_url` or `file_id` references; GPT Image edits accept up to 16 source images. `file_id` values must be created through LemonData `/v1/files` with `purpose=user_data` or `purpose=vision` so the gateway can bind them to the same upstream image-edit channel. Optional parameters are `mask`, `n`, `size`, `quality`, `response_format`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. `background` remains generation-only and is not part of the current `gpt-image-2` image-edit public contract. Billing follows the upstream usage token details, including image input tokens and any image output tokens added for partial images.
 
 ## Request Body
 
