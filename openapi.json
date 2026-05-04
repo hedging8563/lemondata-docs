@@ -649,6 +649,92 @@
             "$ref": "#/components/responses/ServerError"
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Cancel async task",
+        "description": "Cancels a queued asynchronous task when the provider and model support cancellation. Currently, this public contract supports queued Volcengine Seedance video tasks (`seedance-1.5-pro`, `seedance-2.0`, and `seedance-2.0-fast`). Tasks that are already processing, completed, failed, expired, or unsupported are not cancelled.",
+        "operationId": "cancelAsyncTask",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The async task ID returned by `id` / `task_id`, or embedded in `poll_url`",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task cancelled. The task remains queryable and is represented as `failed` with `cancelled: true` for compatibility with existing async task status values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoTaskResponse"
+                },
+                "example": {
+                  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "status": "failed",
+                  "cancelled": true,
+                  "cancellation_status": "cancelled",
+                  "error": "Task cancelled before execution"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Task type, provider, or model does not support cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "Task not available to the current API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Task is no longer cancellable, for example because it is already processing or terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/v1/models": {
@@ -4257,6 +4343,17 @@
           },
           "poll_url": {
             "type": "string"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "description": "True when a queued async task was cancelled before execution. Cancelled tasks are represented with `status: failed` for compatibility with existing async task status values."
+          },
+          "cancellation_status": {
+            "type": "string",
+            "enum": [
+              "cancelled"
+            ],
+            "description": "Cancellation marker for tasks cancelled through the public async task contract."
           },
           "billing_transaction_id": {
             "type": "string"
