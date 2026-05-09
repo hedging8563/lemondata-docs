@@ -14,17 +14,17 @@ La route prend en charge à la fois :
 - les requêtes JSON qui fournissent `image_url`, `image_urls` ou des références officielles `images` pour les familles image-to-image prises en charge
 
 <Note>
-`gpt-image-2` est pris en charge ici. Il accepte les uploads multipart `image`, JSON `image_url` / `image_urls` et les références officielles `images[]` (`image_url` ou `file_id`), jusqu’à 16 images source. Créez d’abord les `file_id` via `/v1/files`. Les paramètres optionnels courants incluent `mask`, `n`, `size`, `quality`, `response_format`, `output_format` / `output_compression`, `moderation`, `partial_images` et `user`.
+`gpt-image-2` est pris en charge ici. Il accepte les uploads multipart `image`, JSON `image_url` / `image_urls` et les références officielles `images[]` (`image_url` ou `file_id`), jusqu’à 16 images source. Créez d’abord les `file_id` via `/v1/files`.
 </Note>
 
 ## Corps de la requête
 
 **Timeout des requêtes synchrones :** certains fournisseurs d’images routés renvoient l’image finale inline et attendent la fin de la génération. Les requêtes haute résolution ou haute qualité peuvent prendre près d’une minute, voire plus ; configurez donc le timeout de votre client HTTP à au moins `120s`. Si la réponse de création contient `status: "pending"`, `task_id` ou `poll_url`, suivez plutôt le `poll_url` renvoyé.
 
-When you send JSON `image_url`, `image_urls`, or `images[].image_url` and the selected upstream requires multipart upload, LemonData fetches the referenced images and forwards them as multipart `image` files. Remote URLs must be public HTTP(S) resources that do not require cookies or custom headers, must resolve to PNG, JPEG, or WebP image bytes, are fetched with a `10s` timeout and up to `3` redirects, and are limited to `50MB` per image and `200MB` total per request.
+URL d’images distantes : lorsque le fournisseur routé exige une entrée multipart, LemonData récupère JSON `image_url`, `image_urls` ou `images[].image_url`, puis transmet les octets comme parties multipart `image`. Les URL doivent être publiques en `http`/`https`, sans identifiants intégrés ni fragments, et ne doivent pas résoudre vers localhost ni vers des plages IP privées ou réservées ; chaque redirection est revalidée. Le contenu récupéré doit être une vraie image PNG, JPEG ou WebP. Limites : `50MB` par image, `200MB` au total pour les images récupérées par URL dans une requête, timeout de `10s` et jusqu’à `3` redirections.
 
 <ParamField body="image" type="file">
-  Source image files for multipart requests. Send `image` multiple times for GPT Image edits when you need more than one source image. Each file must be PNG, JPEG, or WebP and less than 50MB. Legacy DALL-E 2 mask edits still expect PNG inputs with transparent areas, or a separate `mask`.
+  Images source multipart. Répétez `image` pour fournir plusieurs sources GPT Image. Les fichiers doivent être PNG, JPEG ou WebP, jusqu’à 16 images source et `50MB` chacune. Les éditions legacy DALL-E 2 avec masque attendent toujours des PNG avec zones transparentes, ou un `mask` séparé.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -211,5 +211,5 @@ echo $data['data'][0]['url'];
 ## Notes
 
 <Note>
-  For JSON `image_url`, `image_urls`, or `images[].image_url`, LemonData only converts URLs to multipart when the selected upstream channel requires file upload. Private URLs, signed URLs that require extra headers, internal network addresses, non-image responses, and oversized images are rejected before the upstream request. For private assets, send multipart `image` files directly or create `/v1/files` references.
+  Les échecs de récupération d’images distantes sont renvoyés comme erreurs d’entrée avant l’envoi de la requête upstream. URL inaccessible, timeout, réponses 403/404, hôtes privés/internes, identifiants ou fragments dans l’URL, contenu non image, formats non pris en charge et dépassements de taille renvoient `400` ou `413` et indiquent l’entrée `image_url` / `image_urls[n]`. Pour des assets privés ou protégés par headers, téléversez directement des fichiers multipart `image` ou créez des références `/v1/files`.
 </Note>

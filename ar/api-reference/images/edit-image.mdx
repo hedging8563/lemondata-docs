@@ -14,17 +14,17 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
 - طلبات JSON التي توفر `image_url` أو `image_urls` أو مراجع `images` الرسمية لعائلات الصور المدعومة من صورة إلى صورة
 
 <Note>
-`gpt-image-2` مدعوم هنا. يقبل رفع multipart باسم `image`، و JSON `image_url` / `image_urls`، ومراجع `images[]` الرسمية (`image_url` أو `file_id`) حتى 16 صورة مصدر. أنشئ قيم `file_id` أولاً عبر `/v1/files`. تشمل المعلمات الاختيارية الشائعة `mask` و `n` و `size` و `quality` و `response_format` و `output_format` / `output_compression` و `moderation` و `partial_images` و `user`.
+`gpt-image-2` مدعوم هنا. يقبل رفع multipart باسم `image`، و JSON `image_url` / `image_urls`، ومراجع `images[]` الرسمية (`image_url` أو `file_id`) حتى 16 صورة مصدر. أنشئ قيم `file_id` أولاً عبر `/v1/files`.
 </Note>
 
 ## جسم الطلب
 
 **مهلة الطلبات المتزامنة:** قد يعيد بعض مزودي الصور الذين يتم التوجيه إليهم الصورة النهائية inline وينتظرون اكتمال التوليد. قد تستغرق طلبات الدقة العالية أو الجودة العالية ما يقارب دقيقة أو أكثر، لذا اضبط مهلة عميل HTTP على `120s` على الأقل. إذا احتوت استجابة الإنشاء على `status: "pending"` أو `task_id` أو `poll_url`، فاتبع `poll_url` المُعاد بدلًا من الانتظار.
 
-When you send JSON `image_url`, `image_urls`, or `images[].image_url` and the selected upstream requires multipart upload, LemonData fetches the referenced images and forwards them as multipart `image` files. Remote URLs must be public HTTP(S) resources that do not require cookies or custom headers, must resolve to PNG, JPEG, or WebP image bytes, are fetched with a `10s` timeout and up to `3` redirects, and are limited to `50MB` per image and `200MB` total per request.
+عناوين الصور البعيدة: عندما يتطلب المزوّد الموجّه إليه إدخال multipart، تجلب LemonData قيم JSON `image_url` أو `image_urls` أو `images[].image_url` وتعيد تمرير البايتات كأجزاء multipart باسم `image`. يجب أن تكون العناوين عامة عبر `http`/`https`، بلا بيانات اعتماد مضمّنة أو fragments، وألا تشير إلى localhost أو نطاقات IP خاصة أو محجوزة؛ ويتم فحص كل إعادة توجيه من جديد. يجب أن تكون الحمولة التي تم جلبها صورة PNG أو JPEG أو WebP حقيقية. الحدود هي `50MB` لكل صورة، و`200MB` إجمالاً للصور المجلبة من URL في الطلب الواحد، و timeout قدره `10s`، وحتى `3` عمليات إعادة توجيه.
 
 <ParamField body="image" type="file">
-  Source image files for multipart requests. Send `image` multiple times for GPT Image edits when you need more than one source image. Each file must be PNG, JPEG, or WebP and less than 50MB. Legacy DALL-E 2 mask edits still expect PNG inputs with transparent areas, or a separate `mask`.
+  صور المصدر في multipart. كرّر حقل `image` لإرسال عدة صور مصدر لـ GPT Image. يجب أن تكون الملفات PNG أو JPEG أو WebP، بحد أقصى 16 صورة مصدر و`50MB` لكل ملف. لا تزال تعديلات DALL-E 2 القديمة بالماسك تتوقع مدخلات PNG ذات مناطق شفافة، أو `mask` منفصلاً.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -211,5 +211,5 @@ echo $data['data'][0]['url'];
 ## ملاحظات
 
 <Note>
-  For JSON `image_url`, `image_urls`, or `images[].image_url`, LemonData only converts URLs to multipart when the selected upstream channel requires file upload. Private URLs, signed URLs that require extra headers, internal network addresses, non-image responses, and oversized images are rejected before the upstream request. For private assets, send multipart `image` files directly or create `/v1/files` references.
+  تُعاد أخطاء جلب الصور البعيدة كأخطاء إدخال قبل إرسال الطلب إلى المزوّد. العناوين غير القابلة للوصول، والمهلات، وردود 403/404، والمضيفات الخاصة أو الداخلية، ووجود بيانات اعتماد أو fragments في URL، والمحتوى غير الصوري، والصيغ غير المدعومة، وتجاوز الحجم ترجع `400` أو `413` وتحدد مدخل `image_url` / `image_urls[n]`. للملفات الخاصة أو التي تتطلب headers، ارفع ملفات multipart `image` مباشرة أو أنشئ مراجع `/v1/files`.
 </Note>

@@ -14,17 +14,17 @@ description: "根據提示詞和來源圖像編輯圖像"
 - 為受支援的圖像到圖像模型提供 `image_url`、`image_urls` 或官方 `images` 參照的 JSON 請求
 
 <Note>
-`gpt-image-2` 已支援此端點。它支援 multipart `image` 上傳、JSON `image_url` / `image_urls`，以及官方 `images[]` 參照（`image_url` 或 `file_id`），最多 16 張來源圖。`file_id` 需先透過 `/v1/files` 建立。常用可選參數包含 `mask`、`n`、`size`、`quality`、`response_format`、`output_format` / `output_compression`、`moderation`、`partial_images` 和 `user`。
+`gpt-image-2` 已支援此端點。它支援 multipart `image` 上傳、JSON `image_url` / `image_urls`，以及官方 `images[]` 參照（`image_url` 或 `file_id`），最多 16 張來源圖。`file_id` 需先透過 `/v1/files` 建立。
 </Note>
 
 ## 請求主體
 
 **同步請求逾時：** 某些路由到的圖片提供者會以内嵌方式返回最終圖片，並等待生成完成。高解析度或高品質請求可能接近一分鐘甚至更久，因此請將 HTTP 用戶端逾時設定為至少 `120s`。如果建立回應包含 `status: "pending"`、`task_id` 或 `poll_url`，請改為依照返回的 `poll_url` 輪詢。
 
-當你傳送 JSON `image_url`、`image_urls` 或 `images[].image_url`，且被選中的上游只接受 multipart 上傳時，LemonData 會先抓取這些圖片 URL，再作為 multipart `image` 檔案轉發給上游。遠端 URL 必須是公網 HTTP(S) 資源，不能依賴 Cookie 或自訂請求標頭，實際內容必須是 PNG、JPEG 或 WebP 圖片位元組；抓取逾時為 `10s`，最多跟隨 `3` 次重新導向，限制為每張 `50MB`、每次請求總計 `200MB`。
+遠端圖片 URL：當路由到的上游要求 multipart 輸入時，LemonData 會抓取 JSON `image_url`、`image_urls` 或 `images[].image_url`，並把圖片位元組作為 multipart `image` 檔案轉發。URL 必須是公網 `http`/`https`，不能包含使用者名稱密碼或 fragment，不能解析到 localhost、內網或保留 IP；每次重新導向後的目標也會重新校驗。抓取到的內容必須是真實 PNG、JPEG 或 WebP 圖片。限制為單圖 `50MB`、單次請求 URL 抓取圖片總計 `200MB`、抓取逾時 `10s`、最多 `3` 次重新導向。
 
 <ParamField body="image" type="file">
-  multipart 請求中的來源圖片檔案。GPT Image 編輯需要多張來源圖時，可以重複傳送 `image` 欄位。每個檔案必須是 PNG、JPEG 或 WebP，且小於 50MB。傳統 DALL-E 2 遮罩編輯仍要求 PNG 輸入帶透明區域，或額外提供 `mask`。
+  multipart 來源圖片。需要多張 GPT Image 來源圖時，可以重複傳送 `image` 欄位。檔案必須是 PNG、JPEG 或 WebP，最多 16 張來源圖，每張不超過 `50MB`。傳統 DALL-E 2 遮罩編輯仍要求 PNG 輸入帶透明區域，或額外提供 `mask`。
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -211,5 +211,5 @@ echo $data['data'][0]['url'];
 ## 注意事項
 
 <Note>
-  對 JSON `image_url`、`image_urls` 或 `images[].image_url`，LemonData 只會在所選上游渠道要求檔案上傳時，把 URL 轉成 multipart。私有 URL、需要額外請求標頭的簽名 URL、內網地址、非圖片回應和超限圖片都會在轉發上游前被拒絕。私有素材請直接使用 multipart `image` 上傳，或先建立 `/v1/files` 參照。
+  遠端圖片抓取失敗會在請求送往上游前作為輸入錯誤返回。URL 無法存取、逾時、403/404、私有或內網主機、URL 中包含使用者名稱密碼或 fragment、非圖片內容、不支援的格式、超過大小限制，都會返回 `400` 或 `413`，並指向 `image_url` / `image_urls[n]` 輸入。私有或需要請求標頭鑑權的素材，請直接用 multipart `image` 上傳，或建立 `/v1/files` 參照。
 </Note>

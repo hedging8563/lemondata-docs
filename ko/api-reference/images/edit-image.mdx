@@ -14,17 +14,17 @@ description: "프롬프트와 원본 이미지를 기반으로 이미지를 편�
 - 지원되는 이미지-to-이미지 패밀리를 위한 `image_url`, `image_urls` 또는 공식 `images` 참조 JSON 요청
 
 <Note>
-`gpt-image-2`는 이 엔드포인트에서 지원됩니다. multipart `image` 업로드, JSON `image_url` / `image_urls`, 공식 `images[]` 참조(`image_url` 또는 `file_id`)를 최대 16개 원본 이미지까지 사용할 수 있습니다. `file_id`는 먼저 `/v1/files`에서 생성하세요. 일반적인 선택 파라미터는 `mask`, `n`, `size`, `quality`, `response_format`, `output_format` / `output_compression`, `moderation`, `partial_images`, `user`입니다.
+`gpt-image-2`는 이 엔드포인트에서 지원됩니다. multipart `image` 업로드, JSON `image_url` / `image_urls`, 공식 `images[]` 참조(`image_url` 또는 `file_id`)를 최대 16개 원본 이미지까지 사용할 수 있습니다. `file_id`는 먼저 `/v1/files`에서 생성하세요.
 </Note>
 
 ## 요청 본문
 
 **동기 요청 타임아웃:** 일부 라우팅된 이미지 제공자는 생성이 완료될 때까지 기다린 뒤 최종 이미지를 inline 으로 반환합니다. 고해상도 또는 고품질 요청은 1분 안팎이거나 그 이상 걸릴 수 있으므로 HTTP 클라이언트 타임아웃을 최소 `120s` 로 설정하세요. 생성 응답에 `status: "pending"`, `task_id`, 또는 `poll_url` 이 포함되어 있으면 반환된 `poll_url` 을 따라 폴링하세요.
 
-When you send JSON `image_url`, `image_urls`, or `images[].image_url` and the selected upstream requires multipart upload, LemonData fetches the referenced images and forwards them as multipart `image` files. Remote URLs must be public HTTP(S) resources that do not require cookies or custom headers, must resolve to PNG, JPEG, or WebP image bytes, are fetched with a `10s` timeout and up to `3` redirects, and are limited to `50MB` per image and `200MB` total per request.
+원격 이미지 URL: 라우팅된 제공자가 multipart 입력을 요구하면 LemonData는 JSON `image_url`, `image_urls`, 또는 `images[].image_url`을 가져와 바이트를 multipart `image` 파트로 전달합니다. URL은 공개 `http`/`https`여야 하며, 내장 자격 증명이나 fragment가 없어야 하고, localhost, private 또는 reserved IP 범위로 해석되면 안 됩니다. 각 redirect 대상도 다시 검사됩니다. 가져온 payload는 실제 PNG, JPEG, WebP 이미지여야 합니다. 제한은 이미지당 `50MB`, 한 요청에서 URL로 가져오는 이미지 합계 `200MB`, fetch timeout `10s`, 최대 `3`회 redirect입니다.
 
 <ParamField body="image" type="file">
-  Source image files for multipart requests. Send `image` multiple times for GPT Image edits when you need more than one source image. Each file must be PNG, JPEG, or WebP and less than 50MB. Legacy DALL-E 2 mask edits still expect PNG inputs with transparent areas, or a separate `mask`.
+  multipart 원본 이미지. 여러 GPT Image 원본을 제공하려면 `image`를 반복해서 보내세요. 파일은 PNG, JPEG, WebP여야 하며 최대 16개 원본 이미지, 각 `50MB`까지 지원됩니다. 기존 DALL-E 2 마스크 편집은 여전히 투명 영역이 있는 PNG 입력 또는 별도 `mask`를 기대합니다.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -211,5 +211,5 @@ echo $data['data'][0]['url'];
 ## 참고 사항
 
 <Note>
-  For JSON `image_url`, `image_urls`, or `images[].image_url`, LemonData only converts URLs to multipart when the selected upstream channel requires file upload. Private URLs, signed URLs that require extra headers, internal network addresses, non-image responses, and oversized images are rejected before the upstream request. For private assets, send multipart `image` files directly or create `/v1/files` references.
+  원격 이미지 가져오기 실패는 upstream 요청을 보내기 전에 입력 오류로 반환됩니다. 접근 불가 URL, timeout, 403/404 응답, private/internal host, URL 내 자격 증명 또는 fragment, 이미지가 아닌 콘텐츠, 지원하지 않는 형식, 크기 초과는 `400` 또는 `413`을 반환하고 `image_url` / `image_urls[n]` 입력을 표시합니다. private 또는 header로 보호된 asset은 multipart `image` 파일로 직접 업로드하거나 `/v1/files` 참조를 생성하세요.
 </Note>

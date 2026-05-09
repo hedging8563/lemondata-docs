@@ -14,17 +14,17 @@ Route şunları destekler:
 - desteklenen image-to-image aileleri için `image_url`, `image_urls` veya resmi `images` referansları sağlayan JSON istekleri
 
 <Note>
-`gpt-image-2` burada desteklenir. Multipart `image` yüklemeleri, JSON `image_url` / `image_urls` ve resmi `images[]` referanslarını (`image_url` veya `file_id`) en fazla 16 kaynak görselle kabul eder. `file_id` değerlerini önce `/v1/files` üzerinden oluşturun. Yaygın isteğe bağlı parametreler: `mask`, `n`, `size`, `quality`, `response_format`, `output_format` / `output_compression`, `moderation`, `partial_images` ve `user`.
+`gpt-image-2` burada desteklenir. Multipart `image` yüklemeleri, JSON `image_url` / `image_urls` ve resmi `images[]` referanslarını (`image_url` veya `file_id`) en fazla 16 kaynak görselle kabul eder. `file_id` değerlerini önce `/v1/files` üzerinden oluşturun.
 </Note>
 
 ## İstek Gövdesi
 
 **Senkron istek zaman aşımı:** Bazı yönlendirilmiş görsel sağlayıcıları son görseli inline döndürür ve üretimin tamamlanmasını bekler. Yüksek çözünürlüklü veya yüksek kaliteli istekler bir dakikaya yakın ya da daha uzun sürebilir; bu yüzden HTTP istemcisi zaman aşımını en az `120s` olarak ayarlayın. Oluşturma yanıtı `status: "pending"`, `task_id` veya `poll_url` içeriyorsa, dönen `poll_url` ile polling yapın.
 
-When you send JSON `image_url`, `image_urls`, or `images[].image_url` and the selected upstream requires multipart upload, LemonData fetches the referenced images and forwards them as multipart `image` files. Remote URLs must be public HTTP(S) resources that do not require cookies or custom headers, must resolve to PNG, JPEG, or WebP image bytes, are fetched with a `10s` timeout and up to `3` redirects, and are limited to `50MB` per image and `200MB` total per request.
+Uzak görüntü URL’leri: yönlendirilen sağlayıcı multipart girdi istediğinde LemonData, JSON `image_url`, `image_urls` veya `images[].image_url` değerlerini indirir ve baytları multipart `image` parçaları olarak iletir. URL’ler herkese açık `http`/`https` olmalı, gömülü kimlik bilgisi veya fragment içermemeli ve localhost, özel ya da ayrılmış IP aralıklarına çözülmemelidir; her redirect yeniden kontrol edilir. İndirilen payload gerçek PNG, JPEG veya WebP görüntüsü olmalıdır. Limitler: görüntü başına `50MB`, tek istekte URL’den indirilen görüntüler için toplam `200MB`, `10s` fetch timeout ve en fazla `3` redirect.
 
 <ParamField body="image" type="file">
-  Source image files for multipart requests. Send `image` multiple times for GPT Image edits when you need more than one source image. Each file must be PNG, JPEG, or WebP and less than 50MB. Legacy DALL-E 2 mask edits still expect PNG inputs with transparent areas, or a separate `mask`.
+  Multipart kaynak görüntüler. Birden çok GPT Image kaynağı göndermek için `image` alanını tekrarlayın. Dosyalar PNG, JPEG veya WebP olmalı; en fazla 16 kaynak görüntü ve her biri `50MB` desteklenir. Eski DALL-E 2 mask düzenlemeleri hâlâ şeffaf alanları olan PNG girdileri veya ayrı bir `mask` bekler.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -211,5 +211,5 @@ echo $data['data'][0]['url'];
 ## Notlar
 
 <Note>
-  For JSON `image_url`, `image_urls`, or `images[].image_url`, LemonData only converts URLs to multipart when the selected upstream channel requires file upload. Private URLs, signed URLs that require extra headers, internal network addresses, non-image responses, and oversized images are rejected before the upstream request. For private assets, send multipart `image` files directly or create `/v1/files` references.
+  Uzak görüntü indirme hataları, upstream isteği gönderilmeden önce giriş hatası olarak döner. Erişilemeyen URL’ler, timeout, 403/404 yanıtları, private/internal hostlar, URL içindeki kimlik bilgileri veya fragmentler, görüntü olmayan içerik, desteklenmeyen formatlar ve boyut aşımı `400` veya `413` döndürür ve `image_url` / `image_urls[n]` girdisini belirtir. Private veya header korumalı varlıklar için multipart `image` dosyalarını doğrudan yükleyin ya da `/v1/files` referansları oluşturun.
 </Note>
