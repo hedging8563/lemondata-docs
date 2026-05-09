@@ -14,15 +14,17 @@ Route này hỗ trợ cả:
 - request JSON cung cấp `image_url`, `image_urls`, hoặc tham chiếu chính thức `images` cho các nhóm image-to-image được hỗ trợ
 
 <Note>
-`gpt-image-2` được hỗ trợ trên endpoint này. Gửi multipart `image`, JSON `image_url`, JSON `image_urls`, hoặc mảng JSON chính thức `images` với tham chiếu `image_url` hoặc `file_id`; GPT Image edits chấp nhận tối đa 16 ảnh nguồn. Giá trị `file_id` phải được tạo qua LemonData `/v1/files` với `purpose=user_data` hoặc `purpose=vision` để gateway có thể gắn chúng với cùng kênh chỉnh sửa ảnh upstream. Tham số tuỳ chọn gồm `mask`, `n`, `size`, `quality`, `response_format`, `output_format`, `output_compression` hoặc `compression`, `moderation`, `partial_images` và `user`. `background` chỉ còn ở luồng tạo ảnh và không thuộc hợp đồng công khai hiện tại của `gpt-image-2` cho chỉnh sửa ảnh. Tính phí theo chi tiết usage token từ upstream, bao gồm token đầu vào ảnh và mọi token đầu ra ảnh phát sinh từ partial images.
+`gpt-image-2` được hỗ trợ tại đây. Endpoint chấp nhận upload multipart `image`, JSON `image_url` / `image_urls`, và tham chiếu chính thức `images[]` (`image_url` hoặc `file_id`) với tối đa 16 ảnh nguồn. Hãy tạo `file_id` qua `/v1/files` trước. Tham số tuỳ chọn thường dùng gồm `mask`, `n`, `size`, `quality`, `response_format`, `output_format` / `output_compression`, `moderation`, `partial_images`, và `user`.
 </Note>
 
 ## Thân Yêu Cầu
 
 **Timeout cho yêu cầu đồng bộ:** một số nhà cung cấp hình ảnh được định tuyến sẽ trả ảnh cuối cùng inline và chờ quá trình tạo hoàn tất. Yêu cầu độ phân giải cao hoặc chất lượng cao có thể mất gần một phút hoặc lâu hơn, vì vậy hãy đặt timeout của HTTP client ít nhất là `120s`. Nếu phản hồi tạo có `status: "pending"`, `task_id`, hoặc `poll_url`, hãy theo `poll_url` được trả về để polling.
 
-<ParamField body="image" type="file" required>
-  Ảnh cần chỉnh sửa. Phải là tệp PNG hợp lệ, nhỏ hơn 50MB và là ảnh vuông. Ảnh nên có vùng trong suốt ở nơi muốn chỉnh sửa.
+When you send JSON `image_url`, `image_urls`, or `images[].image_url` and the selected upstream requires multipart upload, LemonData fetches the referenced images and forwards them as multipart `image` files. Remote URLs must be public HTTP(S) resources that do not require cookies or custom headers, must resolve to PNG, JPEG, or WebP image bytes, are fetched with a `10s` timeout and up to `3` redirects, and are limited to `50MB` per image and `200MB` total per request.
+
+<ParamField body="image" type="file">
+  Source image files for multipart requests. Send `image` multiple times for GPT Image edits when you need more than one source image. Each file must be PNG, JPEG, or WebP and less than 50MB. Legacy DALL-E 2 mask edits still expect PNG inputs with transparent areas, or a separate `mask`.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -209,5 +211,5 @@ echo $data['data'][0]['url'];
 ## Ghi Chú
 
 <Note>
-  Chỉnh sửa ảnh chỉ khả dụng với DALL-E 2. Ảnh phải có các vùng trong suốt để chỉ ra nơi cần áp dụng chỉnh sửa, hoặc bạn có thể cung cấp một ảnh mask riêng.
+  For JSON `image_url`, `image_urls`, or `images[].image_url`, LemonData only converts URLs to multipart when the selected upstream channel requires file upload. Private URLs, signed URLs that require extra headers, internal network addresses, non-image responses, and oversized images are rejected before the upstream request. For private assets, send multipart `image` files directly or create `/v1/files` references.
 </Note>

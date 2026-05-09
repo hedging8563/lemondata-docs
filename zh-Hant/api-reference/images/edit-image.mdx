@@ -14,15 +14,17 @@ description: "根據提示詞和來源圖像編輯圖像"
 - 為受支援的圖像到圖像模型提供 `image_url`、`image_urls` 或官方 `images` 參照的 JSON 請求
 
 <Note>
-`gpt-image-2` 已支援此端點。可傳送 multipart `image` 上傳、JSON `image_url`、JSON `image_urls`，或官方 JSON `images` 陣列中的 `image_url` / `file_id` 參照；GPT Image 編輯最多接受 16 張來源圖片。`file_id` 必須先透過 LemonData `/v1/files` 以 `purpose=user_data` 或 `purpose=vision` 建立，讓閘道能將它綁定到同一個上游圖像編輯渠道。可選參數包含 `mask`、`n`、`size`、`quality`、`response_format`、`output_format`、`output_compression` 或 `compression`、`moderation`、`partial_images` 和 `user`。`background` 僅保留在圖像生成路徑中，不屬於目前 `gpt-image-2` 圖像編輯公開契約。計費以上游回傳的 usage token 明細為準，包含圖像輸入 token，以及 partial images 產生的額外圖像輸出 token。
+`gpt-image-2` 已支援此端點。它支援 multipart `image` 上傳、JSON `image_url` / `image_urls`，以及官方 `images[]` 參照（`image_url` 或 `file_id`），最多 16 張來源圖。`file_id` 需先透過 `/v1/files` 建立。常用可選參數包含 `mask`、`n`、`size`、`quality`、`response_format`、`output_format` / `output_compression`、`moderation`、`partial_images` 和 `user`。
 </Note>
 
 ## 請求主體
 
 **同步請求逾時：** 某些路由到的圖片提供者會以内嵌方式返回最終圖片，並等待生成完成。高解析度或高品質請求可能接近一分鐘甚至更久，因此請將 HTTP 用戶端逾時設定為至少 `120s`。如果建立回應包含 `status: "pending"`、`task_id` 或 `poll_url`，請改為依照返回的 `poll_url` 輪詢。
 
-<ParamField body="image" type="file" required>
-  要編輯的圖像。必須是有效的 PNG 檔案，小於 50MB，且為正方形。圖像應在需要編輯的位置具有透明度。
+當你傳送 JSON `image_url`、`image_urls` 或 `images[].image_url`，且被選中的上游只接受 multipart 上傳時，LemonData 會先抓取這些圖片 URL，再作為 multipart `image` 檔案轉發給上游。遠端 URL 必須是公網 HTTP(S) 資源，不能依賴 Cookie 或自訂請求標頭，實際內容必須是 PNG、JPEG 或 WebP 圖片位元組；抓取逾時為 `10s`，最多跟隨 `3` 次重新導向，限制為每張 `50MB`、每次請求總計 `200MB`。
+
+<ParamField body="image" type="file">
+  multipart 請求中的來源圖片檔案。GPT Image 編輯需要多張來源圖時，可以重複傳送 `image` 欄位。每個檔案必須是 PNG、JPEG 或 WebP，且小於 50MB。傳統 DALL-E 2 遮罩編輯仍要求 PNG 輸入帶透明區域，或額外提供 `mask`。
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -209,5 +211,5 @@ echo $data['data'][0]['url'];
 ## 注意事項
 
 <Note>
-  圖像編輯僅適用於 DALL-E 2。圖像必須具有透明區域以指示應套用編輯的位置，或者您可以提供單獨的遮罩圖像。
+  對 JSON `image_url`、`image_urls` 或 `images[].image_url`，LemonData 只會在所選上游渠道要求檔案上傳時，把 URL 轉成 multipart。私有 URL、需要額外請求標頭的簽名 URL、內網地址、非圖片回應和超限圖片都會在轉發上游前被拒絕。私有素材請直接使用 multipart `image` 上傳，或先建立 `/v1/files` 參照。
 </Note>

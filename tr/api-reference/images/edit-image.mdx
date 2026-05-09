@@ -14,15 +14,17 @@ Route şunları destekler:
 - desteklenen image-to-image aileleri için `image_url`, `image_urls` veya resmi `images` referansları sağlayan JSON istekleri
 
 <Note>
-`gpt-image-2` bu uç noktada desteklenir. Multipart `image` yüklemeleri, JSON `image_url`, JSON `image_urls` veya resmi JSON `images` dizisinde `image_url` ya da `file_id` referansları gönderebilirsiniz; GPT Image edits en fazla 16 kaynak görüntü kabul eder. `file_id` değerleri LemonData `/v1/files` üzerinden `purpose=user_data` veya `purpose=vision` ile oluşturulmalıdır; böylece ağ geçidi bunları aynı upstream görüntü düzenleme kanalına bağlayabilir. İsteğe bağlı parametreler `mask`, `n`, `size`, `quality`, `response_format`, `output_format`, `output_compression` veya `compression`, `moderation`, `partial_images` ve `user` şeklindedir. `background` yalnızca görüntü oluşturma yolunda kalır ve mevcut `gpt-image-2` görüntü düzenleme genel sözleşmesinin parçası değildir. Faturalama, görüntü input tokenları ve partial images ile eklenen görüntü output tokenları dahil upstream usage token ayrıntılarını izler.
+`gpt-image-2` burada desteklenir. Multipart `image` yüklemeleri, JSON `image_url` / `image_urls` ve resmi `images[]` referanslarını (`image_url` veya `file_id`) en fazla 16 kaynak görselle kabul eder. `file_id` değerlerini önce `/v1/files` üzerinden oluşturun. Yaygın isteğe bağlı parametreler: `mask`, `n`, `size`, `quality`, `response_format`, `output_format` / `output_compression`, `moderation`, `partial_images` ve `user`.
 </Note>
 
 ## İstek Gövdesi
 
 **Senkron istek zaman aşımı:** Bazı yönlendirilmiş görsel sağlayıcıları son görseli inline döndürür ve üretimin tamamlanmasını bekler. Yüksek çözünürlüklü veya yüksek kaliteli istekler bir dakikaya yakın ya da daha uzun sürebilir; bu yüzden HTTP istemcisi zaman aşımını en az `120s` olarak ayarlayın. Oluşturma yanıtı `status: "pending"`, `task_id` veya `poll_url` içeriyorsa, dönen `poll_url` ile polling yapın.
 
-<ParamField body="image" type="file" required>
-  Düzenlenecek görsel. Geçerli bir PNG dosyası olmalı, 50MB'tan küçük olmalı ve kare olmalıdır. Görsel, düzenleme istenen yerde transparan alanlara sahip olmalıdır.
+When you send JSON `image_url`, `image_urls`, or `images[].image_url` and the selected upstream requires multipart upload, LemonData fetches the referenced images and forwards them as multipart `image` files. Remote URLs must be public HTTP(S) resources that do not require cookies or custom headers, must resolve to PNG, JPEG, or WebP image bytes, are fetched with a `10s` timeout and up to `3` redirects, and are limited to `50MB` per image and `200MB` total per request.
+
+<ParamField body="image" type="file">
+  Source image files for multipart requests. Send `image` multiple times for GPT Image edits when you need more than one source image. Each file must be PNG, JPEG, or WebP and less than 50MB. Legacy DALL-E 2 mask edits still expect PNG inputs with transparent areas, or a separate `mask`.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -209,5 +211,5 @@ echo $data['data'][0]['url'];
 ## Notlar
 
 <Note>
-  Görsel düzenleme yalnızca DALL-E 2 ile kullanılabilir. Görselde düzenlemenin uygulanacağı yerleri gösteren transparan alanlar olmalı veya ayrı bir maske görseli sağlayabilirsiniz.
+  For JSON `image_url`, `image_urls`, or `images[].image_url`, LemonData only converts URLs to multipart when the selected upstream channel requires file upload. Private URLs, signed URLs that require extra headers, internal network addresses, non-image responses, and oversized images are rejected before the upstream request. For private assets, send multipart `image` files directly or create `/v1/files` references.
 </Note>
