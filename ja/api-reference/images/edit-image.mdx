@@ -14,7 +14,7 @@ description: "プロンプトとソース画像を使用して画像を編集し
 - サポートされる画像-to-画像ファミリー向けの `image_url`、`image_urls`、または公式 `images` 参照を含む JSON リクエスト
 
 <Note>
-`gpt-image-2` はこのエンドポイントで利用できます。multipart `image` アップロード、JSON `image_url` / `image_urls`、公式 `images[]` 参照（`image_url` または `file_id`）に対応し、最大 16 枚のソース画像を受け付けます。`file_id` は先に `/v1/files` で作成してください。
+`gpt-image-2` はこのエンドポイントで利用できます。multipart `image` アップロード、JSON `image_url` / `image_urls`、公式 `images[]` 参照（`image_url` または `file_id`）に対応し、最大 16 枚のソース画像を受け付けます。`file_id` は先に `/v1/files` で作成してください。`async: true` を指定すると先にタスクを返します。公式 FLUX/BFL 編集モデルも同じタスクポーリングフローを使用します。
 </Note>
 
 ## リクエストボディ
@@ -36,7 +36,7 @@ description: "プロンプトとソース画像を使用して画像を編集し
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  画像編集に使用するモデル。`gpt-image-2` に対応しています。従来の DALL-E 形式の編集では引き続き `dall-e-2` を使用できます。
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ description: "プロンプトとソース画像を使用して画像を編集し
 </ParamField>
 
 <ParamField body="size" type="string">
-  The generated image size. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  生成画像のサイズ。`gpt-image-2` では `auto` または `WIDTHxHEIGHT` を使用します。寸法は 16 の倍数、最長辺は `3840px` 以下、長辺/短辺比は `3:1` 以下、総ピクセル数は `655,360` から `8,294,400` の範囲である必要があります。従来の DALL-E 編集は `256x256`、`512x512`、`1024x1024` に対応します。
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  生成された画像の返却形式。`url` または `b64_json` である必要があります。
+  生成画像の返却形式。`url` または `b64_json` である必要があり、デフォルトは `url` です。
+
+  Azure Official または Azure-compatible の `gpt-image-2` ルートでは、LemonData は `response_format` を upstream に転送しません。ゲートウェイは常に upstream から `b64_json` として画像データを受け取ります。`url` リクエストでは各画像を CDN にアップロードして `data[].url` を返します。CDN ストレージが利用できない、またはアップロードに失敗した場合は、Base64 にフォールバックせずリクエストを失敗させます。`b64_json` では生の Base64 を返します。
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  `gpt-image-2` または公式 FLUX/BFL 編集モデルで `true` にすると、最終画像が準備できる前にタスクを返します。完了した非同期編集は、要求された `response_format` に関係なく URL を返します。`b64_json` が必要な場合は同期リクエストを使用してください。
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ description: "プロンプトとソース画像を使用して画像を編集し
   - `b64_json` (string): Base64 エンコードされた画像（response_format が `b64_json` の場合）
 </ResponseField>
 
+### 非同期タスクレスポンス
+
+`gpt-image-2` または公式 FLUX/BFL 編集モデルで `async: true` を指定すると、リクエスト内で編集済み画像を待たずにタスクを作成します。レスポンスには `status: "pending"`、`task_id`、`poll_url` が含まれます。タスクが `completed` または `failed` になるまで `/v1/tasks/{task_id}` をポーリングしてください。
+
+非同期編集タスクは最終画像の URL のみを返します。生の `b64_json` 画像データが必要な場合は、同期リクエストを使用してください。
+
+
+タスク作成時に見積もり金額が予約される場合があります。完了したタスクは実際の使用量で精算され、失敗またはタイムアウトしたタスクは予約が解放または返金されます。
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \

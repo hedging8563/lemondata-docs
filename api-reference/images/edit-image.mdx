@@ -14,7 +14,7 @@ The route supports both:
 - JSON requests that provide `image_url`, `image_urls`, or official `images` references for supported image-to-image families
 
 <Note>
-`gpt-image-2` is supported here. It accepts multipart `image` uploads, JSON `image_url` / `image_urls`, and official `images[]` references (`image_url` or `file_id`), with up to 16 source images. Create `file_id` values through `/v1/files` first.
+`gpt-image-2` is supported here. It accepts multipart `image` uploads, JSON `image_url` / `image_urls`, and official `images[]` references (`image_url` or `file_id`), with up to 16 source images. Create `file_id` values through `/v1/files` first. Set `async: true` to return a task first; official FLUX/BFL edit models also use the same task polling flow.
 </Note>
 
 ## Request Body
@@ -36,7 +36,7 @@ Remote image URLs: when the routed provider requires multipart input, LemonData 
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  The model to use for image edits. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ Remote image URLs: when the routed provider requires multipart input, LemonData 
 </ParamField>
 
 <ParamField body="size" type="string">
-  The size of the generated image. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT` with dimensions that are multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  The size of the generated image. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  The format in which the generated images are returned. Must be `url` or `b64_json`.
+  The format in which generated images are returned. Must be `url` or `b64_json`; the default is `url`.
+
+  For Azure Official or Azure-compatible `gpt-image-2` routes, LemonData does not forward `response_format` upstream. The gateway always receives upstream image data as `b64_json`; for `url` requests it uploads every image to the CDN and returns `data[].url`. If CDN storage is unavailable or upload fails, the request fails instead of falling back to Base64. For `b64_json`, the raw Base64 is returned.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  Set to `true` with `gpt-image-2` or official FLUX/BFL edit models to return a task before the final image is ready. Completed async edits return URLs regardless of the requested `response_format`; use synchronous requests when you need `b64_json`.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -68,6 +74,14 @@ Remote image URLs: when the routed provider requires multipart input, LemonData 
   - `url` (string): URL of the edited image (if response_format is `url`)
   - `b64_json` (string): Base64-encoded image (if response_format is `b64_json`)
 </ResponseField>
+
+### Async Task Response
+
+Set `async: true` with `gpt-image-2` or official FLUX/BFL edit models to create a task instead of waiting for the edited image in the request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+
+Async edit tasks return final image URLs only. If you need raw `b64_json` image data, use a synchronous request.
+
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
 
 <RequestExample>
 ```bash cURL

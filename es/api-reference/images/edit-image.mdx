@@ -14,7 +14,7 @@ El endpoint admite ambos flujos:
 - solicitudes JSON que proporcionan `image_url`, `image_urls` o referencias oficiales `images` para familias de imagen a imagen compatibles
 
 <Note>
-`gpt-image-2` es compatible aquí. Acepta uploads multipart `image`, JSON `image_url` / `image_urls` y referencias oficiales `images[]` (`image_url` o `file_id`), hasta 16 imágenes fuente. Crea los `file_id` primero con `/v1/files`.
+`gpt-image-2` es compatible aquí. Acepta uploads multipart `image`, JSON `image_url` / `image_urls` y referencias oficiales `images[]` (`image_url` o `file_id`), hasta 16 imágenes fuente. Crea los `file_id` primero con `/v1/files`. Usa `async: true` para recibir una tarea primero; los modelos de edición oficiales FLUX/BFL usan el mismo flujo de polling.
 </Note>
 
 ## Cuerpo de la solicitud
@@ -36,7 +36,7 @@ URLs de imagen remotas: cuando el proveedor enrutado requiere entrada multipart,
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  Modelo que se usará para editar imágenes. `gpt-image-2` es compatible; las ediciones clásicas estilo DALL-E pueden seguir usando `dall-e-2`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ URLs de imagen remotas: cuando el proveedor enrutado requiere entrada multipart,
 </ParamField>
 
 <ParamField body="size" type="string">
-  The generated image size. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  Tamaño de la imagen generada. Para `gpt-image-2`, usa `auto` o `WIDTHxHEIGHT`; las dimensiones deben ser múltiplos de 16, el lado más largo como máximo `3840px`, la relación lado largo/corto como máximo `3:1`, y el total de píxeles entre `655,360` y `8,294,400`. Las ediciones clásicas de DALL-E admiten `256x256`, `512x512` o `1024x1024`.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  El formato en que se devuelven las imágenes generadas. Debe ser `url` o `b64_json`.
+  Formato en el que se devuelven las imágenes generadas. Debe ser `url` o `b64_json`; el valor predeterminado es `url`.
+
+  Para rutas `gpt-image-2` de Azure Official o compatibles con Azure, LemonData no reenvía `response_format` al upstream. El gateway siempre recibe los datos de imagen upstream como `b64_json`; para solicitudes `url`, sube cada imagen al CDN y devuelve `data[].url`. Si el almacenamiento CDN no está disponible o la subida falla, la solicitud falla en vez de degradar a Base64. Para `b64_json`, devuelve el Base64 sin procesar.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  Establécelo en `true` con `gpt-image-2` o modelos de edición oficiales FLUX/BFL para devolver una tarea antes de que la imagen final esté lista. Las ediciones asíncronas completadas devuelven URL sin importar el `response_format` solicitado; usa solicitudes síncronas si necesitas `b64_json`.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ URLs de imagen remotas: cuando el proveedor enrutado requiere entrada multipart,
   - `b64_json` (string): Imagen codificada en Base64 (si response_format es `b64_json`)
 </ResponseField>
 
+### Respuesta de tarea asíncrona
+
+Usa `async: true` con `gpt-image-2` o modelos de edición oficiales FLUX/BFL para crear una tarea en lugar de esperar la imagen editada en la solicitud. La respuesta incluye `status: "pending"`, `task_id` y `poll_url`. Consulta `/v1/tasks/{task_id}` hasta que la tarea llegue a `completed` o `failed`.
+
+Las tareas asíncronas de edición solo devuelven las URL finales. Si necesitas datos de imagen `b64_json` sin procesar, usa una solicitud síncrona.
+
+
+Al crear la tarea puede reservarse el importe estimado. Las tareas completadas se cobran por uso real; las fallidas o vencidas liberan o reembolsan la reserva.
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \

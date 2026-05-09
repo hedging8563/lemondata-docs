@@ -6,13 +6,11 @@ description: "Crea una imagen a partir de un prompt"
 
 ## Resumen
 
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
-
 Para agentes de código, descubre primero la lista corta recomendada de imágenes con `GET /v1/models?recommended_for=image`, y luego envía explícitamente el `model` elegido a este endpoint.
 
 `gpt-image-2` es un modelo GPT Image con facturación por tokens. LemonData sigue el desglose oficial de `usage` de OpenAI para liquidar tokens de entrada de texto, entrada de imagen, entrada en caché cuando se reporta, y salida de imagen; no se factura como un precio fijo por imagen.
 
-Los modelos de la familia de imágenes de ### Model behavior notes
+Para generación de imágenes con `gpt-image-2`, los parámetros públicos admitidos son `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` o `compression`, `moderation`, `partial_images` y `user`. Si omites `size` o `quality`, LemonData usa `auto`; los valores personalizados de `size` deben usar el contrato flexible `WIDTHxHEIGHT` documentado abajo.
 
 ### Notas de comportamiento del modelo
 
@@ -65,11 +63,13 @@ Para las familias de imágenes de Google, prefiere `aspect_ratio` y envía `reso
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Formato de respuesta: `url` o `b64_json`.
+  Formato de respuesta: `url` o `b64_json`. El valor predeterminado es `url`.
+
+  Para rutas `gpt-image-2` de Azure Official o compatibles con Azure, LemonData no reenvía `response_format` al upstream. El gateway siempre recibe los datos de imagen upstream como `b64_json`; para solicitudes `url`, sube cada imagen al CDN y devuelve `data[].url`. Si el almacenamiento CDN no está disponible o la subida falla, la solicitud falla en vez de degradar a Base64. Para `b64_json`, devuelve el Base64 sin procesar.
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
-  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+  Establécelo en `true` con `gpt-image-2` o modelos de imagen oficiales FLUX/BFL para crear una tarea primero. Las tareas asíncronas completadas devuelven URL sin importar el `response_format` solicitado; usa solicitudes síncronas si necesitas `b64_json`.
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -97,13 +97,13 @@ Para las familias de imágenes de Google, prefiere `aspect_ratio` y envía `reso
   - `revised_prompt` (string): El prompt usado (DALL-E 3)
 </ResponseField>
 
-### Async Task Response
+### Respuesta de tarea asíncrona
 
-Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+Usa `async: true` con `gpt-image-2` o modelos de imagen oficiales FLUX/BFL para crear una tarea en lugar de esperar la imagen final en la solicitud de creación. La respuesta incluye `status: "pending"`, `task_id` y `poll_url`. Consulta `/v1/tasks/{task_id}` hasta que la tarea llegue a `completed` o `failed`.
 
-Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+Las tareas asíncronas de imagen solo devuelven las URL finales. Si necesitas datos de imagen `b64_json` sin procesar, usa una solicitud síncrona.
 
-Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+Al crear la tarea puede reservarse el importe estimado. Las tareas completadas se cobran por uso real; las fallidas o vencidas liberan o reembolsan la reserva.
 
 <ResponseField name="created" type="integer">
   Unix timestamp of creation.

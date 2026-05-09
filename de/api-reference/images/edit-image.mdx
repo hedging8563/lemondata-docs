@@ -14,7 +14,7 @@ Die Route unterstützt sowohl:
 - JSON-Anfragen mit `image_url`, `image_urls` oder offiziellen `images`-Referenzen für unterstützte Image-to-Image-Familien
 
 <Note>
-`gpt-image-2` wird hier unterstützt. Akzeptiert werden multipart-`image`-Uploads, JSON `image_url` / `image_urls` und offizielle `images[]`-Referenzen (`image_url` oder `file_id`) mit bis zu 16 Quellbildern. `file_id`-Werte zuerst über `/v1/files` erstellen.
+`gpt-image-2` wird hier unterstützt. Akzeptiert werden multipart-`image`-Uploads, JSON `image_url` / `image_urls` und offizielle `images[]`-Referenzen (`image_url` oder `file_id`) mit bis zu 16 Quellbildern. `file_id`-Werte zuerst über `/v1/files` erstellen. Mit `async: true` wird zuerst eine Aufgabe zurückgegeben; offizielle FLUX/BFL-Edit-Modelle verwenden denselben Polling-Ablauf.
 </Note>
 
 ## Request Body
@@ -36,7 +36,7 @@ Remote-Bild-URLs: Wenn der geroutete Anbieter multipart-Eingaben verlangt, ruft 
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  Das Modell für Bildbearbeitungen. `gpt-image-2` wird unterstützt; klassische DALL-E-Edits können weiterhin `dall-e-2` verwenden.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ Remote-Bild-URLs: Wenn der geroutete Anbieter multipart-Eingaben verlangt, ruft 
 </ParamField>
 
 <ParamField body="size" type="string">
-  The generated image size. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  Die Größe des erzeugten Bildes. Für `gpt-image-2` verwenden Sie `auto` oder `WIDTHxHEIGHT`; beide Abmessungen müssen Vielfache von 16 sein, die längste Kante höchstens `3840px`, das Verhältnis lange/kurze Kante höchstens `3:1`, und die Gesamtpixelzahl zwischen `655,360` und `8,294,400`. Klassische DALL-E-Edits unterstützen `256x256`, `512x512` oder `1024x1024`.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Das Format der zurückgegebenen Bilder. Muss `url` oder `b64_json` sein.
+  Format, in dem die erzeugten Bilder zurückgegeben werden. Muss `url` oder `b64_json` sein; Standard ist `url`.
+
+  Bei Azure Official- oder Azure-kompatiblen `gpt-image-2`-Routen leitet LemonData `response_format` nicht an upstream weiter. Das Gateway erhält die Bilddaten upstream immer als `b64_json`; bei `url`-Anfragen lädt es jedes Bild in das CDN hoch und gibt `data[].url` zurück. Wenn der CDN-Speicher nicht verfügbar ist oder der Upload fehlschlägt, schlägt die Anfrage fehl, statt auf Base64 zurückzufallen. Bei `b64_json` wird das rohe Base64 zurückgegeben.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  Auf `true` setzen, um mit `gpt-image-2` oder offiziellen FLUX/BFL-Edit-Modellen eine Aufgabe zurückzugeben, bevor das endgültige Bild bereit ist. Abgeschlossene Async-Edits liefern unabhängig vom angeforderten `response_format` URLs; verwenden Sie synchrone Anfragen, wenn Sie `b64_json` benötigen.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ Remote-Bild-URLs: Wenn der geroutete Anbieter multipart-Eingaben verlangt, ruft 
   - `b64_json` (string): Base64-kodiertes Bild, wenn `response_format` auf `b64_json` gesetzt ist
 </ResponseField>
 
+### Antwort für asynchrone Aufgaben
+
+Setzen Sie `async: true` mit `gpt-image-2` oder offiziellen FLUX/BFL-Edit-Modellen, um eine Aufgabe zu erstellen, statt im Request auf das bearbeitete Bild zu warten. Die Antwort enthält `status: "pending"`, `task_id` und `poll_url`. Fragen Sie `/v1/tasks/{task_id}` ab, bis die Aufgabe `completed` oder `failed` erreicht.
+
+Asynchrone Edit-Aufgaben liefern nur die endgültigen Bild-URLs. Wenn Sie rohe `b64_json`-Bilddaten benötigen, verwenden Sie eine synchrone Anfrage.
+
+
+Beim Erstellen der Aufgabe kann der geschätzte Betrag reserviert werden. Abgeschlossene Aufgaben werden nach tatsächlicher Nutzung abgerechnet; fehlgeschlagene oder abgelaufene Aufgaben werden freigegeben oder erstattet.
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \

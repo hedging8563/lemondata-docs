@@ -6,21 +6,21 @@ description: "プロンプトに基づいて画像を生成します"
 
 ## 概要
 
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
-
 コーディング agent の場合は、まず `GET /v1/models?recommended_for=image` で現在推奨される画像モデルの候補を見つけ、そのうえで選んだ `model` をこのエンドポイントに明示的に渡してください。
 
 `gpt-image-2` は token 単位で課金される GPT Image モデルです。LemonData は OpenAI 公式の usage 内訳に従い、テキスト入力、画像入力、報告されたキャッシュ入力、画像出力 token を精算します。固定の画像単価モデルとしては扱いません。
 
+`gpt-image-2` の画像生成でサポートされる公開パラメーターは、`prompt`、`n`、`size`、`quality`、`response_format`、`async`、`background`、`output_format`、`output_compression` または `compression`、`moderation`、`partial_images`、`user` です。`size` または `quality` を省略すると LemonData は `auto` を使用します。カスタム `size` は下記の柔軟な `WIDTHxHEIGHT` 契約に従う必要があります。
+
 ### モデル動作メモ
 
-Google Gemini image-family models do not share the same selector contract:
+Google Gemini の画像ファミリーは、同じセレクター契約を共有していません:
 
 - `gemini-3-pro-image-preview` and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
 - `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
 - `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
 
-For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
+Google の画像ファミリーでは `aspect_ratio` を優先し、モデルが明示的に対応している場合だけ `resolution` を送信してください。
 
 ## リクエストボディ
 
@@ -63,11 +63,13 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  レスポンス形式：`url` または `b64_json`。
+  レスポンス形式：`url` または `b64_json`。デフォルトは `url` です。
+
+  Azure Official または Azure-compatible の `gpt-image-2` ルートでは、LemonData は `response_format` を upstream に転送しません。ゲートウェイは常に upstream から `b64_json` として画像データを受け取ります。`url` リクエストでは各画像を CDN にアップロードして `data[].url` を返します。CDN ストレージが利用できない、またはアップロードに失敗した場合は、Base64 にフォールバックせずリクエストを失敗させます。`b64_json` では生の Base64 を返します。
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
-  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+  `gpt-image-2` または公式 FLUX/BFL 画像モデルで `true` にすると、まずタスクを作成します。完了した非同期画像タスクは、要求された `response_format` に関係なく URL を返します。`b64_json` が必要な場合は同期リクエストを使用してください。
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -95,13 +97,13 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   - `revised_prompt` (string): 使用されたプロンプト（DALL-E 3）
 </ResponseField>
 
-### Async Task Response
+### 非同期タスクレスポンス
 
-Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+`gpt-image-2` または公式 FLUX/BFL 画像モデルで `async: true` を指定すると、作成リクエスト内で最終画像を待たずにタスクを作成します。レスポンスには `status: "pending"`、`task_id`、`poll_url` が含まれます。タスクが `completed` または `failed` になるまで `/v1/tasks/{task_id}` をポーリングしてください。
 
-Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+非同期画像タスクは最終画像の URL のみを返します。生の `b64_json` 画像データが必要な場合は、同期リクエストを使用してください。
 
-Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+タスク作成時に見積額が予約される場合があります。完了したタスクは実使用量で精算され、失敗またはタイムアウトしたタスクは予約が解放または返金されます。
 
 <ResponseField name="created" type="integer">
   Unix timestamp of creation.

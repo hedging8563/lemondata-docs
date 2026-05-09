@@ -14,7 +14,7 @@ Route şunları destekler:
 - desteklenen image-to-image aileleri için `image_url`, `image_urls` veya resmi `images` referansları sağlayan JSON istekleri
 
 <Note>
-`gpt-image-2` burada desteklenir. Multipart `image` yüklemeleri, JSON `image_url` / `image_urls` ve resmi `images[]` referanslarını (`image_url` veya `file_id`) en fazla 16 kaynak görselle kabul eder. `file_id` değerlerini önce `/v1/files` üzerinden oluşturun.
+`gpt-image-2` burada desteklenir. Multipart `image` yüklemeleri, JSON `image_url` / `image_urls` ve resmi `images[]` referanslarını (`image_url` veya `file_id`) en fazla 16 kaynak görselle kabul eder. `file_id` değerlerini önce `/v1/files` üzerinden oluşturun. Önce görev döndürmek için `async: true` kullanın; resmi FLUX/BFL düzenleme modelleri de aynı görev sorgulama akışını kullanır.
 </Note>
 
 ## İstek Gövdesi
@@ -36,7 +36,7 @@ Uzak görüntü URL’leri: yönlendirilen sağlayıcı multipart girdi istediğ
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  Görüntü düzenleme için kullanılacak model. `gpt-image-2` desteklenir; eski DALL-E tarzı düzenlemeler `dall-e-2` kullanmaya devam edebilir.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ Uzak görüntü URL’leri: yönlendirilen sağlayıcı multipart girdi istediğ
 </ParamField>
 
 <ParamField body="size" type="string">
-  The generated image size. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  Üretilen görüntünün boyutu. `gpt-image-2` için `auto` veya `WIDTHxHEIGHT` kullanın; boyutlar 16’nın katı olmalı, en uzun kenar en fazla `3840px`, uzun/kısa kenar oranı en fazla `3:1`, toplam piksel sayısı `655,360` ile `8,294,400` arasında olmalıdır. Eski DALL-E düzenlemeleri `256x256`, `512x512` veya `1024x1024` destekler.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Üretilen görsellerin döndürüldüğü format. `url` veya `b64_json` olmalıdır.
+  Üretilen görsellerin döndürüldüğü format. `url` veya `b64_json` olmalıdır; varsayılan `url` değeridir.
+
+  Azure Official veya Azure-compatible `gpt-image-2` rotalarında LemonData `response_format` alanını upstream’e iletmez. Gateway, upstream görüntü verisini her zaman `b64_json` olarak alır; `url` isteklerinde her görseli CDN’e yükler ve `data[].url` döndürür. CDN depolama kullanılamıyorsa veya upload başarısız olursa istek Base64’e düşmek yerine başarısız olur. `b64_json` için ham Base64 döndürülür.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  `gpt-image-2` veya resmi FLUX/BFL düzenleme modelleriyle nihai görüntü hazır olmadan önce görev döndürmek için `true` yapın. Tamamlanan asenkron düzenlemeler, istenen `response_format` ne olursa olsun URL döndürür; `b64_json` gerekiyorsa senkron istek kullanın.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ Uzak görüntü URL’leri: yönlendirilen sağlayıcı multipart girdi istediğ
   - `b64_json` (string): Base64 kodlanmış görsel (`response_format` `b64_json` ise)
 </ResponseField>
 
+### Asenkron görev yanıtı
+
+`gpt-image-2` veya resmi FLUX/BFL düzenleme modelleriyle `async: true` kullanarak istekte düzenlenmiş görüntüyü beklemek yerine bir görev oluşturun. Yanıt `status: "pending"`, `task_id` ve `poll_url` içerir. Görev `completed` veya `failed` durumuna gelene kadar `/v1/tasks/{task_id}` adresini sorgulayın.
+
+Asenkron düzenleme görevleri yalnızca nihai görüntü URL’lerini döndürür. Ham `b64_json` görüntü verisi gerekiyorsa senkron istek kullanın.
+
+
+Görev oluşturulurken tahmini tutar önce rezerve edilebilir. Tamamlanan görevler gerçek kullanıma göre ücretlendirilir; başarısız olan veya zaman aşımına uğrayan görevlerde rezervasyon serbest bırakılır ya da iade edilir.
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \

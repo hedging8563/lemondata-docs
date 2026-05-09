@@ -14,7 +14,7 @@ Route này hỗ trợ cả:
 - request JSON cung cấp `image_url`, `image_urls`, hoặc tham chiếu chính thức `images` cho các nhóm image-to-image được hỗ trợ
 
 <Note>
-`gpt-image-2` được hỗ trợ tại đây. Endpoint chấp nhận upload multipart `image`, JSON `image_url` / `image_urls`, và tham chiếu chính thức `images[]` (`image_url` hoặc `file_id`) với tối đa 16 ảnh nguồn. Hãy tạo `file_id` qua `/v1/files` trước.
+`gpt-image-2` được hỗ trợ tại đây. Endpoint chấp nhận upload multipart `image`, JSON `image_url` / `image_urls`, và tham chiếu chính thức `images[]` (`image_url` hoặc `file_id`) với tối đa 16 ảnh nguồn. Hãy tạo `file_id` qua `/v1/files` trước. Đặt `async: true` để nhận task trước; các model edit FLUX/BFL chính thức cũng dùng cùng luồng polling task.
 </Note>
 
 ## Thân Yêu Cầu
@@ -36,7 +36,7 @@ URL ảnh từ xa: khi provider được định tuyến yêu cầu input multip
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  Model dùng cho edit ảnh. `gpt-image-2` được hỗ trợ; các edit kiểu DALL-E legacy vẫn có thể dùng `dall-e-2`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ URL ảnh từ xa: khi provider được định tuyến yêu cầu input multip
 </ParamField>
 
 <ParamField body="size" type="string">
-  The generated image size. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  Kích thước ảnh được tạo. Với `gpt-image-2`, dùng `auto` hoặc `WIDTHxHEIGHT`; kích thước phải là bội số của 16, cạnh dài nhất tối đa `3840px`, tỷ lệ cạnh dài/ngắn tối đa `3:1`, và tổng pixel nằm trong khoảng `655,360` đến `8,294,400`. Edit DALL-E legacy hỗ trợ `256x256`, `512x512`, hoặc `1024x1024`.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Định dạng trả về của ảnh được tạo. Phải là `url` hoặc `b64_json`.
+  Định dạng trả về của ảnh được tạo. Phải là `url` hoặc `b64_json`; mặc định là `url`.
+
+  Với các tuyến `gpt-image-2` Azure Official hoặc tương thích Azure, LemonData không chuyển `response_format` lên upstream. Gateway luôn nhận dữ liệu ảnh upstream dưới dạng `b64_json`; với request `url`, gateway tải từng ảnh lên CDN rồi trả về `data[].url`. Nếu CDN storage không khả dụng hoặc upload thất bại, request sẽ fail thay vì fallback về Base64. Với `b64_json`, Base64 gốc được trả về.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  Đặt `true` với `gpt-image-2` hoặc các model edit FLUX/BFL chính thức để trả về task trước khi ảnh cuối sẵn sàng. Edit async hoàn tất trả về URL bất kể `response_format` được yêu cầu; dùng request đồng bộ nếu cần `b64_json`.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ URL ảnh từ xa: khi provider được định tuyến yêu cầu input multip
   - `b64_json` (string): Ảnh mã hoá Base64 (nếu response_format là `b64_json`)
 </ResponseField>
 
+### Phản hồi task async
+
+Đặt `async: true` với `gpt-image-2` hoặc các model edit FLUX/BFL chính thức để tạo task thay vì chờ ảnh đã chỉnh sửa trong request. Phản hồi gồm `status: "pending"`, `task_id` và `poll_url`. Hãy poll `/v1/tasks/{task_id}` cho đến khi task chuyển sang `completed` hoặc `failed`.
+
+Task edit async chỉ trả về URL của ảnh cuối. Nếu cần dữ liệu ảnh thô `b64_json`, hãy dùng request đồng bộ.
+
+
+Khi tạo tác vụ, hệ thống có thể tạm giữ chi phí ước tính. Tác vụ hoàn tất được tính theo mức sử dụng thực tế; tác vụ thất bại hoặc hết hạn sẽ được giải phóng khoản tạm giữ hoặc hoàn phí.
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \

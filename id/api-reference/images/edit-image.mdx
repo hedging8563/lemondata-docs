@@ -14,7 +14,7 @@ Route ini mendukung:
 - request JSON yang menyediakan `image_url`, `image_urls`, atau referensi resmi `images` untuk keluarga image-to-image yang didukung
 
 <Note>
-`gpt-image-2` didukung di sini. Endpoint ini menerima upload multipart `image`, JSON `image_url` / `image_urls`, dan referensi resmi `images[]` (`image_url` atau `file_id`) hingga 16 gambar sumber. Buat `file_id` terlebih dahulu melalui `/v1/files`.
+`gpt-image-2` didukung di sini. Endpoint ini menerima upload multipart `image`, JSON `image_url` / `image_urls`, dan referensi resmi `images[]` (`image_url` atau `file_id`) hingga 16 gambar sumber. Buat `file_id` terlebih dahulu melalui `/v1/files`. Setel `async: true` untuk menerima task terlebih dahulu; model edit resmi FLUX/BFL memakai alur polling task yang sama.
 </Note>
 
 ## Body Request
@@ -36,7 +36,7 @@ URL gambar jarak jauh: ketika provider yang dirutekan memerlukan input multipart
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  Model yang digunakan untuk edit gambar. `gpt-image-2` didukung; edit gaya DALL-E legacy tetap bisa memakai `dall-e-2`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ URL gambar jarak jauh: ketika provider yang dirutekan memerlukan input multipart
 </ParamField>
 
 <ParamField body="size" type="string">
-  The generated image size. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  Ukuran gambar yang dihasilkan. Untuk `gpt-image-2`, gunakan `auto` atau `WIDTHxHEIGHT`; dimensi harus kelipatan 16, sisi terpanjang maksimal `3840px`, rasio sisi panjang/pendek maksimal `3:1`, dan total piksel antara `655,360` dan `8,294,400`. Edit DALL-E legacy mendukung `256x256`, `512x512`, atau `1024x1024`.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Format tempat gambar yang dihasilkan dikembalikan. Harus `url` atau `b64_json`.
+  Format pengembalian gambar yang dihasilkan. Harus `url` atau `b64_json`; default-nya `url`.
+
+  Untuk rute `gpt-image-2` Azure Official atau Azure-compatible, LemonData tidak meneruskan `response_format` ke upstream. Gateway selalu menerima data gambar upstream sebagai `b64_json`; untuk request `url`, setiap gambar diunggah ke CDN lalu `data[].url` dikembalikan. Jika storage CDN tidak tersedia atau upload gagal, request gagal alih-alih fallback ke Base64. Untuk `b64_json`, Base64 mentah dikembalikan.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  Setel ke `true` dengan `gpt-image-2` atau model edit resmi FLUX/BFL untuk mengembalikan task sebelum gambar final siap. Edit async yang selesai mengembalikan URL apa pun `response_format` yang diminta; gunakan request sinkron jika membutuhkan `b64_json`.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ URL gambar jarak jauh: ketika provider yang dirutekan memerlukan input multipart
   - `b64_json` (string): Gambar Base64-encoded (jika response_format `b64_json`)
 </ResponseField>
 
+### Respons Task Async
+
+Setel `async: true` dengan `gpt-image-2` atau model edit resmi FLUX/BFL untuk membuat task alih-alih menunggu gambar hasil edit di request. Respons berisi `status: "pending"`, `task_id`, dan `poll_url`. Poll `/v1/tasks/{task_id}` hingga task menjadi `completed` atau `failed`.
+
+Task edit async hanya mengembalikan URL gambar final. Jika membutuhkan data gambar mentah `b64_json`, gunakan request sinkron.
+
+
+Saat task dibuat, biaya perkiraan dapat dicadangkan terlebih dahulu. Task yang selesai ditagih sesuai pemakaian aktual; task yang gagal atau timeout akan melepaskan atau mengembalikan cadangan biaya.
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \

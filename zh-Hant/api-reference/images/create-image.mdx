@@ -14,13 +14,13 @@ description: "根據 prompt 建立圖片"
 
 ### 模型行為說明
 
-Google Gemini image-family models do not share the same selector contract:
+Google Gemini 圖片系列不共用同一套選擇器契約：
 
 - `gemini-3-pro-image-preview` and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`).
 - `gemini-2.5-flash-image`, `gemini-3.1-flash-image-preview`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
 - `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
 
-For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
+Google 圖片系列請優先使用 `aspect_ratio`，只有模型明確支援時才傳送 `resolution`。
 
 ## 請求本文
 
@@ -63,11 +63,13 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  回應格式：`url` 或 `b64_json`。
+  回應格式：`url` 或 `b64_json`，預設為 `url`。
+
+  對於 Azure Official 或 Azure-compatible 的 `gpt-image-2` 路由，LemonData 不會把 `response_format` 傳給上游。閘道始終從上游取得 `b64_json` 圖片資料；請求 `url` 時會把每張圖上傳到 CDN 並返回 `data[].url`。如果 CDN 儲存不可用或上傳失敗，請求會失敗，而不是降級返回 Base64；請求 `b64_json` 時直接返回原始 Base64。
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
-  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+  搭配 `gpt-image-2` 或官方 FLUX/BFL 圖像模型設為 `true` 時，會先建立任務。完成後的非同步圖片任務無論請求的 `response_format` 是什麼，都只返回 URL；如果需要 `b64_json`，請使用同步請求。
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -95,13 +97,13 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
   - `revised_prompt`（string）：實際使用的 prompt（DALL-E 3）
 </ResponseField>
 
-### Async Task Response
+### 非同步任務回應
 
-Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+搭配 `gpt-image-2` 或官方 FLUX/BFL 圖像模型設定 `async: true` 後，建立請求會先返回任務，而不是等待最終圖片完成。回應包含 `status: "pending"`、`task_id` 和 `poll_url`。請輪詢 `/v1/tasks/{task_id}`，直到任務進入 `completed` 或 `failed`。
 
-Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+非同步圖片任務最終只返回圖片 URL。如果你需要原始 `b64_json` 圖片資料，請使用同步請求。
 
-Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+任務建立時可能會先預留預估費用。任務完成後按實際用量結算；失敗或逾時的任務會釋放預留費用或退回費用。
 
 <ResponseField name="created" type="integer">
   Unix timestamp of creation.

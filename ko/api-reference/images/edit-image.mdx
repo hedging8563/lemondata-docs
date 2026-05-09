@@ -14,7 +14,7 @@ description: "프롬프트와 원본 이미지를 기반으로 이미지를 편�
 - 지원되는 이미지-to-이미지 패밀리를 위한 `image_url`, `image_urls` 또는 공식 `images` 참조 JSON 요청
 
 <Note>
-`gpt-image-2`는 이 엔드포인트에서 지원됩니다. multipart `image` 업로드, JSON `image_url` / `image_urls`, 공식 `images[]` 참조(`image_url` 또는 `file_id`)를 최대 16개 원본 이미지까지 사용할 수 있습니다. `file_id`는 먼저 `/v1/files`에서 생성하세요.
+`gpt-image-2`는 이 엔드포인트에서 지원됩니다. multipart `image` 업로드, JSON `image_url` / `image_urls`, 공식 `images[]` 참조(`image_url` 또는 `file_id`)를 최대 16개 원본 이미지까지 사용할 수 있습니다. `file_id`는 먼저 `/v1/files`에서 생성하세요. `async: true`를 설정하면 먼저 작업을 반환합니다. 공식 FLUX/BFL 편집 모델도 동일한 작업 폴링 흐름을 사용합니다.
 </Note>
 
 ## 요청 본문
@@ -36,7 +36,7 @@ description: "프롬프트와 원본 이미지를 기반으로 이미지를 편�
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  이미지 편집에 사용할 모델입니다. `gpt-image-2`를 지원합니다. 기존 DALL-E 스타일 편집은 계속 `dall-e-2`를 사용할 수 있습니다.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ description: "프롬프트와 원본 이미지를 기반으로 이미지를 편�
 </ParamField>
 
 <ParamField body="size" type="string">
-  The generated image size. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  생성된 이미지 크기입니다. `gpt-image-2`에서는 `auto` 또는 `WIDTHxHEIGHT`를 사용하세요. 각 변은 16의 배수여야 하고, 가장 긴 변은 `3840px` 이하, 긴 변/짧은 변 비율은 `3:1` 이하, 총 픽셀 수는 `655,360`에서 `8,294,400` 사이여야 합니다. 기존 DALL-E 편집은 `256x256`, `512x512`, `1024x1024`를 지원합니다.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  생성된 이미지가 반환되는 형식입니다. `url` 또는 `b64_json` 이어야 합니다.
+  생성된 이미지가 반환되는 형식입니다. `url` 또는 `b64_json`이어야 하며 기본값은 `url`입니다.
+
+  Azure Official 또는 Azure-compatible `gpt-image-2` 라우팅에서는 LemonData가 `response_format`을 upstream으로 전달하지 않습니다. 게이트웨이는 항상 upstream 이미지 데이터를 `b64_json`으로 받습니다. `url` 요청에서는 각 이미지를 CDN에 업로드한 뒤 `data[].url`을 반환합니다. CDN 스토리지를 사용할 수 없거나 업로드가 실패하면 Base64로 fallback하지 않고 요청을 실패시킵니다. `b64_json` 요청에서는 원본 Base64를 반환합니다.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  `gpt-image-2` 또는 공식 FLUX/BFL 편집 모델에서 `true`로 설정하면 최종 이미지가 준비되기 전에 작업을 반환합니다. 완료된 비동기 편집은 요청한 `response_format`과 관계없이 URL을 반환합니다. `b64_json`이 필요하면 동기 요청을 사용하세요.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ description: "프롬프트와 원본 이미지를 기반으로 이미지를 편�
   - `b64_json` (string): Base64로 인코딩된 이미지 (`response_format` 이 `b64_json` 인 경우)
 </ResponseField>
 
+### 비동기 작업 응답
+
+`gpt-image-2` 또는 공식 FLUX/BFL 편집 모델에서 `async: true`를 설정하면 요청에서 편집된 이미지를 기다리지 않고 작업을 생성합니다. 응답에는 `status: "pending"`, `task_id`, `poll_url`이 포함됩니다. 작업이 `completed` 또는 `failed`가 될 때까지 `/v1/tasks/{task_id}`를 폴링하세요.
+
+비동기 편집 작업은 최종 이미지 URL만 반환합니다. 원본 `b64_json` 이미지 데이터가 필요하면 동기 요청을 사용하세요.
+
+
+작업 생성 시 예상 금액이 먼저 예약될 수 있습니다. 완료된 작업은 실제 사용량으로 정산되며, 실패하거나 시간 초과된 작업은 예약 금액이 해제되거나 환불됩니다.
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \

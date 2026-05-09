@@ -6,13 +6,11 @@ description: "Membuat gambar berdasarkan prompt"
 
 ## Ringkasan
 
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
-
 Untuk coding agents, cari shortlist gambar yang direkomendasikan saat ini terlebih dahulu dengan `GET /v1/models?recommended_for=image`, lalu kirim `model` yang dipilih secara eksplisit ke endpoint ini.
 
 `gpt-image-2` adalah model GPT Image dengan penagihan berbasis token. LemonData mengikuti rincian `usage` resmi OpenAI untuk menghitung token input teks, input gambar, input cache jika dilaporkan, dan output gambar; model ini tidak ditagih sebagai harga tetap per gambar.
 
-Model keluarga gambar ### Model behavior notes
+Untuk pembuatan gambar dengan `gpt-image-2`, parameter publik yang didukung adalah `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` atau `compression`, `moderation`, `partial_images`, dan `user`. Jika `size` atau `quality` tidak dikirim, LemonData memakai `auto`; nilai `size` kustom harus mengikuti kontrak fleksibel `WIDTHxHEIGHT` yang dijelaskan di bawah.
 
 ### Catatan perilaku model
 
@@ -65,11 +63,13 @@ Untuk keluarga gambar Google, utamakan `aspect_ratio` dan hanya kirim `resolutio
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Format respons: `url` atau `b64_json`.
+  Format respons: `url` atau `b64_json`. Default-nya `url`.
+
+  Untuk rute `gpt-image-2` Azure Official atau Azure-compatible, LemonData tidak meneruskan `response_format` ke upstream. Gateway selalu menerima data gambar upstream sebagai `b64_json`; untuk request `url`, setiap gambar diunggah ke CDN lalu `data[].url` dikembalikan. Jika storage CDN tidak tersedia atau upload gagal, request gagal alih-alih fallback ke Base64. Untuk `b64_json`, Base64 mentah dikembalikan.
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
-  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+  Setel ke `true` dengan `gpt-image-2` atau model gambar resmi FLUX/BFL untuk membuat task terlebih dahulu. Task gambar async yang selesai mengembalikan URL apa pun `response_format` yang diminta; gunakan request sinkron jika membutuhkan `b64_json`.
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -97,13 +97,13 @@ Untuk keluarga gambar Google, utamakan `aspect_ratio` dan hanya kirim `resolutio
   - `revised_prompt` (string): Prompt yang dipakai (DALL-E 3)
 </ResponseField>
 
-### Async Task Response
+### Respons Task Async
 
-Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+Setel `async: true` dengan `gpt-image-2` atau model gambar resmi FLUX/BFL untuk membuat task alih-alih menunggu gambar final di request pembuatan. Respons berisi `status: "pending"`, `task_id`, dan `poll_url`. Poll `/v1/tasks/{task_id}` hingga task menjadi `completed` atau `failed`.
 
-Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+Task gambar async hanya mengembalikan URL gambar final. Jika membutuhkan data gambar mentah `b64_json`, gunakan request sinkron.
 
-Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+Saat task dibuat, biaya estimasi dapat dicadangkan. Task yang selesai ditagih berdasarkan penggunaan aktual; task yang gagal atau timeout akan melepas atau mengembalikan cadangan biaya.
 
 <ResponseField name="created" type="integer">
   Unix timestamp of creation.

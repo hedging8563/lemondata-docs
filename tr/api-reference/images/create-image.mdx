@@ -6,11 +6,11 @@ description: "Bir prompt verildiğinde bir görsel oluşturur"
 
 ## Genel Bakış
 
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
-
-Kod üreten ajanlar için önce `GET /v1/models?recommended_for=image` ile mevcut önerilen görsel shortlist'ini keşfedin, ardından seçilen `model`i bu endpoint'e açıkça gönderin.
+Kod üreten ajanlar için önce `GET /v1/models?recommended_for=image` ile mevcut önerilen görsel shortlist’ini keşfedin, ardından seçilen `model`i bu endpoint’e açıkça gönderin.
 
 `gpt-image-2`, token bazlı ücretlendirilen bir GPT Image modelidir. LemonData; metin girdisi, görsel girdisi, raporlandığında önbellek girdisi ve görsel çıktı token’ları için OpenAI’ın resmi `usage` dökümünü izler; sabit görüntü başı fiyat olarak faturalandırılmaz.
+
+`gpt-image-2` görüntü oluşturma için desteklenen herkese açık parametreler `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` veya `compression`, `moderation`, `partial_images` ve `user` alanlarıdır. `size` veya `quality` gönderilmezse LemonData `auto` kullanır; özel `size` değerleri aşağıda belgelenen esnek `WIDTHxHEIGHT` sözleşmesini izlemelidir.
 
 ### Model davranışı notları
 
@@ -63,11 +63,13 @@ Google görsel aileleri için `aspect_ratio` kullanmayı tercih edin ve `resolut
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Yanıt formatı: `url` veya `b64_json`.
+  Yanıt formatı: `url` veya `b64_json`. Varsayılan `url` değeridir.
+
+  Azure Official veya Azure-compatible `gpt-image-2` rotalarında LemonData `response_format` alanını upstream’e iletmez. Gateway, upstream görüntü verisini her zaman `b64_json` olarak alır; `url` isteklerinde her görseli CDN’e yükler ve `data[].url` döndürür. CDN depolama kullanılamıyorsa veya upload başarısız olursa istek Base64’e düşmek yerine başarısız olur. `b64_json` için ham Base64 döndürülür.
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
-  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+  `gpt-image-2` veya resmi FLUX/BFL görüntü modelleriyle önce bir görev oluşturmak için `true` yapın. Tamamlanan asenkron görüntü görevleri, istenen `response_format` ne olursa olsun URL döndürür; `b64_json` gerekiyorsa senkron istek kullanın.
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -95,13 +97,13 @@ Google görsel aileleri için `aspect_ratio` kullanmayı tercih edin ve `resolut
   - `revised_prompt` (string): Kullanılan prompt (DALL-E 3)
 </ResponseField>
 
-### Async Task Response
+### Asenkron görev yanıtı
 
-Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+`gpt-image-2` veya resmi FLUX/BFL görüntü modelleriyle `async: true` kullanarak oluşturma isteğinde nihai görüntüyü beklemek yerine bir görev oluşturun. Yanıt `status: "pending"`, `task_id` ve `poll_url` içerir. Görev `completed` veya `failed` durumuna gelene kadar `/v1/tasks/{task_id}` adresini sorgulayın.
 
-Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+Asenkron görüntü görevleri yalnızca nihai görüntü URL’lerini döndürür. Ham `b64_json` görüntü verisi gerekiyorsa senkron istek kullanın.
 
-Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+Görev oluşturulurken tahmini tutar rezerve edilebilir. Tamamlanan görevler gerçek kullanıma göre ücretlendirilir; başarısız olan veya zaman aşımına uğrayan görevlerin rezervi serbest bırakılır veya iade edilir.
 
 <ResponseField name="created" type="integer">
   Unix timestamp of creation.

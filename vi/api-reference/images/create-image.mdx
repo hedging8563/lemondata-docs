@@ -6,13 +6,11 @@ description: "Tạo một hình ảnh từ prompt"
 
 ## Tổng quan
 
-For `gpt-image-2` image generation, supported public parameters are: `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. If `size` or `quality` is omitted, LemonData uses `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
-
 Dành cho coding agents, hãy khám phá shortlist hình ảnh được khuyến nghị hiện tại trước bằng `GET /v1/models?recommended_for=image`, rồi gửi rõ `model` đã chọn đến endpoint này.
 
 `gpt-image-2` là model GPT Image tính phí theo token. LemonData bám theo chi tiết `usage` chính thức của OpenAI để tính token đầu vào văn bản, đầu vào hình ảnh, đầu vào cache khi được báo cáo, và token đầu ra hình ảnh; model này không được tính như giá cố định cho mỗi ảnh.
 
-Các model nhóm hình ảnh của ### Model behavior notes
+Với tạo ảnh bằng `gpt-image-2`, các tham số public được hỗ trợ gồm `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` hoặc `compression`, `moderation`, `partial_images`, và `user`. Nếu bỏ qua `size` hoặc `quality`, LemonData dùng `auto`; giá trị `size` tùy chỉnh phải theo hợp đồng linh hoạt `WIDTHxHEIGHT` được mô tả bên dưới.
 
 ### Ghi chú hành vi mô hình
 
@@ -65,11 +63,13 @@ Với các model hình ảnh của Google, hãy ưu tiên `aspect_ratio` và ch�
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  Định dạng response: `url` hoặc `b64_json`.
+  Định dạng response: `url` hoặc `b64_json`. Mặc định là `url`.
+
+  Với các tuyến `gpt-image-2` Azure Official hoặc tương thích Azure, LemonData không chuyển `response_format` lên upstream. Gateway luôn nhận dữ liệu ảnh upstream dưới dạng `b64_json`; với request `url`, gateway tải từng ảnh lên CDN rồi trả về `data[].url`. Nếu CDN storage không khả dụng hoặc upload thất bại, request sẽ fail thay vì fallback về Base64. Với `b64_json`, Base64 gốc được trả về.
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
-  Set to `true` with `gpt-image-2` to create an async image task. Async task results are returned as URLs; use synchronous requests when you need `b64_json`.
+  Đặt `true` với `gpt-image-2` hoặc các model hình ảnh FLUX/BFL chính thức để tạo task trước. Task ảnh async hoàn tất trả về URL bất kể `response_format` được yêu cầu; dùng request đồng bộ nếu cần `b64_json`.
 </ParamField>
 
 <ParamField body="style" type="string" default="vivid">
@@ -97,13 +97,13 @@ Với các model hình ảnh của Google, hãy ưu tiên `aspect_ratio` và ch�
   - `revised_prompt` (string): Prompt đã được dùng (DALL-E 3)
 </ResponseField>
 
-### Async Task Response
+### Phản hồi task async
 
-Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+Đặt `async: true` với `gpt-image-2` hoặc các model hình ảnh FLUX/BFL chính thức để tạo task thay vì chờ ảnh cuối trong request tạo ảnh. Phản hồi gồm `status: "pending"`, `task_id` và `poll_url`. Hãy poll `/v1/tasks/{task_id}` cho đến khi task chuyển sang `completed` hoặc `failed`.
 
-Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+Task ảnh async chỉ trả về URL của ảnh cuối. Nếu cần dữ liệu ảnh thô `b64_json`, hãy dùng request đồng bộ.
 
-Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
+Khi tạo task, hệ thống có thể giữ trước chi phí ước tính. Task hoàn tất được tính theo mức dùng thực tế; task thất bại hoặc timeout sẽ giải phóng hoặc hoàn lại khoản giữ trước.
 
 <ResponseField name="created" type="integer">
   Unix timestamp of creation.

@@ -14,7 +14,7 @@ description: "根據提示詞和來源圖像編輯圖像"
 - 為受支援的圖像到圖像模型提供 `image_url`、`image_urls` 或官方 `images` 參照的 JSON 請求
 
 <Note>
-`gpt-image-2` 已支援此端點。它支援 multipart `image` 上傳、JSON `image_url` / `image_urls`，以及官方 `images[]` 參照（`image_url` 或 `file_id`），最多 16 張來源圖。`file_id` 需先透過 `/v1/files` 建立。
+`gpt-image-2` 已支援此端點。它支援 multipart `image` 上傳、JSON `image_url` / `image_urls`，以及官方 `images[]` 參照（`image_url` 或 `file_id`），最多 16 張來源圖。`file_id` 需先透過 `/v1/files` 建立。設定 `async: true` 會先返回任務；官方 FLUX/BFL 編輯模型也使用同一套任務輪詢流程。
 </Note>
 
 ## 請求主體
@@ -48,7 +48,13 @@ description: "根據提示詞和來源圖像編輯圖像"
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  回傳生成圖像的格式。必須是 `url` 或 `b64_json`。
+  回傳生成圖像的格式。必須是 `url` 或 `b64_json`，預設為 `url`。
+
+  對於 Azure Official 或 Azure-compatible 的 `gpt-image-2` 路由，LemonData 不會把 `response_format` 傳給上游。閘道始終從上游取得 `b64_json` 圖片資料；請求 `url` 時會把每張圖上傳到 CDN 並返回 `data[].url`。如果 CDN 儲存不可用或上傳失敗，請求會失敗，而不是降級返回 Base64；請求 `b64_json` 時直接返回原始 Base64。
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  搭配 `gpt-image-2` 或官方 FLUX/BFL 編輯模型設為 `true` 時，會在最終圖片完成前先返回任務。完成後的非同步編輯無論請求的 `response_format` 是什麼，都只返回 URL；如果需要 `b64_json`，請使用同步請求。
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ description: "根據提示詞和來源圖像編輯圖像"
   - `b64_json` (string): Base64 編碼的圖像（如果 response_format 是 `b64_json`）
 </ResponseField>
 
+### 非同步任務回應
+
+搭配 `gpt-image-2` 或官方 FLUX/BFL 編輯模型設定 `async: true` 後，請求會先建立任務，而不是等待編輯後圖片完成。回應包含 `status: "pending"`、`task_id` 和 `poll_url`。請輪詢 `/v1/tasks/{task_id}`，直到任務進入 `completed` 或 `failed`。
+
+非同步編輯任務最終只返回圖片 URL。如果你需要原始 `b64_json` 圖片資料，請使用同步請求。
+
+
+任務建立時可能會先預留預估費用。任務完成後按實際用量結算；失敗或逾時的任務會釋放預留費用或退回費用。
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \

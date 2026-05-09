@@ -14,7 +14,7 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
 - طلبات JSON التي توفر `image_url` أو `image_urls` أو مراجع `images` الرسمية لعائلات الصور المدعومة من صورة إلى صورة
 
 <Note>
-`gpt-image-2` مدعوم هنا. يقبل رفع multipart باسم `image`، و JSON `image_url` / `image_urls`، ومراجع `images[]` الرسمية (`image_url` أو `file_id`) حتى 16 صورة مصدر. أنشئ قيم `file_id` أولاً عبر `/v1/files`.
+`gpt-image-2` مدعوم هنا. يقبل رفع multipart باسم `image`، و JSON `image_url` / `image_urls`، ومراجع `images[]` الرسمية (`image_url` أو `file_id`) حتى 16 صورة مصدر. أنشئ قيم `file_id` أولاً عبر `/v1/files`. اضبط `async: true` لإرجاع مهمة أولاً؛ وتستخدم نماذج التحرير الرسمية FLUX/BFL تدفق الاستعلام عن المهمة نفسه.
 </Note>
 
 ## جسم الطلب
@@ -36,7 +36,7 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
 </ParamField>
 
 <ParamField body="model" type="string" default="dall-e-2">
-  The model to use for image edit. `gpt-image-2` is supported; legacy DALL-E style edits can continue to use `dall-e-2`.
+  النموذج المستخدم لتحرير الصور. `gpt-image-2` مدعوم؛ ويمكن الاستمرار في استخدام `dall-e-2` لتحريرات DALL-E القديمة.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -44,11 +44,17 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
 </ParamField>
 
 <ParamField body="size" type="string">
-  The generated image size. For `gpt-image-2`, use `auto` or `WIDTHxHEIGHT`; dimensions must be multiples of 16, longest edge at most `3840px`, long/short ratio at most `3:1`, and total pixels between `655,360` and `8,294,400`. Legacy DALL-E edits support `256x256`, `512x512`, or `1024x1024`.
+  حجم الصورة المُنشأة. بالنسبة إلى `gpt-image-2` استخدم `auto` أو `WIDTHxHEIGHT`؛ يجب أن تكون الأبعاد من مضاعفات 16، وأطول ضلع لا يتجاوز `3840px`، ونسبة الطويل إلى القصير لا تتجاوز `3:1`، وإجمالي البكسلات بين `655,360` و`8,294,400`. تدعم تحريرات DALL-E القديمة `256x256` أو `512x512` أو `1024x1024`.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
-  تنسيق إرجاع الصور المُنشأة. يجب أن يكون `url` أو `b64_json`.
+  تنسيق إرجاع الصور المُنشأة. يجب أن يكون `url` أو `b64_json`؛ والقيمة الافتراضية هي `url`.
+
+  بالنسبة إلى مسارات `gpt-image-2` على Azure Official أو القنوات المتوافقة مع Azure، لا تمرّر LemonData الحقل `response_format` إلى upstream. يحصل gateway دائمًا على بيانات الصور من upstream بصيغة `b64_json`؛ عند طلب `url` يرفع كل صورة إلى CDN ويعيد `data[].url`. إذا لم يكن تخزين CDN متاحًا أو فشل الرفع، يفشل الطلب بدلاً من الرجوع إلى Base64. عند طلب `b64_json` يُعاد Base64 الخام.
+</ParamField>
+
+<ParamField body="async" type="boolean" default="false">
+  اضبطه على `true` مع `gpt-image-2` أو نماذج تحرير FLUX/BFL الرسمية لإرجاع مهمة قبل أن تكون الصورة النهائية جاهزة. تعيد التحريرات غير المتزامنة المكتملة روابط URL بغض النظر عن `response_format` المطلوب؛ استخدم الطلبات المتزامنة إذا كنت تحتاج إلى `b64_json`.
 </ParamField>
 
 <ParamField body="user" type="string">
@@ -69,6 +75,14 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
   - `b64_json` (string): الصورة بترميز Base64 (إذا كان response_format هو `b64_json`)
 </ResponseField>
 
+### استجابة المهمة غير المتزامنة
+
+اضبط `async: true` مع `gpt-image-2` أو نماذج تحرير FLUX/BFL الرسمية لإنشاء مهمة بدلاً من انتظار الصورة المحررة داخل الطلب. تتضمن الاستجابة `status: "pending"` و`task_id` و`poll_url`. استعلم عن `/v1/tasks/{task_id}` حتى تصل المهمة إلى `completed` أو `failed`.
+
+تعيد مهام التحرير غير المتزامنة روابط URL للصور النهائية فقط. إذا كنت تحتاج إلى بيانات `b64_json` الخام، فاستخدم طلبًا متزامنًا.
+
+
+قد يتم حجز المبلغ التقديري عند إنشاء المهمة. تُحاسَب المهام المكتملة حسب الاستخدام الفعلي، أما المهام الفاشلة أو المنتهية بالمهلة فيُحرَّر حجزها أو تُرد تكلفتها.
 <RequestExample>
 ```bash cURL
 curl -X POST "https://api.lemondata.cc/v1/images/edits" \
