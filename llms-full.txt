@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access 300+ AI models through a single API
 
-Generated: 2026-05-04
+Generated: 2026-05-12
 Source: https://docs.lemondata.cc
 
 ---
@@ -4044,6 +4044,35 @@ Rerank documents using semantic similarity models. Useful for improving search r
 
 ---
 
+### Create Translation
+
+> Translates text into a target language
+
+URL: https://docs.lemondata.cc/api-reference/translation/create-translation
+
+## Overview
+
+Use `/v1/translations` for **text-to-text translation**.
+
+> Note: This endpoint is different from [Audio Translation](/api-reference/audio/create-translation), which accepts an audio file and always outputs English text.
+
+For agent workflows, discover the current recommended translation models first:
+
+```bash
+curl "https://api.lemondata.cc/v1/models?recommended_for=translation" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+Then explicitly send the chosen model to `/v1/translations`.
+
+> Note: `recommended_for=translation` applies only to **text translation** (`POST /v1/translations`). It does not apply to [audio translation](/api-reference/audio/create-translation).
+
+## Request Body
+
+## Response
+
+---
+
 
 ## Files & Batches
 
@@ -4316,9 +4345,11 @@ URL: https://docs.lemondata.cc/api-reference/images/create-image
 
 For coding agents, discover the current recommended image shortlist first with `GET /v1/models?recommended_for=image`, then send the selected `model` explicitly to this endpoint.
 
-`gpt-image-2` is a token-priced GPT Image model. LemonData follows OpenAI's official usage breakdown for text input, image input, cached input when reported, and image output tokens; it is not billed as a fixed per-image model.
+`gpt-image-2` is a token-priced GPT Image model. LemonData follows OpenAI's official usage breakdown for text input, image input, reported cached input, and image output tokens; it is not billed as a fixed per-image model.
 
 For `gpt-image-2` image generation, supported public parameters are `prompt`, `n`, `size`, `quality`, `response_format`, `async`, `background`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. Omit `size` or `quality` to let LemonData use `auto`; custom `size` values must use the flexible `WIDTHxHEIGHT` contract documented below.
+
+Compatibility note: if `input_fidelity` is sent with `gpt-image-2`, LemonData removes it before forwarding because GPT Image 2 already handles image inputs at high fidelity.
 
 ### Model behavior notes
 
@@ -4340,9 +4371,9 @@ For Google image families, prefer `aspect_ratio` and only send `resolution` when
 
 ### Async Task Response
 
-Set `async: true` with `gpt-image-2` to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+Set `async: true` with `gpt-image-2` or official FLUX/BFL image models to create a task instead of waiting for the final image in the create request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
 
-Async image tasks return final image URLs. If you need raw `b64_json` image data, use the default synchronous request instead.
+Async image tasks return final image URLs only. If you need raw `b64_json` image data, use a synchronous request.
 
 Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
 
@@ -4425,17 +4456,29 @@ The route supports both:
 - the classic `multipart/form-data` DALL-E style upload flow documented below
 - JSON requests that provide `image_url`, `image_urls`, or official `images` references for supported image-to-image families
 
-> Note: `gpt-image-2` is supported on this endpoint. Send multipart `image` uploads, JSON `image_url`, JSON `image_urls`, or the official JSON `images` array with `image_url` or `file_id` references; GPT Image edits accept up to 16 source images. `file_id` values must be created through LemonData `/v1/files` with `purpose=user_data` or `purpose=vision` so the gateway can bind them to the same upstream image-edit channel. Optional parameters are `mask`, `n`, `size`, `quality`, `response_format`, `output_format`, `output_compression` or `compression`, `moderation`, `partial_images`, and `user`. `background` remains generation-only and is not part of the current `gpt-image-2` image-edit public contract. Billing follows the upstream usage token details, including image input tokens and any image output tokens added for partial images.
+> Note: `gpt-image-2` is supported here. It accepts multipart `image` uploads, JSON `image_url` / `image_urls`, and official `images[]` references (`image_url` or `file_id`), with up to 16 source images. Create `file_id` values through `/v1/files` first. Set `async: true` to return a task first; official FLUX/BFL edit models also use the same task polling flow.
+
+Compatibility note: if `input_fidelity` is sent with `gpt-image-2`, LemonData removes it before forwarding because GPT Image 2 already handles image inputs at high fidelity.
 
 ## Request Body
 
 **Synchronous request timeout:** Some routed image providers return the final image inline and wait for generation to finish. High-resolution or high-quality requests can take close to a minute or longer, so set your HTTP client timeout to at least `120s`. If the create response includes `status: "pending"`, `task_id`, or `poll_url`, follow the returned `poll_url` instead.
 
+Remote image URLs: when the routed provider requires multipart input, LemonData fetches JSON `image_url`, `image_urls`, or `images[].image_url` and forwards the bytes as multipart `image` parts. URLs must be public `http`/`https`, without embedded credentials or fragments, and must not resolve to localhost, private, or reserved IP ranges; each redirect is checked again. The fetched payload must be a real PNG, JPEG, or WebP image. Limits are `50MB` per image, `200MB` total for URL-fetched images in one request, `10s` fetch timeout, and up to `3` redirects.
+
 ## Response
+
+### Async Task Response
+
+Set `async: true` with `gpt-image-2` or official FLUX/BFL edit models to create a task instead of waiting for the edited image in the request. The response includes `status: "pending"`, `task_id`, and `poll_url`. Poll `/v1/tasks/{task_id}` until the task reaches `completed` or `failed`.
+
+Async edit tasks return final image URLs only. If you need raw `b64_json` image data, use a synchronous request.
+
+Billing may reserve the estimated amount when the task is created. Completed tasks are billed by actual usage, and failed or timed-out tasks are released or refunded.
 
 ## Notes
 
-> Note: Image edits are only available with DALL-E 2. The image must have transparent areas indicating where the edit should be applied, or you can provide a separate mask image.
+> Note: Remote image fetch failures are returned as input errors before the upstream request is sent. Unreachable URLs, timeouts, 403/404 responses, private/internal hosts, credentials or fragments in the URL, non-image content, unsupported formats, and size-limit violations return `400` or `413` and identify the `image_url` / `image_urls[n]` input. For private or header-protected assets, upload multipart `image` files directly or create `/v1/files` references.
 
 ---
 
@@ -5307,13 +5350,13 @@ Returns a stream of JSON objects, each containing a partial response.
 
 ### Management API
 
-> Manage organization API keys and retrieve key-level usage and billing with a management token.
+> Manage organization balance, API keys, and key-level usage and billing with a management token.
 
 URL: https://docs.lemondata.cc/api-reference/management/introduction
 
 ## Overview
 
-The Management API lets you manage organization API keys and retrieve usage and billing for a specific key without using a standard inference API key.
+The Management API lets you retrieve organization balance totals, manage organization API keys, and retrieve usage and billing for a specific key without using a standard inference API key.
 
 Use a management token from your Dashboard **Settings** page:
 
@@ -5327,6 +5370,7 @@ Authorization: Bearer mt-your-management-token
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/v1/management/balance` | GET | Retrieve current organization balance totals |
 | `/v1/management/api-keys` | GET | List user-managed API keys in the current organization |
 | `/v1/management/api-keys` | POST | Create a new user API key |
 | `/v1/management/api-keys/{keyId}` | PATCH | Update name, usage limit, allowed models, expiry, or status |
@@ -5402,11 +5446,35 @@ Start by listing the API keys available to the current management token:
 
 ## Next Steps
 
+- [Get Organization Balance](/api-reference/management/get-balance)
 - [List API Keys](/api-reference/management/list-api-keys)
 - [Create API Key](/api-reference/management/create-api-key)
 - [Update API Key](/api-reference/management/update-api-key)
 - [Get API Key Usage](/api-reference/management/get-api-key-usage)
 - [Get API Key Billing](/api-reference/management/get-api-key-billing)
+
+---
+
+### Get Organization Balance
+
+> Returns current organization balance totals for the management token.
+
+URL: https://docs.lemondata.cc/api-reference/management/get-balance
+
+## Overview
+
+This endpoint returns the current balance totals for the organization associated with the management token. It uses the same organization balance source of truth as billing and settlement.
+
+## Notes
+
+- Monetary truth fields are returned in USD: `balance`, `total_recharge`, and `total_used`.
+- RMB display companions are returned as `balance_cny`, `total_recharge_cny`, and `total_used_cny`.
+- `exchange_rate` is the USD→CNY rate used for every `*_cny` value in the response.
+- `preferred_currency` reflects the organization dashboard display preference; it does not change the USD truth fields.
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema.
 
 ---
 
@@ -6338,6 +6406,8 @@ websocket_connect_timeout_ms = 15000
 responses_websockets = true
 responses_websockets_v2 = true
 ```
+
+This WebSocket mode is a Responses-over-WebSocket bridge for Codex clients. It accepts `response.create` and `response.cancel`; it is not the OpenAI Realtime API and does not accept `session.update`, `conversation.item.*`, `input_audio_buffer.*`, binary audio, or nested Realtime `response.create.response` envelopes.
 
 > Note: If the config file doesn't exist, run `codex` once to generate it, then edit the file. Restart Codex completely after changing `config.toml` so the new provider settings are reloaded.
 
