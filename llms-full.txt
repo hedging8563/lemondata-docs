@@ -1,8 +1,8 @@
 # LemonData - Full Documentation
 
-> Unified AI API Gateway - Access 300+ AI models through a single API
+> Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-05-12
+Generated: 2026-05-13
 Source: https://docs.lemondata.cc
 
 ---
@@ -15,13 +15,13 @@ Source: https://docs.lemondata.cc
 
 ### Introduction
 
-> Access 300+ AI models through a unified API
+> Access hundreds of AI models through a unified API
 
 URL: https://docs.lemondata.cc/introduction
 
 ## What Is LemonData?
 
-LemonData is an AI API aggregation platform that gives you unified access to **300+ AI models** from providers such as OpenAI, Anthropic, Google, DeepSeek, Moonshot, MiniMax, and more.
+LemonData is an AI API aggregation platform that gives you unified access to **hundreds of AI models** from providers such as OpenAI, Anthropic, Google, DeepSeek, Moonshot, MiniMax, and more.
 
 
 
@@ -117,7 +117,7 @@ curl https://api.lemondata.cc/v1/chat/completions \
 
 ## Try Different Models
 
-LemonData supports 300+ models. Change only the `model` field:
+LemonData supports hundreds of models. Change only the `model` field:
 
 ```python
 response = client.chat.completions.create(model="gpt-5.4", messages=[{"role": "user", "content": "Hello"}])
@@ -1258,7 +1258,7 @@ Yes! When using your own API keys (BYOK), provider caching works the same way. T
 
 URL: https://docs.lemondata.cc/integrations/coding-agent-skill
 
-> Note: This skill teaches your coding agent how to integrate LemonData's **300+ AI APIs** just by describing what you need. It is packaged as one shared agent-first skill and works with any coding agent that supports skill or rules files.
+> Note: This skill teaches your coding agent how to integrate LemonData's **hundreds of AI APIs** just by describing what you need. It is packaged as one shared agent-first skill and works with any coding agent that supports skill or rules files.
 
 The API is **[Agent-First](/guides/agent-first-api)** — even if the agent guesses a model name wrong, the error response tells it exactly how to fix it.
 
@@ -1315,7 +1315,7 @@ Navigate to [Dashboard → API Keys](https://lemondata.cc/dashboard/api) and cre
 
 Your key starts with `sk-...` — save it securely
 
-> Tip: You don't need to configure the API Key in advance. When you use the skill, the agent will ask for your key and include it in the generated code.
+> Tip: You do not need to paste an API key into prompts or source files. The skill should ask which environment variable to use, then generate code that reads the key from that environment.
 
 ## Examples
 
@@ -1328,10 +1328,11 @@ I want to use GPT-4 in my Python project
 
 **The agent generates:**
 ```python
+import os
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-api-key",
+    api_key=os.environ["LEMONDATA_API_KEY"],
     base_url="https://api.lemondata.cc/v1"
 )
 
@@ -1341,6 +1342,13 @@ response = client.chat.completions.create(
 )
 
 print(response.choices[0].message.content)
+```
+
+Run it with:
+
+```bash
+export LEMONDATA_API_KEY="sk-your-api-key"
+python app.py
 ```
 
 If the agent guesses a wrong model name (e.g. `gpt5`), the API returns:
@@ -1386,17 +1394,18 @@ Every error response includes structured hints that any coding agent can parse. 
 | Model unavailable | `alternatives` + `retry_after` | Switches to available model |
 | Rate limited | `retry_after` (exact seconds) | Waits and retries |
 | Context too long | `suggestions` with larger models | Switches to bigger context model |
+| Non-chat request contract mismatch | `supported_operations`, `supported_parameters`, `request_endpoint`, `recommended_request` | Rebuilds the request from the public model contract |
 
 ### Native Endpoint Optimization
 
-When you call `/v1/chat/completions` with a Claude or Gemini model, the API returns optimization headers:
+When you call `/v1/chat/completions` with a Claude or Gemini model, a successful response may include optimization headers:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance.
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-The agent automatically switches to the native endpoint for better performance (no format conversion, extended thinking, prompt caching).
+Treat these headers as routing hints, not a forced automatic switch. Claude-native calls use `/v1/messages`; Gemini-native calls should follow the endpoint advertised by `X-LemonData-Native-Endpoint`, commonly `/v1beta/gemini`.
 
 ### Model Discovery
 
@@ -1410,6 +1419,13 @@ curl https://api.lemondata.cc/llms.txt
 curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
 curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
 
+# Ranked non-chat shortlist
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?recommended_for=translation" -H "Authorization: Bearer sk-KEY"
+
+# Read the public contract for one model before retrying a non-chat request
+curl "https://api.lemondata.cc/v1/models/gpt-image-2" -H "Authorization: Bearer sk-KEY"
+
 # Filter by capability
 curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
 ```
@@ -1419,8 +1435,8 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
 | Type | Examples |
 |------|----------|
 | Chat | GPT-5.4, Claude, Gemini, DeepSeek |
-| Image Generation | Midjourney, Flux, Stable Diffusion |
-| Video Generation | Sora, Runway, Kling, Luma AI |
+| Image Generation | GPT Image, Flux, Stable Diffusion, Gemini image models |
+| Video Generation | Sora, Kling, Veo, Seedance |
 | Music Generation | Suno |
 | 3D Models | Tripo3D |
 | Audio | Text-to-Speech, Speech-to-Text |
@@ -3707,8 +3723,9 @@ When an entry accumulates enough negative feedback, LemonData can automatically 
 ## Notes
 
 - Authentication requires a standard inference API key.
+- `cache_entry_id` must be a cache-hit request/cache entry identifier owned by the API key's organization. Arbitrary identifiers return `404`, and identifiers owned by another organization return `403`.
 - `feedback_type` accepts `wrong_answer`, `outdated`, `irrelevant`, or `other`.
-- `request_id` is optional and helps tie feedback back to the original request log.
+- `request_id` is optional; when provided, it must match `cache_entry_id`.
 - `description` is optional free-form context for operators and audits.
 
 ## Request / Response
@@ -3734,7 +3751,7 @@ It is useful for debugging cache quality, support workflows, and reconciliation 
 ## Notes
 
 - Authentication requires a standard inference API key.
-- `entryId` is the cache entry identifier returned or logged by the cached request flow.
+- `entryId` must be a cache-hit request/cache entry identifier owned by the API key's organization.
 - The endpoint returns aggregate counts only; it does not expose raw feedback submissions.
 - `at_risk` indicates whether the entry is approaching invalidation thresholds.
 
@@ -3782,7 +3799,7 @@ curl -X POST "https://api.lemondata.cc/v1/chat/completions" \
 
 | Type | Effect |
 |------|--------|
-| `no_cache` | Skip cache lookup, always get fresh response |
+| `no_cache` | Skip cache lookup and storage; always get a fresh response |
 | `no_store` | Don't store this response in cache |
 | `response_only` | Only use exact match cache (skip semantic) |
 | `semantic_only` | Only use semantic cache (skip exact match) |
@@ -3791,12 +3808,14 @@ curl -X POST "https://api.lemondata.cc/v1/chat/completions" \
 
 If you receive an incorrect cached response, you can report it:
 
+Use the cache-hit request/cache entry identifier from your own organization; arbitrary identifiers are rejected.
+
 ```bash
 curl -X POST "https://api.lemondata.cc/v1/cache/feedback" \
   -H "Authorization: Bearer sk-your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "cache_entry_id": "abc123",
+    "cache_entry_id": "req_1234567890",
     "feedback_type": "wrong_answer",
     "description": "Response was outdated"
   }'
@@ -4093,6 +4112,8 @@ This endpoint is part of LemonData's OpenAI-compatible Batch API. Batch jobs use
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
 
+## Example
+
 ## Request / Response
 
 Use the interactive OpenAPI panel above for the exact schema.
@@ -4142,6 +4163,8 @@ When the request opts into Anthropic Files compatibility mode, the same route ca
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
 
+## Example
+
 ## Request / Response
 
 Use the interactive OpenAPI panel above for the exact schema.
@@ -4172,6 +4195,8 @@ When the request opts into Anthropic Files compatibility mode, the same route ca
 - `completion_window` is currently `24h`.
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
+
+## Example
 
 ## Request / Response
 
@@ -4204,6 +4229,8 @@ When the request opts into Anthropic Files compatibility mode, the same route ca
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
 
+## Example
+
 ## Request / Response
 
 Use the interactive OpenAPI panel above for the exact schema.
@@ -4232,6 +4259,8 @@ This endpoint is part of LemonData's OpenAI-compatible Batch API. Batch jobs use
 - `completion_window` is currently `24h`.
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
+
+## Example
 
 ## Request / Response
 
@@ -4262,6 +4291,8 @@ This endpoint is part of LemonData's OpenAI-compatible Batch API. Batch jobs use
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
 
+## Example
+
 ## Request / Response
 
 Use the interactive OpenAPI panel above for the exact schema.
@@ -4291,6 +4322,8 @@ This endpoint is part of LemonData's OpenAI-compatible Batch API. Batch jobs use
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
 
+## Example
+
 ## Request / Response
 
 Use the interactive OpenAPI panel above for the exact schema.
@@ -4319,6 +4352,8 @@ This endpoint is part of LemonData's OpenAI-compatible Batch API. Batch jobs use
 - `completion_window` is currently `24h`.
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
+
+## Example
 
 ## Request / Response
 
@@ -5031,11 +5066,6 @@ If the task no longer exists, has expired, or cannot be resolved through the pub
 
 ## Examples
 
-```bash cURL
-curl "https://api.lemondata.cc/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
-  -H "Authorization: Bearer sk-your-api-key"
-```
-
 ```python Python
 import requests
 
@@ -5080,11 +5110,6 @@ Cancellation is currently supported for queued Volcengine Seedance video tasks u
 `400 unsupported_task_cancel` means the task type, provider, or model does not support cancellation. `409 task_not_cancellable` means the task is already processing, terminal, or otherwise no longer cancellable. `403` means the API key cannot access the task.
 
 ## Example
-
-```bash cURL
-curl -X DELETE "https://api.lemondata.cc/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
-  -H "Authorization: Bearer sk-your-api-key"
-```
 
 ```json Response
 {
@@ -5442,7 +5467,9 @@ Responses expose public billing and reporting fields only. Internal routing deta
 
 ## Quick Example
 
-Start by listing the API keys available to the current management token:
+First check the current organization balance with the management token:
+
+Then list the API keys available to the same management token:
 
 ## Next Steps
 
@@ -5472,6 +5499,8 @@ This endpoint returns the current balance totals for the organization associated
 - `exchange_rate` is the USD→CNY rate used for every `*_cny` value in the response.
 - `preferred_currency` reflects the organization dashboard display preference; it does not change the USD truth fields.
 
+## Example
+
 ## Request / Response
 
 Use the interactive OpenAPI panel above for the exact schema.
@@ -5493,6 +5522,8 @@ Returns user API keys in the organization associated with the current management
 - System-managed keys such as Playground and Claw keys are excluded.
 - Monetary response fields are returned in both USD and RMB display form: `limit_amount` / `limit_amount_cny`, `used_amount` / `used_amount_cny`.
 - `exchange_rate` indicates the USD→CNY rate used for the RMB display fields.
+
+## Example
 
 ## Request / Response
 
@@ -5631,6 +5662,8 @@ This endpoint returns consumption-only billing aggregates for the selected API k
 - Recharge, invoices, and other organization-level financial records are intentionally excluded.
 - Monetary response fields remain available in USD and now also include RMB display companions such as `total_cost_cny` and per-breakdown `cost_cny`.
 - `api_key.exchange_rate` is the USD→CNY rate used for all `*_cny` values in that response.
+
+## Example
 
 ## Request / Response
 
@@ -6785,7 +6818,7 @@ URL: https://docs.lemondata.cc/integrations/opencode
 
 **Support Confidence**: Supported path
 
-OpenCode is an open-source AI coding assistant that runs in your terminal. It supports multiple LLM providers and can be configured to use LemonData's API for access to 300+ models.
+OpenCode is an open-source AI coding assistant that runs in your terminal. It supports multiple LLM providers and can be configured to use LemonData's API for access to hundreds of models.
 
 ## Installation
 

@@ -4,7 +4,7 @@ description: "Agent-First 오류 복구와 함께, 모든 코딩 에이전트용
 ---
 
 <Note>
-이 스킬은 코딩 에이전트에게 필요한 내용을 설명하는 것만으로 LemonData의 **300개 이상의 AI API**를 통합하는 방법을 알려줍니다. 하나의 공유 Agent-First 스킬로 패키징되어 있으며, 스킬 또는 rules 파일을 지원하는 모든 코딩 에이전트에서 작동합니다.
+이 스킬은 코딩 에이전트에게 필요한 내용을 설명하는 것만으로 LemonData의 **수백 개의 AI API**를 통합하는 방법을 알려줍니다. 하나의 공유 Agent-First 스킬로 패키징되어 있으며, 스킬 또는 rules 파일을 지원하는 모든 코딩 에이전트에서 작동합니다.
 
 이 API는 **[Agent-First](/guides/agent-first-api)** 입니다 — 에이전트가 모델 이름을 잘못 추측하더라도, 오류 응답이 이를 정확히 어떻게 수정해야 하는지 알려줍니다.
 </Note>
@@ -71,7 +71,7 @@ npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata
 </Steps>
 
 <Tip>
-API Key를 미리 설정할 필요는 없습니다. skill을 사용할 때 에이전트가 key를 요청하고 생성된 코드에 이를 포함합니다.
+API key를 프롬프트나 소스 파일에 직접 붙여넣을 필요는 없습니다. 이 스킬은 사용할 환경 변수를 확인한 뒤 그 환경 변수에서 key를 읽는 코드를 생성해야 합니다.
 </Tip>
 
 ## 예시
@@ -85,10 +85,11 @@ Python 프로젝트에서 GPT-4를 사용하고 싶어요
 
 **에이전트가 생성하는 내용:**
 ```python
+import os
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-api-key",
+    api_key=os.environ["LEMONDATA_API_KEY"],
     base_url="https://api.lemondata.cc/v1"
 )
 
@@ -98,6 +99,13 @@ response = client.chat.completions.create(
 )
 
 print(response.choices[0].message.content)
+```
+
+실행 방법:
+
+```bash
+export LEMONDATA_API_KEY="sk-your-api-key"
+python app.py
 ```
 
 에이전트가 잘못된 모델 이름(예: `gpt5`)을 추측하면, API는 다음을 반환합니다:
@@ -143,6 +151,7 @@ Integrate speech-to-text in my app
 | 모델 사용 불가 | `alternatives` + `retry_after` | 사용 가능한 모델로 전환 |
 | Rate limit 초과 | `retry_after` (정확한 초 단위) | 대기 후 재시도 |
 | Context가 너무 김 | 더 큰 모델이 포함된 `suggestions` | 더 큰 context 모델로 전환 |
+| Non-chat 요청 계약 불일치 | `supported_operations`, `supported_parameters`, `request_endpoint`, `recommended_request` | 공개 모델 계약을 기준으로 요청을 다시 구성 |
 
 ### 네이티브 엔드포인트 최적화
 
@@ -153,7 +162,7 @@ X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/mess
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-에이전트는 더 나은 성능을 위해 자동으로 네이티브 엔드포인트로 전환합니다 (형식 변환 없음, 확장된 thinking, prompt caching).
+이 header들은 강제 자동 전환이 아니라 라우팅 힌트로 취급하세요. Claude 네이티브 호출은 `/v1/messages`를 사용합니다. Gemini 네이티브 호출은 `X-LemonData-Native-Endpoint`가 알려주는 endpoint를 따라야 하며, 일반적으로 `/v1beta/gemini`입니다.
 
 ### 모델 검색
 
@@ -167,6 +176,13 @@ curl https://api.lemondata.cc/llms.txt
 curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
 curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
 
+# Non-chat 시나리오 추천 목록
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?recommended_for=translation" -H "Authorization: Bearer sk-KEY"
+
+# Non-chat 요청을 재시도하기 전에 단일 모델의 공개 계약 확인
+curl "https://api.lemondata.cc/v1/models/gpt-image-2" -H "Authorization: Bearer sk-KEY"
+
 # Filter by capability
 curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
 ```
@@ -176,8 +192,8 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
 | 유형 | 예시 |
 |------|----------|
 | Chat | GPT-5.4, Claude, Gemini, DeepSeek |
-| 이미지 생성 | Midjourney, Flux, Stable Diffusion |
-| 비디오 생성 | Sora, Runway, Kling, Luma AI |
+| 이미지 생성 | GPT Image, Flux, Stable Diffusion, Gemini 이미지 모델 |
+| 비디오 생성 | Sora, Kling, Veo, Seedance |
 | 음악 생성 | Suno |
 | 3D 모델 | Tripo3D |
 | 오디오 | Text-to-Speech, Speech-to-Text |
@@ -237,7 +253,7 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
     전체 API reference
   </Card>
   <Card title="모델" icon="sparkles" href="https://lemondata.cc/ko/models">
-    사용 가능한 300개 이상의 모든 모델 둘러보기
+    사용 가능한 수백 개의 모델 둘러보기
   </Card>
   <Card title="llms.txt" icon="file-lines" href="https://api.lemondata.cc/llms.txt">
     AI 에이전트를 위한 machine-readable API overview

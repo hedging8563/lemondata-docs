@@ -4,7 +4,7 @@ description: "Cài đặt kỹ năng tích hợp API LemonData dùng chung cho b
 ---
 
 <Note>
-Kỹ năng này hướng dẫn coding agent của bạn cách tích hợp **300+ AI APIs** của LemonData chỉ bằng cách mô tả những gì bạn cần. Nó được đóng gói thành một kỹ năng dùng chung agent-first và hoạt động với bất kỳ coding agent nào hỗ trợ file skill hoặc rules.
+Kỹ năng này hướng dẫn coding agent của bạn cách tích hợp **hàng trăm API AI** của LemonData chỉ bằng cách mô tả những gì bạn cần. Nó được đóng gói thành một kỹ năng dùng chung agent-first và hoạt động với bất kỳ coding agent nào hỗ trợ file skill hoặc rules.
 
 API là **[Agent-First](/guides/agent-first-api)** — ngay cả khi agent đoán sai tên model, phản hồi lỗi sẽ cho biết chính xác cách khắc phục.
 </Note>
@@ -62,7 +62,7 @@ Nếu bạn thấy `lemondata-api-integration`, việc cài đặt đã thành c
 </Steps>
 
 <Tip>
-Bạn không cần cấu hình API Key trước. Khi bạn sử dụng kỹ năng này, agent sẽ yêu cầu key của bạn và đưa nó vào code được tạo ra.
+Bạn không cần dán API key vào prompt hoặc mã nguồn. Skill nên hỏi cần dùng biến môi trường nào, rồi tạo code đọc key từ biến đó.
 </Tip>
 
 ## Ví dụ
@@ -76,10 +76,11 @@ Tôi muốn sử dụng GPT-4 trong dự án Python của mình
 
 **Agent tạo ra:**
 ```python
+import os
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-api-key",
+    api_key=os.environ["LEMONDATA_API_KEY"],
     base_url="https://api.lemondata.cc/v1"
 )
 
@@ -89,6 +90,13 @@ response = client.chat.completions.create(
 )
 
 print(response.choices[0].message.content)
+```
+
+Chạy bằng:
+
+```bash
+export LEMONDATA_API_KEY="sk-your-api-key"
+python app.py
 ```
 
 Nếu agent đoán sai tên model (ví dụ: `gpt5`), API sẽ trả về:
@@ -134,6 +142,7 @@ Mỗi phản hồi lỗi đều bao gồm các gợi ý có cấu trúc mà bấ
 | Model không khả dụng | `alternatives` + `retry_after` | Chuyển sang model khả dụng |
 | Bị giới hạn tốc độ | `retry_after` (số giây chính xác) | Chờ và thử lại |
 | Context quá dài | `suggestions` với các model lớn hơn | Chuyển sang model có context lớn hơn |
+| Không khớp hợp đồng cho request không phải chat | `supported_operations`, `supported_parameters`, `request_endpoint`, `recommended_request` | Dựng lại request từ hợp đồng công khai của model |
 
 ### Tối ưu hóa điểm cuối native
 
@@ -144,7 +153,7 @@ X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/mess
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-Agent tự động chuyển sang điểm cuối native để có hiệu năng tốt hơn (không chuyển đổi định dạng, extended thinking, prompt caching).
+Hãy xem các header này là gợi ý định tuyến, không phải một chuyển đổi tự động bắt buộc. Lệnh gọi Claude native dùng `/v1/messages`; lệnh gọi Gemini native nên theo endpoint do `X-LemonData-Native-Endpoint` trả về, thường là `/v1beta/gemini`.
 
 ### Khám phá model
 
@@ -158,6 +167,13 @@ curl https://api.lemondata.cc/llms.txt
 curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
 curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
 
+# Danh sách đề xuất cho kịch bản không phải chat
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?recommended_for=translation" -H "Authorization: Bearer sk-KEY"
+
+# Đọc hợp đồng công khai của một model trước khi thử lại request không phải chat
+curl "https://api.lemondata.cc/v1/models/gpt-image-2" -H "Authorization: Bearer sk-KEY"
+
 # Filter by capability
 curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
 ```
@@ -167,8 +183,8 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
 | Loại | Ví dụ |
 |------|----------|
 | Chat | GPT-5.4, Claude, Gemini, DeepSeek |
-| Tạo ảnh | Midjourney, Flux, Stable Diffusion |
-| Tạo video | Sora, Runway, Kling, Luma AI |
+| Tạo ảnh | GPT Image, Flux, Stable Diffusion, model ảnh Gemini |
+| Tạo video | Sora, Kling, Veo, Seedance |
 | Tạo nhạc | Suno |
 | Mô hình 3D | Tripo3D |
 | Audio | Text-to-Speech, Speech-to-Text |
@@ -228,7 +244,7 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
     Tài liệu tham chiếu API đầy đủ
   </Card>
   <Card title="Models" icon="sparkles" href="https://lemondata.cc/vi/models">
-    Duyệt tất cả 300+ model khả dụng
+    Duyệt hàng trăm model khả dụng
   </Card>
   <Card title="llms.txt" icon="file-lines" href="https://api.lemondata.cc/llms.txt">
     Tổng quan API machine-readable cho AI agents

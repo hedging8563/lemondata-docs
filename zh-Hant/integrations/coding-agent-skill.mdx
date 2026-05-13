@@ -4,7 +4,7 @@ description: "為任何程式設計代理工具安裝共用的 LemonData API 整
 ---
 
 <Note>
-此技能會教你的程式設計代理工具只需描述你的需求，即可整合 LemonData 的 **300+ AI APIs**。它被封裝為一個共用的 agent-first 技能，並可搭配任何支援技能或規則檔案的程式設計代理工具使用。
+此技能會教你的程式設計代理工具只需描述你的需求，即可整合 LemonData 的 **數百個 AI API**。它被封裝為一個共用的 agent-first 技能，並可搭配任何支援技能或規則檔案的程式設計代理工具使用。
 
 此 API 為 **[Agent-First](/guides/agent-first-api)** —— 即使 agent 猜錯 model 名稱，錯誤回應也會明確告訴它該如何修正。
 </Note>
@@ -62,7 +62,7 @@ npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata
 </Steps>
 
 <Tip>
-你不需要事先設定 API Key。當你使用此技能時，agent 會向你索取 key，並將其包含在產生的程式碼中。
+你不需要把 API Key 貼進提示或原始碼。使用此技能時，agent 應詢問要讀取哪個環境變數，並產生從該環境變數讀取 key 的程式碼。
 </Tip>
 
 ## 範例
@@ -76,10 +76,11 @@ npx skills add https://github.com/hedging8563/lemondata-skills --skill lemondata
 
 **agent 會產生：**
 ```python
+import os
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-api-key",
+    api_key=os.environ["LEMONDATA_API_KEY"],
     base_url="https://api.lemondata.cc/v1"
 )
 
@@ -89,6 +90,13 @@ response = client.chat.completions.create(
 )
 
 print(response.choices[0].message.content)
+```
+
+執行方式：
+
+```bash
+export LEMONDATA_API_KEY="sk-your-api-key"
+python app.py
 ```
 
 如果 agent 猜錯 model 名稱（例如 `gpt5`），API 會回傳：
@@ -134,6 +142,7 @@ agent 會產生使用正確 `/v1/audio/transcriptions` 端點與音訊檔案處�
 | Model 無法使用 | `alternatives` + `retry_after` | 切換到可用的 model |
 | 達到 rate limit | `retry_after`（精確秒數） | 等待後重試 |
 | Context 過長 | 具有更大 model 的 `suggestions` | 切換到更大 context 的 model |
+| 非聊天請求契約不匹配 | `supported_operations`, `supported_parameters`, `request_endpoint`, `recommended_request` | 依公開模型契約重建請求 |
 
 ### 原生 Endpoint 最佳化
 
@@ -144,7 +153,7 @@ X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/mess
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-agent 會自動切換到原生端點以獲得更佳效能（無需格式轉換、支援 extended thinking、prompt caching）。
+請把這些 header 視為路由提示，而不是強制自動切換。Claude 原生呼叫使用 `/v1/messages`；Gemini 原生呼叫應遵循 `X-LemonData-Native-Endpoint` 回傳的端點，通常是 `/v1beta/gemini`。
 
 ### Model 探索
 
@@ -158,6 +167,13 @@ curl https://api.lemondata.cc/llms.txt
 curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
 curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
 
+# 非聊天場景推薦清單
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?recommended_for=translation" -H "Authorization: Bearer sk-KEY"
+
+# 重試非聊天請求前，先讀取單一模型的公開契約
+curl "https://api.lemondata.cc/v1/models/gpt-image-2" -H "Authorization: Bearer sk-KEY"
+
 # Filter by capability
 curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
 ```
@@ -167,8 +183,8 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
 | 類型 | 範例 |
 |------|----------|
 | Chat | GPT-5.4, Claude, Gemini, DeepSeek |
-| 圖像生成 | Midjourney, Flux, Stable Diffusion |
-| 影片生成 | Sora, Runway, Kling, Luma AI |
+| 圖像生成 | GPT Image, Flux, Stable Diffusion, Gemini 圖像模型 |
+| 影片生成 | Sora, Kling, Veo, Seedance |
 | 音樂生成 | Suno |
 | 3D Models | Tripo3D |
 | Audio | Text-to-Speech, Speech-to-Text |
@@ -228,7 +244,7 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
     完整的 API 參考
   </Card>
   <Card title="Models" icon="sparkles" href="https://lemondata.cc/zh-TW/models">
-    瀏覽全部 300+ 可用 models
+    瀏覽數百個可用模型
   </Card>
   <Card title="llms.txt" icon="file-lines" href="https://api.lemondata.cc/llms.txt">
     提供給 AI agents 的 machine-readable API overview

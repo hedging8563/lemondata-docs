@@ -4,7 +4,7 @@ description: "Instal skill integrasi API LemonData bersama untuk agen coding apa
 ---
 
 <Note>
-Skill ini mengajarkan agen coding Anda cara mengintegrasikan **300+ API AI** dari LemonData hanya dengan menjelaskan apa yang Anda butuhkan. Skill ini dikemas sebagai satu skill bersama Agent-First dan bekerja dengan agen coding apa pun yang mendukung file skill atau rules.
+Skill ini mengajarkan agen coding Anda cara mengintegrasikan **ratusan API AI** dari LemonData hanya dengan menjelaskan apa yang Anda butuhkan. Skill ini dikemas sebagai satu skill bersama Agent-First dan bekerja dengan agen coding apa pun yang mendukung file skill atau rules.
 
 API ini bersifat **[Agent-First](/guides/agent-first-api)** — bahkan jika agen menebak nama model dengan salah, respons error akan memberi tahu secara tepat cara memperbaikinya.
 </Note>
@@ -71,7 +71,7 @@ Jika Anda melihat `lemondata-api-integration`, instalasi berhasil.
 </Steps>
 
 <Tip>
-Anda tidak perlu mengonfigurasi API Key terlebih dahulu. Saat Anda menggunakan skill ini, agen akan meminta key Anda dan menyertakannya dalam kode yang dihasilkan.
+Anda tidak perlu menempelkan API key ke prompt atau file sumber. Skill sebaiknya menanyakan variabel environment yang akan dipakai, lalu menghasilkan kode yang membaca key dari variabel itu.
 </Tip>
 
 ## Contoh
@@ -85,10 +85,11 @@ Saya ingin menggunakan GPT-4 di project Python saya
 
 **Agen menghasilkan:**
 ```python
+import os
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-api-key",
+    api_key=os.environ["LEMONDATA_API_KEY"],
     base_url="https://api.lemondata.cc/v1"
 )
 
@@ -98,6 +99,13 @@ response = client.chat.completions.create(
 )
 
 print(response.choices[0].message.content)
+```
+
+Jalankan dengan:
+
+```bash
+export LEMONDATA_API_KEY="sk-your-api-key"
+python app.py
 ```
 
 Jika agen menebak nama model yang salah (mis. `gpt5`), API mengembalikan:
@@ -143,6 +151,7 @@ Setiap respons error menyertakan petunjuk terstruktur yang dapat di-parse oleh a
 | Model tidak tersedia | `alternatives` + `retry_after` | Beralih ke model yang tersedia |
 | Rate limited | `retry_after` (detik yang tepat) | Menunggu lalu mencoba lagi |
 | Context terlalu panjang | `suggestions` dengan model yang lebih besar | Beralih ke model dengan context lebih besar |
+| Kontrak request non-chat tidak cocok | `supported_operations`, `supported_parameters`, `request_endpoint`, `recommended_request` | Membangun ulang request dari kontrak model publik |
 
 ### Optimasi Titik Akhir Native
 
@@ -153,7 +162,7 @@ X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/mess
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-Agen secara otomatis beralih ke titik akhir native untuk performa yang lebih baik (tanpa konversi format, extended thinking, prompt caching).
+Perlakukan header ini sebagai petunjuk routing, bukan perpindahan otomatis yang wajib. Panggilan native Claude menggunakan `/v1/messages`; panggilan native Gemini harus mengikuti endpoint yang diberikan oleh `X-LemonData-Native-Endpoint`, biasanya `/v1beta/gemini`.
 
 ### Penemuan Model
 
@@ -167,6 +176,13 @@ curl https://api.lemondata.cc/llms.txt
 curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
 curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
 
+# Shortlist rekomendasi untuk skenario non-chat
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?recommended_for=translation" -H "Authorization: Bearer sk-KEY"
+
+# Baca kontrak publik satu model sebelum mencoba ulang request non-chat
+curl "https://api.lemondata.cc/v1/models/gpt-image-2" -H "Authorization: Bearer sk-KEY"
+
 # Filter by capability
 curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
 ```
@@ -176,8 +192,8 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
 | Type | Contoh |
 |------|----------|
 | Chat | GPT-5.4, Claude, Gemini, DeepSeek |
-| Pembuatan Gambar | Midjourney, Flux, Stable Diffusion |
-| Pembuatan Video | Sora, Runway, Kling, Luma AI |
+| Pembuatan Gambar | GPT Image, Flux, Stable Diffusion, model gambar Gemini |
+| Pembuatan Video | Sora, Kling, Veo, Seedance |
 | Pembuatan Musik | Suno |
 | Model 3D | Tripo3D |
 | Audio | Text-to-Speech, Speech-to-Text |
@@ -237,7 +253,7 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
     Referensi API lengkap
   </Card>
   <Card title="Model" icon="sparkles" href="https://lemondata.cc/id/models">
-    Jelajahi semua 300+ model yang tersedia
+    Jelajahi ratusan model yang tersedia
   </Card>
   <Card title="llms.txt" icon="file-lines" href="https://api.lemondata.cc/llms.txt">
     Ikhtisar API yang dapat dibaca mesin untuk AI agent

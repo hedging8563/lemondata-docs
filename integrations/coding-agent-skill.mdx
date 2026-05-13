@@ -4,7 +4,7 @@ description: "Install the shared LemonData API integration skill for any coding 
 ---
 
 <Note>
-This skill teaches your coding agent how to integrate LemonData's **300+ AI APIs** just by describing what you need. It is packaged as one shared agent-first skill and works with any coding agent that supports skill or rules files.
+This skill teaches your coding agent how to integrate LemonData's **hundreds of AI APIs** just by describing what you need. It is packaged as one shared agent-first skill and works with any coding agent that supports skill or rules files.
 
 The API is **[Agent-First](/guides/agent-first-api)** — even if the agent guesses a model name wrong, the error response tells it exactly how to fix it.
 </Note>
@@ -62,7 +62,7 @@ If you see `lemondata-api-integration`, the installation was successful.
 </Steps>
 
 <Tip>
-You don't need to configure the API Key in advance. When you use the skill, the agent will ask for your key and include it in the generated code.
+You do not need to paste an API key into prompts or source files. The skill should ask which environment variable to use, then generate code that reads the key from that environment.
 </Tip>
 
 ## Examples
@@ -76,10 +76,11 @@ I want to use GPT-4 in my Python project
 
 **The agent generates:**
 ```python
+import os
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-api-key",
+    api_key=os.environ["LEMONDATA_API_KEY"],
     base_url="https://api.lemondata.cc/v1"
 )
 
@@ -89,6 +90,13 @@ response = client.chat.completions.create(
 )
 
 print(response.choices[0].message.content)
+```
+
+Run it with:
+
+```bash
+export LEMONDATA_API_KEY="sk-your-api-key"
+python app.py
 ```
 
 If the agent guesses a wrong model name (e.g. `gpt5`), the API returns:
@@ -134,17 +142,18 @@ Every error response includes structured hints that any coding agent can parse. 
 | Model unavailable | `alternatives` + `retry_after` | Switches to available model |
 | Rate limited | `retry_after` (exact seconds) | Waits and retries |
 | Context too long | `suggestions` with larger models | Switches to bigger context model |
+| Non-chat request contract mismatch | `supported_operations`, `supported_parameters`, `request_endpoint`, `recommended_request` | Rebuilds the request from the public model contract |
 
 ### Native Endpoint Optimization
 
-When you call `/v1/chat/completions` with a Claude or Gemini model, the API returns optimization headers:
+When you call `/v1/chat/completions` with a Claude or Gemini model, a successful response may include optimization headers:
 
 ```
 X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/messages for better performance.
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-The agent automatically switches to the native endpoint for better performance (no format conversion, extended thinking, prompt caching).
+Treat these headers as routing hints, not a forced automatic switch. Claude-native calls use `/v1/messages`; Gemini-native calls should follow the endpoint advertised by `X-LemonData-Native-Endpoint`, commonly `/v1beta/gemini`.
 
 ### Model Discovery
 
@@ -158,6 +167,13 @@ curl https://api.lemondata.cc/llms.txt
 curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
 curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
 
+# Ranked non-chat shortlist
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?recommended_for=translation" -H "Authorization: Bearer sk-KEY"
+
+# Read the public contract for one model before retrying a non-chat request
+curl "https://api.lemondata.cc/v1/models/gpt-image-2" -H "Authorization: Bearer sk-KEY"
+
 # Filter by capability
 curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
 ```
@@ -167,8 +183,8 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
 | Type | Examples |
 |------|----------|
 | Chat | GPT-5.4, Claude, Gemini, DeepSeek |
-| Image Generation | Midjourney, Flux, Stable Diffusion |
-| Video Generation | Sora, Runway, Kling, Luma AI |
+| Image Generation | GPT Image, Flux, Stable Diffusion, Gemini image models |
+| Video Generation | Sora, Kling, Veo, Seedance |
 | Music Generation | Suno |
 | 3D Models | Tripo3D |
 | Audio | Text-to-Speech, Speech-to-Text |
@@ -228,7 +244,7 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
     Complete API reference
   </Card>
   <Card title="Models" icon="sparkles" href="https://lemondata.cc/en/models">
-    Browse all 300+ available models
+    Browse hundreds of available models
   </Card>
   <Card title="llms.txt" icon="file-lines" href="https://api.lemondata.cc/llms.txt">
     Machine-readable API overview for AI agents

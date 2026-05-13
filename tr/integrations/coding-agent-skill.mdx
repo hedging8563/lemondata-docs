@@ -4,7 +4,7 @@ description: "Agent-First hata kurtarma ile, herhangi bir kodlama ajanı için p
 ---
 
 <Note>
-Bu yetenek, kodlama ajanınıza yalnızca neye ihtiyacınız olduğunu açıklayarak LemonData'nın **300+ AI API'sini** nasıl entegre edeceğini öğretir. Tek bir paylaşılan Agent-First yeteneği olarak paketlenmiştir ve skill veya rules dosyalarını destekleyen herhangi bir kodlama ajanı ile çalışır.
+Bu yetenek, kodlama ajanınıza yalnızca neye ihtiyacınız olduğunu açıklayarak LemonData'nın **yüzlerce AI API'sini** nasıl entegre edeceğini öğretir. Tek bir paylaşılan Agent-First yeteneği olarak paketlenmiştir ve skill veya rules dosyalarını destekleyen herhangi bir kodlama ajanı ile çalışır.
 
 API **[Agent-First](/guides/agent-first-api)** yaklaşımındadır — ajan bir model adını yanlış tahmin etse bile, hata yanıtı bunu tam olarak nasıl düzelteceğini söyler.
 </Note>
@@ -71,7 +71,7 @@ Hangi yetenekler kullanılabilir?
 </Steps>
 
 <Tip>
-API Key'i önceden yapılandırmanız gerekmez. Skill'i kullandığınızda, agent sizden key'inizi isteyecek ve bunu oluşturulan koda dahil edecektir.
+API key değerini promptlara veya kaynak dosyalara yapıştırmanız gerekmez. Yetenek hangi ortam değişkeninin kullanılacağını sormalı ve key değerini o değişkenden okuyan kod üretmelidir.
 </Tip>
 
 ## Örnekler
@@ -85,10 +85,11 @@ Python projemde GPT-4 kullanmak istiyorum
 
 **Ajan şunu üretir:**
 ```python
+import os
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-your-api-key",
+    api_key=os.environ["LEMONDATA_API_KEY"],
     base_url="https://api.lemondata.cc/v1"
 )
 
@@ -98,6 +99,13 @@ response = client.chat.completions.create(
 )
 
 print(response.choices[0].message.content)
+```
+
+Şununla çalıştırın:
+
+```bash
+export LEMONDATA_API_KEY="sk-your-api-key"
+python app.py
 ```
 
 Ajan yanlış bir model adı tahmin ederse (ör. `gpt5`), API şunu döndürür:
@@ -143,6 +151,7 @@ Her hata yanıtı, herhangi bir kodlama ajanının ayrıştırabileceği yapıla
 | Model kullanılamıyor | `alternatives` + `retry_after` | Kullanılabilir modele geçer |
 | Rate limited | `retry_after` (tam saniye) | Bekler ve yeniden dener |
 | Context çok uzun | daha büyük modellere sahip `suggestions` | Daha büyük context modeline geçer |
+| Chat dışı istek sözleşmesi uyuşmazlığı | `supported_operations`, `supported_parameters`, `request_endpoint`, `recommended_request` | İsteği modelin public contract bilgisinden yeniden oluşturur |
 
 ### Native Uç Nokta Optimizasyonu
 
@@ -153,7 +162,7 @@ X-LemonData-Hint: This model supports native Anthropic format. Use POST /v1/mess
 X-LemonData-Native-Endpoint: /v1/messages
 ```
 
-Ajan daha iyi performans için otomatik olarak native uç noktaya geçer (format dönüştürme yok, extended thinking, prompt caching).
+Bu header’ları zorunlu otomatik geçiş değil, yönlendirme ipucu olarak değerlendirin. Claude native çağrıları `/v1/messages` kullanır; Gemini native çağrıları `X-LemonData-Native-Endpoint` tarafından bildirilen endpoint’i, genellikle `/v1beta/gemini` yolunu izlemelidir.
 
 ### Model Keşfi
 
@@ -167,6 +176,13 @@ curl https://api.lemondata.cc/llms.txt
 curl "https://api.lemondata.cc/v1/models?category=chat" -H "Authorization: Bearer sk-KEY"
 curl "https://api.lemondata.cc/v1/models?category=image" -H "Authorization: Bearer sk-KEY"
 
+# Chat dışı senaryolar için önerilen liste
+curl "https://api.lemondata.cc/v1/models?recommended_for=image" -H "Authorization: Bearer sk-KEY"
+curl "https://api.lemondata.cc/v1/models?recommended_for=translation" -H "Authorization: Bearer sk-KEY"
+
+# Chat dışı isteği tekrar denemeden önce bir modelin public contract bilgisini okuyun
+curl "https://api.lemondata.cc/v1/models/gpt-image-2" -H "Authorization: Bearer sk-KEY"
+
 # Filter by capability
 curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer sk-KEY"
 ```
@@ -176,8 +192,8 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
 | Tür | Örnekler |
 |------|----------|
 | Chat | GPT-5.4, Claude, Gemini, DeepSeek |
-| Görsel Oluşturma | Midjourney, Flux, Stable Diffusion |
-| Video Oluşturma | Sora, Runway, Kling, Luma AI |
+| Görsel Oluşturma | GPT Image, Flux, Stable Diffusion, Gemini görsel modelleri |
+| Video Oluşturma | Sora, Kling, Veo, Seedance |
 | Müzik Oluşturma | Suno |
 | 3D Modeller | Tripo3D |
 | Ses | Text-to-Speech, Speech-to-Text |
@@ -237,7 +253,7 @@ curl "https://api.lemondata.cc/v1/models?tag=coding" -H "Authorization: Bearer s
     Tam API referansı
   </Card>
   <Card title="Modeller" icon="sparkles" href="https://lemondata.cc/tr/models">
-    Mevcut 300+ modelin tümüne göz atın
+    Mevcut yüzlerce modeli inceleyin
   </Card>
   <Card title="llms.txt" icon="file-lines" href="https://api.lemondata.cc/llms.txt">
     AI agent'leri için machine-readable API genel görünümü
