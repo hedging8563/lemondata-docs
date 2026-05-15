@@ -53,7 +53,7 @@ Authorization: Bearer mt-your-management-token
 |-------|------|---------------|------|
 | `name` | string | 필수, 기본값 `Default Key`, 길이 `1-50` | 표시 이름이며 서버에서 앞뒤 공백을 제거합니다 |
 | `limitAmount` | number \| null | 최소 `0`, 입력 최대 `1000000` | `null` 또는 생략 = 무제한, `0` = 0 한도. 양수는 저장된 상한으로 정규화되며 USD 환산 기준 `100000` 을 넘지 않습니다 |
-| `limitCurrency` | enum | 기본값 `USD` | 선택 사항: `USD` 또는 `CNY`. `CNY`로 설정하면 `limitAmount` 를 RMB로 해석하고 저장 전에 서버에서 USD로 환산합니다 |
+| `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
 | `models` | string[] | 기본값 `[]` | 선택적 논리 모델 허용 목록 |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` 은 만료 없음 의미 |
 
@@ -64,7 +64,7 @@ Authorization: Bearer mt-your-management-token
 | `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | 길이 `1-50` | 업데이트된 표시 이름 |
 | `limitAmount` | number \| null | 최소 `0`, 입력 최대 `1000000` | `null` = 무제한, `0` = 0 한도. 양수는 저장된 상한으로 정규화되며 USD 환산 기준 `100000` 을 넘지 않습니다 |
-| `limitCurrency` | enum | 기본값 `USD` | 선택 사항: `USD` 또는 `CNY`. `CNY`로 설정하면 `limitAmount` 를 RMB로 해석하고 저장 전에 서버에서 USD로 환산합니다 |
+| `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
 | `models` | string[] | - | 업데이트된 논리 모델 허용 목록 |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` 은 만료 제거 |
 
@@ -72,9 +72,6 @@ PATCH 요청에는 최소 1개 이상의 필드가 포함되어야 합니다.
 
 ## 금액 계약
 
-- 기본적으로 요청의 `limitAmount` 는 USD로 해석됩니다. `limitCurrency: "CNY"` 를 설정하면 RMB 한도를 보낼 수 있고, 서버는 저장 전에 현재 환율로 USD로 변환합니다.
-- 응답의 금액 필드는 원래 USD 값을 유지하면서 `_cny` 접미사가 붙은 RMB 표시값을 함께 제공합니다.
-- `exchange_rate` 는 API 키 메타데이터와 함께 반환되며, 해당 응답의 각 `*_cny` 값에 사용된 USD→CNY 환율입니다.
 
 ## 리포팅 의미
 
@@ -122,10 +119,7 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
       "key_prefix": "sk-abc123...",
       "status": "active",
       "limit_amount": 500.0,
-      "limit_amount_cny": 3600.0,
       "used_amount": 148.25,
-      "used_amount_cny": 1067.4,
-      "exchange_rate": 7.2,
       "models": ["gpt-4o-mini", "claude-3-7-sonnet"],
       "expires_at": "2026-04-30T00:00:00.000Z",
       "last_used_at": "2026-03-27T08:12:45.000Z",

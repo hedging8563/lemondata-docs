@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-05-13
+Generated: 2026-05-15
 Source: https://docs.lemondata.cc
 
 ---
@@ -2170,8 +2170,6 @@ Configure alerts when your balance drops:
 
 ### Payment Methods
 
-- Alipay (支付宝)
-- WeChat Pay (微信支付)
 - Stripe (Visa, Mastercard)
 
 ### Steps
@@ -2192,14 +2190,6 @@ You can set spending limits on individual API keys:
 3. Set **Usage Limit**
 
 When the limit is reached, requests with that key will return `402 Payment Required`.
-
-## Invoices
-
-For business accounts, invoices are available:
-
-1. Go to **Dashboard → Billing**
-2. View transaction history
-3. Download invoices as PDF
 
 ## Questions?
 
@@ -5427,7 +5417,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 |-------|------|------------------|-------|
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` or omitted = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
-| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
+| `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
 | `models` | string[] | default `[]` | Optional logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
@@ -5438,7 +5428,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 | `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | length `1-50` | Updated display name |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` means unlimited, `0` means zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
-| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
+| `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
 | `models` | string[] | - | Updated logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
 
@@ -5446,9 +5436,8 @@ At least one PATCH field must be provided.
 
 ## Monetary Contract
 
-- By default, request-side `limitAmount` is interpreted as USD. Set `limitCurrency: "CNY"` to submit an RMB cap; the server converts it to USD using the current exchange rate before storage.
-- Response-side monetary fields keep the original USD field and add an RMB companion with `_cny`.
-- `exchange_rate` is returned alongside API key metadata and is the USD→CNY rate used for every `*_cny` value in that response.
+- Management API monetary request and response fields are USD-only.
+- `limitCurrency` defaults to `USD`; sending `CNY` returns `400` with `currency_retired`.
 
 ## Reporting Semantics
 
@@ -5494,9 +5483,9 @@ This endpoint returns the current balance totals for the organization associated
 
 ## Notes
 
+- Monetary fields are USD-only. `CNY` inputs are retired and return `400 currency_retired`.
+
 - Monetary truth fields are returned in USD: `balance`, `total_recharge`, and `total_used`.
-- RMB display companions are returned as `balance_cny`, `total_recharge_cny`, and `total_used_cny`.
-- `exchange_rate` is the USD→CNY rate used for every `*_cny` value in the response.
 - `preferred_currency` reflects the organization dashboard display preference; it does not change the USD truth fields.
 
 ## Example
@@ -5519,9 +5508,9 @@ Returns user API keys in the organization associated with the current management
 
 ## Notes
 
+- Monetary fields are USD-only. `CNY` inputs are retired and return `400 currency_retired`.
+
 - System-managed keys such as Playground and Claw keys are excluded.
-- Monetary response fields are returned in both USD and RMB display form: `limit_amount` / `limit_amount_cny`, `used_amount` / `used_amount_cny`.
-- `exchange_rate` indicates the USD→CNY rate used for the RMB display fields.
 
 ## Example
 
@@ -5547,17 +5536,17 @@ Creates a new `type=user` API key in the organization associated with the curren
 |-------|------|------------------|-------|
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` or omitted = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
-| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
+| `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
 | `models` | string[] | default `[]` | Optional logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
 ## Notes
 
+- Monetary fields are USD-only. `CNY` inputs are retired and return `400 currency_retired`.
+
 - The full API key value is shown only once in the response.
 - `models: []` means the key has no additional model restriction beyond organization policy.
 - `limitAmount: 0` creates a key that is valid but cannot spend quota until updated.
-- The response includes `exchange_rate`, plus RMB display companions `limit_amount_cny` and `used_amount_cny`.
-- By default, `limitAmount` is interpreted as USD. Set `limitCurrency: "CNY"` to submit an RMB cap that will be converted to USD using the current exchange rate before storage.
 
 ## Example
 
@@ -5586,16 +5575,16 @@ At least one field must be provided.
 | `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | length `1-50` | Updated display name |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
-| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
+| `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
 | `models` | string[] | - | Updated logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
 
 ## Notes
 
+- Monetary fields are USD-only. `CNY` inputs are retired and return `400 currency_retired`.
+
 - Hard delete is intentionally not supported in Management API v1.
 - `revoked` is terminal for ordinary operational use; create a new key instead of expecting a future un-revoke flow.
-- The response includes `exchange_rate`, plus RMB display companions `limit_amount_cny` and `used_amount_cny`.
-- By default, `limitAmount` is interpreted as USD. Set `limitCurrency: "CNY"` to submit an RMB cap that will be converted to USD using the current exchange rate before storage.
 
 ## Example
 
@@ -5632,12 +5621,12 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 
 ## Notes
 
+- Monetary fields are USD-only. `CNY` inputs are retired and return `400 currency_retired`.
+
 - The response is paginated.
 - The response includes public billing and reporting fields only.
 - Each usage item can include `billing_transaction_id` after the underlying request reaches settled billing state. Use it together with `request_id` for request-level reconciliation.
 - Internal routing and physical channel metadata are intentionally hidden.
-- All monetary response fields remain available in USD and now also include RMB display companions: `cost_cny`, `total_cost_cny`, and `cost_cny` inside every breakdown entry.
-- `api_key.exchange_rate` is the USD→CNY rate used for all `*_cny` values in that response.
 
 ## Example
 
@@ -5659,9 +5648,9 @@ This endpoint returns consumption-only billing aggregates for the selected API k
 
 ## Notes
 
+- Monetary fields are USD-only. `CNY` inputs are retired and return `400 currency_retired`.
+
 - Recharge, invoices, and other organization-level financial records are intentionally excluded.
-- Monetary response fields remain available in USD and now also include RMB display companions such as `total_cost_cny` and per-breakdown `cost_cny`.
-- `api_key.exchange_rate` is the USD→CNY rate used for all `*_cny` values in that response.
 
 ## Example
 

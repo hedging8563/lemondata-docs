@@ -53,7 +53,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 |-------|------|------------------|-------|
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` or omitted = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
-| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
+| `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
 | `models` | string[] | default `[]` | Optional logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
@@ -64,7 +64,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 | `status` | enum | - | `active`, `inactive`, `suspended`, `revoked` |
 | `name` | string | length `1-50` | Updated display name |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` means unlimited, `0` means zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
-| `limitCurrency` | enum | default `USD` | Optional: `USD` or `CNY`. When set to `CNY`, `limitAmount` is treated as RMB and converted to USD server-side before storage |
+| `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
 | `models` | string[] | - | Updated logical model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
 
@@ -72,9 +72,8 @@ At least one PATCH field must be provided.
 
 ## Monetary Contract
 
-- By default, request-side `limitAmount` is interpreted as USD. Set `limitCurrency: "CNY"` to submit an RMB cap; the server converts it to USD using the current exchange rate before storage.
-- Response-side monetary fields keep the original USD field and add an RMB companion with `_cny`.
-- `exchange_rate` is returned alongside API key metadata and is the USD→CNY rate used for every `*_cny` value in that response.
+- Management API monetary request and response fields are USD-only.
+- `limitCurrency` defaults to `USD`; sending `CNY` returns `400` with `currency_retired`.
 
 ## Reporting Semantics
 
@@ -122,10 +121,7 @@ curl "https://api.lemondata.cc/v1/management/api-keys" \
       "key_prefix": "sk-abc123...",
       "status": "active",
       "limit_amount": 500.0,
-      "limit_amount_cny": 3600.0,
       "used_amount": 148.25,
-      "used_amount_cny": 1067.4,
-      "exchange_rate": 7.2,
       "models": ["gpt-4o-mini", "claude-3-7-sonnet"],
       "expires_at": "2026-04-30T00:00:00.000Z",
       "last_used_at": "2026-03-27T08:12:45.000Z",
