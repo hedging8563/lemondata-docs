@@ -28,7 +28,7 @@ LemonData mendukung **tiga format API native** dengan satu API key. Pilih format
 |---------|-----------|
 | **Tanpa berpindah SDK** | Gunakan model apa pun dengan SDK pilihan Anda |
 | **Fitur native** | Akses kemampuan spesifik format |
-| **Migrasi mudah** | Beralih dari API resmi hanya dengan mengubah base URL |
+| **Native-first migration** | Keep native provider routes when behavior matters; use `/v1` OpenAI compatibility for existing OpenAI-style clients |
 | **Penagihan tunggal** | Satu akun, satu API key, semua format |
 
 ## Perbandingan Format
@@ -45,7 +45,7 @@ LemonData mendukung **tiga format API native** dengan satu API key. Pilih format
 
 ## Format OpenAI
 
-Format yang paling kompatibel dan titik awal default untuk sebagian besar integrasi baru. Bekerja di berbagai model LemonData.
+Use this compatibility route for existing OpenAI SDK integrations and portable chat or embedding flows. For Claude or Gemini native behavior, use the Anthropic or Gemini format below.
 
 ```python
 from openai import OpenAI
@@ -55,7 +55,7 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-# Works with ANY model
+# Portable chat works across many models
 response = client.chat.completions.create(
     model="claude-sonnet-4-6",  # Claude via OpenAI format
     messages=[
@@ -176,7 +176,9 @@ graph TD
     D -->|OpenAI SDK| E[Use OpenAI Format]
     D -->|Anthropic SDK| C
     D -->|Gemini SDK| F[Use Gemini Format]
-    D -->|New project| E
+    D -->|New project| G{Need provider-native behavior?}
+    G -->|Yes| H[Use native Anthropic or Gemini Format]
+    G -->|No| E
 ```
 
 ## Panduan Migrasi
@@ -229,7 +231,7 @@ response = requests.post(
 
 Keajaiban LemonData: gunakan **SDK apa pun** dengan **model apa pun**. Gateway secara otomatis menangani konversi format.
 
-### Any SDK → Any Model
+### Compatibility SDK → Portable Chat
 
 ```python
 # Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
@@ -246,19 +248,19 @@ response = client.messages.create(
     messages=[{"role": "user", "content": "Hello!"}]
 )
 
-# Same SDK, different models - no code changes
+# Same compatibility SDK for portable chat; native-only features still need native routes
 response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ Works!
 response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
 ```
 
-### OpenAI SDK → All Models
+### OpenAI SDK → Portable Chat Models
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
 
-# All these work with the same SDK:
+# These portable chat calls use the same /v1 compatibility SDK:
 response = client.chat.completions.create(model="gpt-4o", ...)
 response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
 response = client.chat.completions.create(model="gemini-2.5-flash", ...)

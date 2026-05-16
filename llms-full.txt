@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-05-15
+Generated: 2026-05-16
 Source: https://docs.lemondata.cc
 
 ---
@@ -40,9 +40,9 @@ LemonData is an AI API aggregation platform that gives you unified access to **h
 | **Music** | AI music generation | `suno` |
 | **3D** | 3D asset generation | `tripo3d` |
 
-## A Good Default Starting Point
+## Choose the Request Format
 
-For most new projects, start with the OpenAI SDK plus **Chat Completions**:
+Start with the route that matches the behavior you need. Use native Anthropic/Gemini routes for provider-native features; use OpenAI-compatible `/v1/chat/completions` when migrating existing OpenAI-style chat code.
 
 ```bash cURL
 curl https://api.lemondata.cc/v1/chat/completions \
@@ -597,7 +597,7 @@ LemonData supports **three native API formats** with a single API key. Choose th
 |---------|-------------|
 | **No SDK switching** | Use any model with your preferred SDK |
 | **Native features** | Access format-specific capabilities |
-| **Easy migration** | Switch from official APIs with just a base URL change |
+| **Native-first migration** | Keep native provider routes when behavior matters; use `/v1` OpenAI compatibility for existing OpenAI-style clients |
 | **Single billing** | One account, one API key, all formats |
 
 ## Format Comparison
@@ -614,7 +614,7 @@ LemonData supports **three native API formats** with a single API key. Choose th
 
 ## OpenAI Format
 
-The most widely compatible format and the default starting point for most new integrations. Works across the broadest set of LemonData models.
+Use this compatibility route for existing OpenAI SDK integrations and portable chat or embedding flows. For Claude or Gemini native behavior, use the Anthropic or Gemini format below.
 
 ```python
 from openai import OpenAI
@@ -624,7 +624,7 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-# Works with ANY model
+# Portable chat works across many models
 response = client.chat.completions.create(
     model="claude-sonnet-4-6",  # Claude via OpenAI format
     messages=[
@@ -745,7 +745,9 @@ graph TD
     D -->|OpenAI SDK| E[Use OpenAI Format]
     D -->|Anthropic SDK| C
     D -->|Gemini SDK| F[Use Gemini Format]
-    D -->|New project| E
+    D -->|New project| G{Need provider-native behavior?}
+    G -->|Yes| H[Use native Anthropic or Gemini Format]
+    G -->|No| E
 ```
 
 ## Migration Guides
@@ -796,9 +798,9 @@ response = requests.post(
 
 ## Cross-Model Compatibility
 
-The magic of LemonData: use **any SDK** with **any model**. The gateway automatically handles format conversion.
+LemonData supports cross-format conversion for portable chat workflows. Use native routes when provider-specific features matter.
 
-### Any SDK → Any Model
+### Compatibility SDK → Portable Chat
 
 ```python
 # Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
@@ -815,19 +817,19 @@ response = client.messages.create(
     messages=[{"role": "user", "content": "Hello!"}]
 )
 
-# Same SDK, different models - no code changes
+# Same compatibility SDK for portable chat; native-only features still need native routes
 response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ Works!
 response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
 ```
 
-### OpenAI SDK → All Models
+### OpenAI SDK → Portable Chat Models
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
 
-# All these work with the same SDK:
+# These portable chat calls use the same /v1 compatibility SDK:
 response = client.chat.completions.create(model="gpt-4o", ...)
 response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
 response = client.chat.completions.create(model="gemini-2.5-flash", ...)
@@ -3361,7 +3363,7 @@ URL: https://docs.lemondata.cc/api-reference/introduction
 
 ## Overview
 
-The LemonData API is **OpenAI-compatible**, which means you can use the official OpenAI SDK with just a base URL change. For most integrations, start with `POST /v1/chat/completions`. We also support native **Anthropic** and **Gemini** request formats, plus `POST /v1/responses` as an advanced optional path.
+LemonData is **native-first and OpenAI-compatible**. Use provider-native routes such as `POST /v1/messages` for Anthropic and `/v1beta/models/...:generateContent` for Gemini when you need native behavior, and use OpenAI-compatible `/v1` endpoints when you are migrating existing OpenAI-style SDKs or tools. `POST /v1/responses` remains an advanced optional path for Responses-specific behavior.
 
 ## Base URL
 
@@ -5719,7 +5721,7 @@ This page is intentionally narrower than a marketing matrix:
 
 | SDK / Framework | Language | Support Level | Notes |
 |-----------------|----------|---------------|-------|
-| **OpenAI SDK** | Python/JS/Go | Supported core path | Chat Completions and Embeddings are the default documented path; some Responses-only fields are not guaranteed across every model and routed path |
+| **OpenAI SDK** | Python/JS/Go | Supported core path | Compatibility path for `/v1` Chat Completions and Embeddings; use native provider routes for provider-specific behavior, and do not assume Responses-only fields work across every model |
 | **Anthropic SDK** | Python/JS | Strong native path | Native Messages route with direct evidence for tools, thinking, and prompt caching |
 | **Vercel AI SDK** | TypeScript | Recommended integration pattern | Prefer `@ai-sdk/openai-compatible`; use `@ai-sdk/openai` only when you explicitly want Responses-native behavior |
 | **LangChain** | Python/JS | Supported standard surfaces | `ChatOpenAI` and `OpenAIEmbeddings` are the intended scope; vendor-native extras are out of scope |
@@ -6006,10 +6008,10 @@ URL: https://docs.lemondata.cc/guides/sdks
 
 ## Overview
 
-LemonData is easiest to integrate through:
-- official **OpenAI SDKs** for OpenAI-compatible and Responses-style usage
-- official **Anthropic SDKs** for Claude-native `/v1/messages`
-- official **Gemini / Google AI** tooling when you specifically need Gemini-native request shapes
+LemonData is easiest to integrate by matching the SDK to the behavior you need:
+- official **Anthropic SDKs** for Claude-native `/v1/messages` behavior
+- official **Gemini / Google AI** tooling for Gemini-native request shapes
+- official **OpenAI SDKs** for OpenAI-compatible `/v1` routes and Responses-style usage
 
 Use the integration pages for support boundaries. In this docs set, "recommended" or "supported" means a documented setup path exists; it does not automatically mean every framework helper or provider-specific feature is regression-tested end-to-end in this repo.
 
@@ -6021,7 +6023,7 @@ Use the integration pages for support boundaries. In this docs set, "recommended
 
 ## OpenAI SDK Example
 
-Use this as the default starting point for new projects:
+Use this when you are migrating an existing OpenAI-compatible client or want the `/v1` compatibility path. For Claude-native or Gemini-native features, use the matching native SDK instead.
 
 ```python
 from openai import OpenAI
@@ -6078,28 +6080,30 @@ message = client.messages.create(
 
 ## Which SDK Should You Use?
 
-| Goal | Recommended SDK |
+| Goal | Recommended path |
 |------|------------------|
-| New app, general default | OpenAI SDK |
+| Provider-native behavior | Native provider SDK or route |
+| Existing OpenAI-compatible client | OpenAI SDK on LemonData `/v1` |
+| Portable chat / embeddings | OpenAI-compatible `/v1` routes |
 | Claude-native features | Anthropic SDK |
 | Gemini-native request shapes | Gemini-native API / SDK |
 | LangChain / LlamaIndex / Vercel AI SDK | Use the dedicated integration pages |
 
 ## Best Practices
 
-#### Prefer Responses for new projects
+#### Choose native routes when behavior matters
 
-If your SDK supports both `responses` and `chat.completions`, start with `responses`.
+Use Anthropic or Gemini native routes for provider-specific fields, tools, streaming details, and other behavior that should not be translated through another format.
+
+
+#### Use OpenAI-compatible `/v1` for migration
+
+OpenAI-compatible SDKs are the best path for existing OpenAI-style clients, portable chat, and embeddings. Treat them as a compatibility route, not as the only LemonData API surface.
 
 
 #### Keep base URLs explicit
 
 Pass LemonData base URLs directly in your client configuration instead of relying on older environment-variable aliases.
-
-
-#### Use native SDKs only when native features matter
-
-Use the Anthropic SDK for Claude-native features such as extended thinking, and otherwise prefer the OpenAI SDK for broad compatibility.
 
 ---
 

@@ -28,7 +28,7 @@ LemonData 支持使用单个 API 密钥的**三种原生 API 格式**。选择�
 |---------|-------------|
 | **无需切换 SDK** | 在您偏好的 SDK 中使用任意模型 |
 | **原生功能** | 访问格式特定能力 |
-| **轻松迁移** | 仅更改 base URL 即可切换自官方 APIs |
+| **原生优先迁移** | 行为重要时保留提供商原生路由；已有 OpenAI 风格客户端使用 `/v1` 兼容路径 |
 | **统一计费** | 一个账户，一个 API 密钥，支持所有格式 |
 
 ## 格式比较
@@ -45,7 +45,7 @@ LemonData 支持使用单个 API 密钥的**三种原生 API 格式**。选择�
 
 ## OpenAI 格式
 
-最广泛兼容的格式，也是大多数新集成的默认起点。适用于 LemonData 支持范围最广的模型集合。
+这是面向已有 OpenAI SDK 集成、可移植聊天或 embeddings 的兼容路由。需要 Claude 或 Gemini 原生行为时，请使用下面的 Anthropic 或 Gemini 格式。
 
 ```python
 from openai import OpenAI
@@ -55,7 +55,7 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-# Works with ANY model
+# Portable chat works across many models
 response = client.chat.completions.create(
     model="claude-sonnet-4-6",  # Claude via OpenAI format
     messages=[
@@ -176,7 +176,9 @@ graph TD
     D -->|OpenAI SDK| E[Use OpenAI Format]
     D -->|Anthropic SDK| C
     D -->|Gemini SDK| F[Use Gemini Format]
-    D -->|New project| E
+    D -->|New project| G{Need provider-native behavior?}
+    G -->|Yes| H[Use native Anthropic or Gemini Format]
+    G -->|No| E
 ```
 
 ## 迁移指南
@@ -246,7 +248,7 @@ response = client.messages.create(
     messages=[{"role": "user", "content": "Hello!"}]
 )
 
-# Same SDK, different models - no code changes
+# Same compatibility SDK for portable chat; native-only features still need native routes
 response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ Works!
 response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
 ```
@@ -258,7 +260,7 @@ from openai import OpenAI
 
 client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
 
-# All these work with the same SDK:
+# These portable chat calls use the same /v1 compatibility SDK:
 response = client.chat.completions.create(model="gpt-4o", ...)
 response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
 response = client.chat.completions.create(model="gemini-2.5-flash", ...)

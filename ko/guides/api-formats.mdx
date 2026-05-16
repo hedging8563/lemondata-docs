@@ -28,7 +28,7 @@ LemonData는 하나의 API 키로 **세 가지 네이티브 API 형식**을 지�
 |---------|-------------|
 | **SDK 전환 불필요** | 선호하는 SDK로 아무 모델이나 사용 가능 |
 | **네이티브 기능 접근** | 형식별 고유 기능 사용 가능 |
-| **쉬운 마이그레이션** | 공식 API에서 base URL만 변경하면 전환 가능 |
+| **Native-first migration** | Keep native provider routes when behavior matters; use `/v1` OpenAI compatibility for existing OpenAI-style clients |
 | **단일 청구** | 하나의 계정, 하나의 API 키로 모든 형식 사용 |
 
 ## 형식 비교
@@ -45,7 +45,7 @@ LemonData는 하나의 API 키로 **세 가지 네이티브 API 형식**을 지�
 
 ## OpenAI 형식
 
-가장 널리 호환되는 형식으로 대부분의 신규 통합에서 기본 시작점입니다. LemonData 모델 중 가장 폭넓은 세트에서 작동합니다.
+Use this compatibility route for existing OpenAI SDK integrations and portable chat or embedding flows. For Claude or Gemini native behavior, use the Anthropic or Gemini format below.
 
 ```python
 from openai import OpenAI
@@ -55,7 +55,7 @@ client = OpenAI(
     base_url="https://api.lemondata.cc/v1"
 )
 
-# Works with ANY model
+# Portable chat works across many models
 response = client.chat.completions.create(
     model="claude-sonnet-4-6",  # Claude via OpenAI format
     messages=[
@@ -176,7 +176,9 @@ graph TD
     D -->|OpenAI SDK| E[Use OpenAI Format]
     D -->|Anthropic SDK| C
     D -->|Gemini SDK| F[Use Gemini Format]
-    D -->|New project| E
+    D -->|New project| G{Need provider-native behavior?}
+    G -->|Yes| H[Use native Anthropic or Gemini Format]
+    G -->|No| E
 ```
 
 ## 마이그레이션 가이드
@@ -229,7 +231,7 @@ response = requests.post(
 
 LemonData의 마법: **어떤 SDK**로도 **어떤 모델**이든 사용 가능합니다. 게이트웨이가 형식 변환을 자동으로 처리합니다.
 
-### Any SDK → Any Model
+### Compatibility SDK → Portable Chat
 
 ```python
 # Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
@@ -246,7 +248,7 @@ response = client.messages.create(
     messages=[{"role": "user", "content": "Hello!"}]
 )
 
-# Same SDK, different models - no code changes
+# Same compatibility SDK for portable chat; native-only features still need native routes
 response = client.messages.create(model="gemini-2.5-flash", ...)  # ✅ Works!
 response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
 ```
@@ -258,7 +260,7 @@ from openai import OpenAI
 
 client = OpenAI(base_url="https://api.lemondata.cc/v1", api_key="sk-...")
 
-# All these work with the same SDK:
+# These portable chat calls use the same /v1 compatibility SDK:
 response = client.chat.completions.create(model="gpt-4o", ...)
 response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
 response = client.chat.completions.create(model="gemini-2.5-flash", ...)
