@@ -112,4 +112,176 @@ async function pollForVideo() {
     );
 
     const data = await response.json();
-    console.log(`
+    console.log(`Status: ${data.status}, Progress: ${data.progress || 0}%`);
+
+    if (data.status === 'completed') {
+      console.log(`Video URL: ${data.video_url}`);
+      return data.video_url;
+    } else if (data.status === 'failed') {
+      throw new Error(data.error);
+    }
+
+    await new Promise(r => setTimeout(r, 5000));
+  }
+}
+```
+
+```go Go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "time"
+)
+
+func main() {
+    taskID := "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+    for {
+        req, _ := http.NewRequest("GET",
+            fmt.Sprintf("https://api.lemondata.cc/v1/tasks/%s", taskID), nil)
+        req.Header.Set("Authorization", "Bearer sk-your-api-key")
+
+        client := &http.Client{}
+        resp, _ := client.Do(req)
+
+        var result map[string]interface{}
+        json.NewDecoder(resp.Body).Decode(&result)
+        resp.Body.Close()
+
+        fmt.Printf("Status: %s, Progress: %.0f%%\n", result["status"], result["progress"])
+
+        if result["status"] == "completed" {
+            fmt.Printf("Video URL: %s\n", result["video_url"])
+            break
+        } else if result["status"] == "failed" {
+            fmt.Printf("Error: %s\n", result["error"])
+            break
+        }
+
+        time.Sleep(5 * time.Second)
+    }
+}
+```
+
+```php PHP
+<?php
+$taskId = 'ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+while (true) {
+    $ch = curl_init("https://api.lemondata.cc/v1/tasks/{$taskId}");
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer sk-your-api-key'
+        ]
+    ]);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    $data = json_decode($response, true);
+    echo "Status: {$data['status']}, Progress: " . ($data['progress'] ?? 0) . "%\n";
+
+    if ($data['status'] === 'completed') {
+        echo "Video URL: {$data['video_url']}\n";
+        break;
+    } elseif ($data['status'] === 'failed') {
+        echo "Error: {$data['error']}\n";
+        break;
+    }
+
+    sleep(5);
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json Response (pending)
+{
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "pending",
+  "progress": 0,
+  "model": "sora-2",
+  "created": 1706000000,
+  "updated": 1706000000
+}
+```
+
+```json Response (processing)
+{
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "processing",
+  "progress": 45,
+  "model": "sora-2",
+  "created": 1706000000,
+  "updated": 1706000030
+}
+```
+
+```json Response (completed)
+{
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "billing_transaction_id": "cmo164zyc0s48jpgegi80vqv4",
+  "status": "completed",
+  "progress": 100,
+  "video_url": "https://cdn.lemondata.cc/videos/abc123.mp4",
+  "model": "sora-2",
+  "created": 1706000000,
+  "updated": 1706000060
+}
+```
+
+```json Response (failed)
+{
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "failed",
+  "error": "Content policy violation",
+  "model": "sora-2",
+  "created": 1706000000,
+  "updated": 1706000060
+}
+```
+</ResponseExample>
+
+## Best Practices für Polling
+
+- Alle 5-10 Sekunden pollen
+- Für lange Tasks exponentielles Backoff implementieren
+- Ein maximales Timeout festlegen (z. B. 10 Minuten)
+- Den Status `failed` sauber behandeln
+
+```python
+import time
+
+def wait_for_video(task_id, max_wait=600, interval=5):
+    """Wait for video with timeout."""
+    start = time.time()
+
+    while time.time() - start < max_wait:
+        response = requests.get(
+            f"https://api.lemondata.cc/v1/tasks/{task_id}",
+            headers={"Authorization": "Bearer sk-your-api-key"}
+        )
+        data = response.json()
+
+        if data["status"] == "completed":
+            return data["video_url"]
+        elif data["status"] == "failed":
+            raise Exception(data.get("error", "Video generation failed"))
+
+        time.sleep(interval)
+
+    raise TimeoutError("Video generation timed out")
+```
