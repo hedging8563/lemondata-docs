@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-05-16
+Generated: 2026-05-20
 Source: https://docs.lemondata.cc
 
 ---
@@ -72,7 +72,7 @@ curl https://api.lemondata.cc/v1/chat/completions \
 
 URL: https://docs.lemondata.cc/quickstart
 
-## Step 1: Get Your API Key
+## Step 1: Start with Trial Credits
 
 
 #### Create an account
@@ -80,14 +80,14 @@ URL: https://docs.lemondata.cc/quickstart
 Sign up at [lemondata.cc](https://lemondata.cc) using your email, Gmail, or GitHub account.
 
 
-#### Add credits
+#### Use the included trial credits
 
-Open the dashboard and add credits to your account. LemonData uses pay-as-you-go pricing with no minimum commitment.
+Your account starts with trial credits for the first small test requests. You do not need to top up before Quickstart.
 
 
-#### Create an API key
+#### Create or copy an API key
 
-Go to **Dashboard → API Keys** and create a new key. Copy it securely because it is only shown once.
+Go to **Dashboard → API Keys** and create a new key, or copy an existing one. Copy it securely because full keys are only shown once.
 
 > Warning: Keep your API key secure. Never expose it in client-side code or public repositories.
 
@@ -114,6 +114,10 @@ curl https://api.lemondata.cc/v1/chat/completions \
 ```
 
 > Note: Use `POST /v1/responses` only when you explicitly need Responses-specific behavior. Some Responses-only fields depend on the selected model and routed path.
+
+## Top Up for Production
+
+The included trial credits are for the first small tests. Add credits in **Dashboard → Billing** only when you are ready for production usage or higher-volume testing.
 
 ## Try Different Models
 
@@ -2608,7 +2612,7 @@ The request contract also accepts `audio-to-video` and `video-extension` for mod
 | Model | Public operations |
 |-------|-------------------|
 | `kling-3.0-motion-control` | Motion control |
-| `kling-3.0-video` | Text-to-video, image-to-video, start-end-to-video |
+| `kling-3.0-video` | Text-to-video, image-to-video, start-end-to-video, element references |
 | `kling-v2.1-master` | Text-to-video, image-to-video |
 | `kling-v2.1-pro` | Image-to-video, start-end-to-video |
 | `kling-v2.1-standard` | Image-to-video |
@@ -2708,6 +2712,34 @@ response = requests.post(f"{BASE}/videos/generations",
         "image_url": "https://example.com/portrait.jpg",
         "duration": 6,
         "aspect_ratio": "16:9"
+    }
+)
+```
+
+### Kling 3.0 Elements
+
+Use `kling_elements` with `kling-3.0-video` when you need element references. Provide an image-conditioned request (`image_url`, `image_urls`, `start_image`, or `end_image`) and reference each element in the prompt with `@name`.
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-video",
+        "prompt": "Place @hero_bag on a studio turntable with soft product lighting.",
+        "operation": "image-to-video",
+        "image_url": "https://example.com/studio-start.png",
+        "duration": 5,
+        "resolution": "720p",
+        "kling_elements": [
+            {
+                "name": "hero_bag",
+                "description": "black leather handbag",
+                "element_input_urls": [
+                    "https://example.com/bag-front.png",
+                    "https://example.com/bag-side.png"
+                ]
+            }
+        ]
     }
 )
 ```
@@ -3892,6 +3924,8 @@ URL: https://docs.lemondata.cc/api-reference/messages/create-message
 
 This endpoint provides native Anthropic Messages API compatibility. Use this for Claude models with features like extended thinking.
 
+This endpoint keeps the native Anthropic contract. `messages` must be an array of `user` / `assistant` messages, `system` belongs in the top-level `system` field, and `max_tokens` is required. If your payload uses OpenAI roles such as `system`, `developer`, or `tool` inside `messages`, send it to `/v1/chat/completions` instead.
+
 > Note: Base URL for Anthropic SDK: `https://api.lemondata.cc` (no `/v1` suffix)
 
 ## Request Headers
@@ -4541,6 +4575,8 @@ URL: https://docs.lemondata.cc/api-reference/images/get-image-status
 
 > Info: If the create response included `poll_url`, prefer calling that exact URL for polling. Some image tasks may surface a `poll_url` under `/v1/tasks/{id}` instead of the image-specific status path.
 
+You can also poll public image task IDs such as `ldtask_...` at `/v1/images/{id}`. This compatibility alias uses the same authorization, ownership checks, billing headers, terminal snapshots, and response shape as `/v1/images/generations/{id}`.
+
 If the task no longer exists or can no longer be resolved through the public async-task contract, LemonData returns `async_task_not_found` with the message `Task not found or no longer available.`
 
 ## Response
@@ -4769,6 +4805,34 @@ response = requests.post(
 )
 ```
 
+## Kling 3.0 Elements
+
+Use `kling_elements` with `kling-3.0-video` when you need element references. Provide an image-conditioned request (`image_url`, `image_urls`, `start_image`, or `end_image`) and reference each element in the prompt with `@name`.
+
+```python
+response = requests.post("https://api.lemondata.cc/v1/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-video",
+        "prompt": "Place @hero_bag on a studio turntable with soft product lighting.",
+        "operation": "image-to-video",
+        "image_url": "https://example.com/studio-start.png",
+        "duration": 5,
+        "resolution": "720p",
+        "kling_elements": [
+            {
+                "name": "hero_bag",
+                "description": "black leather handbag",
+                "element_input_urls": [
+                    "https://example.com/bag-front.png",
+                    "https://example.com/bag-side.png"
+                ]
+            }
+        ]
+    }
+)
+```
+
 ## Reference to Video
 
 Use `operation=reference-to-video` when the model supports dedicated reference conditioning. In LemonData's public contract, image references use `reference_images`, while multimodal reference videos and audios use `video_urls` and `audio_urls`. For `seedance-2.0` and `seedance-2.0-fast`, LemonData currently supports up to 9 reference images plus up to 3 reference videos and 3 reference audios. `duration` controls generated output length only; it does not set a separate limit for reference video input duration.
@@ -4872,7 +4936,7 @@ This list is aligned with the current enabled public video model inventory in th
 | Model | Public operations |
 |-------|-------------------|
 | `kling-3.0-motion-control` | Motion control |
-| `kling-3.0-video` | Text-to-video, image-to-video, start-end-to-video |
+| `kling-3.0-video` | Text-to-video, image-to-video, start-end-to-video, element references |
 | `kling-v2.5-turbo-pro` | Text-to-video, image-to-video, start-end-to-video |
 | `kling-v2.5-turbo-std` | Text-to-video, image-to-video |
 | `kling-v2.6-pro` | Text-to-video, image-to-video, start-end-to-video |
