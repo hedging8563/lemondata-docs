@@ -23,6 +23,7 @@ Google Gemini 图片模型并不共用同一套参数选择规则：
 - `gemini-2.0-flash-preview-image-generation` 在此端点中按仅使用 prompt 的文生图模型记录。
 - 对 `nano-banana`、`nano-banana-2` 和 `nano-banana-pro` 的参考图请求，请使用本端点（`/v1/images/generations`），并发送 `operation: "image-to-image"` 与 `image_urls`。不要把 Nano Banana 参考图请求发送到 `/v1/images/edits`。
 - Nano Banana 图生图请求请省略 `resolution`。`nano-banana-2` 和 `nano-banana-pro` 只在文生图中公开 `resolution`，`nano-banana` 不公开该参数。
+- 本端点的参考图可以通过 JSON `image_url` / `image_urls` 传入，也可以通过 multipart `image` 文件直接上传。`/v1/images/generations` 不接受 `images[]` 或 `file_id`；只有明确支持 `images[].file_id` 的 `/v1/images/edits` 模型才使用 `/v1/files` 返回的引用。
 
 使用 Google 图片模型时，优先发送 `aspect_ratio`；只有模型明确支持时才发送 `resolution`。
 
@@ -38,6 +39,22 @@ xAI Grok Imagine 图片模型（`grok-imagine-image`、`grok-imagine-image-quali
 
 <ParamField body="prompt" type="string" required>
   所需图片的文本描述。
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  用于图生图的公开 HTTPS 参考图 URL。Nano Banana 系列请求请设置 `operation` 为 `image-to-image`，并且除非该模型明确支持此操作的 `resolution`，否则不要发送 `resolution`。
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  公开 HTTPS 参考图 URL 数组。JSON 请求中需要一张或多张参考图时使用此字段。本端点不支持 `file_id` 和 `images[]`。
+</ParamField>
+
+<ParamField body="reference_image_urls" type="string[]">
+  额外的模型特定参考图 URL，用于区分主输入图和参考图的供应商。
+</ParamField>
+
+<ParamField body="image" type="file">
+  用于图生图的 multipart 参考图文件。源图是私有或需要请求头鉴权时使用直接上传。它不同于 /v1/files 的 `file_id`，本端点不接受 `file_id`。
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -232,6 +249,19 @@ Nano Banana 参考图示例：请求应发送到 `/v1/images/generations`，不�
   "image_urls": ["https://example.com/reference-1.png"],
   "aspect_ratio": "1:1"
 }
+```
+
+
+私有或本地源图可以用 multipart 直接上传。不要把 `file_id` 传给 `/v1/images/generations`：
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=nano-banana-pro" \
+  -F "prompt=Create a clean cinematic character image based on this reference" \
+  -F "operation=image-to-image" \
+  -F "image=@reference.png" \
+  -F "aspect_ratio=1:1"
 ```
 
 </RequestExample>

@@ -23,6 +23,7 @@ Google Gemini image-family 모델은 같은 선택자 계약을 공유하지 않
 - `gemini-2.0-flash-preview-image-generation` 은 프롬프트 전용 텍스트-투-이미지로 문서화됩니다.
 - `nano-banana`, `nano-banana-2`, `nano-banana-pro` 의 참조 이미지 요청은 이 엔드포인트(`/v1/images/generations`)에 `operation: "image-to-image"` 와 `image_urls` 를 보내세요. Nano Banana 참조 이미지 요청을 `/v1/images/edits` 로 보내지 마세요.
 - Nano Banana 이미지-투-이미지 요청에서는 `resolution` 을 생략하세요. `nano-banana-2` 와 `nano-banana-pro` 는 텍스트-이미지에서만 `resolution` 을 공개하며, `nano-banana` 는 공개하지 않습니다.
+- 이 엔드포인트의 참조 이미지는 JSON `image_url` / `image_urls` 또는 multipart `image` 파일로 보낼 수 있습니다. `/v1/images/generations` 는 `images[]` 와 `file_id` 를 받지 않습니다. `/v1/files` 참조는 `images[].file_id` 를 명시적으로 지원하는 `/v1/images/edits` 모델에서만 사용하세요.
 
 Google 이미지 패밀리에는 `aspect_ratio` 를 우선 사용하고, 모델이 명시적으로 지원할 때만 `resolution` 을 보내세요.
 
@@ -38,6 +39,22 @@ xAI Grok Imagine 이미지 모델(`grok-imagine-image`, `grok-imagine-image-qual
 
 <ParamField body="prompt" type="string" required>
   원하는 이미지에 대한 텍스트 설명입니다.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  image-to-image 생성에 사용할 공개 HTTPS 참조 이미지 URL입니다. Nano Banana 계열 요청은 `operation` 을 `image-to-image` 로 설정하고, 해당 작업에서 모델이 명시적으로 지원하지 않는 한 `resolution` 을 생략하세요.
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  공개 HTTPS 참조 이미지 URL 배열입니다. JSON 요청에서 하나 이상의 참조 이미지를 보낼 때 사용합니다. 이 엔드포인트는 `file_id` 와 `images[]` 를 지원하지 않습니다.
+</ParamField>
+
+<ParamField body="reference_image_urls" type="string[]">
+  기본 입력 이미지와 참조 이미지를 구분하는 공급자를 위한 추가 모델별 참조 이미지 URL입니다.
+</ParamField>
+
+<ParamField body="image" type="file">
+  image-to-image 생성을 위한 multipart 참조 이미지 파일입니다. 원본 이미지가 비공개이거나 헤더 인증이 필요할 때 직접 업로드를 사용하세요. /v1/files 의 `file_id` 와는 다르며, 이 엔드포인트는 `file_id` 를 받지 않습니다.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -232,6 +249,19 @@ Nano Banana 참조 이미지 예시: 요청은 `/v1/images/generations` 로 보�
   "image_urls": ["https://example.com/reference-1.png"],
   "aspect_ratio": "1:1"
 }
+```
+
+
+비공개 또는 로컬 원본 이미지는 multipart 로 직접 업로드할 수 있습니다. `/v1/images/generations` 에 `file_id` 를 보내지 마세요:
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=nano-banana-pro" \
+  -F "prompt=Create a clean cinematic character image based on this reference" \
+  -F "operation=image-to-image" \
+  -F "image=@reference.png" \
+  -F "aspect_ratio=1:1"
 ```
 
 </RequestExample>

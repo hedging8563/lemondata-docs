@@ -23,6 +23,7 @@ Les modèles de la famille image Gemini de Google n’utilisent pas exactement l
 - `gemini-2.0-flash-preview-image-generation` est documenté ici comme un modèle texte-vers-image piloté uniquement par le prompt.
 - Pour les requêtes avec image de référence `nano-banana`, `nano-banana-2` et `nano-banana-pro`, utilisez cet endpoint (`/v1/images/generations`) avec `operation: "image-to-image"` et `image_urls`. N’envoyez pas ces requêtes Nano Banana à `/v1/images/edits`.
 - Pour les requêtes image-to-image Nano Banana, omettez `resolution`. `nano-banana-2` et `nano-banana-pro` n’exposent `resolution` que pour le texte-vers-image, et `nano-banana` ne l’expose pas.
+- Les images de référence sur cet endpoint peuvent être fournies via JSON `image_url` / `image_urls`, ou comme fichier multipart `image`. `/v1/images/generations` n’accepte pas `images[]` ni `file_id` ; les références `/v1/files` ne s’utilisent que pour les modèles `/v1/images/edits` qui documentent `images[].file_id`.
 
 Pour les familles d’images Google, privilégiez `aspect_ratio` et n’envoyez `resolution` que lorsque le modèle la prend explicitement en charge.
 
@@ -38,6 +39,22 @@ Les modèles d’image xAI Grok Imagine (`grok-imagine-image`, `grok-imagine-ima
 
 <ParamField body="prompt" type="string" required>
   Description textuelle de l’image souhaitée.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  URL HTTPS publique d’image de référence pour la génération image-to-image. Pour la famille Nano Banana, définissez `operation` sur `image-to-image` et omettez `resolution` sauf si le modèle la prend explicitement en charge pour cette opération.
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  URLs HTTPS publiques d’images de référence. Utilisez ce champ pour une ou plusieurs images de référence dans les requêtes JSON. `file_id` et `images[]` ne sont pas pris en charge sur cet endpoint.
+</ParamField>
+
+<ParamField body="reference_image_urls" type="string[]">
+  URLs d’images de référence supplémentaires propres au modèle pour les fournisseurs qui distinguent les images d’entrée principales des références.
+</ParamField>
+
+<ParamField body="image" type="file">
+  Fichier image de référence multipart pour la génération image-to-image. Utilisez-le lorsque l’image source est privée ou protégée par en-têtes. Ce n’est pas un `file_id` /v1/files, et cet endpoint n’accepte pas `file_id`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -232,6 +249,19 @@ Exemple Nano Banana avec image de référence : envoyez la requête à `/v1/imag
   "image_urls": ["https://example.com/reference-1.png"],
   "aspect_ratio": "1:1"
 }
+```
+
+
+Pour les images source privées ou locales, utilisez un upload multipart direct. Ne transmettez pas de `file_id` à `/v1/images/generations` :
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=nano-banana-pro" \
+  -F "prompt=Create a clean cinematic character image based on this reference" \
+  -F "operation=image-to-image" \
+  -F "image=@reference.png" \
+  -F "aspect_ratio=1:1"
 ```
 
 </RequestExample>

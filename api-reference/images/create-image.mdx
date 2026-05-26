@@ -23,6 +23,7 @@ Google Gemini image-family models do not share the same selector contract:
 - `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
 - For `nano-banana`, `nano-banana-2`, and `nano-banana-pro` reference-image requests, use this endpoint (`/v1/images/generations`) with `operation: "image-to-image"` and `image_urls`. Do not send Nano Banana reference-image requests to `/v1/images/edits`.
 - For Nano Banana image-to-image requests, omit `resolution`. `nano-banana-2` and `nano-banana-pro` expose `resolution` only for text-to-image, and `nano-banana` does not expose it.
+- Reference images on this endpoint can be supplied as JSON `image_url` / `image_urls`, or as a multipart `image` file. `images[]` and `file_id` are not accepted on `/v1/images/generations`; create `/v1/files` references only for `/v1/images/edits` models that document `images[].file_id`.
 
 For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
 
@@ -38,6 +39,22 @@ xAI Grok Imagine image models (`grok-imagine-image`, `grok-imagine-image-quality
 
 <ParamField body="prompt" type="string" required>
   Text description of the desired image.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  Public HTTPS reference image URL for image-to-image generation. For Nano Banana family requests, set `operation` to `image-to-image` and omit `resolution` unless the model explicitly supports it for that operation.
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  Public HTTPS reference image URLs. Use this for one or more reference images in JSON requests. `file_id` and `images[]` are not supported on this endpoint.
+</ParamField>
+
+<ParamField body="reference_image_urls" type="string[]">
+  Additional model-specific reference image URLs for providers that distinguish primary input images from references.
+</ParamField>
+
+<ParamField body="image" type="file">
+  Multipart reference image file for image-to-image generation. Use this when the source image is private or header-protected. This is different from a /v1/files `file_id`, which is not accepted on this endpoint.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -232,6 +249,19 @@ Nano Banana reference-image example: send the request to `/v1/images/generations
   "image_urls": ["https://example.com/reference-1.png"],
   "aspect_ratio": "1:1"
 }
+```
+
+
+Direct multipart upload example for private or local source images. Do not pass a `file_id` to `/v1/images/generations`:
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=nano-banana-pro" \
+  -F "prompt=Create a clean cinematic character image based on this reference" \
+  -F "operation=image-to-image" \
+  -F "image=@reference.png" \
+  -F "aspect_ratio=1:1"
 ```
 
 </RequestExample>

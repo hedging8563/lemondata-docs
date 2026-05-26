@@ -23,6 +23,7 @@ Google Gemini tidak memakai kontrak selector yang sama:
 - `gemini-2.0-flash-preview-image-generation` didokumentasikan di sini sebagai text-to-image yang hanya prompt.
 - Untuk request gambar referensi `nano-banana`, `nano-banana-2`, dan `nano-banana-pro`, gunakan endpoint ini (`/v1/images/generations`) dengan `operation: "image-to-image"` dan `image_urls`. Jangan kirim request gambar referensi Nano Banana ke `/v1/images/edits`.
 - Untuk request image-to-image Nano Banana, jangan kirim `resolution`. `nano-banana-2` dan `nano-banana-pro` hanya mengekspos `resolution` untuk text-to-image, sedangkan `nano-banana` tidak mengeksposnya.
+- Gambar referensi pada endpoint ini dapat dikirim sebagai JSON `image_url` / `image_urls`, atau sebagai file multipart `image`. `/v1/images/generations` tidak menerima `images[]` atau `file_id`; referensi `/v1/files` hanya untuk model `/v1/images/edits` yang mendokumentasikan `images[].file_id`.
 
 Untuk keluarga gambar Google, utamakan `aspect_ratio` dan hanya kirim `resolution` jika model secara eksplisit mendukungnya.
 
@@ -38,6 +39,22 @@ Model gambar xAI Grok Imagine (`grok-imagine-image`, `grok-imagine-image-quality
 
 <ParamField body="prompt" type="string" required>
   Deskripsi teks untuk gambar yang diinginkan.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  URL HTTPS publik gambar referensi untuk image-to-image. Untuk keluarga Nano Banana, set `operation` ke `image-to-image` dan jangan kirim `resolution` kecuali model secara eksplisit mendukungnya untuk operasi itu.
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  URL HTTPS publik untuk gambar referensi. Gunakan untuk satu atau beberapa gambar referensi dalam request JSON. Endpoint ini tidak mendukung `file_id` dan `images[]`.
+</ParamField>
+
+<ParamField body="reference_image_urls" type="string[]">
+  URL gambar referensi tambahan khusus model untuk provider yang membedakan gambar input utama dan referensi.
+</ParamField>
+
+<ParamField body="image" type="file">
+  File gambar referensi multipart untuk image-to-image. Gunakan saat gambar sumber bersifat privat atau membutuhkan header. Ini berbeda dari `file_id` /v1/files; endpoint ini tidak menerima `file_id`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -232,6 +249,19 @@ Contoh Nano Banana dengan gambar referensi: kirim request ke `/v1/images/generat
   "image_urls": ["https://example.com/reference-1.png"],
   "aspect_ratio": "1:1"
 }
+```
+
+
+Untuk gambar sumber privat atau lokal, unggah langsung dengan multipart. Jangan kirim `file_id` ke `/v1/images/generations`:
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=nano-banana-pro" \
+  -F "prompt=Create a clean cinematic character image based on this reference" \
+  -F "operation=image-to-image" \
+  -F "image=@reference.png" \
+  -F "aspect_ratio=1:1"
 ```
 
 </RequestExample>

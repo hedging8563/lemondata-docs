@@ -23,6 +23,7 @@ Google Gemini の画像ファミリーは、同じセレクター契約を共有
 - `gemini-2.0-flash-preview-image-generation` は、ここではプロンプトのみのテキストから画像への生成として説明されています。
 - `nano-banana`、`nano-banana-2`、`nano-banana-pro` の参照画像リクエストでは、このエンドポイント（`/v1/images/generations`）に `operation: "image-to-image"` と `image_urls` を送信してください。Nano Banana の参照画像リクエストを `/v1/images/edits` に送信しないでください。
 - Nano Banana の image-to-image リクエストでは `resolution` を省略してください。`nano-banana-2` と `nano-banana-pro` はテキストから画像の生成でのみ `resolution` を公開し、`nano-banana` は公開していません。
+- このエンドポイントの参照画像は、JSON の `image_url` / `image_urls`、または multipart の `image` ファイルとして渡せます。`/v1/images/generations` では `images[]` と `file_id` は受け付けません。`/v1/files` の参照は、`images[].file_id` を明示的にサポートする `/v1/images/edits` モデルでのみ使用します。
 
 Google の画像ファミリーでは `aspect_ratio` を優先し、モデルが明示的に対応している場合だけ `resolution` を送信してください。
 
@@ -38,6 +39,22 @@ xAI Grok Imagine 画像モデル（`grok-imagine-image`、`grok-imagine-image-qu
 
 <ParamField body="prompt" type="string" required>
   生成したい画像の説明テキスト。
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  image-to-image 生成に使う公開 HTTPS 参照画像 URL。Nano Banana ファミリーでは `operation` を `image-to-image` に設定し、その操作でモデルが明示的に対応していない限り `resolution` は省略してください。
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  公開 HTTPS 参照画像 URL の配列。JSON リクエストで 1 枚以上の参照画像を渡す場合に使います。このエンドポイントでは `file_id` と `images[]` はサポートされません。
+</ParamField>
+
+<ParamField body="reference_image_urls" type="string[]">
+  主入力画像と参照画像を区別するプロバイダー向けの、追加のモデル固有参照画像 URL。
+</ParamField>
+
+<ParamField body="image" type="file">
+  image-to-image 生成用の multipart 参照画像ファイル。元画像が非公開、またはヘッダー認証を必要とする場合に使います。これは /v1/files の `file_id` とは異なり、このエンドポイントでは `file_id` は受け付けません。
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -232,6 +249,19 @@ Nano Banana の参照画像の例: リクエストは `/v1/images/generations` �
   "image_urls": ["https://example.com/reference-1.png"],
   "aspect_ratio": "1:1"
 }
+```
+
+
+非公開またはローカルの元画像は multipart で直接アップロードできます。`/v1/images/generations` に `file_id` は渡さないでください:
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=nano-banana-pro" \
+  -F "prompt=Create a clean cinematic character image based on this reference" \
+  -F "operation=image-to-image" \
+  -F "image=@reference.png" \
+  -F "aspect_ratio=1:1"
 ```
 
 </RequestExample>

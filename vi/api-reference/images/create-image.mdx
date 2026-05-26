@@ -23,6 +23,7 @@ Google Gemini không dùng cùng một hợp đồng selector:
 - `gemini-2.0-flash-preview-image-generation` được tài liệu hoá ở đây như một mô hình text-to-image chỉ dùng prompt.
 - Với request ảnh tham chiếu cho `nano-banana`, `nano-banana-2`, và `nano-banana-pro`, hãy dùng endpoint này (`/v1/images/generations`) với `operation: "image-to-image"` và `image_urls`. Đừng gửi request ảnh tham chiếu Nano Banana tới `/v1/images/edits`.
 - Với request image-to-image Nano Banana, hãy bỏ qua `resolution`. `nano-banana-2` và `nano-banana-pro` chỉ công khai `resolution` cho text-to-image, còn `nano-banana` không công khai trường này.
+- Ảnh tham chiếu trên endpoint này có thể gửi bằng JSON `image_url` / `image_urls`, hoặc file multipart `image`. `/v1/images/generations` không nhận `images[]` hay `file_id`; tham chiếu `/v1/files` chỉ dùng cho model `/v1/images/edits` có tài liệu rõ `images[].file_id`.
 
 Với các model hình ảnh của Google, hãy ưu tiên `aspect_ratio` và chỉ gửi `resolution` khi model đó hỗ trợ rõ ràng.
 
@@ -38,6 +39,22 @@ Các model hình ảnh xAI Grok Imagine (`grok-imagine-image`, `grok-imagine-ima
 
 <ParamField body="prompt" type="string" required>
   Mô tả bằng văn bản cho hình ảnh mong muốn.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  URL HTTPS công khai của ảnh tham chiếu cho image-to-image. Với họ Nano Banana, đặt `operation` là `image-to-image` và bỏ qua `resolution` trừ khi model hỗ trợ rõ trường này cho operation đó.
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  Danh sách URL HTTPS công khai của ảnh tham chiếu. Dùng khi request JSON cần một hoặc nhiều ảnh tham chiếu. Endpoint này không hỗ trợ `file_id` và `images[]`.
+</ParamField>
+
+<ParamField body="reference_image_urls" type="string[]">
+  URL ảnh tham chiếu bổ sung theo từng model, dành cho provider phân biệt ảnh đầu vào chính và ảnh tham chiếu.
+</ParamField>
+
+<ParamField body="image" type="file">
+  File ảnh tham chiếu multipart cho image-to-image. Dùng khi ảnh nguồn là riêng tư hoặc cần header xác thực. Trường này khác với `file_id` của /v1/files; endpoint này không nhận `file_id`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -232,6 +249,19 @@ Ví dụ Nano Banana dùng ảnh tham chiếu: gửi request tới `/v1/images/g
   "image_urls": ["https://example.com/reference-1.png"],
   "aspect_ratio": "1:1"
 }
+```
+
+
+Với ảnh nguồn riêng tư hoặc trên máy local, hãy upload trực tiếp bằng multipart. Đừng gửi `file_id` tới `/v1/images/generations`:
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=nano-banana-pro" \
+  -F "prompt=Create a clean cinematic character image based on this reference" \
+  -F "operation=image-to-image" \
+  -F "image=@reference.png" \
+  -F "aspect_ratio=1:1"
 ```
 
 </RequestExample>

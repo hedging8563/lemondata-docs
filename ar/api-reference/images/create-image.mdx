@@ -23,6 +23,7 @@ Google Gemini في عقد اختيار واحد:
 - `gemini-2.0-flash-preview-image-generation` موثّق هنا على أنه تحويل نص إلى صورة يعتمد على prompt فقط.
 - لطلبات الصور المرجعية مع `nano-banana` و`nano-banana-2` و`nano-banana-pro`، استخدم هذه الواجهة (`/v1/images/generations`) مع `operation: "image-to-image"` و`image_urls`. لا ترسل طلبات Nano Banana المرجعية إلى `/v1/images/edits`.
 - في طلبات image-to-image الخاصة بـ Nano Banana، احذف `resolution`. يتيح `nano-banana-2` و`nano-banana-pro` هذا الحقل فقط لتوليد الصور من النص، ولا يتيحه `nano-banana`.
+- يمكن إرسال الصور المرجعية في هذه الواجهة عبر JSON `image_url` / `image_urls` أو كملف multipart باسم `image`. لا تقبل `/v1/images/generations` الحقول `images[]` أو `file_id`؛ تُستخدم مراجع `/v1/files` فقط مع نماذج `/v1/images/edits` التي توثق `images[].file_id` صراحةً.
 
 لأسَر صور Google، فضّل `aspect_ratio` وأرسل `resolution` فقط عندما يذكرها النموذج صراحةً.
 
@@ -38,6 +39,22 @@ Google Gemini في عقد اختيار واحد:
 
 <ParamField body="prompt" type="string" required>
   وصف نصي للصورة المطلوبة.
+</ParamField>
+
+<ParamField body="image_url" type="string">
+  رابط HTTPS عام لصورة مرجعية في توليد image-to-image. لعائلة Nano Banana، اجعل `operation` تساوي `image-to-image` واحذف `resolution` ما لم يكن النموذج يدعمها صراحةً لهذه العملية.
+</ParamField>
+
+<ParamField body="image_urls" type="string[]">
+  روابط HTTPS عامة لصور مرجعية. استخدمها لصورة مرجعية واحدة أو أكثر في طلبات JSON. لا تدعم هذه الواجهة `file_id` أو `images[]`.
+</ParamField>
+
+<ParamField body="reference_image_urls" type="string[]">
+  روابط صور مرجعية إضافية خاصة بالنموذج للمزوّدين الذين يميزون بين صورة الإدخال الأساسية والصور المرجعية.
+</ParamField>
+
+<ParamField body="image" type="file">
+  ملف صورة مرجعية multipart لتوليد image-to-image. استخدمه عندما تكون الصورة المصدر خاصة أو تتطلب ترويسات. هذا يختلف عن `file_id` من /v1/files؛ هذه الواجهة لا تقبل `file_id`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -232,6 +249,19 @@ echo $data['data'][0]['url'];
   "image_urls": ["https://example.com/reference-1.png"],
   "aspect_ratio": "1:1"
 }
+```
+
+
+للصور المصدر الخاصة أو المحلية، استخدم رفع multipart مباشرًا. لا ترسل `file_id` إلى `/v1/images/generations`:
+
+```bash
+curl -X POST "https://api.lemondata.cc/v1/images/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=nano-banana-pro" \
+  -F "prompt=Create a clean cinematic character image based on this reference" \
+  -F "operation=image-to-image" \
+  -F "image=@reference.png" \
+  -F "aspect_ratio=1:1"
 ```
 
 </RequestExample>
