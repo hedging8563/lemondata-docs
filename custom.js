@@ -1,5 +1,5 @@
 /**
- * LemonData Docs - Custom Auth Input Injection
+ * TokenLab Docs - Custom Auth Input Injection
  * 在 Mintlify Playground 上方注入 Authorization 输入框
  */
 (function() {
@@ -223,7 +223,7 @@
     }, [
       'Get your API key from ',
       createElement('a', {
-        href: 'https://lemondata.cc/dashboard',
+        href: 'https://tokenlab.sh/dashboard',
         target: '_blank',
         style: { color: '#7C3AED', textDecoration: 'none' }
       }, ['Dashboard →']),
@@ -293,7 +293,7 @@
 
       // 拦截请求
       interceptPlaygroundRequests();
-      console.log('[LemonData] Auth input injected successfully');
+      console.log('[TokenLab] Auth input injected successfully');
     }
   }
 
@@ -309,7 +309,7 @@
       const apiKey = document.getElementById('lemondata-api-key-input');
       const apiKeyValue = apiKey ? apiKey.value : '';
 
-      // 检查是否是发往 LemonData API 的请求
+      // 检查是否是发往 TokenLab API 的请求
       if (apiKeyValue && typeof url === 'string' &&
           (url.includes('api.tokenlab.sh') || url.includes('lemondata'))) {
 
@@ -327,7 +327,7 @@
         if (!headers['Authorization'] && !headers['authorization']) {
           headers['Authorization'] = 'Bearer ' + apiKeyValue;
           options.headers = headers;
-          console.log('[LemonData] Authorization header injected');
+          console.log('[TokenLab] Authorization header injected');
         }
       }
 
@@ -379,5 +379,5 @@
   observeDOM();
   handleNavigation();
 
-  console.log('[LemonData] Custom auth script loaded');
+  console.log('[TokenLab] Custom auth script loaded');
 })();
