@@ -27,7 +27,7 @@
       pathname === '/v1beta' ||
       pathname.startsWith('/v1beta/')
     ) {
-      window.location.replace(`https://api.lemondata.cc${pathname}${search}${hash}`);
+      window.location.replace(`https://api.tokenlab.sh${pathname}${search}${hash}`);
       return true;
     }
     return false;
@@ -311,7 +311,7 @@
 
       // 检查是否是发往 LemonData API 的请求
       if (apiKeyValue && typeof url === 'string' &&
-          (url.includes('api.lemondata.cc') || url.includes('lemondata'))) {
+          (url.includes('api.tokenlab.sh') || url.includes('lemondata'))) {
 
         // 确保 headers 是普通对象
         let headers = options.headers || {};
