@@ -18,11 +18,12 @@ Compatibility note: if `input_fidelity` is sent with `gpt-image-2`, TokenLab rem
 
 Google Gemini image-family models do not share the same selector contract:
 
-- `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview`, `nano-banana-2`, and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`) for text-to-image generation.
+- `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview`, and `nano-banana-pro` support `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`) for their public text-to-image and image-edit/image-to-image operations.
+- `nano-banana-2` supports `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`) for text-to-image generation only in the current TokenLab contract.
 - `gemini-2.5-flash-image`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
 - `gemini-2.0-flash-preview-image-generation` is documented here as prompt-only text-to-image.
-- For `nano-banana`, `nano-banana-2`, and `nano-banana-pro` reference-image requests, use this endpoint (`/v1/images/generations`) with `operation: "image-to-image"` and `image_urls`. Do not send Nano Banana reference-image requests to `/v1/images/edits`.
-- For Nano Banana image-to-image requests, omit `resolution`. `nano-banana-2` and `nano-banana-pro` expose `resolution` only for text-to-image, and `nano-banana` does not expose it.
+- For Nano Banana reference-image requests, use `nano-banana-edit` or `nano-banana-pro` on this endpoint (`/v1/images/generations`) with `operation: "image-to-image"` and `image_urls`. Do not send Nano Banana reference-image requests to `/v1/images/edits`.
+- For Nano Banana image-to-image requests, `nano-banana-pro` may include `resolution` (`1k`, `2k`, `4k`); `nano-banana-edit` must omit it. `nano-banana` and `nano-banana-2` are text-to-image models in the current public contract.
 - Reference images on this endpoint can be supplied as JSON `image_url` / `image_urls`, or as a multipart `image` file. `images[]` and `file_id` are not accepted on `/v1/images/generations`; create `/v1/files` references only for `/v1/images/edits` models that document `images[].file_id`.
 
 For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
@@ -42,7 +43,7 @@ xAI Grok Imagine image models (`grok-imagine-image`, `grok-imagine-image-quality
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  Public HTTPS reference image URL for image-to-image generation. For Nano Banana family requests, set `operation` to `image-to-image` and omit `resolution` unless the model explicitly supports it for that operation.
+  Public HTTPS reference image URL for image-to-image generation. For Nano Banana reference-image requests, set `operation` to `image-to-image`; `nano-banana-pro` may include `resolution`, while `nano-banana-edit` should omit it.
 </ParamField>
 
 <ParamField body="image_urls" type="string[]">
@@ -78,7 +79,7 @@ xAI Grok Imagine image models (`grok-imagine-image`, `grok-imagine-image-quality
 <ParamField body="resolution" type="string">
   Model-dependent output resolution selector.
 
-  Supported on `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview`, `nano-banana-2`, `nano-banana-pro`, and similar high-resolution families. Typical values are `1k`, `2k`, and `4k`. Do not send this parameter to ratio-only Gemini image families unless the model explicitly documents it. For xAI Grok Imagine image models, use `1k` or `2k`.
+  Supported on `gemini-3.1-flash-image-preview` and `gemini-3-pro-image-preview` for text-to-image and image-edit, on `nano-banana-pro` for text-to-image and image-to-image, and on `nano-banana-2` for text-to-image only. Typical values are `1k`, `2k`, and `4k`. Do not send this parameter to ratio-only Gemini image families unless the model explicitly documents it. For xAI Grok Imagine image models, use `1k` or `2k`.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -239,7 +240,7 @@ Ratio-only image-family example: for `gemini-2.5-flash-image`, `nano-banana`, or
 }
 ```
 
-Nano Banana reference-image example: send the request to `/v1/images/generations`, not `/v1/images/edits`, and omit `resolution`:
+Nano Banana Pro reference-image example: send the request to `/v1/images/generations`, not `/v1/images/edits`. `resolution` is optional and may be set to `1k`, `2k`, or `4k`:
 
 ```json
 {
@@ -247,7 +248,8 @@ Nano Banana reference-image example: send the request to `/v1/images/generations
   "prompt": "Create a clean cinematic character image based on the reference images",
   "operation": "image-to-image",
   "image_urls": ["https://example.com/reference-1.png"],
-  "aspect_ratio": "1:1"
+  "aspect_ratio": "1:1",
+  "resolution": "2k"
 }
 ```
 
@@ -261,7 +263,8 @@ curl -X POST "https://api.tokenlab.sh/v1/images/generations" \
   -F "prompt=Create a clean cinematic character image based on this reference" \
   -F "operation=image-to-image" \
   -F "image=@reference.png" \
-  -F "aspect_ratio=1:1"
+  -F "aspect_ratio=1:1" \
+  -F "resolution=2k"
 ```
 
 </RequestExample>

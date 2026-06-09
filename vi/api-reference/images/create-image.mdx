@@ -18,11 +18,12 @@ Ghi chu tuong thich: neu yeu cau `gpt-image-2` gui `input_fidelity`, TokenLab se
 
 Google Gemini không dùng cùng một hợp đồng selector:
 
-- `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview`, `nano-banana-2`, và `nano-banana-pro` hỗ trợ `aspect_ratio` cùng `resolution` (`1k`, `2k`, `4k`) cho text-to-image.
+- `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview`, và `nano-banana-pro` hỗ trợ `aspect_ratio` cùng `resolution` (`1k`, `2k`, `4k`) cho các operation text-to-image và image-edit/image-to-image công khai.
+- `nano-banana-2` chỉ hỗ trợ `aspect_ratio` cùng `resolution` (`1k`, `2k`, `4k`) cho text-to-image trong contract TokenLab hiện tại.
 - `gemini-2.5-flash-image`, `nano-banana`, và `nano-banana-edit` hỗ trợ `aspect_ratio` nhưng không công khai `resolution`.
 - `gemini-2.0-flash-preview-image-generation` được tài liệu hoá ở đây như một mô hình text-to-image chỉ dùng prompt.
-- Với request ảnh tham chiếu cho `nano-banana`, `nano-banana-2`, và `nano-banana-pro`, hãy dùng endpoint này (`/v1/images/generations`) với `operation: "image-to-image"` và `image_urls`. Đừng gửi request ảnh tham chiếu Nano Banana tới `/v1/images/edits`.
-- Với request image-to-image Nano Banana, hãy bỏ qua `resolution`. `nano-banana-2` và `nano-banana-pro` chỉ công khai `resolution` cho text-to-image, còn `nano-banana` không công khai trường này.
+- Với request Nano Banana dùng ảnh tham chiếu, hãy dùng `nano-banana-edit` hoặc `nano-banana-pro` trên endpoint này (`/v1/images/generations`) với `operation: "image-to-image"` và `image_urls`. Đừng gửi request ảnh tham chiếu Nano Banana tới `/v1/images/edits`.
+- Với request Nano Banana image-to-image, `nano-banana-pro` có thể gửi `resolution` (`1k`, `2k`, `4k`); `nano-banana-edit` phải bỏ qua trường này. `nano-banana` và `nano-banana-2` là model text-to-image trong contract công khai hiện tại.
 - Ảnh tham chiếu trên endpoint này có thể gửi bằng JSON `image_url` / `image_urls`, hoặc file multipart `image`. `/v1/images/generations` không nhận `images[]` hay `file_id`; tham chiếu `/v1/files` chỉ dùng cho model `/v1/images/edits` có tài liệu rõ `images[].file_id`.
 
 Với các model hình ảnh của Google, hãy ưu tiên `aspect_ratio` và chỉ gửi `resolution` khi model đó hỗ trợ rõ ràng.
@@ -42,7 +43,7 @@ Các model hình ảnh xAI Grok Imagine (`grok-imagine-image`, `grok-imagine-ima
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  URL HTTPS công khai của ảnh tham chiếu cho image-to-image. Với họ Nano Banana, đặt `operation` là `image-to-image` và bỏ qua `resolution` trừ khi model hỗ trợ rõ trường này cho operation đó.
+  URL HTTPS công khai của ảnh tham chiếu cho image-to-image. Với request Nano Banana dùng ảnh tham chiếu, đặt `operation` là `image-to-image`; `nano-banana-pro` có thể gửi `resolution`, còn `nano-banana-edit` nên bỏ qua trường này.
 </ParamField>
 
 <ParamField body="image_urls" type="string[]">
@@ -78,7 +79,7 @@ Các model hình ảnh xAI Grok Imagine (`grok-imagine-image`, `grok-imagine-ima
 <ParamField body="resolution" type="string">
   Bộ chọn độ phân giải đầu ra theo từng model.
 
-  Được hỗ trợ trên `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview`, `nano-banana-2`, `nano-banana-pro`, và các nhóm độ phân giải cao tương tự. Giá trị thường dùng là `1k`, `2k`, và `4k`. Không gửi tham số này cho các model Gemini hình ảnh chỉ nhận tỷ lệ khung hình trừ khi tài liệu của model đó nói rõ. Với model hình ảnh xAI Grok Imagine, dùng `1k` hoặc `2k`.
+  Được hỗ trợ trên `gemini-3.1-flash-image-preview` và `gemini-3-pro-image-preview` cho text-to-image và image-edit, trên `nano-banana-pro` cho text-to-image và image-to-image, và trên `nano-banana-2` chỉ cho text-to-image. Giá trị thường dùng là `1k`, `2k`, và `4k`. Không gửi tham số này cho các model Gemini hình ảnh chỉ nhận tỷ lệ khung hình trừ khi tài liệu của model đó nói rõ. Với model hình ảnh xAI Grok Imagine, dùng `1k` hoặc `2k`.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -239,7 +240,7 @@ Ví dụ cho dòng hình ảnh chỉ nhận tỷ lệ khung hình: với `gemini
 }
 ```
 
-Ví dụ Nano Banana dùng ảnh tham chiếu: gửi request tới `/v1/images/generations`, không gửi tới `/v1/images/edits`, và bỏ qua `resolution`:
+Ví dụ Nano Banana Pro dùng ảnh tham chiếu: gửi request tới `/v1/images/generations`, không gửi tới `/v1/images/edits`. `resolution` là tùy chọn và có thể đặt là `1k`, `2k`, hoặc `4k`:
 
 ```json
 {
@@ -247,7 +248,8 @@ Ví dụ Nano Banana dùng ảnh tham chiếu: gửi request tới `/v1/images/g
   "prompt": "Create a clean cinematic character image based on the reference images",
   "operation": "image-to-image",
   "image_urls": ["https://example.com/reference-1.png"],
-  "aspect_ratio": "1:1"
+  "aspect_ratio": "1:1",
+  "resolution": "2k"
 }
 ```
 
@@ -261,7 +263,8 @@ curl -X POST "https://api.tokenlab.sh/v1/images/generations" \
   -F "prompt=Create a clean cinematic character image based on this reference" \
   -F "operation=image-to-image" \
   -F "image=@reference.png" \
-  -F "aspect_ratio=1:1"
+  -F "aspect_ratio=1:1" \
+  -F "resolution=2k"
 ```
 
 </RequestExample>

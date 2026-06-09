@@ -18,11 +18,12 @@ description: "根据 prompt 创建图像"
 
 Google Gemini 图片模型并不共用同一套参数选择规则：
 
-- `gemini-3.1-flash-image-preview`、`gemini-3-pro-image-preview`、`nano-banana-2` 和 `nano-banana-pro` 在文生图生成中支持 `aspect_ratio`，也支持 `resolution`（`1k`、`2k`、`4k`）。
+- `gemini-3.1-flash-image-preview`、`gemini-3-pro-image-preview` 和 `nano-banana-pro` 在公开的文生图、图片编辑/图生图操作中支持 `aspect_ratio` 和 `resolution`（`1k`、`2k`、`4k`）。
+- `nano-banana-2` 在当前 TokenLab 契约中仅文生图支持 `aspect_ratio` 和 `resolution`（`1k`、`2k`、`4k`）。
 - `gemini-2.5-flash-image`、`nano-banana` 和 `nano-banana-edit` 支持 `aspect_ratio`，但不提供公开的 `resolution` 选择。
 - `gemini-2.0-flash-preview-image-generation` 在此端点中按仅使用 prompt 的文生图模型记录。
-- 对 `nano-banana`、`nano-banana-2` 和 `nano-banana-pro` 的参考图请求，请使用本端点（`/v1/images/generations`），并发送 `operation: "image-to-image"` 与 `image_urls`。不要把 Nano Banana 参考图请求发送到 `/v1/images/edits`。
-- Nano Banana 图生图请求请省略 `resolution`。`nano-banana-2` 和 `nano-banana-pro` 只在文生图中公开 `resolution`，`nano-banana` 不公开该参数。
+- Nano Banana 参考图请求请在本端点（`/v1/images/generations`）使用 `nano-banana-edit` 或 `nano-banana-pro`，并发送 `operation: "image-to-image"` 与 `image_urls`。不要把 Nano Banana 参考图请求发送到 `/v1/images/edits`。
+- Nano Banana 图生图请求中，`nano-banana-pro` 可以发送 `resolution`（`1k`、`2k`、`4k`）；`nano-banana-edit` 必须省略该参数。`nano-banana` 和 `nano-banana-2` 在当前公开契约中是文生图模型。
 - 本端点的参考图可以通过 JSON `image_url` / `image_urls` 传入，也可以通过 multipart `image` 文件直接上传。`/v1/images/generations` 不接受 `images[]` 或 `file_id`；只有明确支持 `images[].file_id` 的 `/v1/images/edits` 模型才使用 `/v1/files` 返回的引用。
 
 使用 Google 图片模型时，优先发送 `aspect_ratio`；只有模型明确支持时才发送 `resolution`。
@@ -42,7 +43,7 @@ xAI Grok Imagine 图片模型（`grok-imagine-image`、`grok-imagine-image-quali
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  用于图生图的公开 HTTPS 参考图 URL。Nano Banana 系列请求请设置 `operation` 为 `image-to-image`，并且除非该模型明确支持此操作的 `resolution`，否则不要发送 `resolution`。
+  用于图生图的公开 HTTPS 参考图 URL。Nano Banana 参考图请求请设置 `operation` 为 `image-to-image`；`nano-banana-pro` 可以发送 `resolution`，`nano-banana-edit` 应省略该参数。
 </ParamField>
 
 <ParamField body="image_urls" type="string[]">
@@ -78,7 +79,7 @@ xAI Grok Imagine 图片模型（`grok-imagine-image`、`grok-imagine-image-quali
 <ParamField body="resolution" type="string">
   依模型而定的输出分辨率选择器。
 
-  支持于 `gemini-3.1-flash-image-preview`、`gemini-3-pro-image-preview`、`nano-banana-2`、`nano-banana-pro` 以及类似的高分辨率家族。常见值为 `1k`、`2k`、`4k`。除非模型明确说明，否则不要发送给仅支持比例选择的 Gemini 图片家族。xAI Grok Imagine 图片模型请使用 `1k` 或 `2k`。
+  `gemini-3.1-flash-image-preview` 和 `gemini-3-pro-image-preview` 在文生图与图片编辑中支持该参数；`nano-banana-pro` 在文生图与图生图中支持；`nano-banana-2` 仅文生图支持。常见值为 `1k`、`2k`、`4k`。除非模型明确说明，否则不要发送给仅支持比例选择的 Gemini 图片家族。xAI Grok Imagine 图片模型请使用 `1k` 或 `2k`。
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -239,7 +240,7 @@ echo $data['data'][0]['url'];
 }
 ```
 
-Nano Banana 参考图示例：请求应发送到 `/v1/images/generations`，不要发送到 `/v1/images/edits`，并省略 `resolution`：
+Nano Banana Pro 参考图示例：请求应发送到 `/v1/images/generations`，不要发送到 `/v1/images/edits`。`resolution` 是可选参数，可设为 `1k`、`2k` 或 `4k`：
 
 ```json
 {
@@ -247,7 +248,8 @@ Nano Banana 参考图示例：请求应发送到 `/v1/images/generations`，不�
   "prompt": "Create a clean cinematic character image based on the reference images",
   "operation": "image-to-image",
   "image_urls": ["https://example.com/reference-1.png"],
-  "aspect_ratio": "1:1"
+  "aspect_ratio": "1:1",
+  "resolution": "2k"
 }
 ```
 
@@ -261,7 +263,8 @@ curl -X POST "https://api.tokenlab.sh/v1/images/generations" \
   -F "prompt=Create a clean cinematic character image based on this reference" \
   -F "operation=image-to-image" \
   -F "image=@reference.png" \
-  -F "aspect_ratio=1:1"
+  -F "aspect_ratio=1:1" \
+  -F "resolution=2k"
 ```
 
 </RequestExample>

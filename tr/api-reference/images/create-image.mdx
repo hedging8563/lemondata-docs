@@ -18,11 +18,12 @@ Uyumluluk notu: Bir `gpt-image-2` isteği `input_fidelity` gönderirse TokenLab 
 
 Google Gemini görsel aileleri aynı selector sözleşmesini paylaşmaz:
 
-- `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview`, `nano-banana-2` ve `nano-banana-pro`, text-to-image üretimde `aspect_ratio` ile birlikte `resolution` (`1k`, `2k`, `4k`) destekler.
+- `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview` ve `nano-banana-pro`, public text-to-image ve image-edit/image-to-image işlemlerinde `aspect_ratio` ile birlikte `resolution` (`1k`, `2k`, `4k`) destekler.
+- `nano-banana-2`, mevcut TokenLab sözleşmesinde yalnızca text-to-image için `aspect_ratio` ile birlikte `resolution` (`1k`, `2k`, `4k`) destekler.
 - `gemini-2.5-flash-image`, `nano-banana` ve `nano-banana-edit`, `aspect_ratio` destekler fakat public `resolution` seçimi sunmaz.
 - `gemini-2.0-flash-preview-image-generation` burada yalnızca prompt alan text-to-image olarak belgelenmiştir.
-- `nano-banana`, `nano-banana-2` ve `nano-banana-pro` referans görsel istekleri için bu endpoint'i (`/v1/images/generations`) `operation: "image-to-image"` ve `image_urls` ile kullanın. Nano Banana referans görsel isteklerini `/v1/images/edits` endpoint'ine göndermeyin.
-- Nano Banana image-to-image isteklerinde `resolution` göndermeyin. `nano-banana-2` ve `nano-banana-pro`, `resolution` alanını yalnızca text-to-image için sunar; `nano-banana` bu alanı sunmaz.
+- Nano Banana referans görsel istekleri için bu endpointte (`/v1/images/generations`) `nano-banana-edit` veya `nano-banana-pro` kullanın ve `operation: "image-to-image"` ile `image_urls` gönderin. Nano Banana referans görsel isteklerini `/v1/images/edits` endpointine göndermeyin.
+- Nano Banana image-to-image isteklerinde `nano-banana-pro`, `resolution` (`1k`, `2k`, `4k`) içerebilir; `nano-banana-edit` bunu atlamalıdır. `nano-banana` ve `nano-banana-2` mevcut public sözleşmede text-to-image modelleridir.
 - Bu endpointte referans görseller JSON `image_url` / `image_urls` olarak veya multipart `image` dosyası olarak gönderilebilir. `/v1/images/generations`, `images[]` ya da `file_id` kabul etmez; `/v1/files` referansları yalnızca `images[].file_id` dokümante eden `/v1/images/edits` modelleri için kullanılır.
 
 Google görsel aileleri için `aspect_ratio` kullanmayı tercih edin ve `resolution`'ı yalnızca model açıkça destekliyorsa gönderin.
@@ -42,7 +43,7 @@ xAI Grok Imagine görsel modelleri (`grok-imagine-image`, `grok-imagine-image-qu
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  Image-to-image üretim için herkese açık HTTPS referans görsel URL'si. Nano Banana ailesinde `operation` değerini `image-to-image` yapın ve model bu operasyonda açıkça desteklemiyorsa `resolution` göndermeyin.
+  Image-to-image üretim için herkese açık HTTPS referans görsel URL'si. Nano Banana referans görsel isteklerinde `operation` değerini `image-to-image` yapın; `nano-banana-pro` `resolution` içerebilir, `nano-banana-edit` ise bunu atlamalıdır.
 </ParamField>
 
 <ParamField body="image_urls" type="string[]">
@@ -78,7 +79,7 @@ xAI Grok Imagine görsel modelleri (`grok-imagine-image`, `grok-imagine-image-qu
 <ParamField body="resolution" type="string">
   Modele bağlı çıktı çözünürlüğü seçici.
 
-  `gemini-3.1-flash-image-preview`, `gemini-3-pro-image-preview`, `nano-banana-2`, `nano-banana-pro` ve benzeri yüksek çözünürlüklü ailelerde desteklenir. Tipik değerler `1k`, `2k` ve `4k`'tür. Model bunu açıkça belgelemiyorsa bu parametreyi yalnızca oran seçimi destekleyen Gemini image ailelerine göndermeyin. xAI Grok Imagine görsel modelleri için `1k` veya `2k` kullanın.
+  `gemini-3.1-flash-image-preview` ve `gemini-3-pro-image-preview` için text-to-image ve image-edit işlemlerinde, `nano-banana-pro` için text-to-image ve image-to-image işlemlerinde, `nano-banana-2` için yalnızca text-to-image işleminde desteklenir. Tipik değerler `1k`, `2k` ve `4k`'tür. Model bunu açıkça belgelemiyorsa bu parametreyi yalnızca oran seçimi destekleyen Gemini image ailelerine göndermeyin. xAI Grok Imagine görsel modelleri için `1k` veya `2k` kullanın.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -239,7 +240,7 @@ Yalnızca oran seçimi destekleyen image ailesi örneği: `gemini-2.5-flash-imag
 }
 ```
 
-Nano Banana referans görsel örneği: isteği `/v1/images/generations` endpoint'ine gönderin, `/v1/images/edits` endpoint'ine göndermeyin ve `resolution` alanını atlayın:
+Nano Banana Pro referans görsel örneği: isteği `/v1/images/generations` endpointine gönderin, `/v1/images/edits` endpointine göndermeyin. `resolution` opsiyoneldir ve `1k`, `2k` veya `4k` olabilir:
 
 ```json
 {
@@ -247,7 +248,8 @@ Nano Banana referans görsel örneği: isteği `/v1/images/generations` endpoint
   "prompt": "Create a clean cinematic character image based on the reference images",
   "operation": "image-to-image",
   "image_urls": ["https://example.com/reference-1.png"],
-  "aspect_ratio": "1:1"
+  "aspect_ratio": "1:1",
+  "resolution": "2k"
 }
 ```
 
@@ -261,7 +263,8 @@ curl -X POST "https://api.tokenlab.sh/v1/images/generations" \
   -F "prompt=Create a clean cinematic character image based on this reference" \
   -F "operation=image-to-image" \
   -F "image=@reference.png" \
-  -F "aspect_ratio=1:1"
+  -F "aspect_ratio=1:1" \
+  -F "resolution=2k"
 ```
 
 </RequestExample>

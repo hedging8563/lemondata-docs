@@ -18,11 +18,12 @@ description: "ينشئ صورة بناءً على prompt"
 
 Google Gemini في عقد اختيار واحد:
 
-- `gemini-3.1-flash-image-preview` و `gemini-3-pro-image-preview` و `nano-banana-2` و `nano-banana-pro` تدعم `aspect_ratio` مع `resolution` (`1k` و `2k` و `4k`) لتوليد الصور من النص.
-- `gemini-2.5-flash-image` و `nano-banana` و `nano-banana-edit` تدعم `aspect_ratio` لكنها لا تعرض اختيارًا عامًا لـ `resolution`.
+- تدعم `gemini-3.1-flash-image-preview` و`gemini-3-pro-image-preview` و`nano-banana-pro` كلًا من `aspect_ratio` و`resolution` (`1k` و`2k` و`4k`) في عمليات text-to-image وimage-edit/image-to-image العامة.
+- يدعم `nano-banana-2` كلًا من `aspect_ratio` و`resolution` (`1k` و`2k` و`4k`) في text-to-image فقط ضمن عقد TokenLab الحالي.
+- تدعم `gemini-2.5-flash-image` و`nano-banana` و`nano-banana-edit` الحقل `aspect_ratio` لكنها لا تعرض اختيار `resolution` عامًا.
 - `gemini-2.0-flash-preview-image-generation` موثّق هنا على أنه تحويل نص إلى صورة يعتمد على prompt فقط.
-- لطلبات الصور المرجعية مع `nano-banana` و`nano-banana-2` و`nano-banana-pro`، استخدم هذه الواجهة (`/v1/images/generations`) مع `operation: "image-to-image"` و`image_urls`. لا ترسل طلبات Nano Banana المرجعية إلى `/v1/images/edits`.
-- في طلبات image-to-image الخاصة بـ Nano Banana، احذف `resolution`. يتيح `nano-banana-2` و`nano-banana-pro` هذا الحقل فقط لتوليد الصور من النص، ولا يتيحه `nano-banana`.
+- لطلبات Nano Banana مع صورة مرجعية، استخدم `nano-banana-edit` أو `nano-banana-pro` على هذه الواجهة (`/v1/images/generations`) مع `operation: "image-to-image"` و`image_urls`. لا ترسل طلبات Nano Banana المرجعية إلى `/v1/images/edits`.
+- في طلبات Nano Banana image-to-image، يمكن لـ `nano-banana-pro` تضمين `resolution` (`1k` و`2k` و`4k`)؛ ويجب على `nano-banana-edit` حذفها. أما `nano-banana` و`nano-banana-2` فهما نموذجا text-to-image في العقد العام الحالي.
 - يمكن إرسال الصور المرجعية في هذه الواجهة عبر JSON `image_url` / `image_urls` أو كملف multipart باسم `image`. لا تقبل `/v1/images/generations` الحقول `images[]` أو `file_id`؛ تُستخدم مراجع `/v1/files` فقط مع نماذج `/v1/images/edits` التي توثق `images[].file_id` صراحةً.
 
 لأسَر صور Google، فضّل `aspect_ratio` وأرسل `resolution` فقط عندما يذكرها النموذج صراحةً.
@@ -42,7 +43,7 @@ Google Gemini في عقد اختيار واحد:
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  رابط HTTPS عام لصورة مرجعية في توليد image-to-image. لعائلة Nano Banana، اجعل `operation` تساوي `image-to-image` واحذف `resolution` ما لم يكن النموذج يدعمها صراحةً لهذه العملية.
+  رابط HTTPS عام لصورة مرجعية في توليد image-to-image. في طلبات Nano Banana المرجعية، اجعل `operation` تساوي `image-to-image`؛ يمكن لـ `nano-banana-pro` تضمين `resolution`، بينما يجب على `nano-banana-edit` حذفها.
 </ParamField>
 
 <ParamField body="image_urls" type="string[]">
@@ -78,7 +79,7 @@ Google Gemini في عقد اختيار واحد:
 <ParamField body="resolution" type="string">
   محدد دقة الإخراج بحسب النموذج.
 
-  مدعوم في `gemini-3.1-flash-image-preview` و`gemini-3-pro-image-preview` و`nano-banana-2` و`nano-banana-pro` وعائلات الدقة العالية المشابهة. القيم النموذجية هي `1k` و`2k` و`4k`. لا ترسل هذه المعلمة إلى عائلات صور Gemini التي تدعم النسبة فقط إلا إذا وثّقها النموذج صراحةً. لنماذج صور xAI Grok Imagine استخدم `1k` أو `2k`.
+  مدعوم في `gemini-3.1-flash-image-preview` و`gemini-3-pro-image-preview` لعمليات text-to-image وimage-edit، وفي `nano-banana-pro` لعمليات text-to-image وimage-to-image، وفي `nano-banana-2` لعملية text-to-image فقط. القيم النموذجية هي `1k` و`2k` و`4k`. لا ترسل هذه المعلمة إلى عائلات صور Gemini التي تدعم النسبة فقط إلا إذا وثّقها النموذج صراحةً. لنماذج صور xAI Grok Imagine استخدم `1k` أو `2k`.
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -239,7 +240,7 @@ echo $data['data'][0]['url'];
 }
 ```
 
-مثال Nano Banana مع صورة مرجعية: أرسل الطلب إلى `/v1/images/generations` وليس إلى `/v1/images/edits`، واحذف `resolution`:
+مثال Nano Banana Pro مع صورة مرجعية: أرسل الطلب إلى `/v1/images/generations` وليس إلى `/v1/images/edits`. `resolution` اختياري ويمكن ضبطه على `1k` أو `2k` أو `4k`:
 
 ```json
 {
@@ -247,7 +248,8 @@ echo $data['data'][0]['url'];
   "prompt": "Create a clean cinematic character image based on the reference images",
   "operation": "image-to-image",
   "image_urls": ["https://example.com/reference-1.png"],
-  "aspect_ratio": "1:1"
+  "aspect_ratio": "1:1",
+  "resolution": "2k"
 }
 ```
 
@@ -261,7 +263,8 @@ curl -X POST "https://api.tokenlab.sh/v1/images/generations" \
   -F "prompt=Create a clean cinematic character image based on this reference" \
   -F "operation=image-to-image" \
   -F "image=@reference.png" \
-  -F "aspect_ratio=1:1"
+  -F "aspect_ratio=1:1" \
+  -F "resolution=2k"
 ```
 
 </RequestExample>

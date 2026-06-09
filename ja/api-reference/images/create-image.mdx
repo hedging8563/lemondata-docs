@@ -18,11 +18,12 @@ description: "プロンプトに基づいて画像を生成します"
 
 Google Gemini の画像ファミリーは、同じセレクター契約を共有していません:
 
-- `gemini-3.1-flash-image-preview`、`gemini-3-pro-image-preview`、`nano-banana-2`、および `nano-banana-pro` は、テキストから画像の生成で `aspect_ratio` と `resolution`（`1k`、`2k`、`4k`）をサポートしています。
-- `gemini-2.5-flash-image`、`nano-banana`、および `nano-banana-edit` は `aspect_ratio` をサポートしますが、公開されている `resolution` の選択肢はありません。
+- `gemini-3.1-flash-image-preview`、`gemini-3-pro-image-preview`、`nano-banana-pro` は、公開されているテキストから画像、画像編集/image-to-image 操作で `aspect_ratio` と `resolution`（`1k`、`2k`、`4k`）をサポートします。
+- `nano-banana-2` は、現在の TokenLab 契約ではテキストから画像の生成でのみ `aspect_ratio` と `resolution`（`1k`、`2k`、`4k`）をサポートします。
+- `gemini-2.5-flash-image`、`nano-banana`、`nano-banana-edit` は `aspect_ratio` をサポートしますが、公開されている `resolution` の選択肢はありません。
 - `gemini-2.0-flash-preview-image-generation` は、ここではプロンプトのみのテキストから画像への生成として説明されています。
-- `nano-banana`、`nano-banana-2`、`nano-banana-pro` の参照画像リクエストでは、このエンドポイント（`/v1/images/generations`）に `operation: "image-to-image"` と `image_urls` を送信してください。Nano Banana の参照画像リクエストを `/v1/images/edits` に送信しないでください。
-- Nano Banana の image-to-image リクエストでは `resolution` を省略してください。`nano-banana-2` と `nano-banana-pro` はテキストから画像の生成でのみ `resolution` を公開し、`nano-banana` は公開していません。
+- Nano Banana の参照画像リクエストでは、このエンドポイント（`/v1/images/generations`）で `nano-banana-edit` または `nano-banana-pro` を使い、`operation: "image-to-image"` と `image_urls` を送信してください。Nano Banana の参照画像リクエストを `/v1/images/edits` に送信しないでください。
+- Nano Banana の image-to-image リクエストでは、`nano-banana-pro` は `resolution`（`1k`、`2k`、`4k`）を指定できます。`nano-banana-edit` では省略してください。`nano-banana` と `nano-banana-2` は現在の公開契約ではテキストから画像モデルです。
 - このエンドポイントの参照画像は、JSON の `image_url` / `image_urls`、または multipart の `image` ファイルとして渡せます。`/v1/images/generations` では `images[]` と `file_id` は受け付けません。`/v1/files` の参照は、`images[].file_id` を明示的にサポートする `/v1/images/edits` モデルでのみ使用します。
 
 Google の画像ファミリーでは `aspect_ratio` を優先し、モデルが明示的に対応している場合だけ `resolution` を送信してください。
@@ -42,7 +43,7 @@ xAI Grok Imagine 画像モデル（`grok-imagine-image`、`grok-imagine-image-qu
 </ParamField>
 
 <ParamField body="image_url" type="string">
-  image-to-image 生成に使う公開 HTTPS 参照画像 URL。Nano Banana ファミリーでは `operation` を `image-to-image` に設定し、その操作でモデルが明示的に対応していない限り `resolution` は省略してください。
+  image-to-image 生成に使う公開 HTTPS 参照画像 URL。Nano Banana の参照画像リクエストでは `operation` を `image-to-image` に設定してください。`nano-banana-pro` は `resolution` を指定でき、`nano-banana-edit` では省略してください。
 </ParamField>
 
 <ParamField body="image_urls" type="string[]">
@@ -78,7 +79,7 @@ xAI Grok Imagine 画像モデル（`grok-imagine-image`、`grok-imagine-image-qu
 <ParamField body="resolution" type="string">
   モデル依存の出力解像度セレクタ。
 
-  `gemini-3.1-flash-image-preview`、`gemini-3-pro-image-preview`、`nano-banana-2`、`nano-banana-pro`、および同種の高解像度ファミリーでサポートされます。一般的な値は `1k`、`2k`、`4k` です。モデル側で明記されていない限り、アスペクト比のみの Gemini 画像ファミリーには送信しないでください。xAI Grok Imagine 画像モデルでは `1k` または `2k` を使用してください。
+  `gemini-3.1-flash-image-preview` と `gemini-3-pro-image-preview` ではテキストから画像と画像編集で、`nano-banana-pro` ではテキストから画像と image-to-image で、`nano-banana-2` ではテキストから画像のみでサポートされます。一般的な値は `1k`、`2k`、`4k` です。モデル側で明記されていない限り、アスペクト比のみの Gemini 画像ファミリーには送信しないでください。xAI Grok Imagine 画像モデルでは `1k` または `2k` を使用してください。
 </ParamField>
 
 <ParamField body="quality" type="string" default="standard">
@@ -239,7 +240,7 @@ echo $data['data'][0]['url'];
 }
 ```
 
-Nano Banana の参照画像の例: リクエストは `/v1/images/generations` に送信し、`/v1/images/edits` には送信せず、`resolution` は省略します。
+Nano Banana Pro の参照画像の例: リクエストは `/v1/images/generations` に送信し、`/v1/images/edits` には送信しません。`resolution` は任意で、`1k`、`2k`、`4k` を指定できます。
 
 ```json
 {
@@ -247,7 +248,8 @@ Nano Banana の参照画像の例: リクエストは `/v1/images/generations` �
   "prompt": "Create a clean cinematic character image based on the reference images",
   "operation": "image-to-image",
   "image_urls": ["https://example.com/reference-1.png"],
-  "aspect_ratio": "1:1"
+  "aspect_ratio": "1:1",
+  "resolution": "2k"
 }
 ```
 
@@ -261,7 +263,8 @@ curl -X POST "https://api.tokenlab.sh/v1/images/generations" \
   -F "prompt=Create a clean cinematic character image based on this reference" \
   -F "operation=image-to-image" \
   -F "image=@reference.png" \
-  -F "aspect_ratio=1:1"
+  -F "aspect_ratio=1:1" \
+  -F "resolution=2k"
 ```
 
 </RequestExample>
