@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-06-09
+Generated: 2026-06-16
 Source: https://docs.tokenlab.sh
 
 ---
@@ -56,7 +56,6 @@ curl https://api.tokenlab.sh/v1/chat/completions \
 ```
 
 ## Key Features
-
 
 
 
@@ -459,7 +458,7 @@ These headers appear on both streaming and non-streaming responses.
 |-------|--------|-------------|
 | `category` | `chat`, `image`, `video`, `audio`, `tts`, `stt`, `3d`, `embedding`, `rerank` | Model type |
 | `pricing_unit` | `per_token`, `per_image`, `per_second`, `per_request` | How the model is billed |
-| `cache_pricing` | object or `null` | Model-specific upstream prompt cache prices. Pure platform semantic-cache discount no longer appears by itself on the list route. |
+| `cache_pricing` | object or `null` | Model-specific upstream prompt cache prices. |
 | `agent_preferences.` | object | Non-chat recommendation snapshot for that scene, only on `GET /v1/models?recommended_for=` |
 
 When `recommended_for` is present, `agent_preferences` is derived from a cached 24-hour success-rate snapshot:
@@ -851,208 +850,6 @@ response = client.chat.completions.create(model="gemini-2.5-flash", ...)
 
 ---
 
-### ✨ Intelligent Caching
-
-> Reduce costs and latency with context-aware semantic caching
-
-URL: https://docs.tokenlab.sh/guides/caching
-
-## Overview
-
-TokenLab provides an intelligent caching system that can significantly reduce your API costs and response latency. Our caching goes beyond simple request matching - it understands the **semantic meaning** of your prompts.
-
-
-
-
-
-## How It Works
-
-TokenLab uses a two-layer caching system:
-
-### Layer 1: Response Cache (Exact Match)
-
-For deterministic requests (`temperature=0`), we cache the exact response:
-
-- **Match**: Identical model, messages, and parameters
-- **Speed**: Instant (microseconds)
-- **Best for**: Repeated identical queries
-
-### Layer 2: Semantic Cache (Similarity Match)
-
-For all requests, we also check semantic similarity using a two-stage matching algorithm:
-
-- **Stage 1 (Query-only)**: ≥95% similarity on user query
-- **Stage 2 (Full context)**: ≥95% similarity including conversation context
-- **Best for**: FAQ-style queries, common questions
-
-```
-User A: "What is the capital of France?"
-User B: "Tell me the capital city of France"
-→ Same cached response (high semantic similarity)
-```
-
-## Cache Control
-
-### Request-Level Control
-
-Control caching behavior per-request using the `cache_control` parameter in the request body:
-
-```bash
-# Skip cache lookup, always call the model
-curl https://api.tokenlab.sh/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello"}],
-    "cache_control": {"type": "no_cache"}
-  }'
-```
-
-| Type            | Effect                                       |
-| --------------- | -------------------------------------------- |
-| `no_cache`      | Skip cache lookup, always get fresh response |
-| `no_store`      | Don't store this response in cache           |
-| `response_only` | Only use exact match cache (skip semantic)   |
-| `semantic_only` | Only use semantic cache (skip exact match)   |
-
-### Response Headers
-
-Every response includes cache status:
-
-```
-X-Cache-Status: HIT    # Response served from cache
-X-Cache-Status: MISS   # Fresh response from model
-```
-
-## Checking Cache Status
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="sk-your-key",
-    base_url="https://api.tokenlab.sh/v1"
-)
-
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "What is 2+2?"}]
-)
-
-# Check cache status from response headers
-# (Available in raw HTTP response)
-print(f"Cache: {response._raw_response.headers.get('X-Cache-Status')}")
-```
-
-## Cache Billing
-
-Cache hits are significantly cheaper than fresh requests:
-
-| Type       | Cost        |
-| ---------- | ----------- |
-| Cache HIT  | **90% off** |
-| Cache MISS | Full price  |
-
-The exact discount is shown in your dashboard usage logs.
-
-## Privacy Controls
-
-### Organization / User Level
-
-Configure caching behavior in your dashboard settings:
-
-| Mode         | Description                                                                               |
-| ------------ | ----------------------------------------------------------------------------------------- |
-| **Shared**   | Cache enabled, responses may be shared across users (default for personal accounts)       |
-| **Isolated** | Cache enabled, but responses are private to your organization (default for organizations) |
-| **Disabled** | No caching at all                                                                         |
-
-Additional settings available:
-
-- **Similarity Threshold**: Adjust semantic matching sensitivity (default: 92%)
-- **Custom TTL**: Override cache expiration time
-- **Excluded Models**: Disable caching for specific models
-
-### Request Level
-
-Override per-request using the `cache_control` parameter:
-
-```bash
-# Disable caching for this request
-curl https://api.tokenlab.sh/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "..."}],
-    "cache_control": {"type": "no_store"}
-  }'
-```
-
-## Cache Feedback
-
-If you receive an incorrect cached response, you can report it:
-
-```bash
-curl -X POST https://api.tokenlab.sh/v1/cache/feedback \
-  -H "Authorization: Bearer sk-your-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "cache_entry_id": "abc123",
-    "feedback_type": "wrong_answer",
-    "description": "Response was outdated"
-  }'
-```
-
-**Feedback types:**
-
-- `wrong_answer` - Factually incorrect
-- `outdated` - Information is stale
-- `irrelevant` - Doesn't match the question
-- `other` - Other issues
-
-When a cache entry receives enough negative feedback, it's automatically invalidated.
-
-## Best Practices
-
-#### Use temperature=0 for cacheable queries
-
-Deterministic settings maximize cache hit rates.
-
-#### Standardize prompt formats
-
-Consistent formatting improves semantic matching.
-
-#### Use no-cache for time-sensitive queries
-
-Current events, real-time data should skip cache.
-
-
-#### Monitor cache hit rates
-
-Check your dashboard for cache statistics and savings.
-
-## When NOT to Cache
-
-Disable caching for:
-
-- **Real-time information**: Stock prices, weather, news
-- **Personalized content**: User-specific recommendations
-- **Creative tasks**: When variety is desired
-- **Sensitive data**: Confidential information
-
-```python
-# For time-sensitive queries
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "What's the current stock price of AAPL?"}],
-    extra_body={"cache_control": {"type": "no_cache"}}
-)
-```
-
----
-
 ### ✨ Upstream Prompt Cache
 
 > Understand provider-level prompt caching and how it reduces costs
@@ -1060,17 +857,6 @@ response = client.chat.completions.create(
 URL: https://docs.tokenlab.sh/guides/prompt-cache
 
 ## Overview
-
-In addition to TokenLab's [platform semantic cache](/guides/caching), many AI providers offer their own **prompt caching** feature. This is a separate caching mechanism that operates at the provider level (Anthropic, OpenAI, DeepSeek, etc.).
-
-> Note: **Two Types of Caching**
-
-| Type | Where | How it Works | Cost |
-|------|-------|--------------|------|
-| **Platform Cache** | TokenLab | Semantic similarity matching | 10% of normal price |
-| **Provider Cache** | Upstream (Anthropic/OpenAI/etc) | Exact prefix matching | Discounted token rates |
-
-These are **mutually exclusive**: if platform cache hits, no upstream call is made, so provider cache doesn't apply.
 
 ## How Provider Prompt Cache Works
 
@@ -1120,7 +906,6 @@ Your usage logs show detailed cache token breakdown:
 
 Transactions show a **Provider Cache** label when upstream caching was used:
 
-- **Cache** (sky blue): Platform semantic cache hit - 90% discount
 - **Provider Cache** (teal): Upstream prompt cache hit - discounted rates
 
 ## Cost Calculation Example
@@ -1160,48 +945,11 @@ Ensure your cacheable prefix meets the provider's minimum (e.g., 1024 tokens for
 
 Check your dashboard usage statistics for cache hit rates and savings.
 
-## Platform Cache vs Provider Cache
-
-| Aspect | Platform Cache | Provider Cache |
-|--------|----------------|----------------|
-| **Matching** | Semantic similarity | Exact prefix match |
-| **Cost** | 10% of normal price | Discounted rates |
-| **Latency** | Instant (~1ms) | Reduced (skip processing) |
-| **Control** | Dashboard settings | Automatic |
-| **Scope** | Cross-user (optional) | Per-API-key |
-
-### When Each Applies
-
-```
-Request arrives
-    │
-    ▼
-┌─────────────────────┐
-│ Platform Cache Hit? │
-└─────────────────────┘
-    │ Yes              │ No
-    ▼                  ▼
-┌─────────┐    ┌─────────────────────┐
-│ Return  │    │ Call Upstream API   │
-│ Cached  │    └─────────────────────┘
-│ (10%)   │            │
-└─────────┘            ▼
-               ┌─────────────────────┐
-               │ Provider Cache Hit? │
-               └─────────────────────┘
-                   │ Yes        │ No
-                   ▼            ▼
-               Discounted    Full Price
-               Token Rate    Token Rate
-```
-
 ## Checking Cache Status
 
 ### Response Headers
 
 ```
-X-Cache-Status: HIT           # Platform cache hit
-X-Cache-Status: MISS          # No platform cache
 X-Upstream-Cache-Read: 8000   # Provider cache read tokens
 X-Upstream-Cache-Write: 2000  # Provider cache write tokens
 ```
@@ -1212,7 +960,7 @@ Usage logs API is not public yet. Check cache breakdown via response headers and
 
 ```text
 GET /v1/usage/logs is currently not a public endpoint.
-Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard usage page.
+Use X-Upstream-Cache-* response headers, plus the dashboard usage page.
 ```
 
 Response includes:
@@ -1250,10 +998,9 @@ Yes! When using your own API keys (BYOK), provider caching works the same way. T
 
 #### How do I maximize cache savings?
 
-1. Use platform semantic cache for repeated similar queries
-    2. Structure prompts with static content first
-    3. Keep system prompts consistent across requests
-    4. Send related requests in quick succession
+1. Structure prompts with static content first
+    2. Keep system prompts consistent across requests
+    3. Send related requests in quick succession
 
 ---
 
@@ -2287,20 +2034,7 @@ thorough but also concise in your response. The text is as follows:
 prompt = "Summarize the key points:\n{text}"
 ```
 
-### 4. Enable Caching
-
-Take advantage of [semantic caching](/guides/caching):
-
-```python
-# For repeated similar queries, caching provides major savings
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "What is machine learning?"}],
-    temperature=0  # Deterministic = better cache hits
-)
-```
-
-### 5. Batch Similar Requests
+### 4. Batch Similar Requests
 
 ```python
 # ❌ Many small requests
@@ -2320,7 +2054,7 @@ response = client.chat.completions.create(
 
 ## Performance Optimization
 
-### 1. Use Streaming for UX
+### 5. Use Streaming for UX
 
 Streaming improves perceived performance:
 
@@ -2336,7 +2070,7 @@ for chunk in stream:
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-### 2. Choose Fast Models for Interactive Use
+### 6. Choose Fast Models for Interactive Use
 
 | Use Case | Recommended | Latency |
 |----------|-------------|---------|
@@ -2344,7 +2078,7 @@ for chunk in stream:
 | Tab completion | `claude-haiku-4-5` | ~150ms first token |
 | Background processing | `gpt-4o`, `claude-sonnet-4-6` | ~500ms first token |
 
-### 3. Set Timeouts
+### 7. Set Timeouts
 
 ```python
 client = OpenAI(
@@ -2356,7 +2090,7 @@ client = OpenAI(
 
 ## Reliability
 
-### 1. Implement Retries
+### 8. Implement Retries
 
 ```python
 import time
@@ -2380,7 +2114,7 @@ def chat_with_retry(messages, max_retries=3):
     raise Exception("Max retries exceeded")
 ```
 
-### 2. Handle Errors Gracefully
+### 9. Handle Errors Gracefully
 
 ```python
 from openai import APIError, AuthenticationError, RateLimitError
@@ -2401,7 +2135,7 @@ except APIError as e:
         schedule_retry(request)
 ```
 
-### 3. Use Fallback Models
+### 10. Use Fallback Models
 
 ```python
 FALLBACK_CHAIN = ["gpt-4o", "claude-sonnet-4-6", "gemini-2.5-flash"]
@@ -2420,7 +2154,7 @@ def chat_with_fallback(messages):
 
 ## Security
 
-### 1. Protect API Keys
+### 11. Protect API Keys
 
 ```python
 # ❌ Never hardcode keys
@@ -2431,7 +2165,7 @@ import os
 client = OpenAI(api_key=os.environ["TOKENLAB_API_KEY"])
 ```
 
-### 2. Validate User Input
+### 12. Validate User Input
 
 ```python
 def validate_message(content: str) -> bool:
@@ -2442,7 +2176,7 @@ def validate_message(content: str) -> bool:
     return True
 ```
 
-### 3. Set API Key Limits
+### 13. Set API Key Limits
 
 Create separate API keys with spending limits for:
 - Development/testing
@@ -2451,7 +2185,7 @@ Create separate API keys with spending limits for:
 
 ## Monitoring
 
-### 1. Track Usage
+### 14. Track Usage
 
 Check your dashboard regularly for:
 - Token usage by model
@@ -2459,7 +2193,7 @@ Check your dashboard regularly for:
 - Cache hit rates
 - Error rates
 
-### 2. Log Important Metrics
+### 15. Log Important Metrics
 
 ```python
 import logging
@@ -2474,7 +2208,7 @@ logging.info({
 })
 ```
 
-### 3. Set Up Alerts
+### 16. Set Up Alerts
 
 Configure low balance alerts in your dashboard to avoid service interruption.
 
@@ -2594,11 +2328,6 @@ The request contract also accepts `audio-to-video` and `video-extension` for mod
 - **Motion**: Combine a subject image with a motion reference video.
 
 ## Current Public Model Inventory
-
-### OpenAI
-
-| Model | Public operations |
-|-------|-------------------|
 
 ### Kuaishou
 
@@ -2862,7 +2591,6 @@ Coding agents like Claude Code, Cursor, and Codex CLI are powerful — but they 
 
 
 
-
 ## Supported Coding Tools
 
 
@@ -2914,16 +2642,6 @@ Not every coding task needs the most expensive model. Match the task to the righ
 
 Coding agents are ideal for caching because they repeat similar patterns constantly.
 
-### Semantic Cache
-
-TokenLab's [semantic cache](/guides/caching) matches requests by meaning, not exact text. This is powerful for coding agents because:
-
-- **Repeated questions**: "What does this function do?" asked about similar code → cache hit
-- **Common patterns**: Boilerplate generation, import statements, error handling → cache hit
-- **Team sharing**: Multiple developers asking similar questions → shared cache hits
-
-Cache hits cost **90% less** than fresh requests.
-
 ### Prompt Cache (Provider-Level)
 
 [Upstream prompt caching](/guides/prompt-cache) is automatic through TokenLab. Long system prompts — which coding agents always include — get cached at the provider level:
@@ -2936,7 +2654,7 @@ Cache hits cost **90% less** than fresh requests.
 
 Since coding agents send the same system prompt + project context on every call, prompt cache hit rates are typically **70–90%**.
 
-### Combined Savings Example
+### Prompt Cache Savings Example
 
 For a request with 50,000 input tokens (typical coding agent call):
 
@@ -2948,9 +2666,6 @@ With prompt cache (40,000 cached + 10,000 new):
   Cached:  40,000 × $0.30/1M = $0.012
   New:     10,000 × $3.00/1M = $0.030
   Total: $0.042 (72% savings)
-
-With semantic cache hit:
-  50,000 tokens × $0.30/1M = $0.015 (90% savings)
 ```
 
 ## Real Cost Comparison
@@ -2962,7 +2677,6 @@ Estimated costs for a typical 1-hour coding session (~3M tokens):
 | Direct API (premium model) | ~$15–25 | ~$2,400–4,000 |
 | TokenLab (smart routing) | ~$10–18 | ~$1,600–2,900 |
 | TokenLab + prompt cache | ~$4–8 | ~$640–1,280 |
-| TokenLab + both caches | ~$2–5 | ~$320–800 |
 
 > Warning: These are illustrative estimates. Actual costs depend on your model choice, usage patterns, and cache hit rates. Check [real-time pricing](/api-reference/pricing/get-pricing) for current rates.
 
@@ -3723,144 +3437,6 @@ For one model's full pricing detail, including structured pricing and provenance
 ## Response
 
 > Note: Use the interactive OpenAPI panel above for the exact response schema. Public pricing entries may also expose `lock_price_per_request`, `has_complex_pricing`, `supported_operations`, `pricing_summary`, and `pricing_provenance`.
-
----
-
-
-## Cache
-
-### Submit Cache Feedback
-
-> Report an incorrect cached response so TokenLab can track and invalidate low-quality cache entries.
-
-URL: https://docs.tokenlab.sh/api-reference/cache/submit-cache-feedback
-
-## Overview
-
-Use this endpoint to report a cached response that was incorrect, outdated, irrelevant, or otherwise unsafe to reuse.
-
-When an entry accumulates enough negative feedback, TokenLab can automatically invalidate it.
-
-## Notes
-
-- Authentication requires a standard inference API key.
-- `cache_entry_id` must be a cache-hit request/cache entry identifier owned by the API key's organization. Arbitrary identifiers return `404`, and identifiers owned by another organization return `403`.
-- `feedback_type` accepts `wrong_answer`, `outdated`, `irrelevant`, or `other`.
-- `request_id` is optional; when provided, it must match `cache_entry_id`.
-- `description` is optional free-form context for operators and audits.
-
-## Request / Response
-
-Use the interactive OpenAPI panel above for the exact schema and response fields.
-
-## Example
-
----
-
-### Get Cache Feedback Stats
-
-> Inspect the feedback risk profile for one cached response entry.
-
-URL: https://docs.tokenlab.sh/api-reference/cache/get-cache-feedback-stats
-
-## Overview
-
-Use this endpoint to inspect the current feedback statistics for a cache entry that has already received reports.
-
-It is useful for debugging cache quality, support workflows, and reconciliation after submitting feedback.
-
-## Notes
-
-- Authentication requires a standard inference API key.
-- `entryId` must be a cache-hit request/cache entry identifier owned by the API key's organization.
-- The endpoint returns aggregate counts only; it does not expose raw feedback submissions.
-- `at_risk` indicates whether the entry is approaching invalidation thresholds.
-
-## Request / Response
-
-Use the interactive OpenAPI panel above for the exact schema and response fields.
-
-## Example
-
----
-
-### Cache Management
-
-> Control caching behavior for your API requests
-
-URL: https://docs.tokenlab.sh/api-reference/cache/cache-management
-
-## Overview
-
-TokenLab automatically manages caching to optimize performance and reduce costs. While there is no public endpoint to clear cache entries, you have full control over caching behavior through request-level controls.
-
-This page is a usage guide for request-side cache controls.
-
-For strict API reference pages, see:
-
-- [Submit Cache Feedback](/api-reference/cache/submit-cache-feedback)
-- [Get Cache Feedback Stats](/api-reference/cache/get-cache-feedback-stats)
-
-## Bypassing Cache
-
-To get fresh responses without using cache, use the `cache_control` parameter in your request:
-
-```bash cURL
-curl -X POST "https://api.tokenlab.sh/v1/chat/completions" \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "cache_control": {"type": "no_cache"}
-  }'
-```
-
-## Cache Control Options
-
-| Type | Effect |
-|------|--------|
-| `no_cache` | Skip cache lookup and storage; always get a fresh response |
-| `no_store` | Don't store this response in cache |
-| `response_only` | Only use exact match cache (skip semantic) |
-| `semantic_only` | Only use semantic cache (skip exact match) |
-
-## Cache Feedback
-
-If you receive an incorrect cached response, you can report it:
-
-Use the cache-hit request/cache entry identifier from your own organization; arbitrary identifiers are rejected.
-
-```bash
-curl -X POST "https://api.tokenlab.sh/v1/cache/feedback" \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "cache_entry_id": "req_1234567890",
-    "feedback_type": "wrong_answer",
-    "description": "Response was outdated"
-  }'
-```
-
-When a cache entry receives enough negative feedback, it is automatically invalidated.
-
-## Use Cases
-
-#### Testing fresh responses
-
-During development, use `cache_control: {"type": "no_cache"}` to ensure you're getting fresh API responses.
-
-
-#### Time-sensitive queries
-
-For real-time data like stock prices or weather, always use `no_cache` to get current information.
-
-
-#### Debugging
-
-When debugging unexpected responses, use `no_cache` to rule out cached results.
-
-> Note: For more details on caching, see the [Caching Guide](/guides/caching).
 
 ---
 

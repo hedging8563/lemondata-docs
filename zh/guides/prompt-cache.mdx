@@ -5,19 +5,6 @@ description: "了解供应商级别的 Prompt 缓存及其如何降低成本"
 
 ## 概览
 
-除了 TokenLab 的 [平台语义缓存](/guides/caching) 之外，许多 AI 供应商也提供自有的 **Prompt 缓存** 功能。这是一种运作于供应商级别（Anthropic、OpenAI、DeepSeek 等）的独立缓存机制。
-
-<Note>
-**两种缓存类型**
-
-| 类型 | 位置 | 工作原理 | 成本 |
-|------|-------|--------------|------|
-| **平台缓存** | TokenLab | 语义相似度匹配 | 正常价格的 10% |
-| **供应商缓存** | 上游 (Anthropic/OpenAI/等) | 精确前缀匹配 | 折扣 Token 费率 |
-
-这两者是**互斥的**：如果平台缓存命中，则不会发起上游调用，因此供应商缓存不适用。
-</Note>
-
 ## 供应商 Prompt 缓存如何工作
 
 供应商 Prompt 缓存会将您 Prompt 前缀的处理后表示形式存储在供应商的服务器上。当您发送具有相同前缀的请求时，供应商可以跳过对这些 Token 的重复处理。
@@ -68,7 +55,6 @@ description: "了解供应商级别的 Prompt 缓存及其如何降低成本"
 
 当使用上游缓存时，交易记录会显示 **Provider Cache** 标签：
 
-- **Cache** (天蓝色)：平台语义缓存命中 - 90% 折扣
 - **Provider Cache** (青色)：上游 Prompt 缓存命中 - 折扣费率
 
 ## 成本计算示例
@@ -107,48 +93,11 @@ description: "了解供应商级别的 Prompt 缓存及其如何降低成本"
   </Accordion>
 </AccordionGroup>
 
-## 平台缓存 vs 供应商缓存
-
-| 方面 | 平台缓存 | 供应商缓存 |
-|--------|----------------|----------------|
-| **匹配方式** | 语义相似度 | 精确前缀匹配 |
-| **成本** | 正常价格的 10% | 折扣费率 |
-| **延迟** | 即时 (~1ms) | 降低（跳过处理） |
-| **控制** | 仪表盘设置 | 自动 |
-| **范围** | 跨用户（可选） | 每个 API 密钥 |
-
-### 何时适用
-
-```
-请求到达
-    │
-    ▼
-┌─────────────────────┐
-│ 平台缓存命中？      │
-└─────────────────────┘
-    │ 是               │ 否
-    ▼                  ▼
-┌─────────┐    ┌─────────────────────┐
-│ 返回     │    │ 调用上游 API        │
-│ 缓存内容 │    └─────────────────────┘
-│ (10%)   │            │
-└─────────┘            ▼
-               ┌─────────────────────┐
-               │ 供应商缓存命中？    │
-               └─────────────────────┘
-                   │ 是         │ 否
-                   ▼            ▼
-               折扣 Token    全额 Token
-               费率          费率
-```
-
 ## 检查缓存状态
 
 ### 响应头
 
 ```
-X-Cache-Status: HIT           # 平台缓存命中
-X-Cache-Status: MISS          # 无平台缓存
 X-Upstream-Cache-Read: 8000   # 供应商缓存读取 tokens
 X-Upstream-Cache-Write: 2000  # 供应商缓存写入 tokens
 ```
@@ -159,7 +108,7 @@ X-Upstream-Cache-Write: 2000  # 供应商缓存写入 tokens
 
 ```text
 GET /v1/usage/logs is currently not a public endpoint.
-Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard usage page.
+Use X-Upstream-Cache-* response headers, plus the dashboard usage page.
 ```
 
 响应包含：
@@ -194,9 +143,8 @@ Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard u
   </Accordion>
 
   <Accordion title="如何最大化缓存节省？">
-    1. 对于重复的相似查询使用平台语义缓存
-    2. 将静态内容放在 Prompt 的最前面
-    3. 在不同请求之间保持系统提示词的一致性
-    4. 快速连续发送相关请求
+    1. 将静态内容放在 Prompt 的最前面
+    2. 在不同请求之间保持系统提示词的一致性
+    3. 快速连续发送相关请求
   </Accordion>
 </AccordionGroup>

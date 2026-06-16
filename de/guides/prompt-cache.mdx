@@ -5,19 +5,6 @@ description: "Verstehen Sie das Prompt-Caching auf Provider-Ebene und wie es Kos
 
 ## Übersicht
 
-Zusätzlich zum [semantischen Plattform-Cache](/guides/caching) von TokenLab bieten viele AI-Provider ihre eigene **Prompt-Caching**-Funktion an. Dies ist ein separater Caching-Mechanismus, der auf Provider-Ebene (Anthropic, OpenAI, DeepSeek usw.) arbeitet.
-
-<Note>
-**Zwei Arten von Caching**
-
-| Typ | Ort | Funktionsweise | Kosten |
-|------|-------|--------------|------|
-| **Plattform-Cache** | TokenLab | Semantischer Ähnlichkeitsabgleich | 10 % des normalen Preises |
-| **Provider-Cache** | Upstream (Anthropic/OpenAI/etc) | Exakter Präfix-Abgleich | Ermäßigte Token-Raten |
-
-Diese schließen sich **gegenseitig aus**: Wenn der Plattform-Cache trifft, erfolgt kein Upstream-Aufruf, sodass der Provider-Cache nicht angewendet wird.
-</Note>
-
 ## Wie Provider-Prompt-Caching funktioniert
 
 Provider-Prompt-Caching speichert die verarbeitete Darstellung Ihres Prompt-Präfixes auf den Servern des Providers. Wenn Sie eine Anfrage mit demselben Präfix senden, kann der Provider die erneute Verarbeitung dieser Token überspringen.
@@ -107,48 +94,11 @@ Gesamt: $0,0099 (67 % Ersparnis)
   </Accordion>
 </AccordionGroup>
 
-## Plattform-Cache vs. Provider-Cache
-
-| Aspekt | Plattform-Cache | Provider-Cache |
-|--------|----------------|----------------|
-| **Abgleich** | Semantische Ähnlichkeit | Exakter Präfix-Abgleich |
-| **Kosten** | 10 % des normalen Preises | Ermäßigte Raten |
-| **Latenz** | Sofort (~1 ms) | Reduziert (Verarbeitung übersprungen) |
-| **Steuerung** | Dashboard-Einstellungen | Automatisch |
-| **Geltungsbereich** | Benutzerübergreifend (optional) | Pro API-Key |
-
-### Wann welcher Cache greift
-
-```
-Anfrage eingehend
-    │
-    ▼
-┌─────────────────────────┐
-│ Plattform-Cache-Treffer?│
-└─────────────────────────┘
-    │ Ja                │ Nein
-    ▼                   ▼
-┌───────────┐    ┌─────────────────────────┐
-│ Gecachte  │    │ Upstream-API aufrufen   │
-│ Antwort   │    └─────────────────────────┘
-│ (10 %)    │            │
-└───────────┘            ▼
-               ┌─────────────────────────┐
-               │ Provider-Cache-Treffer? │
-               └─────────────────────────┘
-                   │ Ja          │ Nein
-                   ▼             ▼
-               Ermäßigte      Voller
-               Token-Rate     Token-Preis
-```
-
 ## Cache-Status prüfen
 
 ### Response-Header
 
 ```
-X-Cache-Status: HIT           # Plattform-Cache-Treffer
-X-Cache-Status: MISS          # Kein Plattform-Cache
 X-Upstream-Cache-Read: 8000   # Provider-Cache gelesene Token
 X-Upstream-Cache-Write: 2000  # Provider-Cache geschriebene Token
 ```
@@ -159,7 +109,7 @@ Fragen Sie Ihre Nutzungsprotokolle ab, um die Cache-Aufschlüsselung zu sehen:
 
 ```text
 GET /v1/usage/logs is currently not a public endpoint.
-Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard usage page.
+Use X-Upstream-Cache-* response headers, plus the dashboard usage page.
 ```
 
 Die Antwort enthält:
@@ -173,30 +123,3 @@ Die Antwort enthält:
   "cost": 0.0099
 }
 ```
-
-## FAQ
-
-<AccordionGroup>
-  <Accordion title="Kann ich Provider-Caching deaktivieren?">
-    Provider-Caching ist automatisch und kann nicht deaktiviert werden. Es bringt Ihnen jedoch nur Vorteile (niedrigere Kosten), sodass es keinen Grund gibt, es zu deaktivieren.
-  </Accordion>
-
-  <Accordion title="Warum hat meine Anfrage den Provider-Cache nicht getroffen?">
-    Häufige Gründe:
-    - Präfix hat sich geändert (selbst ein Token Unterschied)
-    - Cache abgelaufen (normalerweise 5–60 Minuten)
-    - Präfix zu kurz (unter der Mindest-Token-Anzahl)
-    - Anderer API-Key verwendet
-  </Accordion>
-
-  <Accordion title="Unterstützt BYOK Provider-Caching?">
-    Ja! Wenn Sie Ihre eigenen API-Keys verwenden (BYOK), funktioniert Provider-Caching genauso. Der Cache ist an Ihren Upstream-API-Key gebunden.
-  </Accordion>
-
-  <Accordion title="Wie maximiere ich die Cache-Einsparungen?">
-    1. Nutzen Sie den semantischen Plattform-Cache für wiederholte ähnliche Anfragen
-    2. Strukturieren Sie Prompts mit statischem Inhalt am Anfang
-    3. Halten Sie System-Prompts über Anfragen hinweg konsistent
-    4. Senden Sie zusammenhängende Anfragen in schneller Folge
-  </Accordion>
-</AccordionGroup>

@@ -5,19 +5,6 @@ description: "Pahami prompt caching tingkat penyedia dan bagaimana hal ini mengu
 
 ## Gambaran Umum
 
-Selain [platform semantic cache](/guides/caching) TokenLab, banyak penyedia AI menawarkan fitur **prompt caching** mereka sendiri. Ini adalah mekanisme caching terpisah yang beroperasi pada tingkat penyedia (Anthropic, OpenAI, DeepSeek, dll.).
-
-<Note>
-**Dua Jenis Caching**
-
-| Jenis | Lokasi | Cara Kerja | Biaya |
-|------|-------|--------------|------|
-| **Platform Cache** | TokenLab | Pencocokan kemiripan semantik | 10% dari harga normal |
-| **Provider Cache** | Upstream (Anthropic/OpenAI/dll) | Pencocokan awalan (prefix) yang tepat | Tarif token diskon |
-
-Ini bersifat **mutually exclusive**: jika platform cache hit, tidak ada panggilan upstream yang dilakukan, sehingga provider cache tidak berlaku.
-</Note>
-
 ## Cara Kerja Provider Prompt Cache
 
 Provider prompt caching menyimpan representasi terproses dari awalan (prefix) prompt Anda di server penyedia. Saat Anda mengirim permintaan dengan awalan yang sama, penyedia dapat melewati pemrosesan ulang token tersebut.
@@ -68,7 +55,6 @@ Log penggunaan Anda menunjukkan rincian token cache yang mendetail:
 
 Transaksi menunjukkan label **Provider Cache** saat caching upstream digunakan:
 
-- **Cache** (biru langit): Platform semantic cache hit - diskon 90%
 - **Provider Cache** (teal): Upstream prompt cache hit - tarif diskon
 
 ## Contoh Perhitungan Biaya
@@ -107,48 +93,11 @@ Total: $0.0099 (penghematan 67%)
   </Accordion>
 </AccordionGroup>
 
-## Cache Platform vs Cache Penyedia
-
-| Aspek | Platform Cache | Provider Cache |
-|--------|----------------|----------------|
-| **Pencocokan** | Kemiripan semantik | Pencocokan awalan tepat |
-| **Biaya** | 10% dari harga normal | Tarif diskon |
-| **Latensi** | Instan (~1ms) | Berkurang (melewati pemrosesan) |
-| **Kontrol** | Pengaturan dasbor | Otomatis |
-| **Cakupan** | Lintas pengguna (opsional) | Per-API-key |
-
-### Kapan Masing-masing Berlaku
-
-```
-Permintaan tiba
-    │
-    ▼
-┌─────────────────────┐
-│ Platform Cache Hit? │
-└─────────────────────┘
-    │ Ya               │ Tidak
-    ▼                  ▼
-┌─────────┐    ┌─────────────────────┐
-│ Kembalikan  │    │ Panggil Upstream API│
-│ Cache       │    └─────────────────────┘
-│ (10%)       │            │
-└─────────┘            ▼
-               ┌─────────────────────┐
-               │ Provider Cache Hit? │
-               └─────────────────────┘
-                   │ Ya         │ Tidak
-                   ▼            ▼
-               Tarif Token   Tarif Token
-               Diskon        Harga Penuh
-```
-
 ## Memeriksa Status Cache
 
 ### Header Respons
 
 ```
-X-Cache-Status: HIT           # Platform cache hit
-X-Cache-Status: MISS          # Tidak ada platform cache
 X-Upstream-Cache-Read: 8000   # Token baca provider cache
 X-Upstream-Cache-Write: 2000  # Token tulis provider cache
 ```
@@ -159,7 +108,7 @@ Kueri log penggunaan Anda untuk melihat rincian cache:
 
 ```text
 GET /v1/usage/logs is currently not a public endpoint.
-Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard usage page.
+Use X-Upstream-Cache-* response headers, plus the dashboard usage page.
 ```
 
 Respons mencakup:
@@ -194,9 +143,8 @@ Respons mencakup:
   </Accordion>
 
   <Accordion title="Bagaimana cara memaksimalkan penghematan cache?">
-    1. Gunakan platform semantic cache untuk kueri serupa yang berulang
-    2. Strukturkan prompt dengan konten statis terlebih dahulu
-    3. Jaga agar system prompt tetap konsisten di seluruh permintaan
-    4. Kirim permintaan terkait secara berurutan dengan cepat
+    1. Strukturkan prompt dengan konten statis terlebih dahulu
+    2. Jaga agar system prompt tetap konsisten di seluruh permintaan
+    3. Kirim permintaan terkait secara berurutan dengan cepat
   </Accordion>
 </AccordionGroup>

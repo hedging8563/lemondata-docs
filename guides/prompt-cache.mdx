@@ -5,19 +5,6 @@ description: "Understand provider-level prompt caching and how it reduces costs"
 
 ## Overview
 
-In addition to TokenLab's [platform semantic cache](/guides/caching), many AI providers offer their own **prompt caching** feature. This is a separate caching mechanism that operates at the provider level (Anthropic, OpenAI, DeepSeek, etc.).
-
-<Note>
-**Two Types of Caching**
-
-| Type | Where | How it Works | Cost |
-|------|-------|--------------|------|
-| **Platform Cache** | TokenLab | Semantic similarity matching | 10% of normal price |
-| **Provider Cache** | Upstream (Anthropic/OpenAI/etc) | Exact prefix matching | Discounted token rates |
-
-These are **mutually exclusive**: if platform cache hits, no upstream call is made, so provider cache doesn't apply.
-</Note>
-
 ## How Provider Prompt Cache Works
 
 Provider prompt caching stores the processed representation of your prompt prefix on the provider's servers. When you send a request with the same prefix, the provider can skip reprocessing those tokens.
@@ -68,7 +55,6 @@ Your usage logs show detailed cache token breakdown:
 
 Transactions show a **Provider Cache** label when upstream caching was used:
 
-- **Cache** (sky blue): Platform semantic cache hit - 90% discount
 - **Provider Cache** (teal): Upstream prompt cache hit - discounted rates
 
 ## Cost Calculation Example
@@ -107,48 +93,11 @@ Total: $0.0099 (67% savings)
   </Accordion>
 </AccordionGroup>
 
-## Platform Cache vs Provider Cache
-
-| Aspect | Platform Cache | Provider Cache |
-|--------|----------------|----------------|
-| **Matching** | Semantic similarity | Exact prefix match |
-| **Cost** | 10% of normal price | Discounted rates |
-| **Latency** | Instant (~1ms) | Reduced (skip processing) |
-| **Control** | Dashboard settings | Automatic |
-| **Scope** | Cross-user (optional) | Per-API-key |
-
-### When Each Applies
-
-```
-Request arrives
-    │
-    ▼
-┌─────────────────────┐
-│ Platform Cache Hit? │
-└─────────────────────┘
-    │ Yes              │ No
-    ▼                  ▼
-┌─────────┐    ┌─────────────────────┐
-│ Return  │    │ Call Upstream API   │
-│ Cached  │    └─────────────────────┘
-│ (10%)   │            │
-└─────────┘            ▼
-               ┌─────────────────────┐
-               │ Provider Cache Hit? │
-               └─────────────────────┘
-                   │ Yes        │ No
-                   ▼            ▼
-               Discounted    Full Price
-               Token Rate    Token Rate
-```
-
 ## Checking Cache Status
 
 ### Response Headers
 
 ```
-X-Cache-Status: HIT           # Platform cache hit
-X-Cache-Status: MISS          # No platform cache
 X-Upstream-Cache-Read: 8000   # Provider cache read tokens
 X-Upstream-Cache-Write: 2000  # Provider cache write tokens
 ```
@@ -159,7 +108,7 @@ Usage logs API is not public yet. Check cache breakdown via response headers and
 
 ```text
 GET /v1/usage/logs is currently not a public endpoint.
-Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard usage page.
+Use X-Upstream-Cache-* response headers, plus the dashboard usage page.
 ```
 
 Response includes:
@@ -194,9 +143,8 @@ Response includes:
   </Accordion>
 
   <Accordion title="How do I maximize cache savings?">
-    1. Use platform semantic cache for repeated similar queries
-    2. Structure prompts with static content first
-    3. Keep system prompts consistent across requests
-    4. Send related requests in quick succession
+    1. Structure prompts with static content first
+    2. Keep system prompts consistent across requests
+    3. Send related requests in quick succession
   </Accordion>
 </AccordionGroup>

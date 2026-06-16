@@ -5,19 +5,6 @@ description: "瞭解供應商層級的 Prompt 快取及其如何降低成本"
 
 ## 概覽
 
-除了 TokenLab 的 [平台語義快取](/guides/caching) 之外，許多 AI 供應商也提供自有的 **Prompt 快取** 功能。這是一種運作於供應商層級（Anthropic、OpenAI、DeepSeek 等）的獨立快取機制。
-
-<Note>
-**兩種快取類型**
-
-| 類型 | 位置 | 運作方式 | 成本 |
-|------|-------|--------------|------|
-| **平台快取** | TokenLab | 語義相似度比對 | 正常價格的 10% |
-| **供應商快取** | 上游 (Anthropic/OpenAI/等) | 精確前綴比對 | Token 費率優惠 |
-
-這兩者是**互斥的**：如果平台快取命中，則不會發起上游呼叫，因此供應商快取不適用。
-</Note>
-
 ## 供應商 Prompt 快取如何運作
 
 供應商 Prompt 快取會將您 Prompt 前綴的處理後表示形式儲存在供應商的伺服器上。當您發送具有相同前綴的請求時，供應商可以跳過對這些 Token 的重複處理。
@@ -68,7 +55,6 @@ description: "瞭解供應商層級的 Prompt 快取及其如何降低成本"
 
 當使用上游快取時，交易紀錄會顯示 **Provider Cache** 標籤：
 
-- **Cache** (天藍色)：平台語義快取命中 - 90% 折扣
 - **Provider Cache** (鴨綠色)：上游 Prompt 快取命中 - 優惠費率
 
 ## 成本計算範例
@@ -107,48 +93,11 @@ description: "瞭解供應商層級的 Prompt 快取及其如何降低成本"
   </Accordion>
 </AccordionGroup>
 
-## 平台快取 vs 供應商快取
-
-| 面向 | 平台快取 | 供應商快取 |
-|--------|----------------|----------------|
-| **比對方式** | 語義相似度 | 精確前綴比對 |
-| **成本** | 正常價格的 10% | 優惠費率 |
-| **延遲** | 即時 (~1ms) | 降低（跳過處理） |
-| **控制** | 儀表板設定 | 自動 |
-| **範圍** | 跨使用者（選填） | 每個 API 金鑰 |
-
-### 何時適用
-
-```
-請求到達
-    │
-    ▼
-┌─────────────────────┐
-│ 平台快取命中？      │
-└─────────────────────┘
-    │ 是               │ 否
-    ▼                  ▼
-┌─────────┐    ┌─────────────────────┐
-│ 回傳     │    │ 呼叫上游 API        │
-│ 快取內容 │    └─────────────────────┘
-│ (10%)   │            │
-└─────────┘            ▼
-               ┌─────────────────────┐
-               │ 供應商快取命中？    │
-               └─────────────────────┘
-                   │ 是         │ 否
-                   ▼            ▼
-               優惠 Token    全額 Token
-               費率          費率
-```
-
 ## 檢查快取狀態
 
 ### 回應標頭
 
 ```
-X-Cache-Status: HIT           # 平台快取命中
-X-Cache-Status: MISS          # 無平台快取
 X-Upstream-Cache-Read: 8000   # 供應商快取讀取 tokens
 X-Upstream-Cache-Write: 2000  # 供應商快取寫入 tokens
 ```
@@ -159,7 +108,7 @@ X-Upstream-Cache-Write: 2000  # 供應商快取寫入 tokens
 
 ```text
 GET /v1/usage/logs is currently not a public endpoint.
-Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard usage page.
+Use X-Upstream-Cache-* response headers, plus the dashboard usage page.
 ```
 
 回應包含：
@@ -194,9 +143,8 @@ Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard u
   </Accordion>
 
   <Accordion title="如何最大化快取節省？">
-    1. 對於重複的相似查詢使用平台語義快取
-    2. 將靜態內容放在 Prompt 的最前面
-    3. 在不同請求之間保持系統 Prompt 的一致性
-    4. 快速連續發送相關請求
+    1. 將靜態內容放在 Prompt 的最前面
+    2. 在不同請求之間保持系統 Prompt 的一致性
+    3. 快速連續發送相關請求
   </Accordion>
 </AccordionGroup>

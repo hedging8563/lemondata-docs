@@ -5,19 +5,6 @@ description: "Tìm hiểu về prompt caching ở cấp độ nhà cung cấp v�
 
 ## Tổng quan
 
-Ngoài [platform semantic cache](/guides/caching) của TokenLab, nhiều nhà cung cấp AI cũng cung cấp tính năng **prompt caching** của riêng họ. Đây là một cơ chế caching riêng biệt hoạt động ở cấp độ nhà cung cấp (Anthropic, OpenAI, DeepSeek, v.v.).
-
-<Note>
-**Hai loại Caching**
-
-| Loại | Vị trí | Cách hoạt động | Chi phí |
-|------|-------|--------------|------|
-| **Platform Cache** | TokenLab | Khớp nối tương đồng ngữ nghĩa | 10% giá thường |
-| **Provider Cache** | Upstream (Anthropic/OpenAI/v.v.) | Khớp nối tiền tố chính xác | Giá token ưu đãi |
-
-Hai loại này **loại trừ lẫn nhau**: nếu platform cache khớp (hit), sẽ không có cuộc gọi upstream nào được thực hiện, do đó provider cache sẽ không được áp dụng.
-</Note>
-
 ## Cách Provider Prompt Cache hoạt động
 
 Provider prompt caching lưu trữ biểu diễn đã xử lý của tiền tố prompt trên máy chủ của nhà cung cấp. Khi bạn gửi một yêu cầu với cùng một tiền tố, nhà cung cấp có thể bỏ qua việc xử lý lại các token đó.
@@ -68,7 +55,6 @@ Nhật ký sử dụng của bạn hiển thị chi tiết phân bổ token cach
 
 Các giao dịch hiển thị nhãn **Provider Cache** khi caching upstream được sử dụng:
 
-- **Cache** (xanh da trời): Khớp platform semantic cache - giảm 90%
 - **Provider Cache** (xanh mòng két): Khớp upstream prompt cache - mức giá ưu đãi
 
 ## Ví dụ tính toán chi phí
@@ -107,48 +93,11 @@ Tổng cộng: $0.0099 (Tiết kiệm 67%)
   </Accordion>
 </AccordionGroup>
 
-## Platform Cache so với Provider Cache
-
-| Khía cạnh | Platform Cache | Provider Cache |
-|--------|----------------|----------------|
-| **Khớp nối** | Tương đồng ngữ nghĩa | Khớp tiền tố chính xác |
-| **Chi phí** | 10% giá thường | Mức giá ưu đãi |
-| **Độ trễ** | Tức thì (~1ms) | Được giảm bớt (bỏ qua xử lý) |
-| **Kiểm soát** | Cài đặt trên Dashboard | Tự động |
-| **Phạm vi** | Giữa các người dùng (tùy chọn) | Theo từng API key |
-
-### Khi nào mỗi loại được áp dụng
-
-```
-Yêu cầu đến
-    │
-    ▼
-┌─────────────────────┐
-│ Khớp Platform Cache?│
-└─────────────────────┘
-    │ Có               │ Không
-    ▼                  ▼
-┌─────────┐    ┌─────────────────────┐
-│ Trả về  │    │ Gọi Upstream API    │
-│ Cache   │    └─────────────────────┘
-│ (10%)   │            │
-└─────────┘            ▼
-               ┌─────────────────────┐
-               │ Khớp Provider Cache?│
-               └─────────────────────┘
-                   │ Có         │ Không
-                   ▼            ▼
-               Giá Token     Giá Token
-               ưu đãi        đầy đủ
-```
-
 ## Kiểm tra trạng thái Cache
 
 ### Tiêu đề phản hồi
 
 ```
-X-Cache-Status: HIT           # Khớp platform cache
-X-Cache-Status: MISS          # Không có platform cache
 X-Upstream-Cache-Read: 8000   # Token đọc từ provider cache
 X-Upstream-Cache-Write: 2000  # Token ghi vào provider cache
 ```
@@ -159,7 +108,7 @@ Truy vấn nhật ký sử dụng của bạn để xem phân bổ cache:
 
 ```text
 GET /v1/usage/logs is currently not a public endpoint.
-Use X-Cache-Status and X-Upstream-Cache-* response headers, plus the dashboard usage page.
+Use X-Upstream-Cache-* response headers, plus the dashboard usage page.
 ```
 
 Phản hồi bao gồm:
@@ -194,9 +143,8 @@ Phản hồi bao gồm:
   </Accordion>
 
   <Accordion title="Làm thế nào để tối đa hóa mức tiết kiệm từ cache?">
-    1. Sử dụng platform semantic cache cho các truy vấn tương tự lặp lại
-    2. Cấu trúc prompt với nội dung tĩnh ở trước
-    3. Giữ system prompt nhất quán giữa các yêu cầu
-    4. Gửi các yêu cầu liên quan liên tiếp nhau một cách nhanh chóng
+    1. Cấu trúc prompt với nội dung tĩnh ở trước
+    2. Giữ system prompt nhất quán giữa các yêu cầu
+    3. Gửi các yêu cầu liên quan liên tiếp nhau một cách nhanh chóng
   </Accordion>
 </AccordionGroup>
