@@ -121,10 +121,11 @@
     // 内部包装
     const wrapper = createElement('div', {
       style: {
-        padding: '12px 16px',
-        background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-        border: '1px solid #dee2e6',
-        borderRadius: '8px',
+        padding: '16px',
+        background: 'rgba(255, 255, 255, 0.92)',
+        border: '1px solid #e2e8f0',
+        borderRadius: '10px',
+        boxShadow: '0 18px 48px -42px rgba(15, 23, 42, 0.5)',
         marginBottom: '16px',
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
       }
@@ -139,17 +140,32 @@
         marginBottom: '8px'
       }
     }, [
-      createElement('span', { style: { fontSize: '16px' } }, ['🔑']),
+      createElement('span', {
+        style: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '22px',
+          height: '22px',
+          borderRadius: '6px',
+          background: '#0f172a',
+          color: '#ffffff',
+          fontSize: '11px',
+          fontWeight: '700'
+        },
+        'aria-hidden': 'true'
+      }, ['API']),
       createElement('label', {
-        style: { fontWeight: '600', fontSize: '14px', color: '#495057' }
+        for: 'tokenlab-api-key-input',
+        style: { fontWeight: '600', fontSize: '14px', color: '#0f172a' }
       }, ['Authorization']),
       createElement('span', {
         style: {
           fontSize: '11px',
-          background: '#dc3545',
-          color: 'white',
-          padding: '2px 6px',
-          borderRadius: '4px',
+          background: '#fee2e2',
+          color: '#991b1b',
+          padding: '3px 7px',
+          borderRadius: '999px',
           fontWeight: '500'
         }
       }, ['required'])
@@ -157,7 +173,12 @@
 
     // 输入行
     const inputRow = createElement('div', {
-      style: { display: 'flex', gap: '8px' }
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) auto',
+        gap: '10px',
+        alignItems: 'stretch'
+      }
     });
 
     // API Key 输入框
@@ -168,19 +189,24 @@
       value: savedKey,
       style: {
         flex: '1',
+        minWidth: '0',
+        minHeight: '44px',
         padding: '10px 12px',
-        border: '1px solid #ced4da',
-        borderRadius: '6px',
+        border: '1px solid #cbd5e1',
+        borderRadius: '8px',
         fontSize: '14px',
         fontFamily: "'Monaco', 'Menlo', monospace",
-        outline: 'none'
+        outline: 'none',
+        color: '#0f172a',
+        background: '#ffffff',
+        transition: 'border-color 160ms ease, box-shadow 160ms ease'
       },
       onfocus: function() {
-        this.style.borderColor = '#7C3AED';
-        this.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.1)';
+        this.style.borderColor = '#475569';
+        this.style.boxShadow = '0 0 0 3px rgba(71, 85, 105, 0.14)';
       },
       onblur: function() {
-        this.style.borderColor = '#ced4da';
+        this.style.borderColor = '#cbd5e1';
         this.style.boxShadow = 'none';
       },
       oninput: function(e) {
@@ -190,29 +216,49 @@
 
     // 显示/隐藏按钮
     const toggleBtn = createElement('button', {
+      type: 'button',
       id: 'tokenlab-toggle-visibility',
       title: 'Show/Hide API Key',
+      'aria-label': 'Show API key',
       style: {
-        padding: '10px 12px',
-        background: '#6c757d',
-        color: 'white',
-        border: 'none',
-        borderRadius: '6px',
+        minWidth: '64px',
+        minHeight: '44px',
+        padding: '10px 14px',
+        background: '#0f172a',
+        color: '#ffffff',
+        border: '1px solid #0f172a',
+        borderRadius: '8px',
         cursor: 'pointer',
-        fontSize: '14px'
+        fontSize: '13px',
+        fontWeight: '600',
+        transition: 'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease'
       },
-      onmouseover: function() { this.style.background = '#5a6268'; },
-      onmouseout: function() { this.style.background = '#6c757d'; },
+      onmouseover: function() {
+        this.style.background = '#1e293b';
+        this.style.borderColor = '#1e293b';
+      },
+      onmouseout: function() {
+        this.style.background = '#0f172a';
+        this.style.borderColor = '#0f172a';
+      },
+      onfocus: function() {
+        this.style.boxShadow = '0 0 0 3px rgba(71, 85, 105, 0.18)';
+      },
+      onblur: function() {
+        this.style.boxShadow = 'none';
+      },
       onclick: function() {
         if (input.type === 'password') {
           input.type = 'text';
-          this.textContent = '🙈';
+          this.textContent = 'Hide';
+          this.setAttribute('aria-label', 'Hide API key');
         } else {
           input.type = 'password';
-          this.textContent = '👁';
+          this.textContent = 'Show';
+          this.setAttribute('aria-label', 'Show API key');
         }
       }
-    }, ['👁']);
+    }, ['Show']);
 
     inputRow.appendChild(input);
     inputRow.appendChild(toggleBtn);
@@ -225,9 +271,10 @@
       createElement('a', {
         href: 'https://tokenlab.sh/dashboard',
         target: '_blank',
-        style: { color: '#7C3AED', textDecoration: 'none' }
+        rel: 'noopener noreferrer',
+        style: { color: '#334155', fontWeight: '600', textDecoration: 'none' }
       }, ['Dashboard →']),
-      createElement('span', { style: { marginLeft: '12px' } }, ['💾 Auto-saved in browser'])
+      createElement('span', { style: { marginLeft: '12px' } }, ['Auto-saved in browser'])
     ]);
 
     wrapper.appendChild(titleRow);
