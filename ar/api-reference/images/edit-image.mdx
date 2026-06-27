@@ -10,7 +10,7 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
 
 يدعم المسار كلا النمطين:
 
-- مسار الرفع التقليدي `multipart/form-data` على نمط DALL-E والمذكور أدناه
+- مسار رفع `multipart/form-data` المتوافق مع OpenAI والموضح أدناه
 - طلبات JSON التي توفر `image_url` أو `image_urls` أو مراجع `images` الرسمية لعائلات الصور المدعومة من صورة إلى صورة
 
 <Note>
@@ -32,7 +32,7 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
 عناوين الصور البعيدة: عندما يتطلب المزوّد الموجّه إليه إدخال multipart، تجلب TokenLab قيم JSON `image_url` أو `image_urls` أو `images[].image_url` وتعيد تمرير البايتات كأجزاء multipart باسم `image`. يجب أن تكون العناوين عامة عبر `http`/`https`، بلا بيانات اعتماد مضمّنة أو fragments، وألا تشير إلى localhost أو نطاقات IP خاصة أو محجوزة؛ ويتم فحص كل إعادة توجيه من جديد. يجب أن تكون الحمولة التي تم جلبها صورة PNG أو JPEG أو WebP حقيقية. الحدود هي `50MB` لكل صورة، و`200MB` إجمالاً للصور المجلبة من URL في الطلب الواحد، و timeout قدره `10s`، وحتى `3` عمليات إعادة توجيه.
 
 <ParamField body="image" type="file">
-  صور المصدر في multipart. كرّر حقل `image` لإرسال عدة صور مصدر لـ GPT Image. يجب أن تكون الملفات PNG أو JPEG أو WebP، بحد أقصى 16 صورة مصدر و`50MB` لكل ملف. تستخدم نماذج تحرير xAI Grok Imagine حقول الإدخال نفسها لكنها تحد صور المصدر بـ 3. لا تزال تعديلات DALL-E 2 القديمة بالماسك تتوقع مدخلات PNG ذات مناطق شفافة، أو `mask` منفصلاً.
+  صور المصدر في multipart. كرّر حقل `image` لإرسال عدة صور مصدر لـ GPT Image. يجب أن تكون الملفات PNG أو JPEG أو WebP، بحد أقصى 16 صورة مصدر و`50MB` لكل ملف. تستخدم نماذج تحرير xAI Grok Imagine حقول الإدخال نفسها لكنها تحد صور المصدر بـ 3.
 </ParamField>
 
 <ParamField body="prompt" type="string" required>
@@ -43,8 +43,8 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
   صورة إضافية تشير مناطقها الشفافة بالكامل إلى أماكن التعديل. يجب أن تكون ملف PNG صالح، أقل من 50MB، وبنفس أبعاد `image`.
 </ParamField>
 
-<ParamField body="model" type="string" default="dall-e-2">
-  النموذج المستخدم لتحرير الصور. `gpt-image-2` مدعوم؛ ويمكن الاستمرار في استخدام `dall-e-2` لتحريرات DALL-E القديمة.
+<ParamField body="model" type="string" required>
+  النموذج المستخدم لتحرير الصور. استخدم `gpt-image-2` لتحريرات GPT Image، أو نموذج تحرير صور حاليًا يعيده `GET /v1/models?recommended_for=image`.
 </ParamField>
 
 <ParamField body="n" type="integer" default="1">
@@ -52,7 +52,7 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
 </ParamField>
 
 <ParamField body="size" type="string">
-  حجم الصورة المُنشأة. بالنسبة إلى `gpt-image-2` استخدم `auto` أو `WIDTHxHEIGHT`؛ يجب أن تكون الأبعاد من مضاعفات 16، وأطول ضلع لا يتجاوز `3840px`، ونسبة الطويل إلى القصير لا تتجاوز `3:1`، وإجمالي البكسلات بين `655,360` و`8,294,400`. تدعم تحريرات DALL-E القديمة `256x256` أو `512x512` أو `1024x1024`.
+  حجم الصورة المُنشأة. بالنسبة إلى `gpt-image-2` استخدم `auto` أو `WIDTHxHEIGHT`؛ يجب أن تكون الأبعاد من مضاعفات 16، وأطول ضلع لا يتجاوز `3840px`، ونسبة الطويل إلى القصير لا تتجاوز `3:1`، وإجمالي البكسلات بين `655,360` و`8,294,400`.
 </ParamField>
 
 <ParamField body="response_format" type="string" default="url">
@@ -95,6 +95,7 @@ description: "تعديل صورة بناءً على وصف نصي وصورة م�
 ```bash cURL
 curl -X POST "https://api.tokenlab.sh/v1/images/edits" \
   -H "Authorization: Bearer sk-your-api-key" \
+  -F "model=gpt-image-2" \
   -F "image=@sunlit_lounge.png" \
   -F "mask=@mask.png" \
   -F "prompt=A sunlit indoor lounge area with a pool" \
@@ -111,7 +112,7 @@ client = OpenAI(
 )
 
 response = client.images.edit(
-    model="dall-e-2",
+    model="gpt-image-2",
     image=open("sunlit_lounge.png", "rb"),
     mask=open("mask.png", "rb"),
     prompt="A sunlit indoor lounge area with a pool",
@@ -132,7 +133,7 @@ const client = new OpenAI({
 });
 
 const response = await client.images.edit({
-  model: 'dall-e-2',
+  model: 'gpt-image-2',
   image: fs.createReadStream('sunlit_lounge.png'),
   mask: fs.createReadStream('mask.png'),
   prompt: 'A sunlit indoor lounge area with a pool',
@@ -158,6 +159,8 @@ import (
 func main() {
     body := &bytes.Buffer{}
     writer := multipart.NewWriter(body)
+
+    writer.WriteField("model", "gpt-image-2")
 
     image, _ := os.Open("sunlit_lounge.png")
     defer image.Close()
@@ -201,6 +204,7 @@ curl_setopt_array($ch, [
         'Authorization: Bearer sk-your-api-key'
     ],
     CURLOPT_POSTFIELDS => [
+        'model' => 'gpt-image-2',
         'image' => $image,
         'mask' => $mask,
         'prompt' => 'A sunlit indoor lounge area with a pool',
