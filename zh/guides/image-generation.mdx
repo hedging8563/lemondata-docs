@@ -1,0 +1,74 @@
+---
+title: "图片生成"
+description: "使用 TokenLab 图片 API 构建文生图、参考图生成和图片编辑流程。"
+---
+## 推荐流程
+
+1. 调用 [模型列表](/zh/api-reference/models/list-models)，带上 `recommended_for=image`。
+2. 打开所选模型的 [模型详情](/zh/api-reference/models/get-model)，按它的公开契约传参。
+3. 文生图和支持的参考图流程使用 [创建图片](/zh/api-reference/images/create-image)；编辑专用流程使用 [编辑图片](/zh/api-reference/images/edit-image)。
+4. 如果响应包含 `poll_url`，优先轮询该 URL，直到任务进入终态。
+
+## 模型发现
+
+图片模型的请求形态不完全相同。有些直接返回结果，有些创建异步任务。`size`、`quality`、`aspect_ratio`、`resolution`、`async` 等字段是否可用，以所选模型契约为准。
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 文生图
+
+GPT 图片系列模型通常使用 `size`。Google 或 Nano Banana 图片模型只有在模型契约列出时才使用 `aspect_ratio` 和 `resolution`。
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "A clean product photo of a ceramic coffee cup on a walnut desk",
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+```
+
+## 参考图与编辑
+
+在 `/v1/images/generations` 做参考图生成时，使用 `operation: "image-to-image"`，并传 `image_url`、`image_urls`、`reference_image_urls`，或在模型支持时传 multipart `image` 文件。图片编辑模型请使用 `/v1/images/edits`，它可以按文档接收 multipart 图片、图片 URL 或 `images[].image_url` / `images[].file_id`。
+
+不要把顶层 `images[]` 或顶层 `file_id` 发送到 `/v1/images/generations`；这些形态只属于明确支持它们的编辑流程。
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro",
+    "operation": "image-to-image",
+    "prompt": "Keep the same product, place it in a bright studio scene",
+    "image_urls": ["https://example.com/reference.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## 轮询结果
+
+同步图片响应会返回 `data[].url` 或 `data[].b64_json`。任务响应会返回 `status`、`task_id`，通常还有 `poll_url`。优先用 `poll_url`；固定兜底入口是 [查询任务状态](/zh/api-reference/tasks/get-task-status)。异步图片任务返回 URL 结果，base64 只应在支持的同步流程中请求。
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## API 参考
+
+| 主题 | 参考 |
+|-------|-----------|
+| 创建图片 | [创建图片](/zh/api-reference/images/create-image) |
+| 编辑图片 | [编辑图片](/zh/api-reference/images/edit-image) |
+| 查询图片状态 | [查询图片状态](/zh/api-reference/images/get-image-status) |
+| 查询任务状态 | [查询任务状态](/zh/api-reference/tasks/get-task-status) |
+| 模型列表 | [模型列表](/zh/api-reference/models/list-models) |
+| 模型详情 | [模型详情](/zh/api-reference/models/get-model) |

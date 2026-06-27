@@ -1,0 +1,74 @@
+---
+title: "이미지 생성"
+description: "TokenLab 이미지 API로 텍스트-이미지, 참조 이미지, 편집 워크플로를 구축합니다."
+---
+## 권장 흐름
+
+1. [모델 목록](/ko/api-reference/models/list-models)을 `recommended_for=image`와 함께 호출합니다.
+2. 선택한 모델의 [모델 조회](/ko/api-reference/models/get-model)를 열고 공개 계약을 따릅니다.
+3. 텍스트-이미지와 지원되는 참조 이미지 흐름에는 [이미지 생성](/ko/api-reference/images/create-image)을, 편집 전용 흐름에는 [이미지 편집](/ko/api-reference/images/edit-image)을 사용합니다.
+4. 응답에 `poll_url`이 있으면 해당 URL을 작업이 최종 상태가 될 때까지 폴링합니다.
+
+## 모델 찾기
+
+이미지 모델의 요청 형태는 모두 같지 않습니다. 일부는 바로 결과를 반환하고, 일부는 비동기 작업을 만듭니다. `size`, `quality`, `aspect_ratio`, `resolution`, `async` 지원 여부는 선택한 모델 계약을 기준으로 확인하세요.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 텍스트-이미지
+
+GPT 이미지 계열 모델은 계약에 `size`가 있을 때 사용합니다. Google 또는 Nano Banana 이미지 모델은 계약에 명시된 경우에만 `aspect_ratio`와 `resolution`을 사용합니다.
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "A clean product photo of a ceramic coffee cup on a walnut desk",
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+```
+
+## 참조 이미지 및 편집
+
+`/v1/images/generations`에서 참조 이미지 생성을 할 때는 모델이 지원하는 경우 `operation: "image-to-image"`와 `image_url`, `image_urls`, `reference_image_urls` 또는 multipart `image` 파일을 보냅니다. multipart 이미지, 이미지 URL, `images[].image_url` / `images[].file_id`를 받는 편집 모델은 `/v1/images/edits`를 사용합니다.
+
+최상위 `images[]`나 최상위 `file_id`를 `/v1/images/generations`로 보내지 마세요. 이 형태는 명시적으로 문서화된 편집 흐름에 속합니다.
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro",
+    "operation": "image-to-image",
+    "prompt": "Keep the same product, place it in a bright studio scene",
+    "image_urls": ["https://example.com/reference.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## 결과 폴링
+
+동기 이미지 응답은 `data[].url` 또는 `data[].b64_json`을 반환합니다. 작업 응답은 `status`, `task_id`, 일반적으로 `poll_url`을 반환합니다. `poll_url`을 우선 사용하고, 고정 대체 엔드포인트는 [작업 상태 조회](/ko/api-reference/tasks/get-task-status)입니다. 비동기 이미지 작업은 URL 결과를 반환하므로 inline base64는 지원되는 동기 흐름에서만 요청하세요.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## API 레퍼런스
+
+| 항목 | 레퍼런스 |
+|-------|-----------|
+| 이미지 생성 | [이미지 생성](/ko/api-reference/images/create-image) |
+| 이미지 편집 | [이미지 편집](/ko/api-reference/images/edit-image) |
+| 이미지 상태 조회 | [이미지 상태 조회](/ko/api-reference/images/get-image-status) |
+| 작업 상태 조회 | [작업 상태 조회](/ko/api-reference/tasks/get-task-status) |
+| 모델 목록 | [모델 목록](/ko/api-reference/models/list-models) |
+| 모델 조회 | [모델 조회](/ko/api-reference/models/get-model) |

@@ -1,0 +1,74 @@
+---
+title: "Tạo hình ảnh"
+description: "Xây dựng luồng tạo ảnh từ văn bản, ảnh tham chiếu và chỉnh sửa bằng API hình ảnh của TokenLab."
+---
+## Luồng đề xuất
+
+1. Gọi [Danh sách mô hình](/vi/api-reference/models/list-models) với `recommended_for=image`.
+2. Mở [Lấy mô hình](/vi/api-reference/models/get-model) của mô hình đã chọn và làm theo hợp đồng công khai của nó.
+3. Dùng [Tạo hình ảnh](/vi/api-reference/images/create-image) cho văn bản sang hình ảnh và luồng ảnh tham chiếu được hỗ trợ, hoặc [Chỉnh sửa hình ảnh](/vi/api-reference/images/edit-image) cho luồng chỉnh sửa.
+4. Nếu phản hồi có `poll_url`, hãy polling URL đó cho đến khi tác vụ ở trạng thái cuối.
+
+## Khám phá mô hình
+
+Các mô hình hình ảnh không có cùng dạng request. Một số trả kết quả trực tiếp, một số tạo tác vụ bất đồng bộ. Hợp đồng của mô hình đã chọn quyết định `size`, `quality`, `aspect_ratio`, `resolution`, `async` có được chấp nhận hay không.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Văn bản sang hình ảnh
+
+Với các mô hình GPT Image, dùng `size` khi hợp đồng mô hình có trường này. Với mô hình Google hoặc Nano Banana, chỉ dùng `aspect_ratio` và `resolution` khi hợp đồng mô hình liệt kê chúng.
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "A clean product photo of a ceramic coffee cup on a walnut desk",
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+```
+
+## Ảnh tham chiếu và chỉnh sửa
+
+Với tạo ảnh tham chiếu trên `/v1/images/generations`, gửi `operation: "image-to-image"` cùng `image_url`, `image_urls`, `reference_image_urls` hoặc tệp multipart `image` khi mô hình hỗ trợ. Dùng `/v1/images/edits` cho mô hình chỉnh sửa nhận ảnh multipart, URL ảnh hoặc `images[].image_url` / `images[].file_id`.
+
+Không gửi `images[]` cấp cao nhất hoặc `file_id` cấp cao nhất tới `/v1/images/generations`; các dạng đó thuộc về luồng chỉnh sửa có tài liệu riêng.
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro",
+    "operation": "image-to-image",
+    "prompt": "Keep the same product, place it in a bright studio scene",
+    "image_urls": ["https://example.com/reference.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Polling kết quả
+
+Phản hồi hình ảnh đồng bộ trả `data[].url` hoặc `data[].b64_json`. Phản hồi tác vụ trả `status`, `task_id` và thường có `poll_url`. Ưu tiên `poll_url`; endpoint dự phòng cố định là [Trạng thái tác vụ](/vi/api-reference/tasks/get-task-status). Tác vụ hình ảnh bất đồng bộ trả URL, vì vậy chỉ yêu cầu base64 inline trong luồng đồng bộ có hỗ trợ.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Tham chiếu API
+
+| Mục | Tham chiếu |
+|-------|-----------|
+| Tạo hình ảnh | [Tạo hình ảnh](/vi/api-reference/images/create-image) |
+| Chỉnh sửa hình ảnh | [Chỉnh sửa hình ảnh](/vi/api-reference/images/edit-image) |
+| Trạng thái hình ảnh | [Trạng thái hình ảnh](/vi/api-reference/images/get-image-status) |
+| Trạng thái tác vụ | [Trạng thái tác vụ](/vi/api-reference/tasks/get-task-status) |
+| Danh sách mô hình | [Danh sách mô hình](/vi/api-reference/models/list-models) |
+| Lấy mô hình | [Lấy mô hình](/vi/api-reference/models/get-model) |

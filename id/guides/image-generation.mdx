@@ -1,0 +1,74 @@
+---
+title: "Generasi gambar"
+description: "Bangun alur teks-ke-gambar, gambar referensi, dan edit dengan API gambar TokenLab."
+---
+## Alur yang disarankan
+
+1. Panggil [Daftar model](/id/api-reference/models/list-models) dengan `recommended_for=image`.
+2. Buka [Ambil model](/id/api-reference/models/get-model) untuk model yang dipilih dan ikuti kontrak publiknya.
+3. Gunakan [Buat gambar](/id/api-reference/images/create-image) untuk teks-ke-gambar dan alur gambar referensi yang didukung, atau [Edit gambar](/id/api-reference/images/edit-image) untuk alur edit.
+4. Jika respons menyertakan `poll_url`, polling URL itu sampai tugas mencapai status akhir.
+
+## Temukan model
+
+Model gambar tidak selalu memiliki bentuk request yang sama. Sebagian mengembalikan hasil inline, sebagian membuat tugas asinkron. Kontrak model menentukan apakah `size`, `quality`, `aspect_ratio`, `resolution`, dan `async` diterima.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Teks ke gambar
+
+Untuk model keluarga GPT Image, gunakan `size` jika kontrak model menyediakannya. Untuk model Google atau Nano Banana, gunakan `aspect_ratio` dan `resolution` hanya jika tercantum dalam kontrak model.
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "A clean product photo of a ceramic coffee cup on a walnut desk",
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+```
+
+## Gambar referensi dan edit
+
+Untuk generasi gambar referensi di `/v1/images/generations`, kirim `operation: "image-to-image"` dengan `image_url`, `image_urls`, `reference_image_urls`, atau file multipart `image` jika model mendukungnya. Gunakan `/v1/images/edits` untuk model edit yang menerima gambar multipart, URL gambar, atau `images[].image_url` / `images[].file_id`.
+
+Jangan kirim `images[]` level atas atau `file_id` level atas ke `/v1/images/generations`; bentuk itu hanya untuk alur edit yang mendokumentasikannya secara eksplisit.
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro",
+    "operation": "image-to-image",
+    "prompt": "Keep the same product, place it in a bright studio scene",
+    "image_urls": ["https://example.com/reference.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Polling hasil
+
+Respons gambar sinkron mengembalikan `data[].url` atau `data[].b64_json`. Respons tugas mengembalikan `status`, `task_id`, dan biasanya `poll_url`. Prioritaskan `poll_url`; fallback tetapnya adalah [Status tugas](/id/api-reference/tasks/get-task-status). Tugas gambar asinkron mengembalikan URL, jadi minta base64 inline hanya pada alur sinkron yang mendukungnya.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Referensi API
+
+| Topik | Referensi |
+|-------|-----------|
+| Buat gambar | [Buat gambar](/id/api-reference/images/create-image) |
+| Edit gambar | [Edit gambar](/id/api-reference/images/edit-image) |
+| Status gambar | [Status gambar](/id/api-reference/images/get-image-status) |
+| Status tugas | [Status tugas](/id/api-reference/tasks/get-task-status) |
+| Daftar model | [Daftar model](/id/api-reference/models/list-models) |
+| Ambil model | [Ambil model](/id/api-reference/models/get-model) |

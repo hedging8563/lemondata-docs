@@ -1,0 +1,74 @@
+---
+title: "画像生成"
+description: "TokenLab の画像 API でテキストから画像、参照画像、編集ワークフローを構築します。"
+---
+## 推奨フロー
+
+1. [モデル一覧](/ja/api-reference/models/list-models) を `recommended_for=image` 付きで呼び出します。
+2. 選択したモデルの [モデルを取得](/ja/api-reference/models/get-model) を開き、公開契約に従います。
+3. テキストから画像および対応する参照画像フローには [画像を作成](/ja/api-reference/images/create-image) を使い、編集専用フローには [画像を編集](/ja/api-reference/images/edit-image) を使います。
+4. レスポンスに `poll_url` が含まれる場合は、その URL をタスクが終端状態になるまでポーリングします。
+
+## モデルの発見
+
+画像モデルのリクエスト形状は同一ではありません。インライン結果を返すものもあれば、非同期タスクを作成するものもあります。`size`、`quality`、`aspect_ratio`、`resolution`、`async` などのフィールドを受け付けるかは、選択したモデル契約で確認してください。
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## テキストから画像
+
+GPT 画像系モデルでは、モデル契約にある場合に `size` を使います。Google または Nano Banana 画像モデルでは、契約に明記されている場合のみ `aspect_ratio` と `resolution` を使います。
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "A clean product photo of a ceramic coffee cup on a walnut desk",
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+```
+
+## 参照画像と編集
+
+`/v1/images/generations` で参照画像生成を行う場合は、モデルが対応していれば `operation: "image-to-image"` と `image_url`、`image_urls`、`reference_image_urls`、または multipart の `image` ファイルを送ります。multipart 画像、画像 URL、`images[].image_url` / `images[].file_id` を受け付ける編集モデルでは `/v1/images/edits` を使います。
+
+トップレベルの `images[]` やトップレベルの `file_id` を `/v1/images/generations` に送らないでください。これらは明示的に文書化された編集フロー用の形状です。
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro",
+    "operation": "image-to-image",
+    "prompt": "Keep the same product, place it in a bright studio scene",
+    "image_urls": ["https://example.com/reference.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## 結果のポーリング
+
+同期画像レスポンスは `data[].url` または `data[].b64_json` を返します。タスクレスポンスは `status`、`task_id`、通常は `poll_url` を返します。`poll_url` を優先し、固定の代替入口は [タスクステータスを取得](/ja/api-reference/tasks/get-task-status) です。非同期画像タスクは URL 結果を返すため、インライン base64 は対応する同期フローでのみ要求してください。
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## API リファレンス
+
+| 項目 | リファレンス |
+|-------|-----------|
+| 画像を作成 | [画像を作成](/ja/api-reference/images/create-image) |
+| 画像を編集 | [画像を編集](/ja/api-reference/images/edit-image) |
+| 画像ステータスを取得 | [画像ステータスを取得](/ja/api-reference/images/get-image-status) |
+| タスクステータスを取得 | [タスクステータスを取得](/ja/api-reference/tasks/get-task-status) |
+| モデル一覧 | [モデル一覧](/ja/api-reference/models/list-models) |
+| モデルを取得 | [モデルを取得](/ja/api-reference/models/get-model) |

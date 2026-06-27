@@ -1,0 +1,55 @@
+---
+title: "음악 생성"
+description: "TokenLab 음악 생성 API와 비동기 작업 폴링으로 음악과 가사를 만듭니다."
+---
+## 권장 흐름
+
+1. [모델 목록](/ko/api-reference/models/list-models)을 `recommended_for=music`와 함께 호출합니다.
+2. [음악 생성](/ko/api-reference/music/create-music)으로 `prompt`와 선택적 `title`, `tags`, `action`, `mv`, 이어 만들기 설정을 포함한 작업을 만듭니다.
+3. 반환된 `id` / `task_id`와 `poll_url`을 저장합니다.
+4. 작업이 `completed` 또는 `failed`가 될 때까지 폴링한 뒤 `audio_url`, 선택적 `video_url`, `title`, `lyrics`를 읽습니다.
+
+## 모델 찾기
+
+음악 생성은 비동기입니다. 업스트림 제공자 이름이나 제공자 작업 ID에 의존하지 마세요. TokenLab은 정규화된 작업 ID와 폴링 URL을 반환합니다.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 음악 작업 생성
+
+`action: "MUSIC"`은 프롬프트와 모델에 따라 노래 또는 연주곡을 만듭니다. `action: "LYRICS"`는 선택한 모델이 지원하는 가사 전용 흐름에 사용합니다. `continue_clip_id`와 `continue_at`은 모델 계약이 문서화한 이어 만들기 흐름에서만 사용합니다.
+
+```bash
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "suno_music",
+    "prompt": "An upbeat synth-pop track with warm vocals and a clean chorus",
+    "title": "Morning Static",
+    "tags": "synth-pop, upbeat",
+    "action": "MUSIC"
+  }'
+```
+
+## 결과 폴링
+
+항상 반환된 `poll_url`을 우선 사용하세요. 안정적인 대체 엔드포인트는 [작업 상태 조회](/ko/api-reference/tasks/get-task-status)입니다. 완료된 음악 작업에는 `audio_url`, `video_url`, `title`, `lyrics`, 모델 정규화 메타데이터가 포함될 수 있습니다.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## API 레퍼런스
+
+| 항목 | 레퍼런스 |
+|-------|-----------|
+| 음악 생성 | [음악 생성](/ko/api-reference/music/create-music) |
+| 음악 상태 조회 | [음악 상태 조회](/ko/api-reference/music/get-music-status) |
+| 작업 상태 조회 | [작업 상태 조회](/ko/api-reference/tasks/get-task-status) |
+| 모델 목록 | [모델 목록](/ko/api-reference/models/list-models) |
+| 모델 조회 | [모델 조회](/ko/api-reference/models/get-model) |

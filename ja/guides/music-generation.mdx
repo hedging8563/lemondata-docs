@@ -1,0 +1,55 @@
+---
+title: "音楽生成"
+description: "TokenLab の音楽生成 API と非同期タスクのポーリングで音楽と歌詞を作成します。"
+---
+## 推奨フロー
+
+1. [モデル一覧](/ja/api-reference/models/list-models) を `recommended_for=music` 付きで呼び出します。
+2. [音楽を作成](/ja/api-reference/music/create-music) で `prompt` を含むタスクを作成し、必要に応じて `title`、`tags`、`action`、`mv`、継続設定を指定します。
+3. 返された `id` / `task_id` と `poll_url` を保存します。
+4. `completed` または `failed` になるまでポーリングし、`audio_url`、任意の `video_url`、`title`、`lyrics` を読み取ります。
+
+## モデルの発見
+
+音楽生成は非同期です。上流プロバイダ名やプロバイダ側タスク ID に依存せず、TokenLab が返す正規化されたタスク ID とポーリング URL を使ってください。
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 音楽タスクを作成
+
+`action: "MUSIC"` はプロンプトとモデルに応じて楽曲またはインストゥルメンタルを作成します。`action: "LYRICS"` は、選択したモデルが対応する歌詞のみのフロー用です。`continue_clip_id` と `continue_at` は、モデル契約で明記された継続ワークフローでのみ使います。
+
+```bash
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "suno_music",
+    "prompt": "An upbeat synth-pop track with warm vocals and a clean chorus",
+    "title": "Morning Static",
+    "tags": "synth-pop, upbeat",
+    "action": "MUSIC"
+  }'
+```
+
+## 結果のポーリング
+
+返された `poll_url` を常に優先してください。安定した代替入口は [タスクステータスを取得](/ja/api-reference/tasks/get-task-status) です。完了した音楽タスクには `audio_url`、`video_url`、`title`、`lyrics`、モデル正規化メタデータが含まれることがあります。
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## API リファレンス
+
+| 項目 | リファレンス |
+|-------|-----------|
+| 音楽を作成 | [音楽を作成](/ja/api-reference/music/create-music) |
+| 音楽ステータスを取得 | [音楽ステータスを取得](/ja/api-reference/music/get-music-status) |
+| タスクステータスを取得 | [タスクステータスを取得](/ja/api-reference/tasks/get-task-status) |
+| モデル一覧 | [モデル一覧](/ja/api-reference/models/list-models) |
+| モデルを取得 | [モデルを取得](/ja/api-reference/models/get-model) |

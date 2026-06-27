@@ -1,0 +1,74 @@
+---
+title: "Génération d’images"
+description: "Créez des flux texte-vers-image, image de référence et édition avec les API image de TokenLab."
+---
+## Flux recommandé
+
+1. Appelez [Lister les modèles](/fr/api-reference/models/list-models) avec `recommended_for=image`.
+2. Ouvrez [Obtenir le modèle](/fr/api-reference/models/get-model) pour le modèle choisi et suivez son contrat public.
+3. Utilisez [Créer une image](/fr/api-reference/images/create-image) pour le texte-vers-image et les flux avec image de référence pris en charge, ou [Modifier une image](/fr/api-reference/images/edit-image) pour les flux d’édition.
+4. Si la réponse contient `poll_url`, interrogez cette URL jusqu’à un état terminal.
+
+## Découvrir les modèles
+
+Les modèles image n’ont pas tous la même forme de requête. Certains renvoient un résultat immédiat, d’autres créent une tâche asynchrone. Le contrat du modèle choisi indique si `size`, `quality`, `aspect_ratio`, `resolution` et `async` sont acceptés.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Texte vers image
+
+Pour les modèles de la famille GPT Image, utilisez `size` lorsque le contrat l’expose. Pour les modèles Google ou Nano Banana, utilisez `aspect_ratio` et `resolution` uniquement s’ils figurent dans le contrat du modèle.
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "A clean product photo of a ceramic coffee cup on a walnut desk",
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+```
+
+## Images de référence et édition
+
+Pour une génération avec image de référence sur `/v1/images/generations`, envoyez `operation: "image-to-image"` avec `image_url`, `image_urls`, `reference_image_urls` ou un fichier multipart `image` si le modèle le prend en charge. Utilisez `/v1/images/edits` pour les modèles d’édition acceptant des images multipart, des URLs d’image ou `images[].image_url` / `images[].file_id`.
+
+N’envoyez pas `images[]` ou `file_id` au niveau racine vers `/v1/images/generations` ; ces formes appartiennent aux flux d’édition qui les documentent explicitement.
+
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro",
+    "operation": "image-to-image",
+    "prompt": "Keep the same product, place it in a bright studio scene",
+    "image_urls": ["https://example.com/reference.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Polling des résultats
+
+Une réponse image synchrone renvoie `data[].url` ou `data[].b64_json`. Une réponse de tâche renvoie `status`, `task_id` et généralement `poll_url`. Préférez `poll_url`; l’endpoint de secours fixe est [Statut de tâche](/fr/api-reference/tasks/get-task-status). Les tâches image asynchrones renvoient des URLs, donc ne demandez du base64 inline que sur les flux synchrones qui le prennent en charge.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Référence API
+
+| Sujet | Référence |
+|-------|-----------|
+| Créer une image | [Créer une image](/fr/api-reference/images/create-image) |
+| Modifier une image | [Modifier une image](/fr/api-reference/images/edit-image) |
+| Statut image | [Statut image](/fr/api-reference/images/get-image-status) |
+| Statut de tâche | [Statut de tâche](/fr/api-reference/tasks/get-task-status) |
+| Lister les modèles | [Lister les modèles](/fr/api-reference/models/list-models) |
+| Obtenir le modèle | [Obtenir le modèle](/fr/api-reference/models/get-model) |

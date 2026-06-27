@@ -448,9 +448,7 @@ These headers appear on both streaming and non-streaming responses.
         "status": "ready",
         "updated_at": "2026-03-28T12:00:00.000Z",
         "basis": {
-          "score_source": "clickhouse_24h",
-          "channel_id": null,
-          "physical_model": null
+          "source": "recent_activity_24h"
         }
       }
     }
@@ -854,163 +852,7 @@ response = client.chat.completions.create(model="gemini-3.5-flash", ...)
 
 ---
 
-### ✨ Upstream Prompt Cache
-
-> Understand provider-level prompt caching and how it reduces costs
-
-URL: https://docs.tokenlab.sh/guides/prompt-cache
-
-## Overview
-
-TokenLab does not add a separate semantic cache in this guide. This page explains upstream provider prompt caching, which appears in usage and billing when the routed provider reports cache tokens.
-
-## How Provider Prompt Cache Works
-
-Provider prompt caching stores the processed representation of your prompt prefix on the provider's servers. When you send a request with the same prefix, the provider can skip reprocessing those tokens.
-
-### Key Characteristics
-
-- **Prefix-based**: Only the beginning of your prompt can be cached
-- **Exact match**: Requires identical tokens (not semantic similarity)
-- **Time-limited**: Cache entries expire (typically 5-60 minutes)
-- **Automatic**: No special configuration needed
-
-```
-Request 1: [System prompt + Context A + Question 1]
-           ^^^^^^^^^^^^^^^^^^^^^^^^
-           This prefix gets cached
-
-Request 2: [System prompt + Context A + Question 2]
-           ^^^^^^^^^^^^^^^^^^^^^^^^
-           Cache hit! Only Question 2 is processed
-```
-
-## Supported Providers
-
-| Provider | Cache Read Discount | Cache Write Cost | Min Tokens |
-|----------|---------------------|------------------|------------|
-| **Anthropic** | 90% off | 25% premium | 1024 |
-| **OpenAI** | 50% off | Same as input | 1024 |
-| **DeepSeek** | 90% off | Same as input | 64 |
-| **Google** | 75% off | 25% premium | 32768 |
-
-> Info: Discounts are applied automatically. TokenLab passes through the provider's cache pricing to you.
-
-## Identifying Cache Usage
-
-### In Usage Logs
-
-Your usage logs show detailed cache token breakdown:
-
-| Field | Description |
-|-------|-------------|
-| `cacheReadTokens` | Tokens served from provider cache (discounted) |
-| `cacheWriteTokens` | Tokens written to cache (for future requests) |
-| `nonCachedPromptTokens` | Tokens processed without cache |
-
-### In Transactions
-
-Transactions show a **Provider Cache** label when upstream caching was used:
-
-- **Provider Cache** (teal): Upstream prompt cache hit - discounted rates
-
-## Cost Calculation Example
-
-For a request with 10,000 input tokens to Claude (Anthropic):
-
-**Without cache:**
-```
-10,000 tokens × $3.00/1M = $0.030
-```
-
-**With provider cache (8,000 cached + 2,000 new):**
-```
-Cache read:  8,000 tokens × $0.30/1M = $0.0024  (90% off)
-Cache write: 2,000 tokens × $3.75/1M = $0.0075  (25% premium)
-Total: $0.0099 (67% savings)
-```
-
-## Best Practices
-
-#### Use consistent system prompts
-
-Place your system prompt and static context at the beginning of your messages. This maximizes cache hit potential.
-
-
-#### Batch similar requests
-
-Send requests with the same prefix close together in time to benefit from cache before it expires.
-
-
-#### Meet minimum token requirements
-
-Ensure your cacheable prefix meets the provider's minimum (e.g., 1024 tokens for Anthropic/OpenAI).
-
-
-#### Monitor cache metrics
-
-Check your dashboard usage statistics for cache hit rates and savings.
-
-## Checking Cache Status
-
-### Response Headers
-
-```
-X-Upstream-Cache-Read: 8000   # Provider cache read tokens
-X-Upstream-Cache-Write: 2000  # Provider cache write tokens
-```
-
-### Usage API
-
-Usage logs API is not public yet. Check cache breakdown via response headers and the dashboard:
-
-```text
-GET /v1/usage/logs is currently not a public endpoint.
-Use X-Upstream-Cache-* response headers, plus the dashboard usage page.
-```
-
-Response includes:
-```json
-{
-  "promptTokens": 10000,
-  "cacheReadTokens": 8000,
-  "cacheWriteTokens": 2000,
-  "nonCachedPromptTokens": 0,
-  "completionTokens": 500,
-  "cost": 0.0099
-}
-```
-
-## FAQ
-
-#### Can I disable provider caching?
-
-Provider caching is automatic and cannot be disabled. However, it only benefits you (lower costs), so there's no reason to disable it.
-
-
-#### Why didn't my request hit provider cache?
-
-Common reasons:
-    - Prefix changed (even one token difference)
-    - Cache expired (typically 5-60 minutes)
-    - Prefix too short (below minimum tokens)
-    - Different API key used
-
-
-#### Does BYOK support provider caching?
-
-Yes! When using your own API keys (BYOK), provider caching works the same way. The cache is tied to your upstream API key.
-
-
-#### How do I maximize cache savings?
-
-1. Structure prompts with static content first
-    2. Keep system prompts consistent across requests
-    3. Send related requests in quick succession
-
----
-
-### TokenLab API Integration Skill
+### ✨ TokenLab API Integration Skill
 
 > Install the maintained TokenLab API integration skill and teach coding agents to discover models, read public contracts, and recover from API errors.
 
@@ -1042,7 +884,7 @@ If your tool does not support the installer, copy `skills/tokenlab-api-integrati
 
 ### Update Existing Installs
 
-If you installed the skill before the TokenLab repository cleanup, rerun the same command. The current public package is smaller and no longer depends on generated local search scripts.
+If you installed the skill earlier, rerun the same command to update to the current public package.
 
 ### Verify Installation
 
@@ -2219,529 +2061,446 @@ Configure low balance alerts in your dashboard to avoid service interruption.
 ---
 
 
-## Coding Agents
+## Media Guides
 
-### Coding Agents
+### Image Generation
 
-> Cut coding agent costs by up to 90% with smart routing, caching, and model selection
+> Build text-to-image, reference-image, and edit workflows with TokenLab image APIs.
 
-URL: https://docs.tokenlab.sh/guides/coding-agents
+URL: https://docs.tokenlab.sh/guides/image-generation
 
-## Why Coding Agents Are Expensive
+## Recommended flow
 
-Coding agents like Claude Code, Cursor, and Codex CLI are powerful — but they consume tokens at a rate that surprises most teams.
+1. Call [List models](/api-reference/models/list-models) with `recommended_for=image`.
+2. Open [Get model](/api-reference/models/get-model) for the selected model and follow its public contract.
+3. Use [Create image](/api-reference/images/create-image) for text-to-image and supported reference-image flows, or [Edit image](/api-reference/images/edit-image) for edit-specific workflows.
+4. If the response includes `poll_url`, poll that URL until the task reaches a terminal state.
 
-**Long context per request.** Every call includes a system prompt, project files, and conversation history — often 10,000–100,000+ tokens before the model even starts thinking.
+## Model discovery
 
-**High-frequency calls.** A single coding session triggers dozens of API calls: code generation, search, review, autocomplete, and tool use. A 1-hour session can easily hit 200+ requests.
+Image models are not all shaped the same. Some return inline results, while others create asynchronous tasks. The selected model contract determines whether fields such as `size`, `quality`, `aspect_ratio`, `resolution`, and `async` are accepted.
 
-**Conversation accumulation.** Each turn resends the full message history. By turn 20, you're paying for the same context 20 times over.
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-> Info: A typical 1-hour Claude Code session can consume 2–5M tokens. At direct API rates, that's $6–30+ per hour depending on the model.
+## Text to image
 
-## How TokenLab Helps
+For GPT image-family models, use `size` when the model contract exposes it. For Google or Nano Banana image models, use `aspect_ratio` and `resolution` only when the selected model contract lists those fields.
 
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "A clean product photo of a ceramic coffee cup on a walnut desk",
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+```
 
+## Reference images and edits
 
+For reference-image generation on `/v1/images/generations`, send `operation: "image-to-image"` with `image_url`, `image_urls`, `reference_image_urls`, or a multipart `image` file when the model supports it. Use `/v1/images/edits` for edit models that accept multipart images, image URLs, or `images[].image_url` / `images[].file_id`.
 
-## Supported Coding Tools
+Do not send top-level `images[]` or top-level `file_id` to `/v1/images/generations`; those shapes belong to edit flows that explicitly document them.
 
+```bash
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro",
+    "operation": "image-to-image",
+    "prompt": "Keep the same product, place it in a bright studio scene",
+    "image_urls": ["https://example.com/reference.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
 
+## Polling results
 
+A synchronous image response returns `data[].url` or `data[].b64_json`. A task response returns `status`, `task_id`, and usually `poll_url`. Prefer `poll_url`; the fixed fallback endpoint is [Get task status](/api-reference/tasks/get-task-status). Async image tasks return URL results, so request inline base64 only on synchronous flows that support it.
 
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
+## API reference
 
-
-## Go Deeper
+| Topic | Reference |
+|-------|-----------|
+| Create image | [Create image](/api-reference/images/create-image) |
+| Edit image | [Edit image](/api-reference/images/edit-image) |
+| Get image status | [Get image status](/api-reference/images/get-image-status) |
+| Get task status | [Get task status](/api-reference/tasks/get-task-status) |
+| List models | [List models](/api-reference/models/list-models) |
+| Get model | [Get model](/api-reference/models/get-model) |
 
 ---
 
-### Coding Agent Cost Optimization
+### Video Generation
 
-> Practical strategies to reduce coding agent API costs by 60-90%
+> Generate videos with unified public operations such as text-to-video, image-to-video, reference-to-video, keyframe control, motion control, and video-to-video.
 
-URL: https://docs.tokenlab.sh/guides/coding-agent-cost
-
-## The Cost Problem
-
-A typical coding agent session burns through tokens fast:
-
-| Activity | Tokens per call | Calls per hour | Hourly tokens |
-|----------|----------------|----------------|---------------|
-| Code generation | 5,000–50,000 | 10–30 | 150K–1.5M |
-| Codebase search | 2,000–20,000 | 20–50 | 100K–1M |
-| Code review | 10,000–80,000 | 5–10 | 100K–800K |
-| Autocomplete | 500–3,000 | 50–200 | 50K–600K |
-| **Total** | | | **400K–4M+** |
-
-At premium model rates, that's $3–30/hour per developer. For a team of 10, that's $500–5,000/month.
-
-## Smart Model Selection
-
-Not every coding task needs the most expensive model. Match the task to the right tier:
-
-| Task | Recommended | Cost Tier | Why |
-|------|-------------|-----------|-----|
-| Architecture design | `claude-opus-4-6`, `gpt-5.4` | $$$$ Premium | Complex reasoning needed |
-| Code generation | `claude-sonnet-4-6`, `gemini-3.1-pro-preview` | $$$ Standard | Best quality/cost balance |
-| Code review | `claude-sonnet-4-6`, `deepseek-r1` | $$–$$$ | Pattern matching, less creativity |
-| Bug fixing | `claude-sonnet-4-6`, `gpt-5-mini` | $$–$$$ | Focused, well-defined tasks |
-| Tab completion | `gpt-5-mini`, `gemini-3.5-flash` | $$ Budget | Speed matters more than depth |
-| Boilerplate | `deepseek-v3-2`, `gpt-5-mini` | $ Economy | Simple, repetitive patterns |
-
-> Tip: See [Model Selection Guide](/guides/coding-agent-models) for detailed model comparisons and per-tool configuration.
-
-## Caching Strategies
-
-Coding agents are ideal for caching because they repeat similar patterns constantly.
-
-### Prompt Cache (Provider-Level)
-
-[Upstream prompt caching](/guides/prompt-cache) is automatic through TokenLab. Long system prompts — which coding agents always include — get cached at the provider level:
-
-| Provider | Cache Discount | Min Tokens |
-|----------|---------------|------------|
-| Anthropic | 90% off reads | 1,024 |
-| OpenAI | 50% off reads | 1,024 |
-| DeepSeek | 90% off reads | 64 |
-
-Since coding agents send the same system prompt + project context on every call, prompt cache hit rates are typically **70–90%**.
-
-### Prompt Cache Savings Example
-
-For a request with 50,000 input tokens (typical coding agent call):
-
-```
-Direct API (no caching):
-  50,000 tokens × $3.00/1M = $0.150
-
-With prompt cache (40,000 cached + 10,000 new):
-  Cached:  40,000 × $0.30/1M = $0.012
-  New:     10,000 × $3.00/1M = $0.030
-  Total: $0.042 (72% savings)
-```
-
-## Real Cost Comparison
-
-Estimated costs for a typical 1-hour coding session (~3M tokens):
-
-| Setup | Hourly Cost | Monthly (160h) |
-|-------|-------------|----------------|
-| Direct API (premium model) | ~$15–25 | ~$2,400–4,000 |
-| TokenLab (smart routing) | ~$10–18 | ~$1,600–2,900 |
-| TokenLab + prompt cache | ~$4–8 | ~$640–1,280 |
-
-> Warning: These are illustrative estimates. Actual costs depend on your model choice, usage patterns, and cache hit rates. Check [real-time pricing](/api-reference/pricing/get-pricing) for current rates.
-
-## Token Management Tips
-
-### Set max_tokens
-
-Prevent runaway generation:
-
-```json
-{
-  "model": "claude-sonnet-4-6",
-  "max_tokens": 4096,
-  "messages": [...]
-}
-```
-
-Most coding tasks need 1,000–4,000 output tokens. Setting a limit prevents the model from generating unnecessarily long responses.
-
-### Use Auto-Compact
-
-Most coding agents support context compaction — summarizing old conversation turns to reduce token count. Enable it:
-
-- **Claude Code**: Built-in auto-compact triggers at context limits
-- **Cursor**: Automatic context management
-- **Codex CLI**: Use `--max-context` flag
-
-### Avoid Context Bloat
-
-- Don't paste entire files when a function is enough
-- Use `.gitignore`-style patterns to exclude irrelevant files from agent context
-- Clear conversation history when switching tasks
-
-## Quick Configuration
-
-Each tool needs just a few lines to connect through TokenLab:
-
-#### Claude Code
-
-```bash
-    export ANTHROPIC_API_KEY="sk-your-tokenlab-key"
-    export ANTHROPIC_BASE_URL="https://api.tokenlab.sh"
-    ```
-    [Full setup guide →](/integrations/claude-code)
-
-
-#### Cursor
-
-Settings → Models → OpenAI API Key: `sk-your-key`, Base URL: `https://api.tokenlab.sh/v1`
-
-    [Full setup guide →](/integrations/cursor)
-
-
-#### Codex CLI
-
-```bash
-    export OPENAI_API_KEY="sk-your-tokenlab-key"
-    export OPENAI_BASE_URL="https://api.tokenlab.sh/v1"
-    ```
-    [Full setup guide →](/integrations/codex-cli)
-
-
-#### Gemini CLI
-
-```bash
-    export GEMINI_API_KEY="sk-your-tokenlab-key"
-    export GOOGLE_GEMINI_BASE_URL="https://api.tokenlab.sh"
-    ```
-    [Full setup guide →](/integrations/gemini-cli)
-
----
-
-### Coding Agent Model Selection
-
-> Choose the right model for each coding task — comparison table, recommendations, and configuration
-
-URL: https://docs.tokenlab.sh/guides/coding-agent-models
-
-## Model Comparison for Coding
-
-| Model | Speed | Code Quality | Cost | Context Window | Best For |
-|-------|-------|-------------|------|----------------|----------|
-| `claude-opus-4-6` | Moderate | Excellent | $$$$ | 200K | Architecture, complex refactoring |
-| `gpt-5.4` | Moderate | Excellent | $$$$ | 200K | Complex reasoning, planning |
-| `claude-sonnet-4-6` | Fast | Very Good | $$$ | 200K | General coding, reviews |
-| `gemini-3.1-pro-preview` | Fast | Very Good | $$$ | 1M | Large codebase analysis |
-| `gpt-5-mini` | Very Fast | Good | $$ | 128K | Quick edits, completions |
-| `gemini-3.5-flash` | Very Fast | Good | $$ | 1M | Fast iteration, search |
-| `deepseek-r1` | Moderate | Very Good | $ | 64K | Reasoning-heavy tasks |
-| `deepseek-v3-2` | Fast | Good | $ | 128K | Bulk generation, boilerplate |
-
-## Task-Specific Recommendations
-
-#### Code Generation / Scaffolding
-
-**Recommended**: `claude-sonnet-4-6`, `gemini-3.1-pro-preview`
-
-    These models produce clean, well-structured code with good naming conventions. For complex multi-file scaffolding, consider `claude-opus-4-6`.
-
-    Budget alternative: `deepseek-v3-2` handles boilerplate well at a fraction of the cost.
-
-
-#### Code Review / Refactoring
-
-**Recommended**: `claude-sonnet-4-6`, `deepseek-r1`
-
-    Code review benefits from reasoning ability. `deepseek-r1` is particularly cost-effective here — its chain-of-thought approach catches subtle issues.
-
-    For security-focused reviews: `claude-opus-4-6` or `gpt-5.4`.
-
-
-#### Bug Fixing / Debugging
-
-**Recommended**: `claude-sonnet-4-6`, `gpt-5-mini`
-
-    Bug fixing is usually well-scoped — you know what's broken. Standard-tier models handle this well. Use premium models only for complex, multi-file bugs.
-
-
-#### Architecture Design
-
-**Recommended**: `claude-opus-4-6`, `gpt-5.4`
-
-    Architecture decisions benefit from the strongest reasoning. Worth the premium cost since these decisions are infrequent but high-impact.
-
-
-#### Quick Edits / Tab Completion
-
-**Recommended**: `gpt-5-mini`, `gemini-3.5-flash`
-
-    Speed is critical for interactive use. Budget models with fast response times provide the best experience. Don't waste premium tokens on autocomplete.
-
-## How TokenLab Routing Works
-
-TokenLab routes your requests to the best available provider automatically.
-
-### Routing Strategies
-
-| Strategy | Behavior | Best For |
-|----------|----------|----------|
-| **PRIORITY** | Routes to highest-priority available provider | Reliability-focused |
-| **COST** | Routes to cheapest available provider | Cost-focused |
-
-You can set your preferred strategy in the dashboard.
-
-### Automatic Fallback
-
-If a provider is unavailable or returns an error, TokenLab automatically retries with the next provider:
-
-```
-Request: claude-sonnet-4-6
-  → Provider A (primary): 503 error
-  → Provider B (fallback): ✓ Success
-```
-
-This happens transparently — your coding agent sees a normal response.
-
-### Native Format Routing
-
-When the selected model and routed channel support it, TokenLab can route requests through the model family's native API format for better compatibility:
-
-| Model Family | API Format | Base URL |
-|-------------|------------|----------|
-| Claude | Anthropic Messages | `https://api.tokenlab.sh` |
-| GPT | OpenAI Responses | `https://api.tokenlab.sh/v1` |
-| Gemini | Gemini Native API | `https://api.tokenlab.sh` or `https://api.tokenlab.sh/v1beta` depending on client path |
-| DeepSeek | OpenAI Chat | `https://api.tokenlab.sh/v1` |
-
-Claude Code is a strong native Anthropic path. Gemini-native APIs exist too, but Gemini CLI itself remains a best-effort compatibility path rather than a guaranteed long-term workflow.
-
-## Configuration per Tool
-
-#### Claude Code
-
-```bash
-    export ANTHROPIC_API_KEY="sk-your-tokenlab-key"
-    export ANTHROPIC_BASE_URL="https://api.tokenlab.sh"
-    ```
-
-    Select model: `claude --model claude-sonnet-4-6`
-
-    [Full guide →](/integrations/claude-code)
-
-
-#### Cursor
-
-In Settings → Models:
-    - API Key: `sk-your-tokenlab-key`
-    - Base URL: `https://api.tokenlab.sh/v1`
-    - Model: `claude-sonnet-4-6` or `gpt-5-mini`
-
-    [Full guide →](/integrations/cursor)
-
-
-#### Codex CLI
-
-```bash
-    export OPENAI_API_KEY="sk-your-tokenlab-key"
-    export OPENAI_BASE_URL="https://api.tokenlab.sh/v1"
-    ```
-
-    [Full guide →](/integrations/codex-cli)
-
-
-#### Gemini CLI
-
-```bash
-    export GEMINI_API_KEY="sk-your-tokenlab-key"
-    export GOOGLE_GEMINI_BASE_URL="https://api.tokenlab.sh"
-    ```
-
-    Treat this as best-effort compatibility rather than a stable upstream contract.
-
-    [Full guide →](/integrations/gemini-cli)
-
-
-#### OpenCode
-
-```json
-    {
-      "provider": "openai",
-      "apiKey": "sk-your-tokenlab-key",
-      "baseURL": "https://api.tokenlab.sh/v1"
-    }
-    ```
-
-    [Full guide →](/integrations/opencode)
-
----
-
-### TokenLab Provider Setup
-
-> Configure TokenLab as a custom provider in OpenClaw using OpenAI, Responses, Anthropic, and Gemini-compatible routes
-
-URL: https://docs.tokenlab.sh/guides/tokenlab-provider
-
-> Note: This guide is for **self-hosted OpenClaw** users who want to connect TokenLab as their AI provider.
+URL: https://docs.tokenlab.sh/guides/video-generation
 
 ## Overview
 
-For current OpenClaw versions, the recommended approach is to configure TokenLab through `models.providers`.
+TokenLab provides access to video generation models through a single unified API. Video generation is **asynchronous**: submit a request, receive a task ID and `poll_url`, then poll for the final result.
 
-If you just want to get started quickly, configuring `tokenlab` alone is enough. Add the other providers only when you explicitly need **Responses API**, **Claude native**, **Gemini native**, or **MiniMax native** behavior.
+### Availability and polling
 
-| Provider | OpenClaw `api` | Best for | baseUrl |
-|----------|----------------|----------|---------|
-| `tokenlab` | `openai-completions` | GPT, DeepSeek, Qwen, and most OpenAI-compatible calls | `https://api.tokenlab.sh/v1` |
-| `tokenlab-responses` | `openai-responses` | OpenAI Responses workflows that expect `/v1/responses` semantics | `https://api.tokenlab.sh/v1` |
-| `tokenlab-claude` | `anthropic-messages` | Native Claude Messages API | `https://api.tokenlab.sh` |
-| `tokenlab-gemini` | `google-generative-ai` | Native Gemini API format | `https://api.tokenlab.sh` |
-| `tokenlab-minimax` | `anthropic-messages` | Native MiniMax routing | `https://api.tokenlab.sh` |
+The model inventory changes over time. For the latest public availability, use the [Models API](/api-reference/models/list-models) or visit the [Models page](https://tokenlab.sh/en/models).
 
-> Warning: Use the `/v1` suffix only for `openai-completions` and `openai-responses`.
+If a create response returns `poll_url`, call that exact URL. When it points to `/v1/tasks/{id}`, treat that as the canonical fixed status endpoint.
 
-Native providers such as `anthropic-messages` and `google-generative-ai` should use `https://api.tokenlab.sh` without `/v1`, otherwise OpenClaw may construct the wrong upstream path.
+### Model and media behavior
 
-## Prerequisites
+Audio behavior is model-dependent. In TokenLab, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some public models are silent-only or do not expose a stable toggle.
 
-- A self-hosted OpenClaw instance
-- A TokenLab API Key — [Get one here](https://tokenlab.sh/dashboard)
+For production integrations, prefer publicly reachable `https` URLs over inline base64 for images, videos, and audio. Inline `data:` URLs are still supported by compatible models, but URLs are easier to retry, inspect, and debug.
 
-## Configuration
+### Async Workflow
 
-Edit your OpenClaw config:
+```mermaid
+sequenceDiagram
+    participant Client
+    participant TokenLab
+    participant Provider
 
-- **Self-hosted**: `~/.openclaw/openclaw.json`
+    Client->>TokenLab: POST /v1/videos/generations
+    TokenLab->>Provider: Forward normalized request
+    Provider-->>TokenLab: task_id + pending
+    TokenLab-->>Client: { task_id, poll_url, status: "pending" }
 
-Add TokenLab providers under `models.providers`:
-
-```json5
-{
-  agents: {
-    defaults: {
-      model: {
-        primary: "tokenlab-claude/claude-sonnet-4-6"
-      }
-    }
-  },
-  models: {
-    mode: "merge",
-    providers: {
-      tokenlab: {
-        api: "openai-completions",
-        baseUrl: "https://api.tokenlab.sh/v1",
-        apiKey: "sk-your-tokenlab-key",
-        models: [
-          { id: "gpt-4o", name: "GPT-4o" },
-          { id: "deepseek-r1", name: "DeepSeek R1" },
-          { id: "qwen3-coder-flash", name: "Qwen 3 Coder Flash" }
-        ]
-      },
-      "tokenlab-responses": {
-        api: "openai-responses",
-        baseUrl: "https://api.tokenlab.sh/v1",
-        apiKey: "sk-your-tokenlab-key",
-        models: [
-          { id: "gpt-4o", name: "GPT-4o (Responses)" },
-          { id: "gpt-5.2", name: "GPT-5.2 (Responses)" }
-        ]
-      },
-      "tokenlab-claude": {
-        api: "anthropic-messages",
-        baseUrl: "https://api.tokenlab.sh",
-        apiKey: "sk-your-tokenlab-key",
-        models: [
-          { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
-          { id: "claude-opus-4-6", name: "Claude Opus 4.6" }
-        ]
-      },
-      "tokenlab-gemini": {
-        api: "google-generative-ai",
-        baseUrl: "https://api.tokenlab.sh",
-        apiKey: "sk-your-tokenlab-key",
-        models: [
-          { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
-          { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" }
-        ]
-      },
-      "tokenlab-minimax": {
-        api: "anthropic-messages",
-        baseUrl: "https://api.tokenlab.sh",
-        apiKey: "sk-your-tokenlab-key",
-        models: [
-          { id: "minimax-m2.1", name: "MiniMax M2.1" }
-        ]
-      }
-    }
-  }
-}
+    loop Poll every 5-10s
+        Client->>TokenLab: GET poll_url
+        TokenLab->>Provider: Query status
+        Provider-->>TokenLab: Status update
+        TokenLab-->>Client: { status, video_url? }
+    end
 ```
 
-> Info: All 5 providers use the **same API Key**. You only need one TokenLab account.
+## Public Operations
 
-> Info: The `models` arrays above only show common examples. Add more model IDs to each provider as needed.
+TokenLab's public video contract accepts these operation values. Support is model-specific and changes as providers add or retire capabilities, so check the selected model contract before relying on a specialized operation.
 
-## Using Models
+- `text-to-video`
+- `image-to-video`
+- `reference-to-video`
+- `start-end-to-video`
+- `video-to-video`
+- `motion-control`
+- `audio-to-video`
+- `video-extension`
 
-OpenClaw still references models with the `provider/model` format:
+## Operation Definitions
 
-```json5
-{
-  agents: {
-    defaults: {
-      model: {
-        primary: "tokenlab-gemini/gemini-3.5-flash"
-      }
-    }
-  }
-}
-```
+- **T2V (Text-to-Video)**: Generate video from a text prompt.
+- **I2V (Image-to-Video)**: Animate a starting image. For the broadest compatibility, provide `image_url`.
+- **Reference**: Condition generation on one or more reference images via `reference_images`; some models also accept reference videos through `video_urls` and reference audio through `audio_urls`.
+- **Start-End**: Control the first and last frames with `start_image` and `end_image`.
+- **V2V (Video-to-Video)**: Use an existing video, generated task, or provider-specific derivative flow as the source.
+- **Motion**: Combine a subject image with a motion reference video.
+- **Audio-to-Video**: Generate video from an audio-conditioned model flow.
+- **Video Extension**: Continue or extend an existing generated video task.
 
-### Model Examples
+## Model Discovery
 
-| Provider | Model reference | Description |
-|----------|-----------------|-------------|
-| `tokenlab` | `tokenlab/gpt-4o` | OpenAI-compatible route |
-| `tokenlab` | `tokenlab/deepseek-r1` | DeepSeek reasoning model |
-| `tokenlab-responses` | `tokenlab-responses/gpt-4o` | Responses API route |
-| `tokenlab-claude` | `tokenlab-claude/claude-sonnet-4-6` | Native Claude Messages route |
-| `tokenlab-gemini` | `tokenlab-gemini/gemini-3.5-flash` | Native Gemini route |
-| `tokenlab-minimax` | `tokenlab-minimax/minimax-m2.1` | Native MiniMax route |
-
-Browse all available models at [tokenlab.sh/models](https://tokenlab.sh/en/models).
-
-## When to Use Which Provider
-
-- `tokenlab`: default choice for most general-purpose agent and chat use cases.
-- `tokenlab-responses`: use when your OpenClaw workflow explicitly depends on OpenAI Responses semantics.
-- `tokenlab-claude`: use when you want Claude's native Messages behavior.
-- `tokenlab-gemini`: use when you want Gemini-native request/response formatting or existing Gemini-style integrations.
-- `tokenlab-minimax`: use when you want MiniMax on its native route.
-
-If you do not need Gemini-native behavior, you can still call Gemini models through `tokenlab/gemini-*` on the OpenAI-compatible route.
-
-## Common Mistakes
-
-#### Still using the old top-level providers array
-
-Current OpenClaw docs use `models.providers`. If you keep the older top-level `providers` array format, OpenClaw may ignore the config or fail to resolve the provider prefixes as expected.
-
-
-#### Forgetting /v1 on tokenlab-responses
-
-`openai-responses` maps to TokenLab's `/v1/responses` path, so `tokenlab-responses` must use `https://api.tokenlab.sh/v1`.
-
-
-#### Adding /v1 to tokenlab-claude, tokenlab-gemini, or tokenlab-minimax
-
-`anthropic-messages` and `google-generative-ai` should use `https://api.tokenlab.sh` without `/v1`. Adding `/v1` can produce incorrect request paths.
-
-
-#### Does OpenClaw still support native Gemini?
-
-Yes. Current OpenClaw documentation still includes the built-in `google` provider and also supports custom providers using `api: "google-generative-ai"`. So `tokenlab-gemini` remains a valid native Gemini route for OpenClaw users.
-
-## Verify Setup
-
-After saving the config, restart your OpenClaw instance and test with a simple message. If you see a response, the provider is configured correctly.
+Video model availability changes frequently. Fetch the current public shortlist before choosing a model:
 
 ```bash
-# Self-hosted: restart the service
-systemctl --user restart openclaw    # Linux
-launchctl stop cc.tokenlab.openclaw && launchctl start cc.tokenlab.openclaw  # macOS
+curl "https://api.tokenlab.sh/v1/models?recommended_for=video" \
+  -H "Authorization: Bearer sk-your-api-key"
 ```
 
-## Next Steps
+Read the selected model before sending model-specific fields:
 
-Once OpenClaw is connected, these guides help you use TokenLab more effectively:
+```bash
+curl "https://api.tokenlab.sh/v1/models/veo3.1" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-- [API Formats](/guides/api-formats) — understand the differences between OpenAI, Responses, Anthropic, and Gemini routes
-- [IDE / SDK Compatibility](/guides/ide-sdk-compatibility) — see when `/v1/responses` is the better fit
-- [Error Handling](/guides/error-handling) — learn common failure modes and recovery patterns
-- [Models Overview](https://tokenlab.sh/en/models) — browse model IDs before wiring them into agents
+Use `tokenlab.capabilities`, `tokenlab.supported_operations`, `tokenlab.public_contract_summary`, and `tokenlab.public_contract` as the source of truth. The examples below are workflow patterns, not an exhaustive model inventory.
+
+## Usage Examples
+
+### Text-to-Video
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "veo3.1",
+        "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
+        "operation": "text-to-video",
+        "duration": 4,
+        "aspect_ratio": "16:9"
+    }
+)
+```
+
+### Image-to-Video
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "hailuo-2.3-standard",
+        "prompt": "The scene begins from the provided image and adds gentle natural motion.",
+        "operation": "image-to-video",
+        "image_url": "https://example.com/portrait.jpg",
+        "duration": 6,
+        "aspect_ratio": "16:9"
+    }
+)
+```
+
+### Kling 3.0 Elements
+
+Use `kling_elements` with `kling-3.0-video` when you need element references. Provide an image-conditioned request (`image_url`, `image_urls`, `start_image`, or `end_image`) and reference each element in the prompt with `@name`. Do not combine `kling_elements` with `output_audio=true`; omit `output_audio` or set it to `false` for element-reference requests.
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-video",
+        "prompt": "Place @hero_bag on a studio turntable with soft product lighting.",
+        "operation": "image-to-video",
+        "image_url": "https://example.com/studio-start.png",
+        "duration": 5,
+        "resolution": "720p",
+        "kling_elements": [
+            {
+                "name": "hero_bag",
+                "description": "black leather handbag",
+                "element_input_urls": [
+                    "https://example.com/bag-front.png",
+                    "https://example.com/bag-side.png"
+                ]
+            }
+        ]
+    }
+)
+```
+
+### Reference-to-Video
+
+For `seedance-2.0` and `seedance-2.0-fast`, TokenLab currently supports up to 9 reference images plus up to 3 reference videos and 3 reference audios. `duration` controls generated output length only; it does not define a separate reference video input duration limit. For `grok-imagine-video`, reference-to-video accepts up to 7 image references (`reference_images` or `image_urls`) and `duration` is capped at 10 seconds. Do not combine reference images with `image_url` / `image` first-frame inputs. `grok-imagine-video-1.5-preview` is image-to-video only.
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "veo3.1",
+        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
+        "operation": "reference-to-video",
+        "reference_images": [
+            "https://example.com/ref-a.jpg",
+            "https://example.com/ref-b.jpg"
+        ],
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "9:16"
+    }
+)
+```
+
+### Start-End-to-Video
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "viduq2-pro",
+        "prompt": "Smooth transition from day to night.",
+        "operation": "start-end-to-video",
+        "start_image": "https://example.com/city-day.jpg",
+        "end_image": "https://example.com/city-night.jpg",
+        "duration": 5,
+        "resolution": "720p",
+        "aspect_ratio": "16:9"
+    }
+)
+```
+
+### Video-to-Video
+
+For `grok-imagine-video` video-to-video, send a public HTTPS `.mp4` URL in `video_url`. TokenLab translates it to xAI's REST `video.url` body. You may set `resolution` to `480p` or `720p`; `duration` and `aspect_ratio` are not accepted for that edit flow.
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "grok-imagine-video",
+        "operation": "video-to-video",
+        "video_url": "https://example.com/source.mp4",
+        "prompt": "Upscale this clip while preserving the original motion."
+    }
+)
+```
+
+### Motion Control
+
+```python
+response = requests.post(f"{BASE}/videos/generations",
+    headers=headers,
+    json={
+        "model": "kling-3.0-motion-control",
+        "operation": "motion-control",
+        "prompt": "Keep the subject stable while following the motion reference.",
+        "image_url": "https://example.com/subject.png",
+        "video_url": "https://example.com/motion.mp4",
+        "resolution": "720p"
+    }
+)
+```
+
+## Parameters Reference
+
+| Parameter | Type | Notes |
+|-----------|------|-------|
+| `operation` | string | Explicit `operation` is recommended in production. |
+| `image_url` | string | Preferred image input form for broad cross-model compatibility. |
+| `image` | string | Inline data URL; useful for debugging and small local integrations. |
+| `reference_images` | string[] | Canonical public field for reference-image conditioning. |
+| `reference_image_type` | string | Optional `asset` / `style` selector when supported. |
+| `video_url` | string | Required for video-url based `video-to-video` flows and for `motion-control`; some derivative flows use `task_id` instead. |
+| `audio_url` | string | Used by model-specific audio-conditioned flows when available. |
+| `output_audio` | boolean | Veo 3 family defaults to `true` when omitted. `kling-3.0-video` accepts this selector for upstream sound control and defaults to silent output when omitted. |
+
+## Model Selection Guide
+
+
+
+
+
+## Billing
+
+Billing is model-dependent. Some public video models are effectively priced per request, while others are priced per second. Check the [Models page](https://tokenlab.sh/en/models) or the [Pricing API](/api-reference/pricing/get-pricing) for the current public price surface.
+
+---
+
+### Music Generation
+
+> Create music and lyrics with TokenLab music generation APIs and asynchronous task polling.
+
+URL: https://docs.tokenlab.sh/guides/music-generation
+
+## Recommended flow
+
+1. Call [List models](/api-reference/models/list-models) with `recommended_for=music`.
+2. Use [Create music](/api-reference/music/create-music) to create a task with `prompt` and optional fields such as `title`, `tags`, `action`, `mv`, or continuation settings.
+3. Store the returned `id` / `task_id` and `poll_url`.
+4. Poll until the task is `completed` or `failed`, then read `audio_url`, optional `video_url`, `title`, and `lyrics`.
+
+## Model discovery
+
+Music generation is asynchronous. Do not build against an upstream provider name or provider task ID; TokenLab returns a normalized task identity and polling URL.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Create a music task
+
+`action: "MUSIC"` creates songs or instrumentals depending on the prompt and model. `action: "LYRICS"` is for lyric-only flows when the selected model supports it. Use `continue_clip_id` and `continue_at` only for continuation workflows documented by the model contract.
+
+```bash
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "suno_music",
+    "prompt": "An upbeat synth-pop track with warm vocals and a clean chorus",
+    "title": "Morning Static",
+    "tags": "synth-pop, upbeat",
+    "action": "MUSIC"
+  }'
+```
+
+## Polling results
+
+Always prefer the returned `poll_url`. The stable fallback is [Get task status](/api-reference/tasks/get-task-status). Completed music tasks can include `audio_url`, `video_url`, `title`, `lyrics`, and model-normalized metadata.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## API reference
+
+| Topic | Reference |
+|-------|-----------|
+| Create music | [Create music](/api-reference/music/create-music) |
+| Get music status | [Get music status](/api-reference/music/get-music-status) |
+| Get task status | [Get task status](/api-reference/tasks/get-task-status) |
+| List models | [List models](/api-reference/models/list-models) |
+| Get model | [Get model](/api-reference/models/get-model) |
+
+---
+
+### 3D Generation
+
+> Create 3D assets from text or images with TokenLab 3D generation APIs and asynchronous task polling.
+
+URL: https://docs.tokenlab.sh/guides/3d-generation
+
+## Recommended flow
+
+1. Call [List models](/api-reference/models/list-models) with `recommended_for=3d`.
+2. Use [Create 3D](/api-reference/3d/create-3d) with a text `prompt`; add `image` or `image_url` only for image-to-3D models that support it.
+3. Choose optional fields such as `format`, `quality`, `style`, or `seed` according to the selected model contract.
+4. Poll `poll_url` until the asset is ready, then download `model_url` or format-specific URLs such as `glb_url` / `fbx_url`.
+
+## Model discovery
+
+3D generation is task-based. Treat the model catalog as the source of truth instead of assuming one provider or one fixed model.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Create a 3D task
+
+Text-to-3D requests require a `prompt`. Image-to-3D requests add either `image` base64 data or `image_url`. Use `format` and `quality` only where the model contract exposes them.
+
+```bash
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tripo3d-v2.5",
+    "prompt": "A stylized low-poly robot mascot with clean topology",
+    "format": "glb",
+    "quality": "standard"
+  }'
+```
+
+## Polling results
+
+Use the returned `poll_url` first. The stable fallback is [Get task status](/api-reference/tasks/get-task-status). Completed 3D tasks return `model_url` and may include format-specific fields such as `glb_url` or `fbx_url`.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## API reference
+
+| Topic | Reference |
+|-------|-----------|
+| Create 3D | [Create 3D](/api-reference/3d/create-3d) |
+| Get 3D status | [Get 3D status](/api-reference/3d/get-3d-status) |
+| Get task status | [Get task status](/api-reference/tasks/get-task-status) |
+| List models | [List models](/api-reference/models/list-models) |
+| Get model | [Get model](/api-reference/models/get-model) |
 
 ---
 
@@ -3017,9 +2776,7 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
             "status": "ready",
             "updated_at": "2026-03-28T12:00:00.000Z",
             "basis": {
-              "score_source": "clickhouse_24h",
-              "channel_id": null,
-              "physical_model": null
+              "source": "recent_activity_24h"
             }
           }
         }
@@ -3067,7 +2824,7 @@ Use it to inspect:
 - `status`
 - `updated_at`
 
-The public response intentionally keeps `basis.channel_id` and `basis.physical_model` as `null` so agents can consume the recommendation signal without learning internal routing identifiers.
+The public response summarizes recommendation provenance with `basis.source` and does not expose routing identifiers.
 
 ## Public Detail Metadata
 
@@ -3260,7 +3017,7 @@ Operational notes:
 
 - Use the same TokenLab API key plus Anthropic-native headers.
 - If batch items reference `file_id`, also include `anthropic-beta: files-api-2025-04-14`.
-- Batch jobs keep Anthropic-native request/response shapes while TokenLab tracks their internal settlement lifecycle.
+- Batch jobs keep Anthropic-native request/response shapes while TokenLab tracks billing status for reconciliation.
 
 ---
 
@@ -4019,249 +3776,6 @@ If the task no longer exists or can no longer be resolved through the public asy
 
 ---
 
-### Video Generation
-
-> Generate videos with unified public operations such as text-to-video, image-to-video, reference-to-video, keyframe control, motion control, and video-to-video.
-
-URL: https://docs.tokenlab.sh/guides/video-generation
-
-## Overview
-
-TokenLab provides access to video generation models through a single unified API. Video generation is **asynchronous**: submit a request, receive a task ID and `poll_url`, then poll for the final result.
-
-### Availability and polling
-
-The model inventory changes over time. For the latest public availability, use the [Models API](/api-reference/models/list-models) or visit the [Models page](https://tokenlab.sh/en/models).
-
-If a create response returns `poll_url`, call that exact URL. When it points to `/v1/tasks/{id}`, treat that as the canonical fixed status endpoint.
-
-### Model and media behavior
-
-Audio behavior is model-dependent. In TokenLab, Veo 3 family requests default to audio-on when `output_audio` is omitted. Some public models are silent-only or do not expose a stable toggle.
-
-For production integrations, prefer publicly reachable `https` URLs over inline base64 for images, videos, and audio. Inline `data:` URLs are still supported by compatible models, but URLs are easier to retry, inspect, and debug.
-
-### Async Workflow
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant TokenLab
-    participant Provider
-
-    Client->>TokenLab: POST /v1/videos/generations
-    TokenLab->>Provider: Forward normalized request
-    Provider-->>TokenLab: task_id + pending
-    TokenLab-->>Client: { task_id, poll_url, status: "pending" }
-
-    loop Poll every 5-10s
-        Client->>TokenLab: GET poll_url
-        TokenLab->>Provider: Query status
-        Provider-->>TokenLab: Status update
-        TokenLab-->>Client: { status, video_url? }
-    end
-```
-
-## Public Operations
-
-TokenLab's public video contract accepts these operation values. Support is model-specific and changes as providers add or retire capabilities, so check the selected model contract before relying on a specialized operation.
-
-- `text-to-video`
-- `image-to-video`
-- `reference-to-video`
-- `start-end-to-video`
-- `video-to-video`
-- `motion-control`
-- `audio-to-video`
-- `video-extension`
-
-## Operation Definitions
-
-- **T2V (Text-to-Video)**: Generate video from a text prompt.
-- **I2V (Image-to-Video)**: Animate a starting image. For the broadest compatibility, provide `image_url`.
-- **Reference**: Condition generation on one or more reference images via `reference_images`; some models also accept reference videos through `video_urls` and reference audio through `audio_urls`.
-- **Start-End**: Control the first and last frames with `start_image` and `end_image`.
-- **V2V (Video-to-Video)**: Use an existing video, generated task, or provider-specific derivative flow as the source.
-- **Motion**: Combine a subject image with a motion reference video.
-- **Audio-to-Video**: Generate video from an audio-conditioned model flow.
-- **Video Extension**: Continue or extend an existing generated video task.
-
-## Model Discovery
-
-Video model availability changes frequently. Fetch the current public shortlist before choosing a model:
-
-```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=video" \
-  -H "Authorization: Bearer sk-your-api-key"
-```
-
-Read the selected model before sending model-specific fields:
-
-```bash
-curl "https://api.tokenlab.sh/v1/models/veo3.1" \
-  -H "Authorization: Bearer sk-your-api-key"
-```
-
-Use `tokenlab.capabilities`, `tokenlab.supported_operations`, `tokenlab.public_contract_summary`, and `tokenlab.public_contract` as the source of truth. The examples below are workflow patterns, not an exhaustive model inventory.
-
-## Usage Examples
-
-### Text-to-Video
-
-```python
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "veo3.1",
-        "prompt": "A calm cinematic shot of a cat walking through a sunlit garden.",
-        "operation": "text-to-video",
-        "duration": 4,
-        "aspect_ratio": "16:9"
-    }
-)
-```
-
-### Image-to-Video
-
-```python
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "hailuo-2.3-standard",
-        "prompt": "The scene begins from the provided image and adds gentle natural motion.",
-        "operation": "image-to-video",
-        "image_url": "https://example.com/portrait.jpg",
-        "duration": 6,
-        "aspect_ratio": "16:9"
-    }
-)
-```
-
-### Kling 3.0 Elements
-
-Use `kling_elements` with `kling-3.0-video` when you need element references. Provide an image-conditioned request (`image_url`, `image_urls`, `start_image`, or `end_image`) and reference each element in the prompt with `@name`. Do not combine `kling_elements` with `output_audio=true`; omit `output_audio` or set it to `false` for element-reference requests.
-
-```python
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "kling-3.0-video",
-        "prompt": "Place @hero_bag on a studio turntable with soft product lighting.",
-        "operation": "image-to-video",
-        "image_url": "https://example.com/studio-start.png",
-        "duration": 5,
-        "resolution": "720p",
-        "kling_elements": [
-            {
-                "name": "hero_bag",
-                "description": "black leather handbag",
-                "element_input_urls": [
-                    "https://example.com/bag-front.png",
-                    "https://example.com/bag-side.png"
-                ]
-            }
-        ]
-    }
-)
-```
-
-### Reference-to-Video
-
-For `seedance-2.0` and `seedance-2.0-fast`, TokenLab currently supports up to 9 reference images plus up to 3 reference videos and 3 reference audios. `duration` controls generated output length only; it does not define a separate reference video input duration limit. For `grok-imagine-video`, reference-to-video accepts up to 7 image references (`reference_images` or `image_urls`) and `duration` is capped at 10 seconds. Do not combine reference images with `image_url` / `image` first-frame inputs. `grok-imagine-video-1.5-preview` is image-to-video only.
-
-```python
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "veo3.1",
-        "prompt": "Keep the same subject identity and palette while adding subtle motion.",
-        "operation": "reference-to-video",
-        "reference_images": [
-            "https://example.com/ref-a.jpg",
-            "https://example.com/ref-b.jpg"
-        ],
-        "duration": 8,
-        "resolution": "720p",
-        "aspect_ratio": "9:16"
-    }
-)
-```
-
-### Start-End-to-Video
-
-```python
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "viduq2-pro",
-        "prompt": "Smooth transition from day to night.",
-        "operation": "start-end-to-video",
-        "start_image": "https://example.com/city-day.jpg",
-        "end_image": "https://example.com/city-night.jpg",
-        "duration": 5,
-        "resolution": "720p",
-        "aspect_ratio": "16:9"
-    }
-)
-```
-
-### Video-to-Video
-
-For `grok-imagine-video` video-to-video, send a public HTTPS `.mp4` URL in `video_url`. TokenLab translates it to xAI's REST `video.url` body. You may set `resolution` to `480p` or `720p`; `duration` and `aspect_ratio` are not accepted for that edit flow.
-
-```python
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "grok-imagine-video",
-        "operation": "video-to-video",
-        "video_url": "https://example.com/source.mp4",
-        "prompt": "Upscale this clip while preserving the original motion."
-    }
-)
-```
-
-### Motion Control
-
-```python
-response = requests.post(f"{BASE}/videos/generations",
-    headers=headers,
-    json={
-        "model": "kling-3.0-motion-control",
-        "operation": "motion-control",
-        "prompt": "Keep the subject stable while following the motion reference.",
-        "image_url": "https://example.com/subject.png",
-        "video_url": "https://example.com/motion.mp4",
-        "resolution": "720p"
-    }
-)
-```
-
-## Parameters Reference
-
-| Parameter | Type | Notes |
-|-----------|------|-------|
-| `operation` | string | Explicit `operation` is recommended in production. |
-| `image_url` | string | Preferred image input form for broad cross-model compatibility. |
-| `image` | string | Inline data URL; useful for debugging and small local integrations. |
-| `reference_images` | string[] | Canonical public field for reference-image conditioning. |
-| `reference_image_type` | string | Optional `asset` / `style` selector when supported. |
-| `video_url` | string | Required for video-url based `video-to-video` flows and for `motion-control`; some derivative flows use `task_id` instead. |
-| `audio_url` | string | Used by model-specific audio-conditioned flows when available. |
-| `output_audio` | boolean | Veo 3 family defaults to `true` when omitted. `kling-3.0-video` accepts this selector for upstream sound control and defaults to silent output when omitted. |
-
-## Model Selection Guide
-
-
-
-
-
-## Billing
-
-Billing is model-dependent. Some public video models are effectively priced per request, while others are priced per second. Check the [Models page](https://tokenlab.sh/en/models) or the [Pricing API](/api-reference/pricing/get-pricing) for the current public price surface.
-
----
-
 ### Create Video
 
 > Creates a video generation task
@@ -4570,7 +4084,7 @@ Poll this endpoint to check the status of a World Labs Marble generation task. I
 
 URL: https://docs.tokenlab.sh/api-reference/worlds/list-worlds
 
-List completed World Labs Marble worlds created through TokenLab. Results are scoped to your organization; TokenLab does not expose the shared upstream account-wide list.
+List completed World Labs Marble worlds created through TokenLab. Results are scoped to your organization and only include resources created through TokenLab.
 
 Use `/v1/worlds/generations/{id}` for pending or failed generation tasks. This list returns completed worlds that TokenLab has indexed after generation.
 
@@ -5133,7 +4647,7 @@ Returns user API keys in the organization associated with the current management
 
 - Monetary fields are USD-only. `CNY` inputs are retired and return `400 currency_retired`.
 
-- System-managed keys such as Playground and Claw keys are excluded.
+- System-managed keys are excluded.
 
 ## Example
 
@@ -5328,7 +4842,7 @@ This page is intentionally narrower than a marketing matrix:
 | **Gemini CLI** | Best-effort / experimental | Gemini | Custom TokenLab base URL flow is not a stable upstream contract |
 | **OpenCode** | Supported | OpenAI-compatible | Use an OpenAI-compatible provider by default; move to a Responses-based provider only when you explicitly need it |
 
-> Note: Other OpenAI-compatible editors and agent tools often work with the same base URL pattern, but this repo does not currently maintain tool-specific regression coverage for Windsurf, Aider, Continue.dev, Cline/Roo Code, GitHub Copilot, and similar clients.
+> Note: Other OpenAI-compatible editors and agent tools often work with the same base URL pattern; check the tool’s own custom-provider support before using it in production.
 
 ### Configuration Examples
 
@@ -5607,7 +5121,7 @@ See [Error Handling Guide](/guides/error-handling) for details.
 
 #### Use passthrough for unknown parameters
 
-All schemas use `.passthrough()` - unknown parameters are forwarded to upstream providers.
+Unknown parameters are forwarded only when the selected public route and model support them.
 
 
 #### Prefer stream_options for accurate billing
@@ -5634,7 +5148,7 @@ TokenLab is easiest to integrate by matching the SDK to the behavior you need:
 - official **Gemini / Google AI** tooling for Gemini-native request shapes
 - official **OpenAI SDKs** for OpenAI-compatible `/v1` routes and Responses-style usage
 
-Use the integration pages for support boundaries. In this docs set, "recommended" or "supported" means a documented setup path exists; it does not automatically mean every framework helper or provider-specific feature is regression-tested end-to-end in this repo.
+Use the integration pages for support boundaries. In this docs set, "recommended" or "supported" means a documented setup path exists; it does not automatically cover every framework helper or provider-specific feature.
 
 ## Recommended SDKs
 
@@ -5730,6 +5244,495 @@ Pass TokenLab base URLs directly in your client configuration instead of relying
 
 
 ## Coding Tools
+
+### Coding Agent Cost Optimization
+
+> Practical strategies to reduce coding agent API costs by 60-90%
+
+URL: https://docs.tokenlab.sh/guides/coding-agent-cost
+
+## The Cost Problem
+
+A typical coding agent session burns through tokens fast:
+
+| Activity | Tokens per call | Calls per hour | Hourly tokens |
+|----------|----------------|----------------|---------------|
+| Code generation | 5,000–50,000 | 10–30 | 150K–1.5M |
+| Codebase search | 2,000–20,000 | 20–50 | 100K–1M |
+| Code review | 10,000–80,000 | 5–10 | 100K–800K |
+| Autocomplete | 500–3,000 | 50–200 | 50K–600K |
+| **Total** | | | **400K–4M+** |
+
+At premium model rates, that's $3–30/hour per developer. For a team of 10, that's $500–5,000/month.
+
+## Smart Model Selection
+
+Not every coding task needs the most expensive model. Match the task to the right tier:
+
+| Task | Recommended | Cost Tier | Why |
+|------|-------------|-----------|-----|
+| Architecture design | `claude-opus-4-6`, `gpt-5.4` | $$$$ Premium | Complex reasoning needed |
+| Code generation | `claude-sonnet-4-6`, `gemini-3.1-pro-preview` | $$$ Standard | Best quality/cost balance |
+| Code review | `claude-sonnet-4-6`, `deepseek-r1` | $$–$$$ | Pattern matching, less creativity |
+| Bug fixing | `claude-sonnet-4-6`, `gpt-5-mini` | $$–$$$ | Focused, well-defined tasks |
+| Tab completion | `gpt-5-mini`, `gemini-3.5-flash` | $$ Budget | Speed matters more than depth |
+| Boilerplate | `deepseek-v3-2`, `gpt-5-mini` | $ Economy | Simple, repetitive patterns |
+
+> Tip: See [Model Selection Guide](/guides/coding-agent-models) for detailed model comparisons and per-tool configuration.
+
+## Caching Strategies
+
+Coding agents are ideal for caching because they repeat similar patterns constantly.
+
+### Prompt Cache (Provider-Level)
+
+Provider-level prompt caching is automatic through TokenLab. Long system prompts — which coding agents always include — get cached at the provider level:
+
+| Provider | Cache Discount | Min Tokens |
+|----------|---------------|------------|
+| Anthropic | 90% off reads | 1,024 |
+| OpenAI | 50% off reads | 1,024 |
+| DeepSeek | 90% off reads | 64 |
+
+Since coding agents send the same system prompt + project context on every call, prompt cache hit rates are typically **70–90%**.
+
+### Prompt Cache Savings Example
+
+For a request with 50,000 input tokens (typical coding agent call):
+
+```
+Direct API (no caching):
+  50,000 tokens × $3.00/1M = $0.150
+
+With prompt cache (40,000 cached + 10,000 new):
+  Cached:  40,000 × $0.30/1M = $0.012
+  New:     10,000 × $3.00/1M = $0.030
+  Total: $0.042 (72% savings)
+```
+
+## Real Cost Comparison
+
+Estimated costs for a typical 1-hour coding session (~3M tokens):
+
+| Setup | Hourly Cost | Monthly (160h) |
+|-------|-------------|----------------|
+| Direct API (premium model) | ~$15–25 | ~$2,400–4,000 |
+| TokenLab (smart routing) | ~$10–18 | ~$1,600–2,900 |
+| TokenLab + prompt cache | ~$4–8 | ~$640–1,280 |
+
+> Warning: These are illustrative estimates. Actual costs depend on your model choice, usage patterns, and cache hit rates. Check [real-time pricing](/api-reference/pricing/get-pricing) for current rates.
+
+## Token Management Tips
+
+### Set max_tokens
+
+Prevent runaway generation:
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "max_tokens": 4096,
+  "messages": [...]
+}
+```
+
+Most coding tasks need 1,000–4,000 output tokens. Setting a limit prevents the model from generating unnecessarily long responses.
+
+### Use Auto-Compact
+
+Most coding agents support context compaction — summarizing old conversation turns to reduce token count. Enable it:
+
+- **Claude Code**: Built-in auto-compact triggers at context limits
+- **Cursor**: Automatic context management
+- **Codex CLI**: Use `--max-context` flag
+
+### Avoid Context Bloat
+
+- Don't paste entire files when a function is enough
+- Use `.gitignore`-style patterns to exclude irrelevant files from agent context
+- Clear conversation history when switching tasks
+
+## Quick Configuration
+
+Each tool needs just a few lines to connect through TokenLab:
+
+#### Claude Code
+
+```bash
+    export ANTHROPIC_API_KEY="sk-your-tokenlab-key"
+    export ANTHROPIC_BASE_URL="https://api.tokenlab.sh"
+    ```
+    [Full setup guide →](/integrations/claude-code)
+
+
+#### Cursor
+
+Settings → Models → OpenAI API Key: `sk-your-key`, Base URL: `https://api.tokenlab.sh/v1`
+
+    [Full setup guide →](/integrations/cursor)
+
+
+#### Codex CLI
+
+```bash
+    export OPENAI_API_KEY="sk-your-tokenlab-key"
+    export OPENAI_BASE_URL="https://api.tokenlab.sh/v1"
+    ```
+    [Full setup guide →](/integrations/codex-cli)
+
+
+#### Gemini CLI
+
+```bash
+    export GEMINI_API_KEY="sk-your-tokenlab-key"
+    export GOOGLE_GEMINI_BASE_URL="https://api.tokenlab.sh"
+    ```
+    [Full setup guide →](/integrations/gemini-cli)
+
+---
+
+### Coding Agent Model Selection
+
+> Choose the right model for each coding task — comparison table, recommendations, and configuration
+
+URL: https://docs.tokenlab.sh/guides/coding-agent-models
+
+## Model Comparison for Coding
+
+| Model | Speed | Code Quality | Cost | Context Window | Best For |
+|-------|-------|-------------|------|----------------|----------|
+| `claude-opus-4-6` | Moderate | Excellent | $$$$ | 200K | Architecture, complex refactoring |
+| `gpt-5.4` | Moderate | Excellent | $$$$ | 200K | Complex reasoning, planning |
+| `claude-sonnet-4-6` | Fast | Very Good | $$$ | 200K | General coding, reviews |
+| `gemini-3.1-pro-preview` | Fast | Very Good | $$$ | 1M | Large codebase analysis |
+| `gpt-5-mini` | Very Fast | Good | $$ | 128K | Quick edits, completions |
+| `gemini-3.5-flash` | Very Fast | Good | $$ | 1M | Fast iteration, search |
+| `deepseek-r1` | Moderate | Very Good | $ | 64K | Reasoning-heavy tasks |
+| `deepseek-v3-2` | Fast | Good | $ | 128K | Bulk generation, boilerplate |
+
+## Task-Specific Recommendations
+
+#### Code Generation / Scaffolding
+
+**Recommended**: `claude-sonnet-4-6`, `gemini-3.1-pro-preview`
+
+    These models produce clean, well-structured code with good naming conventions. For complex multi-file scaffolding, consider `claude-opus-4-6`.
+
+    Budget alternative: `deepseek-v3-2` handles boilerplate well at a fraction of the cost.
+
+
+#### Code Review / Refactoring
+
+**Recommended**: `claude-sonnet-4-6`, `deepseek-r1`
+
+    Code review benefits from reasoning ability. `deepseek-r1` is particularly cost-effective here — its chain-of-thought approach catches subtle issues.
+
+    For security-focused reviews: `claude-opus-4-6` or `gpt-5.4`.
+
+
+#### Bug Fixing / Debugging
+
+**Recommended**: `claude-sonnet-4-6`, `gpt-5-mini`
+
+    Bug fixing is usually well-scoped — you know what's broken. Standard-tier models handle this well. Use premium models only for complex, multi-file bugs.
+
+
+#### Architecture Design
+
+**Recommended**: `claude-opus-4-6`, `gpt-5.4`
+
+    Architecture decisions benefit from the strongest reasoning. Worth the premium cost since these decisions are infrequent but high-impact.
+
+
+#### Quick Edits / Tab Completion
+
+**Recommended**: `gpt-5-mini`, `gemini-3.5-flash`
+
+    Speed is critical for interactive use. Budget models with fast response times provide the best experience. Don't waste premium tokens on autocomplete.
+
+## How TokenLab Routing Works
+
+TokenLab routes your requests to the best available provider automatically.
+
+### Routing Strategies
+
+| Strategy | Behavior | Best For |
+|----------|----------|----------|
+| **PRIORITY** | Routes to highest-priority available provider | Reliability-focused |
+| **COST** | Routes to cheapest available provider | Cost-focused |
+
+You can set your preferred strategy in the dashboard.
+
+### Automatic Fallback
+
+If a provider is unavailable or returns an error, TokenLab automatically retries with the next provider:
+
+```
+Request: claude-sonnet-4-6
+  → Provider A (primary): 503 error
+  → Provider B (fallback): ✓ Success
+```
+
+This happens transparently — your coding agent sees a normal response.
+
+### Native Format Routing
+
+When the selected model and routed channel support it, TokenLab can route requests through the model family's native API format for better compatibility:
+
+| Model Family | API Format | Base URL |
+|-------------|------------|----------|
+| Claude | Anthropic Messages | `https://api.tokenlab.sh` |
+| GPT | OpenAI Responses | `https://api.tokenlab.sh/v1` |
+| Gemini | Gemini Native API | `https://api.tokenlab.sh` or `https://api.tokenlab.sh/v1beta` depending on client path |
+| DeepSeek | OpenAI Chat | `https://api.tokenlab.sh/v1` |
+
+Claude Code is a strong native Anthropic path. Gemini-native APIs exist too, but Gemini CLI itself remains a best-effort compatibility path rather than a guaranteed long-term workflow.
+
+## Configuration per Tool
+
+#### Claude Code
+
+```bash
+    export ANTHROPIC_API_KEY="sk-your-tokenlab-key"
+    export ANTHROPIC_BASE_URL="https://api.tokenlab.sh"
+    ```
+
+    Select model: `claude --model claude-sonnet-4-6`
+
+    [Full guide →](/integrations/claude-code)
+
+
+#### Cursor
+
+In Settings → Models:
+    - API Key: `sk-your-tokenlab-key`
+    - Base URL: `https://api.tokenlab.sh/v1`
+    - Model: `claude-sonnet-4-6` or `gpt-5-mini`
+
+    [Full guide →](/integrations/cursor)
+
+
+#### Codex CLI
+
+```bash
+    export OPENAI_API_KEY="sk-your-tokenlab-key"
+    export OPENAI_BASE_URL="https://api.tokenlab.sh/v1"
+    ```
+
+    [Full guide →](/integrations/codex-cli)
+
+
+#### Gemini CLI
+
+```bash
+    export GEMINI_API_KEY="sk-your-tokenlab-key"
+    export GOOGLE_GEMINI_BASE_URL="https://api.tokenlab.sh"
+    ```
+
+    Treat this as best-effort compatibility rather than a stable upstream contract.
+
+    [Full guide →](/integrations/gemini-cli)
+
+
+#### OpenCode
+
+```json
+    {
+      "provider": "openai",
+      "apiKey": "sk-your-tokenlab-key",
+      "baseURL": "https://api.tokenlab.sh/v1"
+    }
+    ```
+
+    [Full guide →](/integrations/opencode)
+
+---
+
+### TokenLab Provider Setup
+
+> Configure TokenLab as a custom provider in OpenClaw using OpenAI, Responses, Anthropic, and Gemini-compatible routes
+
+URL: https://docs.tokenlab.sh/guides/tokenlab-provider
+
+> Note: This guide is for **self-hosted OpenClaw** users who want to connect TokenLab as their AI provider.
+
+## Overview
+
+For current OpenClaw versions, the recommended approach is to configure TokenLab through `models.providers`.
+
+If you just want to get started quickly, configuring `tokenlab` alone is enough. Add the other providers only when you explicitly need **Responses API**, **Claude native**, **Gemini native**, or **MiniMax native** behavior.
+
+| Provider | OpenClaw `api` | Best for | baseUrl |
+|----------|----------------|----------|---------|
+| `tokenlab` | `openai-completions` | GPT, DeepSeek, Qwen, and most OpenAI-compatible calls | `https://api.tokenlab.sh/v1` |
+| `tokenlab-responses` | `openai-responses` | OpenAI Responses workflows that expect `/v1/responses` semantics | `https://api.tokenlab.sh/v1` |
+| `tokenlab-claude` | `anthropic-messages` | Native Claude Messages API | `https://api.tokenlab.sh` |
+| `tokenlab-gemini` | `google-generative-ai` | Native Gemini API format | `https://api.tokenlab.sh` |
+| `tokenlab-minimax` | `anthropic-messages` | Native MiniMax routing | `https://api.tokenlab.sh` |
+
+> Warning: Use the `/v1` suffix only for `openai-completions` and `openai-responses`.
+
+Native providers such as `anthropic-messages` and `google-generative-ai` should use `https://api.tokenlab.sh` without `/v1`, otherwise OpenClaw may construct the wrong upstream path.
+
+## Prerequisites
+
+- A self-hosted OpenClaw instance
+- A TokenLab API Key — [Get one here](https://tokenlab.sh/dashboard)
+
+## Configuration
+
+Edit your OpenClaw config:
+
+- **Self-hosted**: `~/.openclaw/openclaw.json`
+
+Add TokenLab providers under `models.providers`:
+
+```json5
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "tokenlab-claude/claude-sonnet-4-6"
+      }
+    }
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      tokenlab: {
+        api: "openai-completions",
+        baseUrl: "https://api.tokenlab.sh/v1",
+        apiKey: "sk-your-tokenlab-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o" },
+          { id: "deepseek-r1", name: "DeepSeek R1" },
+          { id: "qwen3-coder-flash", name: "Qwen 3 Coder Flash" }
+        ]
+      },
+      "tokenlab-responses": {
+        api: "openai-responses",
+        baseUrl: "https://api.tokenlab.sh/v1",
+        apiKey: "sk-your-tokenlab-key",
+        models: [
+          { id: "gpt-4o", name: "GPT-4o (Responses)" },
+          { id: "gpt-5.2", name: "GPT-5.2 (Responses)" }
+        ]
+      },
+      "tokenlab-claude": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.tokenlab.sh",
+        apiKey: "sk-your-tokenlab-key",
+        models: [
+          { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+          { id: "claude-opus-4-6", name: "Claude Opus 4.6" }
+        ]
+      },
+      "tokenlab-gemini": {
+        api: "google-generative-ai",
+        baseUrl: "https://api.tokenlab.sh",
+        apiKey: "sk-your-tokenlab-key",
+        models: [
+          { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
+          { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" }
+        ]
+      },
+      "tokenlab-minimax": {
+        api: "anthropic-messages",
+        baseUrl: "https://api.tokenlab.sh",
+        apiKey: "sk-your-tokenlab-key",
+        models: [
+          { id: "minimax-m2.1", name: "MiniMax M2.1" }
+        ]
+      }
+    }
+  }
+}
+```
+
+> Info: All 5 providers use the **same API Key**. You only need one TokenLab account.
+
+> Info: The `models` arrays above only show common examples. Add more model IDs to each provider as needed.
+
+## Using Models
+
+OpenClaw still references models with the `provider/model` format:
+
+```json5
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "tokenlab-gemini/gemini-3.5-flash"
+      }
+    }
+  }
+}
+```
+
+### Model Examples
+
+| Provider | Model reference | Description |
+|----------|-----------------|-------------|
+| `tokenlab` | `tokenlab/gpt-4o` | OpenAI-compatible route |
+| `tokenlab` | `tokenlab/deepseek-r1` | DeepSeek reasoning model |
+| `tokenlab-responses` | `tokenlab-responses/gpt-4o` | Responses API route |
+| `tokenlab-claude` | `tokenlab-claude/claude-sonnet-4-6` | Native Claude Messages route |
+| `tokenlab-gemini` | `tokenlab-gemini/gemini-3.5-flash` | Native Gemini route |
+| `tokenlab-minimax` | `tokenlab-minimax/minimax-m2.1` | Native MiniMax route |
+
+Browse all available models at [tokenlab.sh/models](https://tokenlab.sh/en/models).
+
+## When to Use Which Provider
+
+- `tokenlab`: default choice for most general-purpose agent and chat use cases.
+- `tokenlab-responses`: use when your OpenClaw workflow explicitly depends on OpenAI Responses semantics.
+- `tokenlab-claude`: use when you want Claude's native Messages behavior.
+- `tokenlab-gemini`: use when you want Gemini-native request/response formatting or existing Gemini-style integrations.
+- `tokenlab-minimax`: use when you want MiniMax on its native route.
+
+If you do not need Gemini-native behavior, you can still call Gemini models through `tokenlab/gemini-*` on the OpenAI-compatible route.
+
+## Common Mistakes
+
+#### Still using the old top-level providers array
+
+Current OpenClaw docs use `models.providers`. If you keep the older top-level `providers` array format, OpenClaw may ignore the config or fail to resolve the provider prefixes as expected.
+
+
+#### Forgetting /v1 on tokenlab-responses
+
+`openai-responses` maps to TokenLab's `/v1/responses` path, so `tokenlab-responses` must use `https://api.tokenlab.sh/v1`.
+
+
+#### Adding /v1 to tokenlab-claude, tokenlab-gemini, or tokenlab-minimax
+
+`anthropic-messages` and `google-generative-ai` should use `https://api.tokenlab.sh` without `/v1`. Adding `/v1` can produce incorrect request paths.
+
+
+#### Does OpenClaw still support native Gemini?
+
+Yes. Current OpenClaw documentation still includes the built-in `google` provider and also supports custom providers using `api: "google-generative-ai"`. So `tokenlab-gemini` remains a valid native Gemini route for OpenClaw users.
+
+## Verify Setup
+
+After saving the config, restart your OpenClaw instance and test with a simple message. If you see a response, the provider is configured correctly.
+
+```bash
+# Self-hosted: restart the service
+systemctl --user restart openclaw    # Linux
+launchctl stop cc.tokenlab.openclaw && launchctl start cc.tokenlab.openclaw  # macOS
+```
+
+## Next Steps
+
+Once OpenClaw is connected, these guides help you use TokenLab more effectively:
+
+- [API Formats](/guides/api-formats) — understand the differences between OpenAI, Responses, Anthropic, and Gemini routes
+- [IDE / SDK Compatibility](/guides/ide-sdk-compatibility) — see when `/v1/responses` is the better fit
+- [Error Handling](/guides/error-handling) — learn common failure modes and recovery patterns
+- [Models Overview](https://tokenlab.sh/en/models) — browse model IDs before wiring them into agents
+
+---
 
 ### Cursor
 
@@ -7080,7 +7083,7 @@ For TokenLab, the most stable default in Vercel AI SDK is the **OpenAI-compatibl
 
 If you specifically need **Responses-native** behavior, you can switch to the OpenAI provider and keep the same TokenLab base URL.
 
-Treat this page as a recommended integration pattern, not as a claim that every helper in Vercel AI SDK has dedicated end-to-end regression coverage in this repo.
+Treat this page as a recommended integration pattern, not as a guarantee that every helper in Vercel AI SDK is supported by TokenLab.
 
 ## Recommended Default: OpenAI-Compatible Provider
 

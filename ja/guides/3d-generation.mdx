@@ -1,0 +1,54 @@
+---
+title: "3D 生成"
+description: "TokenLab の 3D 生成 API と非同期タスクのポーリングでテキストや画像から 3D アセットを作成します。"
+---
+## 推奨フロー
+
+1. [モデル一覧](/ja/api-reference/models/list-models) を `recommended_for=3d` 付きで呼び出します。
+2. テキスト `prompt` で [3D を作成](/ja/api-reference/3d/create-3d) を呼び出します。`image` または `image_url` は、画像から 3D への変換に対応するモデルでのみ追加します。
+3. `format`、`quality`、`style`、`seed` などの任意フィールドは、選択したモデル契約に従って指定します。
+4. アセットが準備できるまで `poll_url` をポーリングし、`model_url` または `glb_url` / `fbx_url` などの形式別 URL をダウンロードします。
+
+## モデルの発見
+
+3D 生成はタスクベースです。単一のプロバイダや固定モデルを前提にせず、モデルカタログを真値として扱ってください。
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 3D タスクを作成
+
+テキストから 3D へのリクエストには `prompt` が必要です。画像から 3D へのリクエストでは `image` の base64 データまたは `image_url` を追加します。`format` と `quality` はモデル契約で公開されている場合のみ使います。
+
+```bash
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tripo3d-v2.5",
+    "prompt": "A stylized low-poly robot mascot with clean topology",
+    "format": "glb",
+    "quality": "standard"
+  }'
+```
+
+## 結果のポーリング
+
+まず返された `poll_url` を使います。安定した代替入口は [タスクステータスを取得](/ja/api-reference/tasks/get-task-status) です。完了した 3D タスクは `model_url` を返し、`glb_url` や `fbx_url` などの形式別フィールドを含むことがあります。
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## API リファレンス
+
+| 項目 | リファレンス |
+|-------|-----------|
+| 3D を作成 | [3D を作成](/ja/api-reference/3d/create-3d) |
+| 3D ステータスを取得 | [3D ステータスを取得](/ja/api-reference/3d/get-3d-status) |
+| タスクステータスを取得 | [タスクステータスを取得](/ja/api-reference/tasks/get-task-status) |
+| モデル一覧 | [モデル一覧](/ja/api-reference/models/list-models) |
+| モデルを取得 | [モデルを取得](/ja/api-reference/models/get-model) |
