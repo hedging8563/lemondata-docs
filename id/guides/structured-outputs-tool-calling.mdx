@@ -1,67 +1,104 @@
 ---
 title: "Keluaran Terstruktur & Panggilan Alat"
-description: "Gunakan mode JSON, alat fungsi, dan rute alat asli tanpa mengasumsikan setiap model mendukung kontrak yang sama."
+description: "Gunakan mode JSON, alat fungsi, dan rute alat bawaan tanpa mengasumsikan setiap model mendukung kontrak yang sama."
 ---
 
-Keluaran terstruktur dan alat adalah jalur API TokenLab yang nyata, tetapi mereka bukan kemampuan universal di setiap model dan rute. Pilih rute yang memiliki perilaku yang Anda butuhkan.
+Keluaran terstruktur dan panggilan alat adalah kontrak spesifik rute. TokenLab meneruskan beberapa format API publik, jadi pola produksi yang paling aman adalah menjaga setiap bentuk alat asli penyedia pada rute yang memilikinya dan memvalidasi keluaran model di aplikasi Anda sendiri.
 
-## JSON Dan Keluaran Terstruktur
+## Pilih Rute
 
-Untuk respons terstruktur yang portabel, mulai dengan Chat Completions `response_format: {"type":"json_object"}` dan validasi keluaran di aplikasi Anda. Ini adalah bentuk permintaan publik yang stabil dalam validasi bersama TokenLab.
+| Kebutuhan | Rute | Gunakan bentuk ini |
+|-----------|------|-------------------|
+| Respon objek JSON portabel | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| Panggilan fungsi yang kompatibel dengan OpenAI | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| Alat Respon OpenAI | `/v1/responses` | Bidang `tools`, `tool_choice`, dan `text` |
+| Penggunaan alat atau pemikiran asli Claude | `/v1/messages` | Skema alat Pesan Anthropic |
+| Deklarasi fungsi Gemini atau alat bawaan | `/v1beta/models/:model:generateContent` | `tools` dan bagian konten asli Gemini |
+
+Jangan kirim alat bawaan asli penyedia melalui rute yang berbeda dan berharap TokenLab akan menerjemahkannya secara diam-diam.
+
+## Mode JSON
+
+Untuk respon terstruktur yang portabel, mulai dengan mode JSON Chat Completions:
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Kembalikan objek JSON dengan kota dan cuaca."}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "Kembalikan objek JSON dengan kota dan cuaca."
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-`json_schema` dan jalur keluaran terstruktur `strict` ada di beberapa kode upstream dan konversi, tetapi mereka tergantung pada model dan rute. Perlakukan mereka sebagai kemampuan untuk diverifikasi dengan model yang dipilih, bukan sebagai janji umum di setiap rute TokenLab.
+Validasi bersama yang stabil untuk Chat Completions menerima `text` dan `json_object`. `json_schema`, `strict`, dan penegakan skema spesifik penyedia mungkin ada untuk beberapa rute hulu atau jalur konversi, tetapi mereka bukan janji umum di setiap rute dan model TokenLab. Verifikasi mereka terhadap model yang dipilih sebelum mengandalkannya.
 
-## Batas Panggilan Alat
+Selalu analisis dan validasi JSON yang dikembalikan di server Anda. Mode JSON meningkatkan bentuk, tetapi tidak menggantikan validasi skema tingkat aplikasi.
 
-| Bentuk Alat | Rute yang disukai | Catatan Produksi |
-|-------------|-------------------|------------------|
-| Alat fungsi OpenAI | `/v1/chat/completions` | Portabel untuk panggilan fungsi yang ditentukan pengguna |
-| Alat Respons OpenAI | `/v1/responses` | Gunakan untuk alat bawaan atau yang dihosting khusus Respons |
-| Alat Anthropic | `/v1/messages` | Gunakan untuk penggunaan alat asli Claude dan alur pemikiran |
-| Deklarasi fungsi Gemini / alat bawaan | `/v1beta/models/:model:generateContent` | Pertahankan bidang alat asli Gemini di rute Gemini |
+## Loop Panggilan Alat
 
-TokenLab tidak menjalankan fungsi Anda untuk Anda. Ketika model mengembalikan `tool_calls`, `function_call`, `tool_use`, atau bagian panggilan fungsi Gemini, aplikasi Anda harus menjalankan alat, menambahkan hasil alat dalam format yang diperlukan oleh rute, dan melanjutkan percakapan.
+TokenLab tidak mengeksekusi fungsi Anda. Aplikasi Anda memiliki loop:
 
-## Kesalahan Umum
+1. Kirim pesan ditambah definisi alat.
+2. Baca respon model untuk `tool_calls`, `function_call`, `tool_use` Anthropic, atau bagian panggilan fungsi Gemini.
+3. Eksekusi alat di backend Anda sendiri.
+4. Tambahkan hasil alat dalam format yang diperlukan oleh rute yang sama.
+5. Lanjutkan percakapan sampai model mengembalikan jawaban akhir.
 
-- Jangan mengirim alat bawaan asli penyedia melalui Chat Completions dan mengharapkan mereka diterjemahkan secara diam-diam.
-- Jangan bergantung pada JSON Schema yang ketat kecuali rute dan model yang dipilih telah diuji.
-- Pertahankan skema kecil dan eksplisit; skema besar menambah token dan dapat mengurangi keandalan.
-- Validasi keluaran model di sisi server bahkan ketika mode JSON diaktifkan.
-- Perlakukan kesalahan bidang yang tidak didukung sebagai umpan balik kontrak. Hapus bidang tersebut atau gunakan rute asli yang memilikinya.
+Pertahankan rute yang sama sepanjang loop alat. Mencampur Chat Completions, Responses, Messages, dan format Gemini dalam satu percakapan biasanya menciptakan bug status dan skema yang halus.
 
-## Contoh
+## Contoh Chat Completions
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"Ekstrak nama dan email sebagai JSON."}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "Mencari pelanggan berdasarkan email",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "Ekstrak nama dan email sebagai JSON. Jika perlu, cari pelanggan."
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "Cari pelanggan berdasarkan email",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
+
+## Desain Skema
+
+- Pertahankan skema kecil dan eksplisit. Skema bersarang besar menambah token dan mengurangi keandalan.
+- Utamakan bidang yang diperlukan untuk nilai yang tidak dapat dilanjutkan produk Anda tanpa itu.
+- Gunakan enum untuk set tertutup yang bergantung pada UI atau backend Anda.
+- Sertakan contoh dalam prompt ketika model kesulitan dengan bentuk.
+- Perlakukan kesalahan bidang yang tidak didukung sebagai umpan balik kontrak. Hapus bidang tersebut atau gunakan rute asli yang mendokumentasikannya.
+
+## Daftar Periksa Produksi
+
+- Catat rute, model, nama alat, dan bentuk skema yang telah disanitasi dalam log.
+- Validasi argumen alat sebelum mengeksekusi efek samping apa pun.
+- Terapkan pemeriksaan izin Anda sendiri sebelum eksekusi alat.
+- Buat eksekusi alat idempotent ketika klien mencoba ulang dapat mengulangi panggilan alat yang sama.
+- Jangan catat rahasia yang dikembalikan oleh alat ke dalam pesan yang terlihat oleh model.
 
 ## Referensi API
 
@@ -69,6 +106,6 @@ curl https://api.tokenlab.sh/v1/chat/completions \\
 |-------|-----------|
 | API Multi-Format | [API Multi-Format](/id/guides/api-formats) |
 | Buat Chat Completion | [Buat Chat Completion](/id/api-reference/chat/create-completion) |
-| Buat Respons | [Buat Respons](/id/api-reference/responses/create-response) |
+| Buat Respon | [Buat Respon](/id/api-reference/responses/create-response) |
 | Buat Pesan | [Buat Pesan](/id/api-reference/messages/create-message) |
 | Hasilkan Konten Gemini | [Hasilkan Konten Gemini](/id/api-reference/gemini/generate-content) |

@@ -1,21 +1,22 @@
 ---
 title: "Göç Rehberleri"
-description: "OpenAI, Anthropic, Gemini ve medya iş yüklerini TokenLab'a en az üretim güvenli değişikliklerle taşıyın."
+description: "OpenAI, Anthropic, Gemini ve medya iş yüklerini TokenLab'a küçük, üretim güvenli değişikliklerle taşıyın."
 ---
 
-TokenLab, yerel öncelikli ve OpenAI ile uyumlu. Her iş yükünü tek bir formata dönüştürmek yerine, ihtiyaç duyduğunuz istemci davranışına uyan rotayı seçin.
+TokenLab çok formatlıdır: OpenAI uyumlu istemcileri, Anthropic yerel Messages çağrılarını, Gemini yerel REST çağrılarını ve medya uç noktalarını doğal şekillerinde tutabilirsiniz. En güvenli göç, her iş yükünü tek bir evrensel formata çevirmemektir. Uygulamanızın ihtiyaç duyduğu davranışı sahiplenen rotayı seçin.
 
-## Formatı Seçin
+## Rota Haritalama
 
-| Mevcut iş yükü | TokenLab temel URL'si | Birincil uç nokta | Notlar |
-|-------------------|-------------------|------------------|-------|
-| OpenAI Sohbet Tamamlamaları | `https://api.tokenlab.sh/v1` | `/chat/completions` | OpenAI ile uyumlu istemciler için en küçük değişiklik |
-| OpenAI Yanıtları | `https://api.tokenlab.sh/v1` | `/responses` | Sadece Yanıtlar'a özgü davranışlar için kullanın |
+| Mevcut iş yükü | TokenLab temel URL'si | Birincil uç nokta | Göç notu |
+|-------------------|-------------------|------------------|----------------|
+| OpenAI Sohbet Tamamlamaları | `https://api.tokenlab.sh/v1` | `/chat/completions` | OpenAI uyumlu sohbet ve fonksiyon çağrıları için en küçük değişiklik |
+| OpenAI Yanıtları | `https://api.tokenlab.sh/v1` | `/responses` | Uygulamanız Yanıtlar'a özel girdi, araçlar veya çıktı işleme bağımlıysa kullanın |
 | Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | SDK temel URL'sine `/v1` eklemeyin |
-| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Yerel rotada Gemini'ye özgü alanları koruyun |
+| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Gemini rotasında Gemini yerel alanlarını koruyun |
 | Medya üretimi | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | `recommended_for` ile modelleri keşfedin ve belgelenmiş yerlerde asenkron anket bekleyin |
+| Yönetim ve faturalama | `https://api.tokenlab.sh/v1` | `/management/...` | Sunucu tarafı kullanımı ve faturalama uzlaştırması için yönetim token'larını kullanın |
 
-## OpenAI-Uyumlu Göç
+## OpenAI Uyumlu Göç
 
 ```python
 from openai import OpenAI
@@ -31,9 +32,9 @@ response = client.chat.completions.create(
 )
 ```
 
-Mevcut yeniden deneme, zaman aşımı ve akış kodunuzu koruyun, ancak model kimliklerini `GET /v1/models` ile doğrulayın. Görüntü üretimi için `model`'i açıkça gönderin ve görüntü modellerinin sohbet modellerinden daha fazla farklılık gösterdiğini göz önünde bulundurarak görüntü kılavuzunu okuyun.
+Mevcut yeniden deneme, zaman aşımı ve akış kodunuzu koruyun, ancak üretim trafiğinden önce model kimliklerini `GET /v1/models` ile doğrulayın. Görüntü üretimi için `model`'i açıkça gönderin ve görüntü kılavuzunu okuyun çünkü görüntü modelleri sohbet modellerinden daha fazla farklılık gösterir.
 
-## Anthropic Göçü
+## Anthropic Göç
 
 ```python
 from anthropic import Anthropic
@@ -50,41 +51,54 @@ message = client.messages.create(
 )
 ```
 
-Bu rotayı, Mesajlar aracı kullanımı ve genişletilmiş düşünme gibi Claude'ye özgü davranışlar için kullanın. Bir özellik Anthropic'e özgü ise, onu `/v1/messages` üzerinde tutun, Sohbet Tamamlamaları üzerinden çevirmeyin.
+Claude yerel araç kullanımı, düşünme akışları ve Anthropic mesaj anlamları için `/v1/messages` kullanın. Anthropic'a özel alanları Sohbet Tamamlamaları aracılığıyla çevirmeyin, aksi takdirde OpenAI uyumlu bir davranış değişikliği istemiyorsanız.
 
-## Gemini Göçü
+## Gemini Göç
 
 ```bash
-curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \\
-  -H "Authorization: Bearer sk-your-tokenlab-key" \\
-  -H "Content-Type: application/json" \\
+curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-tokenlab-key" \
+  -H "Content-Type: application/json" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-Gemini yerleşik araçları, Dosya API kaynakları, önbelleğe alınmış içerikler ve işlev bildirimleri, Gemini'ye özgü davranışlar gerektiğinde `/v1beta` üzerinde kalmalıdır.
+Uygulamanız Gemini yerel davranışa bağımlı olduğunda Gemini yerleşik araçlarını, Dosya API referanslarını, önbelleğe alınmış içerikleri, fonksiyon bildirimlerini ve yerel içerik parçalarını `/v1beta` üzerinde tutun.
 
 ## Medya Göçü
 
-1. Bir model seçmeden önce `GET /v1/models?recommended_for=image|video|music|3d` sorgulayın.
-2. `tokenlab.public_contract_summary`'yı okuyun ve detay sayfalarında tam `tokenlab.public_contract`'ı inceleyin.
-3. Açık bir `model` gönderin. Üretim trafiği için eski varsayılanlara güvenmeyin.
-4. Asenkron işler için `task_id` ve `poll_url`'u saklayın.
-5. Maliyetleri kullanım kayıtları üzerinden uzlaştırın, sağlayıcı görev kimlikleri üzerinden değil.
+1. `GET /v1/models?recommended_for=image|video|music|3d` sorgulayın.
+2. Liste yanıtlarında `tokenlab.public_contract_summary` ve mevcut olduğunda tam `tokenlab.public_contract`'ı okuyun.
+3. Özellikle görüntü uç noktaları için açık bir `model` gönderin.
+4. Asenkron işler için `task_id`, `poll_url`, uç nokta, model ve kendi iş ID'nizi saklayın.
+5. Maliyetleri kullanım kayıtları ve `billing_transaction_id` aracılığıyla uzlaştırın, sağlayıcı görev kimliklerini kullanmayın.
 
-## Üretim Yayılımı
+Medya iş yükleri, gecikme, yeniden denemeler ve nihai varlıkların sohbet tamamlamalarından farklı davrandığı için kendi dağıtım planına ihtiyaç duyar.
 
-- Bir uç nokta ve bir model ailesi ile başlayın.
-- Senkron görüntü yolları için HTTP zaman aşımını yeterince yüksek ayarlayın; uzun işler için mevcut olduğunda asenkron modu kullanın.
-- Üretim trafiği göndermeden önce kamuya açık tanımlayıcıları ve temizlenmiş istek şekillerini kaydedin.
-- Yanıtların, kullanım kayıtlarının ve müşteri görünür çıktılarının bir örneğini karşılaştırın.
-- Geri alma işlemini basit tutun: TokenLab trafiği stabil olana kadar önceki sağlayıcı istemcisini koruyun.
+## Üretim Dağıtım Planı
+
+| Aşama | Hedef | Kontroller |
+|-------|------|--------|
+| 1. Envanter | Uç noktaları, modelleri, istek alanlarını, akış/asenkron davranışları ve faturalama sahibini listeleyin | Gizli sağlayıcıya özel alanların kamuya açık olduğu varsayılmamalıdır |
+| 2. Tek rota pilotu | Bir uç noktayı ve bir model ailesini taşıyın | Yanıt şekli, maliyet ve günlükler beklentilerle eşleşiyor |
+| 3. Gölgeleme veya örnekleme | Seçilen çıktıları önceki sağlayıcı ile karşılaştırın | Kullanıcı görünür kalitesi ve gecikmesi kabul edilebilir |
+| 4. Aşamalı dağıtım | Trafiği anahtar, organizasyon veya özellik bayrağı ile artırın | `4xx`, `5xx`, gecikme, denge ve yinelenen asenkron işleri izleyin |
+| 5. Temizlik | Eski sağlayıcı yolunu yalnızca kararlı kullanım sonrası kaldırın | Geri alma yolu ve destek kılavuzu belgelenmiştir |
+
+## Göç Tuzakları
+
+- Uygulamanız yerel Anthropic, Gemini veya Yanıtlar davranışına ihtiyaç duyuyorsa her modeli tek bir OpenAI Sohbet Tamamlamaları yolunun arkasına koymayın.
+- Eski görüntü varsayımlarını varsaymayın. `model`'i açıkça gönderin.
+- Bir görev zaten oluşturulmuşsa asenkron oluşturma isteklerini yeniden denemeyin.
+- Sağlayıcı yönlendirme meta verilerini günlüklerinizde veya kullanıcı arayüzünüzde açığa çıkarmayın.
+- Faturalamayı sağlayıcı görev kimlikleri ile karşılaştırmayın. TokenLab kullanım kayıtlarını kullanın.
 
 ## API Referansı
 
 | Konu | Referans |
 |-------|-----------|
-| Çoklu Format API | [Çoklu Format API](/tr/guides/api-formats) |
+| Çok Formatlı API | [Çok Formatlı API](/tr/guides/api-formats) |
 | OpenAI SDK | [OpenAI SDK](/tr/integrations/openai-sdk) |
 | Anthropic SDK | [Anthropic SDK](/tr/integrations/anthropic-sdk) |
+| Gemini Yerel | [Gemini Yerel API](/tr/api-reference/gemini/generate-content) |
 | Görüntü Üretimi | [Görüntü Üretimi](/tr/guides/image-generation) |
 | Asenkron İşler & Anket | [Asenkron İşler & Anket](/tr/guides/async-jobs-polling) |

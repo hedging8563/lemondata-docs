@@ -1,43 +1,52 @@
 ---
 title: "Generación de Imágenes"
-description: "Crea flujos de trabajo de texto a imagen, imagen a imagen y edición de imágenes contra los contratos públicos de imagen de TokenLab."
+description: "Elija el endpoint de imagen correcto de TokenLab, envíe solicitudes conscientes del modelo y maneje los resultados de imágenes sincrónicos o asíncronos de manera segura."
 ---
 
-Las API de imagen de TokenLab cubren varias familias de modelos con diferentes formas de solicitud. Utiliza el contrato de modelo público y la referencia API específica del endpoint antes de asumir que un campo funciona en todos los modelos de imagen.
+TokenLab admite texto a imagen, imagen a imagen y edición de imágenes a través de endpoints de imagen públicos. Los modelos de imagen no comparten un conjunto de parámetros universal, por lo que los clientes de producción deben primero elegir el endpoint, luego elegir el modelo y luego enviar solo los campos admitidos por ese modelo.
 
-## Elegir El Endpoint
+## Cuándo Usar Cada Endpoint
 
-| Objetivo | Endpoint | Notas |
-|----------|----------|-------|
-| Texto a imagen | `POST /v1/images/generations` | Usa `prompt` y un `model` explícito |
-| Imagen a imagen / imagen de referencia | `POST /v1/images/generations` | Usa `operation: "image-to-image"` más `image_url`, `image_urls` o `reference_image_urls` cuando el modelo lo soporte |
-| Edición de imagen GPT | `POST /v1/images/edits` | Soporta `image` multipart, `image_url` / `image_urls` en JSON, y referencias oficiales `images[]` para modelos de edición soportados |
-| Variación heredada | `POST /v1/images/variations` | Prefiere las rutas de generación o edición actuales para nuevo trabajo |
-| Estado asíncrono | `GET /v1/tasks/{id}` | Usa `poll_url` primero cuando esté presente |
+| Flujo de trabajo del usuario | Endpoint | Usar cuando | Evitar cuando |
+|------------------------------|----------|-------------|---------------|
+| Texto a imagen               | `POST /v1/images/generations` | El usuario comienza solo con un aviso | Necesita un flujo de edición de imagen GPT oficial |
+| Imagen a imagen              | `POST /v1/images/generations` | Los documentos del modelo hacen referencia a imágenes a través de `operation: "image-to-image"` más `image_url`, `image_urls` o `reference_image_urls` | El modelo espera entrada de edición multipart |
+| Edición de imagen            | `POST /v1/images/edits` | Está editando una imagen existente con un modelo de edición compatible, como un modelo de la familia GPT Image | Está utilizando generación de imagen a imagen estilo Nano Banana |
+| Variación                    | `POST /v1/images/variations` | Mantiene una integración compatible con variaciones heredadas | Está construyendo un nuevo flujo de trabajo de imagen de referencia |
+| Estado                       | `GET /v1/tasks/{id}` | Una respuesta de creación devuelve `task_id`, `status: "pending"` o `poll_url` | La respuesta de creación ya contiene `data[]` final |
 
-## Descubrimiento de Modelos
+Siempre envíe `model`. Los endpoints de imagen intencionalmente no dependen de un modelo predeterminado implícito histórico para el tráfico de producción.
+
+## Elegir Un Modelo
+
+Comience con el descubrimiento del modelo, luego inspeccione el contrato de TokenLab del modelo seleccionado:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Los parámetros del modelo de imagen difieren mucho. Lee el contrato del modelo seleccionado antes de enviar `size`, `quality`, `aspect_ratio`, `resolution`, `async`, `background` o `output_format`.
+Para modelos que no son de chat, la respuesta de la lista puede incluir `tokenlab.public_contract_summary`. Las páginas de detalles del modelo pueden exponer el `tokenlab.public_contract` más completo. Use esos campos para confirmar:
 
-## Entradas Y Campos Específicos Del Modelo
+- La operación admitida, como `text-to-image`, `image-to-image` o `image-edit`.
+- El endpoint de solicitud esperado por el modelo.
+- Qué forma usar para referencias, como `image_url`, `image_urls`, `reference_image_urls`, multipart `image` o JSON `images[]`.
+- Si el modelo acepta `size`, `aspect_ratio`, `resolution`, `quality`, `background`, `output_format` o `response_format`.
 
-- `gpt-image-2` utiliza `size` y `quality` al estilo de OpenAI; omite `size` o `quality` para permitir que TokenLab use `auto` donde sea soportado.
-- Las familias de imágenes Gemini y Nano Banana generalmente utilizan `aspect_ratio`; solo envía `resolution` cuando el modelo seleccionado lo exponga.
-- Las solicitudes de imagen de referencia de Nano Banana pertenecen a `/v1/images/generations` con `operation: "image-to-image"` y `image_urls`, no a `/v1/images/edits`.
-- `/v1/images/generations` no acepta `images[]` de nivel superior o `file_id`; esos son formatos de flujo de edición.
-- Las URL de imágenes remotas deben ser URL públicas `http`/`https`. Evita redes privadas, credenciales incrustadas, fragmentos y URL firmadas de corta duración.
+## Reglas de Forma de Solicitud
 
-## Crear Solicitud
+- Las solicitudes estilo `gpt-image-2` utilizan campos de `size`, `quality` y edición similares a OpenAI. Deje fuera los campos opcionales cuando desee que el modelo o TokenLab utilicen valores predeterminados automáticos.
+- Las familias de imágenes Gemini y Nano Banana generalmente utilizan `aspect_ratio`; solo envíe `resolution` cuando el contrato del modelo lo exponga.
+- La generación de imagen a imagen de Nano Banana pertenece a `/v1/images/generations` con `operation: "image-to-image"` y URLs de imágenes de referencia.
+- `/v1/images/generations` no acepta `images[]` o `file_id` de nivel superior; esos son formas de flujo de edición.
+- Las referencias de imágenes remotas deben ser URLs públicas `http` o `https`. No envíe URLs de red privada, credenciales incrustadas, fragmentos de URL o URLs firmadas que puedan expirar antes de que comience el procesamiento.
+
+## Ejemplo de Texto a Imagen
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
     "prompt": "Una foto de producto limpia de una taza de café de cerámica sobre un escritorio de nogal",
@@ -46,24 +55,55 @@ curl https://api.tokenlab.sh/v1/images/generations \\
   }'
 ```
 
-## Consultar Resultados
-
-Algunas rutas de imagen devuelven `data[].url` o `data[].b64_json` en línea. Otras rutas devuelven `status: "pending"`, `task_id` y `poll_url`. Si solicitas generación o edición de imagen asíncrona, los resultados de tareas completadas devuelven URL; usa solicitudes sincrónicas cuando necesites específicamente `b64_json`.
+## Ejemplo de Imagen de Referencia
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "Mantén la forma del producto, cambia el fondo a un entorno de estudio brillante",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Manejo de Resultados
+
+Las respuestas de imagen pueden ser sincrónicas o asíncronas:
+
+- Las respuestas sincrónicas devuelven `data[]` final con `url` o `b64_json`.
+- Las respuestas asíncronas devuelven `id`, `task_id`, `status` y generalmente `poll_url`.
+- Prefiera `poll_url` cuando esté presente. Si necesita una ruta fija, consulte `GET /v1/tasks/{id}`.
+- Use solicitudes sincrónicas cuando necesite específicamente `b64_json`; los resultados de imagen asíncronos están orientados a URL.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
+Conserve la URL de imagen devuelta, el ID de tarea, el modelo y su propio ID de usuario/trabajo. No siga consultando después de un estado terminal.
+
+## Lista de Verificación de Producción
+
+- Valide las entradas del usuario antes de llamar a TokenLab: longitud del aviso, cantidad de imágenes, accesibilidad de URL y tipo de archivo.
+- Establezca los tiempos de espera HTTP lo suficientemente altos para solicitudes sincrónicas de alta resolución. Use el modo asíncrono donde esté disponible para trabajos largos.
+- Almacene `request_id`, `task_id`, `poll_url`, modelo, endpoint y forma de solicitud saneada para soporte.
+- En caso de tiempo de espera del cliente, verifique si se creó una tarea antes de volver a intentar la solicitud de creación.
+- Concilie el costo con los registros de uso y `billing_transaction_id` cuando esté presente, no con los IDs de tarea del proveedor.
+
 ## Errores Comunes
 
-- No asumas que cada modelo de imagen es sincrónico.
-- No solicites `b64_json` de tareas de imagen asíncronas; los resultados asíncronos están orientados a URL.
-- No envíes `resolution` a modelos de imagen Gemini solo de relación.
-- No uses `/v1/images/edits` para flujos de imagen a imagen de Nano Banana.
-- Establece los tiempos de espera del cliente HTTP a al menos `120s` para solicitudes de imagen de alta resolución sincrónicas.
+| Síntoma | Causa probable | Solución |
+|---------|----------------|----------|
+| `400` con `param: "model"` | Modelo explícito faltante | Consulte `/v1/models?recommended_for=image` y envíe `model` |
+| Campo no soportado | El campo no está en el contrato público de ese modelo | Elimine el campo o elija un modelo/endpoint que lo documente |
+| No hay `b64_json` en el resultado asíncrono | Las tareas de imagen asíncronas devuelven resultados orientados a URL | Use el modo sincrónico para salida base64 |
+| Imagen de referencia rechazada | Endpoint incorrecto o URL privada/expirada | Coincida con la forma de referencia documentada del modelo y use URLs accesibles |
 
-## Referencia API
+## Referencia de API
 
 | Tema | Referencia |
 |------|------------|

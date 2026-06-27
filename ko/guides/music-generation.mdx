@@ -1,53 +1,80 @@
 ---
 title: "음악 생성"
-description: "TokenLab 음악 작업으로 노래, 악기 연주, 가사 및 연속성을 생성합니다."
+description: "음악 또는 가사 작업을 생성하고, 최종 오디오를 폴링하며, 사용자에게 제공되는 음악 출력을 안전하게 저장합니다."
 ---
 
-음악 생성은 비동기적입니다. `POST /v1/music/generations`는 작업을 생성하고 `id` / `task_id`, `status`, 그리고 일반적으로 `poll_url`을 반환합니다. 최종 오디오 및 메타데이터는 폴링 후에 나타납니다.
+음악 생성은 비동기적입니다. `POST /v1/music/generations`는 공개 TokenLab 작업을 생성하고 `id` / `task_id`, `status`, 그리고 일반적으로 `poll_url`을 반환합니다. 귀하의 애플리케이션은 해당 작업 식별자를 저장하고 진행 상황을 표시하며 최종 상태가 될 때까지 폴링해야 합니다.
 
-## 모델 발견
+## 워크플로우 선택
+
+| 워크플로우 | 주요 필드 | 비고 |
+|------------|-----------|------|
+| 전체 곡 또는 기악 | `model`, `prompt`, 선택적 `title`, `tags`, `action: "MUSIC"` | 사용자가 최종 오디오를 기대할 때 사용 |
+| 가사만 | `model`, `prompt`, `action: "LYRICS"` | 가사 생성을 노출하는 모델에서만 사용 |
+| 기존 클립 계속하기 | `continue_clip_id`, 선택적 `continue_at` | 계속하기 전에 이전 공개 클립/작업 식별자를 저장 |
+
+하드코딩된 모델 목록을 배포하기 전에 현재 모델 카탈로그를 쿼리하십시오:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-현재 공개 계약은 음악 생성을 위한 `suno_music`과 가사 전용 흐름을 위한 `suno_lyrics`를 노출합니다. 프로덕션 사용 전에 모델 카탈로그를 쿼리하여 공급자 가정을 고정하지 마십시오.
+현재 공개 예제는 음악 생성을 위해 `suno_music`을 사용합니다. 가사 전용 흐름의 경우, 가사 생성을 문서화한 모델과 함께 `action: "LYRICS"`를 전송하십시오. 모델 ID는 공개 TokenLab ID로 취급하며, 제공자 특정 필드가 공개 계약 필드라는 보장은 아닙니다.
 
-## 요청 생성
+## 음악 작업 생성
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
-    "prompt": "따뜻한 보컬과 깨끗한 후렴이 있는 경쾌한 신스팝 트랙",
+    "prompt": "따뜻한 보컬과 깔끔한 후렴이 있는 경쾌한 신스팝 트랙",
     "title": "아침의 정적",
-    "tags": "신스팝, 경쾌함",
+    "tags": "신스팝, 경쾌한",
     "action": "MUSIC"
   }'
 ```
 
-노래나 악기 연주를 위해 `action: "MUSIC"`을 사용하십시오. 가사 전용 생성을 지원하는 모델과 함께 `action: "LYRICS"`만 사용하십시오. `continue_clip_id` 및 `continue_at`와 같은 연속성 필드는 연속 작업 흐름을 위한 것이며, 제품이 이전 클립을 계속할 때만 전송해야 합니다.
+프롬프트, 제목 및 태그는 사용자에게 보이고 안전하게 저장할 수 있도록 유지하십시오. API 키, 개인 URL 또는 내부 라우팅 정보를 어떤 프롬프트 필드에도 넣지 마십시오.
 
-## 결과 폴링
+## 완료 폴링
 
-반환된 `poll_url`을 먼저 사용하십시오. 고정 엔드포인트가 필요한 경우, 생성 응답에서 동일한 `id` / `task_id`로 `GET /v1/tasks/{id}`를 사용하십시오.
+먼저 `poll_url`을 사용하십시오. 클라이언트가 고정 경로가 필요하면 반환된 `id` 또는 `task_id`로 `GET /v1/tasks/{id}`를 호출하십시오.
 
-완료된 음악 작업에는 `audio_url`, `video_url`, `title`, `lyrics`, 및 모델 정규화 메타데이터가 포함될 수 있습니다. 최종 URL을 애플리케이션에 저장하고 터미널 상태 이후에 반복적으로 폴링하지 마십시오.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## 일반적인 함정
+예상되는 공개 상태는 `pending`, `processing`, `completed`, 및 `failed`입니다. 완료된 음악 작업은 `audio_url`, `video_url`, `title`, `lyrics`, 및 정규화된 메타데이터를 포함할 수 있습니다. 최종 URL을 귀하의 데이터베이스에 저장하여 사용자가 결과를 다시 열 수 있도록 하십시오.
 
-- 작업이 `completed` 상태이고 `audio_url`이 존재할 때까지 최종 플레이어를 표시하지 마십시오.
-- 애플리케이션 상태에서 공급자 작업 ID 또는 공급자 가져오기 URL을 사용하지 마십시오.
-- 사용자에게 차이를 보여주지 않고 가사 전용 및 전체 음악 작업을 하나의 UI 뒤에서 혼합하지 마십시오.
-- 페이지 새로 고침 시마다 작업을 재생성하지 마십시오; 저장된 `task_id`에서 재개하십시오.
+## UI 및 상태 처리
+
+- 작업 생성 직후에 대기 상태를 표시하십시오.
+- 긴 작업의 경우 매 `5-10초`마다 폴링하고, `completed` 또는 `failed` 상태에서 중지하십시오.
+- 작업이 `completed`되고 `audio_url`이 존재할 때까지 최종 플레이어를 표시하지 마십시오.
+- 가사 전용 작업의 경우, 사용자가 구매하는 내용을 이해할 수 있도록 오디오 작업과 별도로 텍스트 출력을 렌더링하십시오.
+- 새로 고침 시 새 작업을 생성하는 대신 저장된 `task_id`에서 계속하십시오.
+
+## 청구 및 조정
+
+음악 작업은 생성 시 예상 금액을 예약하고 최종 상태가 알려진 후에 정산할 수 있습니다. `request_id`, `task_id`, 모델, 엔드포인트, 및 `billing_transaction_id`가 나타날 때 저장하십시오. 제공자 작업 ID 대신 관리 API 사용 기록을 사용하여 조정하십시오.
+
+## 일반 오류
+
+| 증상 | 가능한 원인 | 수정 |
+|------|-------------|------|
+| 작업이 생성되었지만 플레이어 없음 | 작업이 여전히 대기 중이거나 `audio_url` 없이 완료됨 | 최종 상태까지 계속 폴링한 후, 누락된 출력을 실패한 사용자 작업으로 처리 |
+| 새로 고침 후 중복 곡 | UI가 작업을 재생성하여 계속하지 않음 | `task_id`를 지속하고 재사용 |
+| 가사 작업이 오디오를 반환하지 않음 | `action: "LYRICS"`는 텍스트 전용 | 가사와 음악 UI 경로를 분리 |
+| 지원되지 않는 매개변수 | 필드가 모델 공개 계약에 없음 | 제공자 특정 필드를 제거하거나 이를 문서화한 모델을 선택 |
 
 ## API 참조
 
 | 주제 | 참조 |
-|-------|-----------|
+|------|------|
 | 음악 생성 | [음악 생성](/ko/api-reference/music/create-music) |
 | 음악 상태 가져오기 | [음악 상태 가져오기](/ko/api-reference/music/get-music-status) |
 | 작업 상태 가져오기 | [작업 상태 가져오기](/ko/api-reference/tasks/get-task-status) |

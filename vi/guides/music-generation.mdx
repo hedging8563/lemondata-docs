@@ -1,53 +1,80 @@
 ---
 title: "Tạo Nhạc"
-description: "Tạo bài hát, nhạc cụ, lời bài hát và các phần tiếp theo với các tác vụ nhạc của TokenLab."
+description: "Tạo các tác vụ nhạc hoặc lời bài hát, kiểm tra âm thanh cuối cùng và lưu trữ các đầu ra nhạc cho người dùng một cách an toàn."
 ---
 
-Tạo nhạc là bất đồng bộ. `POST /v1/music/generations` tạo một tác vụ và trả về `id` / `task_id`, `status`, và thường là `poll_url`. Âm thanh và siêu dữ liệu cuối cùng sẽ xuất hiện sau khi kiểm tra.
+Việc tạo nhạc là không đồng bộ. `POST /v1/music/generations` tạo một tác vụ TokenLab công khai và trả về `id` / `task_id`, `status`, và thường là `poll_url`. Ứng dụng của bạn nên lưu trữ danh tính tác vụ đó, hiển thị tiến trình và kiểm tra cho đến khi có trạng thái cuối cùng.
 
-## Khám Phá Mô Hình
+## Chọn Quy Trình
+
+| Quy trình | Trường chính | Ghi chú |
+|-----------|--------------|---------|
+| Bài hát hoàn chỉnh hoặc nhạc cụ | `model`, `prompt`, tùy chọn `title`, `tags`, `action: "MUSIC"` | Sử dụng khi người dùng mong đợi âm thanh cuối cùng |
+| Chỉ lời bài hát | `model`, `prompt`, `action: "LYRICS"` | Chỉ sử dụng với các mô hình có khả năng tạo lời bài hát |
+| Tiếp tục một clip hiện có | `continue_clip_id`, tùy chọn `continue_at` | Lưu trữ danh tính clip/tác vụ công khai trước đó trước khi cung cấp tiếp tục |
+
+Truy vấn danh mục mô hình hiện tại trước khi gửi một danh sách mô hình mã cứng:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Hợp đồng công khai hiện tại cung cấp `suno_music` cho việc tạo nhạc và `suno_lyrics` cho các luồng chỉ có lời bài hát. Hãy truy vấn danh mục mô hình trước khi sử dụng trong sản xuất thay vì dựa vào giả định của nhà cung cấp.
+Các ví dụ công khai hiện tại sử dụng `suno_music` cho việc tạo nhạc. Đối với các quy trình chỉ lời bài hát, gửi `action: "LYRICS"` với một mô hình mà hợp đồng công khai của nó tài liệu hóa việc tạo lời bài hát. Xem xét các ID mô hình như là các ID TokenLab công khai, không phải là một đảm bảo rằng các trường cụ thể của nhà cung cấp là các trường hợp công khai.
 
-## Tạo Yêu Cầu
+## Tạo Một Tác Vụ Nhạc
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
-    "prompt": "Một bài hát synth-pop vui tươi với giọng hát ấm áp và điệp khúc trong trẻo",
+    "prompt": "Một bản nhạc synth-pop vui tươi với giọng hát ấm áp và điệp khúc trong trẻo",
     "title": "Morning Static",
     "tags": "synth-pop, vui tươi",
     "action": "MUSIC"
   }'
 ```
 
-Sử dụng `action: "MUSIC"` cho bài hát hoặc nhạc cụ. Sử dụng `action: "LYRICS"` chỉ với các mô hình hỗ trợ tạo lời bài hát. Các trường tiếp tục như `continue_clip_id` và `continue_at` dành cho quy trình làm việc tiếp tục và chỉ nên gửi khi sản phẩm của bạn đang tiếp tục một clip trước đó.
+Giữ cho các prompt, tiêu đề và thẻ có thể nhìn thấy cho người dùng và an toàn để lưu trữ. Không đặt API keys, URL riêng tư, hoặc thông tin định tuyến nội bộ vào bất kỳ trường prompt nào.
 
-## Kiểm Tra Kết Quả
+## Kiểm Tra Để Hoàn Thành
 
-Sử dụng `poll_url` được trả về trước. Nếu bạn cần một điểm cuối cố định, sử dụng `GET /v1/tasks/{id}` với cùng `id` / `task_id` từ phản hồi tạo.
+Sử dụng `poll_url` trước. Nếu khách hàng của bạn cần một tuyến đường cố định, gọi `GET /v1/tasks/{id}` với `id` hoặc `task_id` đã trả về.
 
-Các tác vụ nhạc đã hoàn thành có thể bao gồm `audio_url`, `video_url`, `title`, `lyrics`, và siêu dữ liệu đã chuẩn hóa theo mô hình. Lưu trữ các URL cuối cùng trong ứng dụng của bạn thay vì kiểm tra lặp đi lặp lại sau khi có trạng thái cuối cùng.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Những Cạm Bẫy Thường Gặp
+Các trạng thái công khai mong đợi là `pending`, `processing`, `completed`, và `failed`. Một tác vụ nhạc đã hoàn thành có thể bao gồm `audio_url`, `video_url`, `title`, `lyrics`, và metadata đã chuẩn hóa. Lưu trữ các URL cuối cùng trong cơ sở dữ liệu của riêng bạn để người dùng có thể mở lại kết quả mà không cần khởi động lại việc tạo.
 
+## Giao Diện Người Dùng Và Xử Lý Trạng Thái
+
+- Hiển thị trạng thái đang chờ ngay sau khi tạo tác vụ.
+- Kiểm tra mỗi `5-10s` cho các tác vụ dài, sau đó dừng lại khi `completed` hoặc `failed`.
 - Không hiển thị trình phát cuối cùng cho đến khi tác vụ được `completed` và có `audio_url`.
-- Không sử dụng ID tác vụ của nhà cung cấp hoặc URL lấy dữ liệu của nhà cung cấp trong trạng thái ứng dụng của bạn.
-- Không trộn lẫn các hành động chỉ có lời bài hát và nhạc đầy đủ trong một giao diện người dùng mà không cho người dùng thấy sự khác biệt.
-- Không tái tạo tác vụ trên mỗi lần làm mới trang; tiếp tục từ `task_id` đã lưu.
+- Đối với các tác vụ chỉ lời bài hát, hiển thị đầu ra văn bản riêng biệt với các tác vụ âm thanh để người dùng hiểu những gì họ đang mua.
+- Khi làm mới, tiếp tục từ `task_id` đã lưu thay vì tạo một tác vụ mới.
+
+## Thanh Toán Và Đối Chiếu
+
+Các tác vụ nhạc có thể giữ lại một số tiền ước tính tại thời điểm tạo và thanh toán sau khi trạng thái cuối cùng được biết. Lưu trữ `request_id`, `task_id`, mô hình, điểm cuối, và `billing_transaction_id` khi nó xuất hiện. Sử dụng hồ sơ sử dụng API Quản lý để đối chiếu thay vì các ID tác vụ của nhà cung cấp.
+
+## Lỗi Thường Gặp
+
+| Triệu chứng | Nguyên nhân có thể | Cách khắc phục |
+|-------------|-------------------|----------------|
+| Tác vụ đã tạo nhưng không có trình phát | Tác vụ vẫn đang chờ hoặc đã hoàn thành mà không có `audio_url` | Tiếp tục kiểm tra cho đến khi có trạng thái cuối cùng, sau đó xử lý đầu ra thiếu như một công việc người dùng thất bại |
+| Bài hát trùng lặp sau khi làm mới | Giao diện người dùng đã tạo lại tác vụ thay vì tiếp tục | Lưu trữ và sử dụng lại `task_id` |
+| Tác vụ lời bài hát không trả về âm thanh | `action: "LYRICS"` chỉ là văn bản | Tách biệt các đường dẫn UI lời bài hát và nhạc |
+| Tham số không được hỗ trợ | Trường không có trong hợp đồng công khai của mô hình | Xóa các trường cụ thể của nhà cung cấp hoặc chọn một mô hình tài liệu hóa chúng |
 
 ## Tài Liệu API
 
-| Chủ Đề | Tài Liệu |
-|-------|-----------|
+| Chủ đề | Tài liệu tham khảo |
+|--------|--------------------|
 | Tạo Nhạc | [Tạo Nhạc](/vi/api-reference/music/create-music) |
 | Lấy Trạng Thái Nhạc | [Lấy Trạng Thái Nhạc](/vi/api-reference/music/get-music-status) |
 | Lấy Trạng Thái Tác Vụ | [Lấy Trạng Thái Tác Vụ](/vi/api-reference/tasks/get-task-status) |

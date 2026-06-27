@@ -3,70 +3,107 @@ title: "Yapılandırılmış Çıktılar & Araç Çağrısı"
 description: "Her modelin aynı sözleşmeyi desteklediğini varsaymadan JSON modunu, fonksiyon araçlarını ve yerel araç yollarını kullanın."
 ---
 
-Yapılandırılmış çıktılar ve araçlar gerçek TokenLab API yollarıdır, ancak her model ve yol için evrensel bir yetenek değildir. İhtiyacınız olan davranışı sahip olan yolu seçin.
+Yapılandırılmış çıktılar ve araç çağrıları, yol spesifik sözleşmelerdir. TokenLab, birkaç kamu API formatını iletir, bu nedenle en güvenli üretim modeli, her sağlayıcıya özgü araç biçimini onu sahip olduğu yolda tutmak ve model çıktısını kendi uygulamanızda doğrulamaktır.
 
-## JSON Ve Yapılandırılmış Çıktı
+## Yolu Seçin
 
-Taşınabilir yapılandırılmış yanıtlar için, Chat Tamamlamaları ile başlayın `response_format: {"type":"json_object"}` ve çıktıyı uygulamanızda doğrulayın. Bu, TokenLab paylaşılan doğrulamasındaki kararlı kamu talep şeklidir.
+| İhtiyaç | Yol | Bu biçimi kullanın |
+|---------|-----|--------------------|
+| Taşınabilir JSON nesne yanıtları | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| OpenAI uyumlu fonksiyon çağrısı | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| OpenAI Yanıtları araçları | `/v1/responses` | Yanıtlar `tools`, `tool_choice` ve `text` alanları |
+| Claude'a özgü araç kullanımı veya düşünme | `/v1/messages` | Anthropic Messages araç şeması |
+| Gemini fonksiyon bildirimleri veya yerleşik araçlar | `/v1beta/models/:model:generateContent` | Gemini'ye özgü `tools` ve içerik parçaları |
+
+Sağlayıcıya özgü yerleşik araçları farklı bir yoldan göndermeyin ve TokenLab'ın bunları sessizce çevirmesini beklemeyin.
+
+## JSON Modu
+
+Taşınabilir yapılandırılmış yanıtlar için, Chat Completions JSON moduyla başlayın:
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Return a JSON object with city and weather."}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "Şehir ve hava durumu ile bir JSON nesnesi döndür."
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-`json_schema` ve `strict` yapılandırılmış çıktı yolları bazı yukarı akış ve dönüştürme kodlarında mevcuttur, ancak bunlar model ve yol bağımlıdır. Bunları seçilen model ile doğrulamak için bir yetenek olarak değerlendirin, her TokenLab yolunda genel bir vaat olarak değil.
+Chat Completions için kararlı paylaşılan doğrulama `text` ve `json_object` kabul eder. `json_schema`, `strict` ve sağlayıcıya özgü şema uygulamaları bazı yukarı akış yolları veya dönüşüm yolları için mevcut olabilir, ancak bunlar her TokenLab yolu ve modeli için genel bir vaat değildir. Bunları güvenilir hale gelmeden önce seçilen model ile doğrulayın.
 
-## Araç Çağrısı Sınırı
+Her zaman sunucunuzda döndürülen JSON'u ayrıştırın ve doğrulayın. JSON modu biçimi iyileştirir, ancak uygulama düzeyinde şema doğrulamasını değiştirmez.
 
-| Araç şekli | Tercih Edilecek Yol | Üretim Notu |
-|------------|---------------------|--------------|
-| OpenAI fonksiyon araçları | `/v1/chat/completions` | Kullanıcı tanımlı fonksiyon çağrıları için taşınabilir |
-| OpenAI Yanıt araçları | `/v1/responses` | Yanıtlarla ilgili yerleşik veya barındırılan araçlar için kullanın |
-| Anthropic araçları | `/v1/messages` | Claude'a özgü araç kullanımı ve düşünme akışları için kullanın |
-| Gemini fonksiyon bildirimleri / yerleşik araçlar | `/v1beta/models/:model:generateContent` | Gemini yolunda Gemini'ye özgü araç alanlarını koruyun |
+## Araç Çağrısı Döngüsü
 
-TokenLab, fonksiyonunuzu sizin için çalıştırmaz. Bir model `tool_calls`, `function_call`, `tool_use` veya Gemini fonksiyon çağrı parçaları döndürdüğünde, uygulamanız aracı çalıştırmalı, aracın sonucunu yolun gerektirdiği formatta eklemeli ve konuşmaya devam etmelidir.
+TokenLab, fonksiyonlarınızı çalıştırmaz. Uygulamanız döngüyü sahiplenir:
 
-## Yaygın Hatalar
+1. Mesajları ve araç tanımlarını gönderin.
+2. `tool_calls`, `function_call`, Anthropic `tool_use` veya Gemini fonksiyon çağrı parçaları için model yanıtını okuyun.
+3. Aracı kendi arka uçunuzda çalıştırın.
+4. Araç sonucunu aynı yolun gerektirdiği biçimde ekleyin.
+5. Model nihai bir yanıt verene kadar konuşmaya devam edin.
 
-- Sağlayıcıya özgü yerleşik araçları Chat Tamamlamaları üzerinden göndermeyin ve bunların sessizce çevrileceğini beklemeyin.
-- Seçilen yol ve model test edilmedikçe katı JSON Şemasına güvenmeyin.
-- Şemaları küçük ve açık tutun; büyük şemalar token ekler ve güvenilirliği azaltabilir.
-- JSON modu etkin olsa bile model çıktısını sunucu tarafında doğrulayın.
-- Desteklenmeyen alan hatalarını sözleşme geri bildirimi olarak değerlendirin. Alanı kaldırın veya onu sahip olan yerel yolu kullanın.
+Bir araç döngüsü boyunca aynı yolu koruyun. Chat Completions, Yanıtlar, Mesajlar ve Gemini formatlarını tek bir konuşmada karıştırmak genellikle ince durum ve şema hataları yaratır.
 
-## Örnek
+## Chat Completions Örneği
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"Extract name and email as JSON."}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "Look up a customer by email",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "Adı ve e-postayı JSON olarak çıkar. Gerekirse, müşteriyi araştır."
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "E-posta ile bir müşteriyi araştır",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
+
+## Şema Tasarımı
+
+- Şemaları küçük ve açık tutun. Büyük iç içe geçmiş şemalar token ekler ve güvenilirliği azaltır.
+- Ürününüzün devam edemeyeceği değerler için gerekli alanları tercih edin.
+- UI veya arka uçta bağımlı olduğunuz kapalı setler için enum kullanın.
+- Model bir biçimle zorlandığında, istemde örnekler ekleyin.
+- Desteklenmeyen alan hatalarını sözleşme geri bildirimi olarak değerlendirin. Alanı kaldırın veya onu belgeleyen yerel yolu kullanın.
+
+## Üretim Kontrol Listesi
+
+- Yol, model, araç adlarını ve temizlenmiş şema biçimini kayıtlara alın.
+- Herhangi bir yan etki oluşturmadan önce araç argümanlarını doğrulayın.
+- Araç çalıştırmadan önce kendi izin kontrollerinizi uygulayın.
+- Bir istemci tekrar denemesi aynı araç çağrısını tekrarlayabileceğinden, araç çalıştırmasını idempotent hale getirin.
+- Araçlar tarafından döndürülen gizli bilgileri model görünür mesajlara kaydetmeyin.
 
 ## API Referansı
 
 | Konu | Referans |
-|-------|-----------|
+|------|----------|
 | Çoklu Format API | [Çoklu Format API](/tr/guides/api-formats) |
 | Chat Tamamlaması Oluştur | [Chat Tamamlaması Oluştur](/tr/api-reference/chat/create-completion) |
 | Yanıt Oluştur | [Yanıt Oluştur](/tr/api-reference/responses/create-response) |

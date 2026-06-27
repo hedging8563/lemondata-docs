@@ -1,67 +1,107 @@
 ---
 title: "画像生成"
-description: "TokenLabの公開画像契約に対して、テキストから画像、画像から画像、画像編集のワークフローを構築します。"
+description: "適切なTokenLab画像エンドポイントを選択し、モデルを意識したリクエストを送信し、同期または非同期の画像結果を安全に処理します。"
 ---
 
-TokenLabの画像APIは、異なるリクエスト形式を持ついくつかのモデルファミリーをカバーしています。すべての画像モデルでフィールドが機能することを前提とする前に、公開モデル契約とエンドポイント固有のAPIリファレンスを使用してください。
+TokenLabは、テキストから画像、画像から画像、画像編集を公開画像エンドポイントを通じてサポートしています。画像モデルは共通のパラメータセットを共有しないため、プロダクションクライアントはまずエンドポイントを選択し、次にモデルを選択し、そのモデルがサポートするフィールドのみを送信する必要があります。
 
-## エンドポイントの選択
+## 各エンドポイントを使用するタイミング
 
-| 目標 | エンドポイント | メモ |
-|------|----------------|------|
-| テキストから画像 | `POST /v1/images/generations` | `prompt`と明示的な`model`を使用 |
-| 画像から画像 / 参照画像 | `POST /v1/images/generations` | モデルがサポートしている場合は、`operation: "image-to-image"`に加えて`image_url`、`image_urls`、または`reference_image_urls`を使用 |
-| GPT画像編集 | `POST /v1/images/edits` | サポートされている編集モデルのために、マルチパート`image`、JSON形式の`image_url` / `image_urls`、および公式の`images[]`参照をサポート |
-| レガシー変種 | `POST /v1/images/variations` | 新しい作業には現在の生成または編集ルートを優先 |
-| 非同期ステータス | `GET /v1/tasks/{id}` | 存在する場合は最初に`poll_url`を使用 |
+| ユーザーワークフロー | エンドポイント | 使用する場合 | 避ける場合 |
+|---------------------|----------------|--------------|------------|
+| テキストから画像 | `POST /v1/images/generations` | ユーザーがプロンプトのみから始める場合 | 公式のGPT画像編集フローが必要な場合 |
+| 画像から画像 | `POST /v1/images/generations` | モデルドキュメントが`operation: "image-to-image"`と`image_url`、`image_urls`、または`reference_image_urls`を参照する場合 | モデルがマルチパート編集入力を期待している場合 |
+| 画像編集 | `POST /v1/images/edits` | GPT画像ファミリーモデルなどのサポートされている編集モデルで既存の画像を編集する場合 | Nano Bananaスタイルの画像から画像生成を使用している場合 |
+| バリエーション | `POST /v1/images/variations` | レガシーのバリエーション互換統合を維持している場合 | 新しいリファレンス画像ワークフローを構築している場合 |
+| ステータス | `GET /v1/tasks/{id}` | 作成レスポンスが`task_id`、`status: "pending"`、または`poll_url`を返す場合 | 作成レスポンスにすでに最終的な`data[]`が含まれている場合 |
 
-## モデル発見
+常に`model`を送信してください。画像エンドポイントは、プロダクショントラフィックのために歴史的な暗黙のデフォルトモデルに依存しないように設計されています。
+
+## モデルを選択する
+
+モデルの発見から始め、選択したモデルのTokenLab契約を確認します：
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-画像モデルのパラメータは大きく異なります。`size`、`quality`、`aspect_ratio`、`resolution`、`async`、`background`、または`output_format`を送信する前に、選択したモデル契約を読んでください。
+非チャットモデルの場合、リストレスポンスには`tokenlab.public_contract_summary`が含まれることがあります。モデル詳細ページは、より完全な`tokenlab.public_contract`を公開する場合があります。これらのフィールドを使用して確認します：
 
-## 入力とモデル固有のフィールド
+- サポートされている操作、例えば`text-to-image`、`image-to-image`、または`image-edit`。
+- モデルが期待するリクエストエンドポイント。
+- リファレンスに使用する形状、例えば`image_url`、`image_urls`、`reference_image_urls`、マルチパート`image`、またはJSON`images[]`。
+- モデルが`size`、`aspect_ratio`、`resolution`、`quality`、`background`、`output_format`、または`response_format`を受け入れるかどうか。
 
-- `gpt-image-2`はOpenAIスタイルの`size`と`quality`を使用します。TokenLabがサポートする場合は、`size`または`quality`を省略して`auto`を使用させてください。
-- GeminiおよびNano Banana画像ファミリーは一般的に`aspect_ratio`を使用します。選択したモデルがそれを公開している場合にのみ`resolution`を送信してください。
-- Nano Bananaの参照画像リクエストは、`operation: "image-to-image"`と`image_urls`を持つ`/v1/images/generations`に属し、`/v1/images/edits`には属しません。
-- `/v1/images/generations`はトップレベルの`images[]`または`file_id`を受け付けません。これらは編集フローの形式です。
-- リモート画像URLは公開の`http`/`https` URLでなければなりません。プライベートネットワーク、埋め込まれた資格情報、フラグメント、および短命の署名付きURLは避けてください。
+## リクエスト形状ルール
 
-## リクエストの作成
+- `gpt-image-2`スタイルのリクエストは、OpenAIのような`size`、`quality`、および編集フィールドを使用します。モデルまたはTokenLabが自動デフォルトを使用する場合は、オプションフィールドを省略してください。
+- GeminiおよびNano Banana画像ファミリーは通常`aspect_ratio`を使用します。モデル契約がそれを公開している場合にのみ`resolution`を送信してください。
+- Nano Banana画像から画像への生成は、`operation: "image-to-image"`とリファレンス画像URLを持つ`/v1/images/generations`に属します。
+- `/v1/images/generations`はトップレベルの`images[]`または`file_id`を受け入れません。これらは編集フローの形状です。
+- リモート画像リファレンスは、公開の`http`または`https` URLでなければなりません。プライベートネットワークのURL、埋め込まれた資格情報、URLフラグメント、または処理開始前に期限切れになる可能性のある署名付きURLを送信しないでください。
+
+## テキストから画像の例
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
-    "prompt": "クリーンな製品写真、ウォールナットのデスクの上にあるセラミックコーヒーカップ",
+    "prompt": "クリーンな製品写真、ウォルナットデスクの上に置かれたセラミックコーヒーカップ",
     "size": "1024x1024",
     "response_format": "url"
   }'
 ```
 
-## 結果のポーリング
-
-一部の画像ルートはインラインの`data[].url`または`data[].b64_json`を返します。他のルートは`status: "pending"`、`task_id`、および`poll_url`を返します。非同期の画像生成または編集をリクエストした場合、完了したタスクの結果はURLを返します。特に`b64_json`が必要な場合は同期リクエストを使用してください。
+## リファレンス画像の例
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "製品の形状を保持し、背景を明るいスタジオセットアップに変更する",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## 結果の処理
+
+画像レスポンスは同期または非同期です：
+
+- 同期レスポンスは、最終的な`data[]`を`url`または`b64_json`で返します。
+- 非同期レスポンスは`id`、`task_id`、`status`、通常は`poll_url`を返します。
+- `poll_url`が存在する場合はそれを優先してください。固定のルートが必要な場合は、`GET /v1/tasks/{id}`をポーリングしてください。
+- 特に`b64_json`が必要な場合は同期リクエストを使用してください。非同期画像結果はURL指向です。
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-## よくある落とし穴
+返された画像URL、タスクID、モデル、および自分のユーザー/ジョブIDを保持してください。ターミナルステータスの後はポーリングを続けないでください。
 
-- すべての画像モデルが同期であるとは限りません。
-- 非同期画像タスクから`b64_json`をリクエストしないでください。非同期結果はURL指向です。
-- 比率のみのGemini画像モデルに`resolution`を送信しないでください。
-- Nano Bananaの画像から画像へのフローに`/v1/images/edits`を使用しないでください。
-- 同期の高解像度画像リクエストには、HTTPクライアントのタイムアウトを少なくとも`120s`に設定してください。
+## プロダクションチェックリスト
+
+- TokenLabを呼び出す前にユーザー入力を検証します：プロンプトの長さ、画像の数、URLの到達可能性、およびファイルタイプ。
+- 同期の高解像度リクエストのためにHTTPタイムアウトを十分に高く設定します。長時間の作業には利用可能な場合は非同期モードを使用してください。
+- サポートのために`request_id`、`task_id`、`poll_url`、モデル、エンドポイント、およびサニタイズされたリクエスト形状を保存します。
+- クライアントタイムアウト時には、再試行する前にタスクが作成されたかどうかを確認します。
+- 提供者のタスクIDではなく、使用記録および`billing_transaction_id`が存在する場合はそれとコストを照合します。
+
+## 一般的なエラー
+
+| 症状 | 考えられる原因 | 修正 |
+|------|----------------|------|
+| `400`と`param: "model"` | 明示的なモデルが欠落 | `/v1/models?recommended_for=image`をクエリし、`model`を送信 |
+| サポートされていないフィールド | フィールドがそのモデルの公開契約に含まれていない | フィールドを削除するか、それを文書化しているモデル/エンドポイントを選択 |
+| 非同期結果に`b64_json`がない | 非同期画像タスクはURL指向の結果を返す | base64出力のために同期モードを使用 |
+| リファレンス画像が拒否された | 間違ったエンドポイントまたはプライベート/期限切れのURL | モデルの文書化されたリファレンス形状に一致させ、到達可能なURLを使用 |
 
 ## APIリファレンス
 
@@ -69,6 +109,6 @@ curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
 |----------|---------------|
 | 画像の作成 | [画像の作成](/ja/api-reference/images/create-image) |
 | 画像の編集 | [画像の編集](/ja/api-reference/images/edit-image) |
-| 画像のバリエーションの作成 | [画像のバリエーションの作成](/ja/api-reference/images/create-variation) |
+| 画像バリエーションの作成 | [画像バリエーションの作成](/ja/api-reference/images/create-variation) |
 | 画像のステータス取得 | [画像のステータス取得](/ja/api-reference/images/get-image-status) |
 | タスクのステータス取得 | [タスクのステータス取得](/ja/api-reference/tasks/get-task-status) |

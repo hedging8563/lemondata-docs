@@ -1,25 +1,32 @@
 ---
 title: "Trabalhos Assíncronos & Polling"
-description: "Crie trabalhos de geração assíncrona, consulte o status de tarefas públicas e reconcilie resultados finais sem detalhes específicos de tarefas do provedor."
+description: "Crie trabalhos de mídia assíncronos, consulte o status das tarefas públicas do TokenLab e reconcilie os resultados finais sem IDs específicos do provedor."
 ---
 
-Esta página reflete o contrato público de tarefas assíncronas do TokenLab. Não trata URLs de tarefas do provedor, IDs de roteamento ou comportamento de callback upstream como contratos de integração voltados para o usuário.
+Muitos endpoints de mídia são assíncronos. Um pedido de criação inicia o trabalho e retorna uma identidade de tarefa pública do TokenLab; sua aplicação consulta até que essa tarefa atinja um status terminal. Não construa fluxos de trabalho do cliente em torno de URLs de tarefas upstream, IDs de roteamento ou comportamento de callback do provedor.
 
-## Contrato Público
+## Contrato de Tarefa Pública
 
-O TokenLab expõe um contrato público de tarefa assíncrona para mídia gerada. Os endpoints de criação podem retornar `id`, `task_id`, `status` e `poll_url`. Trate `id` e `task_id` como a mesma identidade de tarefa pública e armazene tanto o ID da tarefa quanto o `poll_url` com seu próprio registro de trabalho.
+As respostas de criação podem incluir:
 
-Use o `poll_url` retornado primeiro. Se você precisar de um endpoint fixo, use `GET /v1/tasks/{id}` com o mesmo `id` / `task_id` da resposta de criação.
+| Campo     | Significado                                         | O que fazer                                   |
+|-----------|----------------------------------------------------|-----------------------------------------------|
+| `id`      | ID da tarefa pública do TokenLab                   | Armazene-o com seu próprio registro de trabalho |
+| `task_id` | Alias de compatibilidade para a mesma identidade de tarefa pública | Trate-o como equivalente a `id`              |
+| `status`  | Status atual da tarefa pública                      | Comece a consultar quando não for terminal    |
+| `poll_url`| URL de status preferencial                          | Use esta primeiro quando presente             |
+| `model`   | Modelo solicitado ou resolvido pelo endpoint        | Armazene para suporte e reconciliação de cobrança |
 
-As tarefas de geração pública são baseadas em polling atualmente. O TokenLab possui receptores de callback upstream internamente, mas eles não são webhooks de clientes e não devem ser usados como um contrato de integração.
+`/v1/tasks/{id}` é o endpoint de status fixo canônico para trabalhos de mídia assíncronos públicos. Rotas de status específicas de mídia podem existir para compatibilidade, mas novas integrações devem preferir `poll_url` ou `/v1/tasks/{id}`.
 
 ## Fluxo Recomendado
 
-1. Envie a solicitação de criação com um `model` explícito.
-2. Se a resposta for inline, leia o resultado final imediatamente.
-3. Se a resposta contiver `status: "pending"`, `task_id` ou `poll_url`, persista a tarefa e comece a consultar.
-4. Consulte a cada `5-10s` para tarefas de mídia longas. Pare apenas em um status terminal.
-5. Em `completed`, leia os campos de resultado para esse tipo de mídia. Em `failed`, armazene o erro público e mostre uma ação de retry apenas quando tentar novamente criar um novo trabalho visível ao usuário.
+1. Valide o pedido do usuário e envie a chamada de criação com um `model` explícito.
+2. Persista `id` / `task_id`, `poll_url`, endpoint, modelo, ID do usuário e seu próprio ID de trabalho antes de retornar o controle para a UI.
+3. Consulte a cada `5-10s` para tarefas de mídia de longa duração.
+4. Pare somente quando a tarefa estiver `completed` ou `failed`.
+5. Ao `completed`, leia os campos de resultado específicos de mídia e armazene URLs ou metadados finais.
+6. Ao `failed`, armazene o erro público e ofereça a tentativa novamente apenas como um novo trabalho visível ao usuário.
 
 ```json
 {
@@ -31,43 +38,67 @@ As tarefas de geração pública são baseadas em polling atualmente. O TokenLab
 }
 ```
 
-## Resultados de Polling
+## Exemplo de Polling
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Os status públicos esperados são `pending`, `processing`, `completed` e `failed`. Tarefas canceladas são representadas como `failed` com `cancelled: true` e `cancellation_status: "cancelled"` para que o tratamento de status mais antigo continue funcionando.
+Os status públicos esperados são `pending`, `processing`, `completed` e `failed`. Tarefas canceladas são representadas como `failed` com `cancelled: true` e `cancellation_status: "cancelled"` para que o manuseio de status mais antigos continue funcionando.
 
-Não consulte URLs específicas do provedor, IDs de tarefas upstream, IDs de roteamento ou metadados de execução privados. Eles não são contratos públicos estáveis.
+## Regras de Tentativa do Cliente
 
-## Cobrança e Reconciliação
+Os timeouts de rede são a fonte mais comum de trabalhos duplicados. Use esta regra:
 
-- Uma resposta de criação pode reservar um valor estimado para trabalho assíncrono.
-- O acerto final ocorre após a tarefa atingir um estado terminal.
-- Quando o acerto estiver disponível, as respostas de status da tarefa podem expor `billing_transaction_id` e o cabeçalho `X-Billing-Transaction-ID`.
-- Se um timeout do cliente ocorrer após a criação da tarefa, não recrie o trabalho cegamente. Retome do `task_id` / `poll_url` armazenados.
+| Onde o timeout acontece | Comportamento mais seguro                     |
+|-------------------------|-----------------------------------------------|
+| Antes que seu servidor receba uma resposta de criação | Verifique os logs do servidor para `request_id`; tente novamente apenas se nenhuma tarefa foi criada |
+| Depois que uma resposta de criação foi armazenada | Retome a consulta do `task_id` armazenado |
+| Durante a consulta       | Tente novamente a solicitação de status com backoff |
+| Após status terminal     | Não consulte novamente a menos que o usuário atualize explicitamente o registro |
+
+Não envie um segundo pedido de criação apenas porque o navegador foi atualizado ou uma consulta de status falhou.
+
+## Cobrança e Liquidação
+
+Trabalhos assíncronos podem reservar um valor estimado quando o pedido de criação é aceito. A liquidação final acontece após o status terminal. Quando disponível, as respostas de status da tarefa podem expor `billing_transaction_id` e o cabeçalho `X-Billing-Transaction-ID`.
+
+Para reconciliação, junte esses identificadores em seus logs:
+
+- `request_id` do pedido de criação.
+- `task_id` / `id` da tarefa.
+- `billing_transaction_id` quando presente.
+- Seu próprio ID de usuário, ID de projeto ou ID de trabalho.
 
 ## Cancelamento
 
-`DELETE /v1/tasks/{id}` é intencionalmente restrito. Atualmente, suporta tarefas de vídeo em fila do Volcengine Seedance, como `seedance-1.5-pro`, `seedance-2.0` e `seedance-2.0-fast`. Tarefas não suportadas retornam `400 unsupported_task_cancel`; tarefas já em execução ou em estado terminal retornam `409 task_not_cancellable`.
+`DELETE /v1/tasks/{id}` é intencionalmente restrito. Atualmente, suporta tarefas de vídeo em fila do Volcengine Seedance, como `seedance-1.5-pro`, `seedance-2.0` e `seedance-2.0-fast`.
 
-## Lista de Verificação de Solução de Problemas
+Tarefas não suportadas retornam `400 unsupported_task_cancel`. Tarefas que já estão em execução ou em status terminal retornam `409 task_not_cancellable`. Construa a UI de cancelamento como "solicitar cancelamento" em vez de um botão de parada garantido.
 
-- `async_task_not_found`: a tarefa é desconhecida, expirou, inacessível a esta chave de API ou não faz parte do contrato de tarefa assíncrona pública.
-- URL final de mídia ausente: continue consultando até o terminal; não assuma que respostas `pending` incluem saídas.
-- Trabalhos duplicados: verifique se seu caminho de retry criou uma segunda tarefa após um timeout HTTP.
-- Desvio de cobrança: compare `request_id`, `task_id` e `billing_transaction_id` no painel ou na API de Gerenciamento.
+## Solução de Problemas
 
-Ao entrar em contato com o suporte, inclua `request_id`, `task_id`, `billing_transaction_id` quando presente, endpoint, modelo, timestamp e uma forma de solicitação sanitizada. Não inclua chaves de API, mídia privada ou prompts completos, a menos que o suporte peça um exemplo redigido.
+| Sintoma                                   | Causa provável                                                                 | O que verificar                                      |
+|-------------------------------------------|-------------------------------------------------------------------------------|-----------------------------------------------------|
+| `async_task_not_found`                    | Tarefa é desconhecida, expirou, inacessível a esta chave de API, ou não é uma tarefa assíncrona pública | Confirme a propriedade da chave de API e o `task_id` público armazenado |
+| A tarefa nunca parece terminar            | O cliente continua consultando a URL errada ou parou antes do status terminal | Use `poll_url` ou `/v1/tasks/{id}` e inspecione o status mais recente |
+| URL final de mídia ausente                | A tarefa não está completa, ou o trabalho upstream foi concluído sem saída utilizável | Continue consultando até o terminal, depois trate a saída ausente como falha |
+| O usuário vê duplicatas                   | O caminho de tentativa criou uma nova tarefa após timeout ou atualização      | Deduplica pelo seu próprio ID de trabalho e `task_id` armazenado |
+| Desvio de cobrança                        | A liquidação é assíncrona ou o cliente está comparando IDs de provedor      | Compare `request_id`, `task_id` e `billing_transaction_id` |
+
+## Pacote de Suporte
+
+Ao entrar em contato com o suporte, inclua `request_id`, `task_id`, `billing_transaction_id` quando presente, endpoint, modelo, timestamp e uma forma de pedido sanitizada. Não inclua chaves de API, mídia privada, URLs assinadas ou prompts completos, a menos que o suporte peça um exemplo redigido.
 
 ## Referência da API
 
-| Tópico | Referência |
-|-------|-----------|
-| Obter Status da Tarefa | [Get Task Status](/pt/api-reference/tasks/get-task-status) |
-| Cancelar Tarefa | [Cancel Task](/pt/api-reference/tasks/cancel-task) |
-| Geração de Imagem | [Image Generation](/pt/guides/image-generation) |
-| Geração de Vídeo | [Video Generation](/pt/guides/video-generation) |
-| Cobrança & Preços | [Billing & Pricing](/pt/guides/billing) |
+| Tópico                | Referência                                      |
+|-----------------------|------------------------------------------------|
+| Obter Status da Tarefa| [Get Task Status](/pt/api-reference/tasks/get-task-status) |
+| Cancelar Tarefa       | [Cancel Task](/pt/api-reference/tasks/cancel-task) |
+| Geração de Imagem     | [Image Generation](/pt/guides/image-generation)  |
+| Geração de Vídeo      | [Video Generation](/pt/guides/video-generation)  |
+| Geração de Música      | [Music Generation](/pt/guides/music-generation)  |
+| Geração 3D           | [3D Generation](/pt/guides/3d-generation)        |
+| Cobrança & Preços     | [Billing & Pricing](/pt/guides/billing)          |

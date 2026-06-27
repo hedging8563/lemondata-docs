@@ -1,25 +1,32 @@
 ---
 title: "Asynchrone Jobs & Abfragen"
-description: "Erstellen Sie asynchrone Generierungsjobs, fragen Sie den Status öffentlicher Aufgaben ab und versöhnen Sie endgültige Ergebnisse ohne provider-spezifische Aufgabendetails."
+description: "Erstellen Sie asynchrone Medienjobs, fragen Sie den Status öffentlicher TokenLab-Aufgaben ab und versöhnen Sie die endgültigen Ergebnisse ohne provider-spezifische IDs."
 ---
 
-Diese Seite spiegelt den öffentlichen asynchronen Aufgabenvertrag von TokenLab wider. Sie behandelt keine provider-spezifischen Aufgaben-URLs, Routing-IDs oder upstream Callback-Verhalten als benutzerorientierte Integrationsverträge.
+Viele Medienendpunkte sind asynchron. Eine Erstellungsanfrage startet die Arbeit und gibt eine öffentliche TokenLab-Aufgabenidentität zurück; Ihre Anwendung fragt ab, bis diese Aufgabe einen terminalen Status erreicht. Bauen Sie keine Kunden-Workflows um upstream-Aufgaben-URLs, Routing-IDs oder das Callback-Verhalten des Anbieters.
 
-## Öffentlicher Vertrag
+## Öffentlicher Aufgabenvertrag
 
-TokenLab bietet einen öffentlichen asynchronen Aufgabenvertrag für generierte Medien an. Die Erstellungsendpunkte können `id`, `task_id`, `status` und `poll_url` zurückgeben. Behandeln Sie `id` und `task_id` als dieselbe öffentliche Aufgabenidentität und speichern Sie sowohl die Aufgaben-ID als auch `poll_url` mit Ihrem eigenen Jobdatensatz.
+Erstellungsantworten können Folgendes enthalten:
 
-Verwenden Sie zuerst die zurückgegebene `poll_url`. Wenn Sie einen festen Endpunkt benötigen, verwenden Sie `GET /v1/tasks/{id}` mit derselben `id` / `task_id` aus der Antwort zur Erstellung.
+| Feld      | Bedeutung                                         | Was zu tun ist                          |
+|-----------|--------------------------------------------------|-----------------------------------------|
+| `id`      | Öffentliche TokenLab-Aufgaben-ID                 | Speichern Sie es mit Ihrem eigenen Jobdatensatz |
+| `task_id` | Kompatibilitätsalias für dieselbe öffentliche Aufgabenidentität | Behandeln Sie es als gleichwertig zu `id` |
+| `status`  | Aktueller öffentlicher Aufgabenstatus             | Beginnen Sie mit der Abfrage, wenn er nicht terminal ist |
+| `poll_url`| Bevorzugte Status-URL                            | Verwenden Sie dies zuerst, wenn vorhanden |
+| `model`   | Modell, das vom Endpunkt angefordert oder gelöst wurde | Speichern Sie es für Support- und Abrechnungsversöhnung |
 
-Öffentliche Generierungsaufgaben basieren heute auf Abfragen. TokenLab hat intern upstream Callback-Empfänger, aber diese sind keine Kunden-Webhooks und sollten nicht als Integrationsvertrag verwendet werden.
+`/v1/tasks/{id}` ist der kanonische feste Statusendpunkt für öffentliche asynchrone Medienjobs. Medien-spezifische Statusrouten können zur Kompatibilität existieren, aber neue Integrationen sollten `poll_url` oder `/v1/tasks/{id}` bevorzugen.
 
 ## Empfohlener Ablauf
 
-1. Senden Sie die Erstellungsanfrage mit einem expliziten `model`.
-2. Wenn die Antwort inline ist, lesen Sie das endgültige Ergebnis sofort.
-3. Wenn die Antwort `status: "pending"`, `task_id` oder `poll_url` enthält, speichern Sie die Aufgabe und beginnen Sie mit dem Abfragen.
-4. Abfragen Sie alle `5-10s` für lange Medienaufgaben. Stoppen Sie nur bei einem terminalen Status.
-5. Bei `completed` lesen Sie die Ergebnisfelder für diesen Medientyp. Bei `failed` speichern Sie den öffentlichen Fehler und zeigen eine Wiederholungsaktion nur an, wenn das Wiederholen einen neuen benutzer sichtbaren Job erstellt.
+1. Validieren Sie die Benutzeranfrage und senden Sie den Erstellungsaufruf mit einem expliziten `model`.
+2. Speichern Sie `id` / `task_id`, `poll_url`, Endpunkt, Modell, Benutzer-ID und Ihre eigene Job-ID, bevor Sie die Kontrolle an die UI zurückgeben.
+3. Fragen Sie alle `5-10s` für lang laufende Medienaufgaben ab.
+4. Stoppen Sie nur, wenn die Aufgabe `completed` oder `failed` ist.
+5. Bei `completed` lesen Sie die medien-spezifischen Ergebnisfelder und speichern Sie endgültige URLs oder Metadaten.
+6. Bei `failed` speichern Sie den öffentlichen Fehler und bieten Sie einen erneuten Versuch nur als neuen benutzer-sichtbaren Job an.
 
 ```json
 {
@@ -31,43 +38,67 @@ Verwenden Sie zuerst die zurückgegebene `poll_url`. Wenn Sie einen festen Endpu
 }
 ```
 
-## Abfrageergebnisse
+## Abfragebeispiel
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Erwartete öffentliche Status sind `pending`, `processing`, `completed` und `failed`. Abgebrochene Aufgaben werden als `failed` mit `cancelled: true` und `cancellation_status: "cancelled"` dargestellt, damit die ältere Statusbehandlung weiterhin funktioniert.
+Erwartete öffentliche Status sind `pending`, `processing`, `completed` und `failed`. Abgebrochene Aufgaben werden als `failed` mit `cancelled: true` und `cancellation_status: "cancelled"` dargestellt, damit die ältere Statusverarbeitung weiterhin funktioniert.
 
-Fragen Sie keine provider-spezifischen URLs, upstream Aufgaben-IDs, Routing-IDs oder private Ausführungsmetadaten ab. Diese sind keine stabilen öffentlichen Verträge.
+## Client-Wiederholungsregeln
 
-## Abrechnung und Versöhnung
+Netzwerkzeitüberschreitungen sind die häufigste Quelle für doppelte Jobs. Verwenden Sie diese Regel:
 
-- Eine Antwort auf die Erstellung kann einen geschätzten Betrag für asynchrone Arbeiten reservieren.
-- Die endgültige Abrechnung erfolgt, nachdem die Aufgabe einen terminalen Zustand erreicht hat.
-- Wenn die Abrechnung verfügbar ist, können die Antworten zum Aufgabenstatus `billing_transaction_id` und den Header `X-Billing-Transaction-ID` offenlegen.
-- Wenn ein Client-Timeout nach der Erstellung der Aufgabe auftritt, erstellen Sie den Job nicht blind erneut. Setzen Sie die Speicherung von `task_id` / `poll_url` fort.
+| Wo die Zeitüberschreitung auftritt | Sichereres Verhalten |
+|-------------------------------------|---------------------|
+| Bevor Ihr Server eine Erstellungsantwort erhält | Überprüfen Sie die Serverprotokolle auf `request_id`; wiederholen Sie nur, wenn keine Aufgabe erstellt wurde |
+| Nachdem eine Erstellungsantwort gespeichert wurde | Setzen Sie die Abfrage der gespeicherten `task_id` fort |
+| Während der Abfrage | Wiederholen Sie die Statusanfrage mit Backoff |
+| Nach terminalem Status | Fragen Sie nicht erneut ab, es sei denn, der Benutzer aktualisiert ausdrücklich den Datensatz |
+
+Senden Sie keine zweite Erstellungsanfrage nur, weil der Browser aktualisiert wurde oder eine Statusabfrage fehlgeschlagen ist.
+
+## Abrechnung und Abwicklung
+
+Asynchrone Jobs können einen geschätzten Betrag reservieren, wenn die Erstellungsanfrage akzeptiert wird. Die endgültige Abwicklung erfolgt nach terminalem Status. Wenn verfügbar, können die Antworten zum Aufgabenstatus `billing_transaction_id` und den Header `X-Billing-Transaction-ID` offenbaren.
+
+Für die Versöhnung verbinden Sie diese Identifikatoren in Ihren Protokollen:
+
+- `request_id` aus der Erstellungsanfrage.
+- `task_id` / `id` aus der Aufgabe.
+- `billing_transaction_id`, wenn vorhanden.
+- Ihre eigene Benutzer-ID, Projekt-ID oder Job-ID.
 
 ## Stornierung
 
-`DELETE /v1/tasks/{id}` ist absichtlich eng gefasst. Es unterstützt derzeit wartende Volcengine Seedance-Videoaufgaben wie `seedance-1.5-pro`, `seedance-2.0` und `seedance-2.0-fast`. Nicht unterstützte Aufgaben geben `400 unsupported_task_cancel` zurück; bereits laufende oder terminale Aufgaben geben `409 task_not_cancellable` zurück.
+`DELETE /v1/tasks/{id}` ist absichtlich eng gefasst. Es unterstützt derzeit wartende Volcengine Seedance-Videoaufgaben wie `seedance-1.5-pro`, `seedance-2.0` und `seedance-2.0-fast`.
 
-## Fehlerbehebung Checkliste
+Nicht unterstützte Aufgaben geben `400 unsupported_task_cancel` zurück. Aufgaben, die bereits laufen oder terminal sind, geben `409 task_not_cancellable` zurück. Erstellen Sie die Stornierungs-UI als "Stornierung anfordern" anstatt als garantierten Stopp-Button.
 
-- `async_task_not_found`: die Aufgabe ist unbekannt, abgelaufen, für diesen API-Schlüssel nicht zugänglich oder nicht Teil des öffentlichen asynchronen Aufgabenvertrags.
-- Fehlende endgültige Medien-URL: Fragen Sie weiter ab, bis ein terminaler Status erreicht ist; gehen Sie nicht davon aus, dass `pending`-Antworten Ausgaben enthalten.
-- Doppelte Jobs: Überprüfen Sie, ob Ihr Wiederholungsweg eine zweite Aufgabe nach einem HTTP-Timeout erstellt hat.
-- Abrechnungsabweichung: Vergleichen Sie `request_id`, `task_id` und `billing_transaction_id` im Dashboard oder Management-API.
+## Fehlersuche
 
-Wenn Sie den Support kontaktieren, fügen Sie `request_id`, `task_id`, `billing_transaction_id` (sofern vorhanden), Endpunkt, Modell, Zeitstempel und eine bereinigte Anfrageform hinzu. Fügen Sie keine API-Schlüssel, privaten Medien oder vollständigen Eingabeaufforderungen hinzu, es sei denn, der Support fordert ein redigiertes Beispiel an.
+| Symptom                              | Wahrscheinliche Ursache                                                                 | Was zu überprüfen ist                       |
+|--------------------------------------|----------------------------------------------------------------------------------------|---------------------------------------------|
+| `async_task_not_found`               | Aufgabe ist unbekannt, abgelaufen, für diesen API-Schlüssel nicht zugänglich oder keine öffentliche asynchrone Aufgabe | Bestätigen Sie den Besitz des API-Schlüssels und die gespeicherte öffentliche `task_id` |
+| Aufgabe scheint nie zu enden         | Client fragt die falsche URL ab oder hat vor dem terminalen Status gestoppt            | Verwenden Sie `poll_url` oder `/v1/tasks/{id}` und überprüfen Sie den neuesten Status |
+| Endgültige Medien-URL fehlt          | Aufgabe ist nicht abgeschlossen oder der upstream-Job wurde ohne verwendbare Ausgabe abgeschlossen | Fragen Sie weiter ab, bis terminal, und behandeln Sie fehlende Ausgaben als fehlgeschlagen |
+| Benutzer sieht Duplikate             | Der Wiederholungsweg hat nach Zeitüberschreitung oder Aktualisierung eine neue Aufgabe erstellt | Dedupizieren Sie nach Ihrer eigenen Job-ID und gespeicherter `task_id` |
+| Abrechnungsabweichung               | Abwicklung ist asynchron oder der Client vergleicht Anbieter-IDs                       | Vergleichen Sie `request_id`, `task_id` und `billing_transaction_id` |
+
+## Support-Paket
+
+Wenn Sie den Support kontaktieren, fügen Sie `request_id`, `task_id`, `billing_transaction_id` (wenn vorhanden), Endpunkt, Modell, Zeitstempel und eine bereinigte Anfrageform hinzu. Fügen Sie keine API-Schlüssel, privaten Medien, signierten URLs oder vollständigen Eingabeaufforderungen hinzu, es sei denn, der Support fordert ein redigiertes Beispiel an.
 
 ## API-Referenz
 
-| Thema | Referenz |
-|-------|-----------|
+| Thema                  | Referenz                                      |
+|-----------------------|-----------------------------------------------|
 | Aufgabenstatus abrufen | [Get Task Status](/de/api-reference/tasks/get-task-status) |
-| Aufgabe stornieren | [Cancel Task](/de/api-reference/tasks/cancel-task) |
-| Bildgenerierung | [Image Generation](/de/guides/image-generation) |
-| Videoerzeugung | [Video Generation](/de/guides/video-generation) |
+| Aufgabe stornieren    | [Cancel Task](/de/api-reference/tasks/cancel-task) |
+| Bildgenerierung       | [Image Generation](/de/guides/image-generation) |
+| Videoerzeugung        | [Video Generation](/de/guides/video-generation) |
+| Musikgenerierung      | [Music Generation](/de/guides/music-generation) |
+| 3D-Generierung        | [3D Generation](/de/guides/3d-generation) |
 | Abrechnung & Preisgestaltung | [Billing & Pricing](/de/guides/billing) |

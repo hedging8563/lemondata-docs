@@ -1,72 +1,109 @@
 ---
 title: "結構化輸出與工具調用"
-description: "使用 JSON 模式、函數工具和原生工具路徑，而不假設每個模型都支持相同的合約。"
+description: "使用 JSON 模式、功能工具和原生工具路由，而不假設每個模型都支持相同的合約。"
 ---
 
-結構化輸出和工具是真正的 TokenLab API 路徑，但它們並不是每個模型和路徑都具備的通用能力。選擇擁有您所需行為的路徑。
+結構化輸出和工具調用是路由特定的合約。TokenLab 轉發幾種公共 API 格式，因此最安全的生產模式是將每個供應商原生工具的形狀保留在擁有它的路由上，並在您自己的應用程序中驗證模型輸出。
 
-## JSON 與結構化輸出
+## 選擇路由
 
-對於可攜式結構化響應，請從 Chat Completions 開始 `response_format: {"type":"json_object"}` 並在您的應用程序中驗證輸出。這是 TokenLab 共享驗證中的穩定公共請求形狀。
+| 需求 | 路由 | 使用此形狀 |
+|------|-------|----------------|
+| 可攜帶的 JSON 對象響應 | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| OpenAI 兼容的功能調用 | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| OpenAI 響應工具 | `/v1/responses` | 響應 `tools`、`tool_choice` 和 `text` 字段 |
+| Claude 原生工具使用或思考 | `/v1/messages` | Anthropic Messages 工具架構 |
+| Gemini 功能聲明或內置工具 | `/v1beta/models/:model:generateContent` | Gemini 原生 `tools` 和內容部分 |
+
+不要通過不同的路由發送供應商原生的內置工具，並期望 TokenLab 靜默地將它們轉換。
+
+## JSON 模式
+
+對於可攜帶的結構化響應，從 Chat Completions JSON 模式開始：
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Return a JSON object with city and weather."}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "返回一個包含城市和天氣的 JSON 對象。"
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-`json_schema` 和 `strict` 結構化輸出路徑存在於某些上游和轉換代碼中，但它們依賴於模型和路徑。將它們視為與所選模型驗證的能力，而不是在每個 TokenLab 路徑上的普遍承諾。
+Chat Completions 的穩定共享驗證接受 `text` 和 `json_object`。某些上游路由或轉換路徑可能存在 `json_schema`、`strict` 和供應商特定的架構強制，但這並不是對每個 TokenLab 路由和模型的普遍承諾。在依賴它們之前，請根據所選模型進行驗證。
 
-## 工具調用邊界
+始終在您的伺服器上解析和驗證返回的 JSON。JSON 模式改善了形狀，但並不取代應用層級的架構驗證。
 
-| 工具形狀 | 優先路徑 | 生產備註 |
-|----------|----------|----------|
-| OpenAI 函數工具 | `/v1/chat/completions` | 可攜式用於用戶定義的函數調用 |
-| OpenAI 響應工具 | `/v1/responses` | 用於響應特定的內置或托管工具 |
-| Anthropic 工具 | `/v1/messages` | 用於 Claude 原生工具使用和思考流程 |
-| Gemini 函數聲明 / 內置工具 | `/v1beta/models/:model:generateContent` | 在 Gemini 路徑上保留 Gemini 原生工具字段 |
+## 工具調用循環
 
-TokenLab 不會為您執行函數。當模型返回 `tool_calls`、`function_call`、`tool_use` 或 Gemini 函數調用部分時，您的應用程序必須運行該工具，將工具結果附加到路徑所需的格式中，並繼續對話。
+TokenLab 不執行您的函數。您的應用程序擁有循環：
 
-## 常見陷阱
+1. 發送消息加上工具定義。
+2. 讀取模型響應中的 `tool_calls`、`function_call`、Anthropic `tool_use` 或 Gemini 功能調用部分。
+3. 在您自己的後端執行工具。
+4. 以相同路由所需的格式附加工具結果。
+5. 繼續對話，直到模型返回最終答案。
 
-- 不要通過 Chat Completions 發送提供者原生的內置工具，並期望它們被靜默翻譯。
-- 除非所選路徑和模型已經過測試，否則不要依賴嚴格的 JSON Schema。
-- 保持 schema 小而明確；大型 schema 會增加 tokens 並可能降低可靠性。
-- 即使啟用了 JSON 模式，也要在伺服器端驗證模型輸出。
-- 將不支持的字段錯誤視為合約反饋。刪除該字段或使用擁有該字段的原生路徑。
+在工具循環中保持相同的路由。在一次對話中混合 Chat Completions、Responses、Messages 和 Gemini 格式通常會產生微妙的狀態和架構錯誤。
 
-## 範例
+## Chat Completions 範例
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"Extract name and email as JSON."}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "Look up a customer by email",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "提取姓名和電子郵件作為 JSON。如果需要，查找客戶。"
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "通過電子郵件查找客戶",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
+
+## 架構設計
+
+- 保持架構小而明確。大型嵌套架構會增加令牌並降低可靠性。
+- 優先使用必需字段，對於您的產品無法繼續的值。
+- 對於您的 UI 或後端依賴的封閉集合使用枚舉。
+- 當模型在形狀上掙扎時，在提示中包含示例。
+- 將不支持字段錯誤視為合約反饋。刪除該字段或使用記錄它的原生路由。
+
+## 生產檢查清單
+
+- 在日誌中記錄路由、模型、工具名稱和清理過的架構形狀。
+- 在執行任何副作用之前驗證工具參數。
+- 在工具執行之前應用您自己的權限檢查。
+- 當客戶端重試可以重複相同的工具調用時，確保工具執行是冪等的。
+- 不要將工具返回的秘密記錄到模型可見的消息中。
 
 ## API 參考
 
 | 主題 | 參考 |
-|------|------|
+|-------|-----------|
 | 多格式 API | [多格式 API](/zh-Hant/guides/api-formats) |
 | 創建聊天完成 | [創建聊天完成](/zh-Hant/api-reference/chat/create-completion) |
 | 創建響應 | [創建響應](/zh-Hant/api-reference/responses/create-response) |

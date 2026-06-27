@@ -1,74 +1,111 @@
 ---
-title: "Strukturierte Ausgaben & Tool-Aufruf"
+title: "Strukturierte Ausgaben & Tool-Aufrufe"
 description: "Verwenden Sie den JSON-Modus, Funktionstools und native Tool-Routen, ohne anzunehmen, dass jedes Modell denselben Vertrag unterstützt."
 ---
 
-Strukturierte Ausgaben und Tools sind echte TokenLab API-Pfade, aber sie sind keine universelle Fähigkeit über jedes Modell und jede Route hinweg. Wählen Sie die Route, die das Verhalten besitzt, das Sie benötigen.
+Strukturierte Ausgaben und Tool-Aufrufe sind routenspezifische Verträge. TokenLab leitet mehrere öffentliche API-Formate weiter, daher ist das sicherste Produktionsmuster, jede provider-native Tool-Form auf der Route zu belassen, die sie besitzt, und die Modelausgabe in Ihrer eigenen Anwendung zu validieren.
 
-## JSON Und Strukturierte Ausgabe
+## Wählen Sie die Route
 
-Für tragbare strukturierte Antworten beginnen Sie mit Chat Completions `response_format: {"type":"json_object"}` und validieren Sie die Ausgabe in Ihrer Anwendung. Dies ist die stabile öffentliche Anforderungsform in der TokenLab gemeinsamen Validierung.
+| Bedarf | Route | Verwenden Sie diese Form |
+|--------|-------|-------------------------|
+| Tragbare JSON-Objektantworten | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| OpenAI-kompatibles Funktionsaufrufen | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| OpenAI-Antworten Tools | `/v1/responses` | Antworten `tools`, `tool_choice` und `text` Felder |
+| Claude-native Tool-Nutzung oder Denken | `/v1/messages` | Anthropic Messages Tool-Schema |
+| Gemini Funktionsdeklarationen oder integrierte Tools | `/v1beta/models/:model:generateContent` | Gemini-native `tools` und Inhaltsbestandteile |
+
+Senden Sie keine provider-native integrierten Tools über eine andere Route und erwarten Sie, dass TokenLab sie stillschweigend übersetzt.
+
+## JSON-Modus
+
+Für tragbare strukturierte Antworten beginnen Sie mit dem Chat Completions JSON-Modus:
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Geben Sie ein JSON-Objekt mit Stadt und Wetter zurück."}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "Geben Sie ein JSON-Objekt mit Stadt und Wetter zurück."
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-`json_schema` und `strict` strukturierte Ausgabepfade existieren in einigen upstream und Konvertierungscode, aber sie sind modell- und routenabhängig. Behandeln Sie sie als eine Fähigkeit, die mit dem ausgewählten Modell verifiziert werden muss, nicht als eine allgemeine Zusage über jede TokenLab-Route hinweg.
+Die stabile gemeinsame Validierung für Chat Completions akzeptiert `text` und `json_object`. `json_schema`, `strict` und provider-spezifische Schema-Durchsetzung können für einige upstream-Routen oder Konvertierungspfade existieren, aber sie sind kein allgemeines Versprechen für jede TokenLab-Route und jedes Modell. Überprüfen Sie sie gegen das ausgewählte Modell, bevor Sie sich darauf verlassen.
 
-## Tool-Aufrufgrenze
+Analysieren und validieren Sie immer das zurückgegebene JSON auf Ihrem Server. Der JSON-Modus verbessert die Form, ersetzt jedoch nicht die schema-Validierung auf Anwendungsebene.
 
-| Tool-Form | Bevorzugte Route | Produktionshinweis |
-|-----------|------------------|---------------------|
-| OpenAI Funktionstools | `/v1/chat/completions` | Tragbar für benutzerdefinierte Funktionsaufrufe |
-| OpenAI Antworten-Tools | `/v1/responses` | Verwenden Sie für spezifische eingebaute oder gehostete Tools für Antworten |
-| Anthropic-Tools | `/v1/messages` | Verwenden Sie für Claude-native Tool-Nutzung und Denkflüsse |
-| Gemini Funktionsdeklarationen / eingebaute Tools | `/v1beta/models/:model:generateContent` | Halten Sie Gemini-native Tool-Felder auf der Gemini-Route |
+## Tool-Aufrufschleife
 
-TokenLab führt Ihre Funktion nicht für Sie aus. Wenn ein Modell `tool_calls`, `function_call`, `tool_use` oder Teile des Gemini-Funktionsaufrufs zurückgibt, muss Ihre Anwendung das Tool ausführen, das Toolergebnis im vom Route erforderlichen Format anhängen und das Gespräch fortsetzen.
+TokenLab führt Ihre Funktionen nicht aus. Ihre Anwendung besitzt die Schleife:
 
-## Häufige Fallstricke
+1. Senden Sie Nachrichten plus Tool-Definitionen.
+2. Lesen Sie die Modellantwort auf `tool_calls`, `function_call`, Anthropic `tool_use` oder Gemini Funktionsaufrufteile.
+3. Führen Sie das Tool in Ihrem eigenen Backend aus.
+4. Fügen Sie das Tool-Ergebnis im Format hinzu, das von derselben Route benötigt wird.
+5. Führen Sie das Gespräch fort, bis das Modell eine endgültige Antwort zurückgibt.
 
-- Senden Sie keine provider-native eingebauten Tools über Chat Completions und erwarten Sie, dass sie stillschweigend übersetzt werden.
-- Verlassen Sie sich nicht auf strikte JSON-Schemata, es sei denn, die ausgewählte Route und das Modell wurden getestet.
-- Halten Sie Schemata klein und explizit; große Schemata fügen Tokens hinzu und können die Zuverlässigkeit verringern.
-- Validieren Sie die Modellausgabe serverseitig, auch wenn der JSON-Modus aktiviert ist.
-- Behandeln Sie Fehler bei nicht unterstützten Feldern als Vertragsfeedback. Entfernen Sie das Feld oder verwenden Sie die native Route, die es besitzt.
+Halten Sie die gleiche Route während einer Tool-Schleife bei. Das Mischen von Chat Completions, Responses, Messages und Gemini-Formaten in einem Gespräch führt normalerweise zu subtilen Zustands- und Schema-Fehlern.
 
-## Beispiel
+## Chat Completions Beispiel
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"Extrahieren Sie Name und E-Mail als JSON."}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "Suchen Sie einen Kunden nach E-Mail",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "Extrahieren Sie Name und E-Mail als JSON. Wenn nötig, suchen Sie den Kunden."
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "Suchen Sie einen Kunden nach E-Mail",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
+
+## Schema-Design
+
+- Halten Sie Schemas klein und explizit. Große verschachtelte Schemas fügen Tokens hinzu und verringern die Zuverlässigkeit.
+- Bevorzugen Sie erforderliche Felder für Werte, ohne die Ihr Produkt nicht fortfahren kann.
+- Verwenden Sie Enums für geschlossene Mengen, von denen Ihre UI oder Ihr Backend abhängt.
+- Fügen Sie Beispiele in die Eingabeaufforderung ein, wenn das Modell Schwierigkeiten mit einer Form hat.
+- Behandeln Sie Fehler bei nicht unterstützten Feldern als Vertragsfeedback. Entfernen Sie das Feld oder verwenden Sie die native Route, die es dokumentiert.
+
+## Produktions-Checkliste
+
+- Protokollieren Sie Route, Modell, Tool-Namen und bereinigte Schema-Formate in den Logs.
+- Validieren Sie Tool-Argumente, bevor Sie Nebenwirkungen ausführen.
+- Wenden Sie Ihre eigenen Berechtigungsprüfungen vor der Tool-Ausführung an.
+- Machen Sie die Tool-Ausführung idempotent, wenn ein Client-Wiederholungsversuch denselben Tool-Aufruf wiederholen kann.
+- Protokollieren Sie keine Geheimnisse, die von Tools in modellsichtbare Nachrichten zurückgegeben werden.
 
 ## API-Referenz
 
 | Thema | Referenz |
-|-------|----------|
+|-------|-----------|
 | Multi-Format API | [Multi-Format API](/de/guides/api-formats) |
-| Chat-Vervollständigung erstellen | [Chat-Vervollständigung erstellen](/de/api-reference/chat/create-completion) |
+| Chat Completion erstellen | [Chat Completion erstellen](/de/api-reference/chat/create-completion) |
 | Antwort erstellen | [Antwort erstellen](/de/api-reference/responses/create-response) |
 | Nachricht erstellen | [Nachricht erstellen](/de/api-reference/messages/create-message) |
 | Gemini-Inhalt generieren | [Gemini-Inhalt generieren](/de/api-reference/gemini/generate-content) |

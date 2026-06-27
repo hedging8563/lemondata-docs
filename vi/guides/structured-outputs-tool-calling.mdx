@@ -1,74 +1,111 @@
 ---
 title: "Đầu Ra Cấu Trúc & Gọi Công Cụ"
-description: "Sử dụng chế độ JSON, công cụ hàm và các đường dẫn công cụ gốc mà không giả định rằng mọi mô hình đều hỗ trợ cùng một hợp đồng."
+description: "Sử dụng chế độ JSON, công cụ chức năng và các tuyến công cụ gốc mà không giả định rằng mọi mô hình đều hỗ trợ cùng một hợp đồng."
 ---
 
-Đầu ra cấu trúc và công cụ là các đường dẫn API TokenLab thực tế, nhưng chúng không phải là một khả năng phổ quát trên mọi mô hình và đường dẫn. Chọn đường dẫn sở hữu hành vi bạn cần.
+Đầu ra cấu trúc và gọi công cụ là các hợp đồng cụ thể cho từng tuyến. TokenLab chuyển tiếp một số định dạng API công khai, vì vậy mẫu sản xuất an toàn nhất là giữ hình dạng công cụ gốc của từng nhà cung cấp trên tuyến mà nó sở hữu và xác thực đầu ra mô hình trong ứng dụng của bạn.
 
-## JSON Và Đầu Ra Cấu Trúc
+## Chọn Tuyến
 
-Để có các phản hồi cấu trúc di động, bắt đầu với Chat Completions `response_format: {"type":"json_object"}` và xác thực đầu ra trong ứng dụng của bạn. Đây là hình dạng yêu cầu công khai ổn định trong xác thực chia sẻ của TokenLab.
+| Nhu cầu | Tuyến | Sử dụng hình dạng này |
+|---------|-------|-----------------------|
+| Phản hồi đối tượng JSON di động | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| Gọi chức năng tương thích với OpenAI | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| Công cụ phản hồi OpenAI | `/v1/responses` | Các trường phản hồi `tools`, `tool_choice`, và `text` |
+| Sử dụng công cụ gốc của Claude hoặc suy nghĩ | `/v1/messages` | Lược đồ công cụ Tin nhắn của Anthropic |
+| Khai báo chức năng Gemini hoặc công cụ tích hợp sẵn | `/v1beta/models/:model:generateContent` | Các phần `tools` và nội dung gốc của Gemini |
+
+Không gửi các công cụ tích hợp sẵn của nhà cung cấp qua một tuyến khác và mong đợi TokenLab tự động dịch chúng.
+
+## Chế Độ JSON
+
+Đối với các phản hồi cấu trúc di động, bắt đầu với chế độ JSON của Chat Completions:
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Return a JSON object with city and weather."}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "Trả về một đối tượng JSON với thành phố và thời tiết."
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-`json_schema` và các đường dẫn đầu ra cấu trúc `strict` tồn tại trong một số mã nguồn và chuyển đổi, nhưng chúng phụ thuộc vào mô hình và đường dẫn. Xem chúng như một khả năng để xác minh với mô hình đã chọn, không phải là một lời hứa chung cho mọi đường dẫn TokenLab.
+Xác thực chia sẻ ổn định cho Chat Completions chấp nhận `text` và `json_object`. `json_schema`, `strict`, và việc thực thi lược đồ cụ thể của nhà cung cấp có thể tồn tại cho một số tuyến upstream hoặc đường chuyển đổi, nhưng chúng không phải là một lời hứa chung cho mọi tuyến và mô hình của TokenLab. Xác minh chúng với mô hình đã chọn trước khi dựa vào chúng.
 
-## Ranh Giới Gọi Công Cụ
+Luôn phân tích và xác thực JSON trả về trên máy chủ của bạn. Chế độ JSON cải thiện hình dạng, nhưng nó không thay thế việc xác thực lược đồ ở cấp độ ứng dụng.
 
-| Hình dạng công cụ | Đường dẫn ưu tiên | Ghi chú sản xuất |
-|-------------------|------------------|------------------|
-| Công cụ hàm OpenAI | `/v1/chat/completions` | Di động cho các cuộc gọi hàm do người dùng định nghĩa |
-| Công cụ phản hồi OpenAI | `/v1/responses` | Sử dụng cho các công cụ tích hợp hoặc lưu trữ cụ thể cho phản hồi |
-| Công cụ Anthropic | `/v1/messages` | Sử dụng cho việc sử dụng công cụ gốc của Claude và các luồng suy nghĩ |
-| Khai báo hàm Gemini / công cụ tích hợp | `/v1beta/models/:model:generateContent` | Giữ các trường công cụ gốc của Gemini trên đường dẫn Gemini |
+## Vòng Gọi Công Cụ
 
-TokenLab không thực thi hàm của bạn cho bạn. Khi một mô hình trả về `tool_calls`, `function_call`, `tool_use`, hoặc các phần gọi hàm Gemini, ứng dụng của bạn phải chạy công cụ, thêm kết quả công cụ theo định dạng yêu cầu bởi đường dẫn, và tiếp tục cuộc trò chuyện.
+TokenLab không thực thi các chức năng của bạn. Ứng dụng của bạn sở hữu vòng lặp:
 
-## Cạm Bẫy Thường Gặp
+1. Gửi tin nhắn cộng với định nghĩa công cụ.
+2. Đọc phản hồi mô hình cho `tool_calls`, `function_call`, `tool_use` của Anthropic, hoặc các phần gọi chức năng Gemini.
+3. Thực thi công cụ trong backend của riêng bạn.
+4. Thêm kết quả công cụ theo định dạng yêu cầu bởi cùng một tuyến.
+5. Tiếp tục cuộc trò chuyện cho đến khi mô hình trả về câu trả lời cuối cùng.
 
-- Không gửi các công cụ tích hợp gốc của nhà cung cấp qua Chat Completions và mong đợi chúng được dịch một cách im lặng.
-- Không dựa vào JSON Schema nghiêm ngặt trừ khi đường dẫn và mô hình đã chọn đã được thử nghiệm.
-- Giữ cho các schema nhỏ và rõ ràng; các schema lớn thêm token và có thể giảm độ tin cậy.
-- Xác thực đầu ra mô hình ở phía máy chủ ngay cả khi chế độ JSON được bật.
-- Xem các lỗi trường không được hỗ trợ như phản hồi hợp đồng. Xóa trường hoặc sử dụng đường dẫn gốc sở hữu nó.
+Giữ cùng một tuyến trong suốt vòng lặp công cụ. Trộn lẫn Chat Completions, Responses, Messages, và định dạng Gemini trong một cuộc trò chuyện thường tạo ra các lỗi trạng thái và lược đồ tinh vi.
 
-## Ví Dụ
+## Ví Dụ Chat Completions
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"Extract name and email as JSON."}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "Look up a customer by email",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "Trích xuất tên và email dưới dạng JSON. Nếu cần, tra cứu khách hàng."
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "Tra cứu một khách hàng theo email",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
 
-## Tài Liệu API
+## Thiết Kế Lược Đồ
 
-| Chủ đề | Tham khảo |
+- Giữ cho các lược đồ nhỏ và rõ ràng. Các lược đồ lồng ghép lớn thêm token và giảm độ tin cậy.
+- Ưu tiên các trường bắt buộc cho các giá trị mà sản phẩm của bạn không thể tiếp tục nếu thiếu.
+- Sử dụng enums cho các tập hợp đóng mà UI hoặc backend của bạn phụ thuộc vào.
+- Bao gồm ví dụ trong lời nhắc khi mô hình gặp khó khăn với một hình dạng.
+- Xem xét các lỗi trường không được hỗ trợ như phản hồi hợp đồng. Xóa trường hoặc sử dụng tuyến gốc tài liệu nó.
+
+## Danh Sách Kiểm Tra Sản Xuất
+
+- Ghi lại tuyến, mô hình, tên công cụ, và hình dạng lược đồ đã được làm sạch trong nhật ký.
+- Xác thực các tham số công cụ trước khi thực thi bất kỳ tác động phụ nào.
+- Áp dụng các kiểm tra quyền của riêng bạn trước khi thực thi công cụ.
+- Làm cho việc thực thi công cụ là idempotent khi một lần thử lại của khách hàng có thể lặp lại cùng một cuộc gọi công cụ.
+- Không ghi lại các bí mật được trả về bởi công cụ vào các tin nhắn có thể nhìn thấy mô hình.
+
+## Tham Khảo API
+
+| Chủ Đề | Tham Khảo |
 |--------|-----------|
-| API Định Dạng Đa | [Multi-Format API](/vi/guides/api-formats) |
-| Tạo Hoàn Thành Trò Chuyện | [Create Chat Completion](/vi/api-reference/chat/create-completion) |
-| Tạo Phản Hồi | [Create Response](/vi/api-reference/responses/create-response) |
-| Tạo Tin Nhắn | [Create Message](/vi/api-reference/messages/create-message) |
-| Tạo Nội Dung Gemini | [Generate Gemini Content](/vi/api-reference/gemini/generate-content) |
+| API Đa Định Dạng | [API Đa Định Dạng](/vi/guides/api-formats) |
+| Tạo Hoàn Thành Chat | [Tạo Hoàn Thành Chat](/vi/api-reference/chat/create-completion) |
+| Tạo Phản Hồi | [Tạo Phản Hồi](/vi/api-reference/responses/create-response) |
+| Tạo Tin Nhắn | [Tạo Tin Nhắn](/vi/api-reference/messages/create-message) |
+| Tạo Nội Dung Gemini | [Tạo Nội Dung Gemini](/vi/api-reference/gemini/generate-content) |

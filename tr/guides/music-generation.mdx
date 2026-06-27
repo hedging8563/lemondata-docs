@@ -1,25 +1,33 @@
 ---
 title: "Müzik Üretimi"
-description: "TokenLab müzik görevleri ile şarkılar, enstrümantaller, sözler ve devamlar oluşturun."
+description: "Müzik veya söz görevleri oluşturun, nihai sesi sorgulayın ve kullanıcıya yönelik müzik çıktıları güvenli bir şekilde saklayın."
 ---
 
-Müzik üretimi asenkron bir süreçtir. `POST /v1/music/generations` bir görev oluşturur ve `id` / `task_id`, `status` ve genellikle `poll_url` döner. Nihai ses ve meta veriler, anket yapıldıktan sonra görünür.
+Müzik üretimi asenkron bir süreçtir. `POST /v1/music/generations` bir kamu TokenLab görevi oluşturur ve `id` / `task_id`, `status` ve genellikle `poll_url` döner. Uygulamanız bu görev kimliğini saklamalı, ilerlemeyi göstermeli ve terminal durumu gelene kadar sorgulama yapmalıdır.
 
-## Model Keşfi
+## İş Akışını Seçin
+
+| İş Akışı | Ana alanlar | Notlar |
+|----------|-------------|--------|
+| Tam şarkı veya enstrümantal | `model`, `prompt`, isteğe bağlı `title`, `tags`, `action: "MUSIC"` | Kullanıcı nihai sesi bekliyorsa kullanın |
+| Sadece sözler | `model`, `prompt`, `action: "LYRICS"` | Sadece söz üretimi sunan modellerle kullanın |
+| Mevcut bir klibi devam ettirin | `continue_clip_id`, isteğe bağlı `continue_at` | Devam ettirmeden önce önceki kamu klip/görev kimliğini saklayın |
+
+Sabit kodlanmış bir model listesi göndermeden önce mevcut model kataloğunu sorgulayın:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Mevcut kamu sözleşmesi, müzik üretimi için `suno_music` ve yalnızca söz akışları için `suno_lyrics` sunmaktadır. Üretim kullanımı öncesinde model kataloğunu sorgulayın, sağlayıcı varsayımlarını sabitlemek yerine.
+Mevcut kamu örnekleri müzik üretimi için `suno_music` kullanmaktadır. Sadece söz akışları için, söz üretimini belgeleyen bir model ile `action: "LYRICS"` gönderin. Model kimliklerini kamu TokenLab kimlikleri olarak değerlendirin, sağlayıcıya özgü alanların kamu sözleşme alanları olduğu garantisi olarak değil.
 
-## İstek Oluşturma
+## Bir Müzik Görevi Oluşturun
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
     "prompt": "Sıcak vokallere ve temiz bir nakarata sahip neşeli bir synth-pop parçası",
@@ -29,25 +37,44 @@ curl https://api.tokenlab.sh/v1/music/generations \\
   }'
 ```
 
-Şarkılar veya enstrümantaller için `action: "MUSIC"` kullanın. Yalnızca söz üretimini destekleyen modellerle `action: "LYRICS"` kullanın. `continue_clip_id` ve `continue_at` gibi devam alanları, devam iş akışları içindir ve yalnızca ürününüz önceki bir klibi devam ettiriyorsa gönderilmelidir.
+Promptları, başlıkları ve etiketleri kullanıcıya görünür ve saklamak için güvenli tutun. Hiçbir prompt alanına API anahtarları, özel URL'ler veya dahili yönlendirme bilgileri koymayın.
 
-## Anket Sonuçları
+## Tamamlanmayı Sorgulayın
 
-Öncelikle dönen `poll_url`'yi kullanın. Sabit bir uç noktaya ihtiyacınız varsa, oluşturma yanıtındaki aynı `id` / `task_id` ile `GET /v1/tasks/{id}` kullanın.
+Öncelikle `poll_url` kullanın. Eğer istemciniz sabit bir rota gerektiriyorsa, dönen `id` veya `task_id` ile `GET /v1/tasks/{id}` çağrısı yapın.
 
-Tamamlanmış müzik görevleri `audio_url`, `video_url`, `title`, `lyrics` ve model-normalize edilmiş meta veriler içerebilir. Nihai URL'leri uygulamanızda saklayın, terminal durumu sonrasında tekrar tekrar anket yapmaktansa.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+Beklenen kamu durumları `pending`, `processing`, `completed` ve `failed`'dir. Tamamlanmış bir müzik görevi `audio_url`, `video_url`, `title`, `lyrics` ve normalize edilmiş meta veriler içerebilir. Nihai URL'leri kendi veritabanınızda saklayın, böylece kullanıcı sonucu yeniden açabilir ve üretimi yeniden başlatmak zorunda kalmaz.
+
+## UI Ve Durum Yönetimi
+
+- Görev oluşturulduktan hemen sonra bekleyen bir durumu gösterin.
+- Uzun görevler için her `5-10s`'de bir sorgulama yapın, ardından `completed` veya `failed` durumunda durun.
+- Görev `completed` olduğunda ve bir `audio_url` mevcut olduğunda nihai bir oynatıcıyı görüntülemeyin.
+- Sadece söz görevleri için, kullanıcıların ne satın aldıklarını anlaması için metin çıktısını ses görevlerinden ayrı olarak render edin.
+- Yenileme sırasında, yeni bir görev oluşturmaktansa saklanan `task_id` ile devam edin.
+
+## Faturalama Ve Uzlaşma
+
+Müzik görevleri, oluşturma zamanında tahmini bir miktarı rezerve edebilir ve terminal durumu bilindiğinde hesaplaşabilir. `request_id`, `task_id`, model, endpoint ve `billing_transaction_id` göründüğünde saklayın. Uzlaşma için sağlayıcı görev kimlikleri yerine Yönetim API kullanım kayıtlarını kullanın.
 
 ## Yaygın Hatalar
 
-- Görev `completed` olana kadar ve bir `audio_url` mevcut olana kadar nihai bir oynatıcı göstermeyin.
-- Uygulama durumunuzda sağlayıcı görev kimliklerini veya sağlayıcı fetch URL'lerini kullanmayın.
-- Kullanıcılara farkı göstermeden tek bir UI arkasında yalnızca söz ve tam müzik eylemlerini karıştırmayın.
-- Her sayfa yenilemesinde görevleri yeniden oluşturmayın; saklanan `task_id`'den devam edin.
+| Belirti | Olası neden | Çözüm |
+|---------|-------------|-------|
+| Görev oluşturuldu ama oynatıcı yok | Görev hala beklemede veya `audio_url` olmadan tamamlandı | Terminal duruma kadar sorgulamaya devam edin, ardından eksik çıktıyı başarısız bir kullanıcı işi olarak yönetin |
+| Yenileme sonrası tekrar eden şarkılar | UI görevi yeniden oluşturdu, devam etmedi | `task_id`'yi saklayın ve yeniden kullanın |
+| Söz görevi ses döndürmüyor | `action: "LYRICS"` sadece metin | Sözler ve müzik UI yollarını ayırın |
+| Desteklenmeyen parametre | Alan model kamu sözleşmesinde yok | Sağlayıcıya özgü alanları kaldırın veya bunları belgeleyen bir model seçin |
 
 ## API Referansı
 
 | Konu | Referans |
-|-------|-----------|
+|------|----------|
 | Müzik Oluştur | [Müzik Oluştur](/tr/api-reference/music/create-music) |
 | Müzik Durumunu Al | [Müzik Durumunu Al](/tr/api-reference/music/get-music-status) |
 | Görev Durumunu Al | [Görev Durumunu Al](/tr/api-reference/tasks/get-task-status) |

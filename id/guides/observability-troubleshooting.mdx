@@ -1,54 +1,78 @@
 ---
 title: "Observabilitas & Pemecahan Masalah"
-description: "Tangkap pengenal publik yang diekspos TokenLab untuk dukungan, rekonsiliasi penggunaan, dan debugging tugas asinkron."
+description: "Catat pengenal TokenLab publik yang diperlukan untuk dukungan, rekonsiliasi penggunaan, dan debugging media asinkron."
 ---
 
-Halaman ini ditulis untuk tim aplikasi yang mengoperasikan TokenLab di produksi. Ini berfokus pada pengenal publik dan log yang aman untuk pengguna, bukan pada internal routing penyedia.
+Observabilitas TokenLab yang baik dimulai dengan pengenal publik. Log Anda harus membantu Anda menjawab "apa yang diminta pengguna, tugas publik apa yang dibuat TokenLab, dan bagaimana penagihannya?" tanpa mengekspos detail routing penyedia atau data pengguna yang sensitif.
 
-## Pengenal Publik
+## Pengenal Publik yang Harus Ditangkap
 
-| Pengenal | Di mana ia muncul | Gunakan untuk |
-|----------|-------------------|---------------|
-| `request_id` | Badan kesalahan, catatan penggunaan Management API, log dasbor | Dukungan dan rekonsiliasi tingkat permintaan |
-| `task_id` / `id` | Respons pembuatan dan status asinkron | Memantau gambar, video, musik, dan pekerjaan 3D |
-| `poll_url` | Respons pembuatan asinkron | URL status yang disukai |
-| `billing_transaction_id` | Respons non-streaming saat diselesaikan, respons status tugas, catatan penggunaan Management API, header `X-Billing-Transaction-ID` | Rekonsiliasi penagihan |
-| `X-Task-ID` | Respons tugas asinkron | Korelasi tugas tingkat header |
+| Pengenal | Di mana muncul | Gunakan untuk |
+|----------|----------------|---------------|
+| `request_id` | Badan kesalahan, log dasbor, catatan penggunaan | Dukungan dan rekonsiliasi tingkat permintaan |
+| `id` / `task_id` | Respons pembuatan dan status asinkron | Memantau gambar, video, musik, dan pekerjaan 3D |
+| `poll_url` | Respons pembuatan asinkron | URL status yang diinginkan |
+| `billing_transaction_id` | Respons non-streaming saat diselesaikan, respons status tugas asinkron, catatan penggunaan, `X-Billing-Transaction-ID` | Rekonsiliasi biaya |
+| `X-Task-ID` | Header respons tugas asinkron | Korelasi tugas tingkat header |
+| ID pekerjaan/pengguna Anda sendiri | Aplikasi Anda | Menghubungkan aktivitas TokenLab kembali ke alur kerja pengguna |
+
+Jangan simpan ID tugas penyedia, URL hulu, ID saluran routing, kunci Redis, atau metadata eksekusi pribadi sebagai kebenaran yang terlihat oleh pelanggan.
 
 ## Apa yang Harus Dicatat
 
-1. Catat endpoint, model, kode status, timestamp, dan pengenal publik.
-2. Redak `Authorization`, kunci API, URL yang ditandatangani, URL media pribadi, dan prompt lengkap secara default.
-3. Untuk pekerjaan asinkron, catat respons pembuatan dan setiap respons status terminal.
-4. Untuk pertanyaan penggunaan, panggil Management API dengan ID kunci API dan filter tanggal.
-5. Gunakan `type`, `code`, dan `param` kesalahan dari badan respons alih-alih mengurai teks penyedia.
+Catat cukup untuk mendiagnosis permintaan tanpa membocorkan rahasia:
 
-## Daftar Periksa Pemecahan Masalah
+- Endpoint, metode HTTP, model, kode status, timestamp, dan latensi.
+- Pengenal publik: `request_id`, `task_id`, `poll_url`, dan `billing_transaction_id` jika ada.
+- Bentuk permintaan yang disanitasi: bidang mana yang ada, bukan prompt lengkap atau konten media pribadi.
+- Respons status asinkron terminal, termasuk bidang kesalahan publik.
+- Jumlah percobaan ulang klien dan apakah percobaan ulang tersebut membuat tugas baru atau melanjutkan yang sudah ada.
+
+Selalu redaksi `Authorization`, kunci API, token manajemen, URL yang ditandatangani, URL media pribadi, prompt lengkap, dan data pribadi pengguna kecuali Anda memiliki izin eksplisit untuk menyimpannya.
+
+## Matriks Pemecahan Masalah
 
 | Gejala | Periksa pertama | Halaman berguna |
-|--------|-----------------|------------------|
-| `401` atau `403` | Kunci API, token manajemen, akses organisasi | [Autentikasi](/id/authentication) |
-| `429` | Tingkat batas laju dan perilaku coba ulang klien | [Batas Laju](/id/guides/rate-limits) |
-| `400 invalid_request_error` | Bidang yang tidak didukung, endpoint yang salah, atau ketidakcocokan kontrak spesifik model | [Penanganan Kesalahan](/id/guides/error-handling) |
-| Tugas asinkron tidak pernah selesai | Pantau `poll_url`, periksa `status` akhir, hindari pembuatan tugas duplikat | [Pekerjaan Asinkron & Pemantauan](/id/guides/async-jobs-polling) |
-| Biaya tidak cocok dengan UI | Bandingkan `request_id` dan `billing_transaction_id` dalam catatan penggunaan | [Penagihan & Harga](/id/guides/billing) |
+|--------|----------------|-----------------|
+| `401` atau `403` | Kunci API, token manajemen, akses organisasi, cakupan kunci | [Autentikasi](/id/authentication) |
+| `402` | Saldo, batas pengeluaran kunci API, ketersediaan harga model | [Penagihan & Harga](/id/guides/billing) |
+| `429` | Tingkat akun, batas laju endpoint, perilaku percobaan ulang | [Batas Laju](/id/guides/rate-limits) |
+| `400 invalid_request_error` | Bidang tidak didukung, endpoint salah, bidang yang diperlukan hilang, atau ketidakcocokan kontrak model | [Penanganan Kesalahan](/id/guides/error-handling) |
+| Tugas asinkron tidak dapat ditemukan | Kunci API salah, ID tugas kadaluarsa, tugas kadaluarsa, atau ID tugas non-publik | [Pekerjaan Asinkron & Pemantauan](/id/guides/async-jobs-polling) |
+| Biaya tidak cocok dengan UI | Waktu penyelesaian atau membandingkan pengenal yang salah | [Penagihan & Harga](/id/guides/billing) |
 
 ## Rekonsiliasi Penggunaan
 
-`GET /v1/management/api-keys/{keyId}/usage` mengembalikan penggunaan tingkat kunci yang dipaginasi. Ini dapat difilter berdasarkan `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, dan `endDate`. Gunakan untuk rekonsiliasi sisi server alih-alih mengikis dasbor.
+Gunakan API Manajemen untuk rekonsiliasi sisi server:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-Respons streaming mungkin diselesaikan setelah aliran dikirim, jadi header penagihan bisa tidak ada bahkan ketika penggunaan dicatat kemudian. Untuk tugas media asinkron, penyelesaian dapat muncul setelah pemantauan terminal.
+`GET /v1/management/api-keys/{keyId}/usage` dapat memfilter berdasarkan `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, dan `endDate`. Gunakan catatan ini alih-alih menggores halaman dasbor atau bergantung pada ID tugas penyedia hulu.
 
-## Paket Dukungan
+Respons streaming mungkin diselesaikan setelah aliran dikirim, jadi header penagihan bisa tidak ada bahkan ketika penggunaan dicatat kemudian. Tugas media asinkron mungkin diselesaikan setelah pemantauan terminal.
 
-Saat menghubungi dukungan, sertakan `request_id`, `task_id`, `billing_transaction_id` jika ada, endpoint, model, timestamp, dan bentuk permintaan yang telah disanitasi. Jangan sertakan kunci API, media pribadi, atau prompt lengkap kecuali dukungan meminta contoh yang telah direda.
+## Template Paket Dukungan
 
-Jangan sertakan nama penyedia, ID saluran, pengenal routing, kunci Redis, atau URL tugas hulu dalam log pelanggan atau tiket dukungan kecuali dukungan TokenLab secara eksplisit meminta mereka.
+Saat menghubungi dukungan, sertakan:
+
+- `request_id`.
+- `task_id` dan `poll_url` untuk pekerjaan asinkron.
+- `billing_transaction_id` jika ada.
+- Endpoint, metode, model, timestamp, dan kode status.
+- Bentuk permintaan yang disanitasi dan badan kesalahan publik.
+- Hasil yang Anda harapkan dan apa yang sebenarnya dilihat pengguna.
+
+Jangan sertakan kunci API, token manajemen, media pribadi, prompt lengkap, URL penyedia, ID saluran, atau pengenal routing internal kecuali dukungan TokenLab secara eksplisit meminta contoh yang telah direduksi.
+
+## Pemeriksaan Operasional
+
+- Beri peringatan pada respons `401`, `402`, `429`, dan `5xx` yang berulang secara terpisah; biasanya mereka memiliki pemilik yang berbeda.
+- Lacak pekerjaan asinkron yang tetap non-terminal lebih lama dari SLA produk Anda.
+- Lacak upaya pembuatan duplikat untuk ID pekerjaan pengguna yang sama.
+- Sampel pekerjaan yang telah selesai dan verifikasi aset yang terlihat oleh pengguna, catatan penggunaan, dan catatan tugas yang disimpan setuju.
 
 ## Referensi API
 

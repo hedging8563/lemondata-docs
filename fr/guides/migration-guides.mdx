@@ -1,19 +1,20 @@
 ---
 title: "Guides de Migration"
-description: "Déplacez OpenAI, Anthropic, Gemini et les charges de travail multimédia vers TokenLab avec les plus petits changements sûrs en production."
+description: "Déplacez OpenAI, Anthropic, Gemini et les charges de travail multimédia vers TokenLab avec de petits changements sûrs pour la production."
 ---
 
-TokenLab est natif-first et compatible avec OpenAI. Choisissez la route qui correspond au comportement client dont vous avez besoin au lieu de convertir chaque charge de travail en un seul format.
+TokenLab est multi-format : vous pouvez conserver des clients compatibles avec OpenAI, des appels Messages natifs à Anthropic, des appels REST natifs à Gemini et des points de terminaison multimédia dans leurs formes naturelles. La migration la plus sûre consiste à ne pas traduire chaque charge de travail en un format universel. Choisissez la route qui possède le comportement dont votre application a besoin.
 
-## Choisissez Le Format
+## Cartographie des Routes
 
-| Charge de travail existante | URL de base TokenLab | Point de terminaison principal | Remarques |
-|-----------------------------|----------------------|-------------------------------|-----------|
-| OpenAI Chat Completions     | `https://api.tokenlab.sh/v1` | `/chat/completions`          | Changement le plus petit pour les clients compatibles avec OpenAI |
-| OpenAI Responses            | `https://api.tokenlab.sh/v1` | `/responses`                 | À utiliser uniquement pour un comportement spécifique aux réponses |
-| Anthropic SDK               | `https://api.tokenlab.sh` | `/v1/messages`               | Ne pas ajouter `/v1` dans l'URL de base du SDK |
-| Gemini REST                 | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Conservez les champs natifs de Gemini sur la route native |
+| Charge de travail existante | URL de base TokenLab | Point de terminaison principal | Remarque sur la migration |
+|-----------------------------|----------------------|-------------------------------|--------------------------|
+| OpenAI Chat Completions     | `https://api.tokenlab.sh/v1` | `/chat/completions`          | Changement le plus petit pour le chat compatible avec OpenAI et l'appel de fonction |
+| OpenAI Responses            | `https://api.tokenlab.sh/v1` | `/responses`                 | Utilisez lorsque votre application dépend d'entrées, d'outils ou de gestion de sortie spécifiques aux Responses |
+| Anthropic SDK               | `https://api.tokenlab.sh`    | `/v1/messages`               | Ne pas ajouter `/v1` à l'URL de base du SDK |
+| Gemini REST                 | `https://api.tokenlab.sh`    | `/v1beta/models/:model:generateContent` | Conservez les champs natifs de Gemini sur la route Gemini |
 | Génération multimédia        | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Découvrez les modèles avec `recommended_for` et attendez-vous à un polling asynchrone là où cela est documenté |
+| Gestion et facturation       | `https://api.tokenlab.sh/v1` | `/management/...`            | Utilisez des tokens de gestion pour un usage côté serveur et la réconciliation de facturation |
 
 ## Migration Compatible avec OpenAI
 
@@ -31,7 +32,7 @@ response = client.chat.completions.create(
 )
 ```
 
-Conservez votre code de retry, de timeout et de streaming existant, mais validez les ID de modèle contre `GET /v1/models`. Pour la génération d'images, envoyez `model` explicitement et lisez le guide d'image car les modèles d'image diffèrent plus que les modèles de chat.
+Conservez votre code de réessai, de délai d'attente et de streaming existant, mais validez les ID de modèle avec `GET /v1/models` avant le trafic de production. Pour la génération d'images, envoyez `model` explicitement et lisez le guide d'image car les modèles d'image diffèrent plus que les modèles de chat.
 
 ## Migration Anthropic
 
@@ -50,41 +51,54 @@ message = client.messages.create(
 )
 ```
 
-Utilisez cette route pour un comportement natif à Claude tel que l'utilisation de l'outil Messages et la pensée étendue. Si une fonctionnalité est native à Anthropic, conservez-la sur `/v1/messages` au lieu de la traduire via Chat Completions.
+Utilisez `/v1/messages` pour l'utilisation d'outils natifs à Claude, les flux de réflexion et la sémantique des messages Anthropic. Ne traduisez pas les champs uniquement Anthropic via les Chat Completions à moins que vous ne souhaitiez intentionnellement un changement de comportement compatible avec OpenAI.
 
 ## Migration Gemini
 
 ```bash
-curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \\
-  -H "Authorization: Bearer sk-your-tokenlab-key" \\
-  -H "Content-Type: application/json" \\
+curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-tokenlab-key" \
+  -H "Content-Type: application/json" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-Les outils intégrés de Gemini, les ressources de l'API de fichiers, les contenus mis en cache et les déclarations de fonction doivent rester sur `/v1beta` lorsque vous avez besoin d'un comportement natif à Gemini.
+Conservez les outils intégrés de Gemini, les références de l'API de fichiers, les contenus mis en cache, les déclarations de fonction et les parties de contenu natif sur `/v1beta` lorsque votre application dépend du comportement natif de Gemini.
 
 ## Migration Multimédia
 
-1. Interrogez `GET /v1/models?recommended_for=image|video|music|3d` avant de choisir un modèle.
-2. Lisez `tokenlab.public_contract_summary` et, sur les pages de détails, le `tokenlab.public_contract` complet.
-3. Envoyez un `model` explicite. Ne comptez pas sur les valeurs par défaut héritées pour le trafic de production.
-4. Stockez `task_id` et `poll_url` pour les travaux asynchrones.
-5. Réconciliez les coûts à travers les enregistrements d'utilisation, pas à travers les ID de tâche du fournisseur.
+1. Interrogez `GET /v1/models?recommended_for=image|video|music|3d`.
+2. Lisez `tokenlab.public_contract_summary` dans les réponses de liste et le `tokenlab.public_contract` complet lorsque disponible.
+3. Envoyez un `model` explicite, en particulier pour les points de terminaison d'image.
+4. Stockez `task_id`, `poll_url`, point de terminaison, modèle et votre propre ID de travail pour les travaux asynchrones.
+5. Réconciliez les coûts via les enregistrements d'utilisation et `billing_transaction_id`, pas les ID de tâche du fournisseur.
 
-## Déploiement en Production
+Les charges de travail multimédia nécessitent leur propre plan de déploiement car la latence, les réessais et les actifs finaux se comportent différemment des complétions de chat.
 
-- Commencez par un point de terminaison et une famille de modèles.
-- Réglez les timeouts HTTP suffisamment élevés pour les routes d'images synchrones ; utilisez le mode asynchrone lorsque disponible pour un travail long.
-- Enregistrez les identifiants publics et la forme de requête assainie avant d'envoyer du trafic de production.
-- Comparez un échantillon de réponses, d'enregistrements d'utilisation et de sorties visibles par les clients.
-- Gardez le rollback simple : préservez le client fournisseur précédent jusqu'à ce que le trafic TokenLab soit stable.
+## Plan de Déploiement en Production
+
+| Phase | Objectif | Vérifications |
+|-------|----------|---------------|
+| 1. Inventaire | Lister les points de terminaison, modèles, champs de requête, comportement de streaming/asynchrone et propriétaire de facturation | Aucun champ caché uniquement fournisseur n'est supposé public |
+| 2. Pilote à route unique | Déplacer un point de terminaison et une famille de modèles | La forme de réponse, le coût et les journaux correspondent aux attentes |
+| 3. Ombre ou échantillon | Comparer les sorties sélectionnées avec le fournisseur précédent | La qualité et la latence visibles par l'utilisateur sont acceptables |
+| 4. Déploiement progressif | Augmenter le trafic par clé, org ou drapeau de fonctionnalité | Surveillez `4xx`, `5xx`, latence, équilibre et travaux asynchrones en double |
+| 5. Nettoyage | Supprimer l'ancienne route fournisseur uniquement après une utilisation stable | Le chemin de retour et le manuel de support sont documentés |
+
+## Pièges de Migration
+
+- Ne mettez pas chaque modèle derrière un seul chemin OpenAI Chat Completions si votre application a besoin d'un comportement natif à Anthropic, Gemini ou Responses.
+- Ne supposez pas les anciens défauts d'image. Envoyez `model` explicitement.
+- Ne réessayez pas les requêtes de création asynchrone sans vérifier si une tâche a déjà été créée.
+- Ne divulguez pas les métadonnées de routage du fournisseur dans vos journaux ou votre interface utilisateur.
+- Ne comparez pas la facturation avec les ID de tâche du fournisseur. Utilisez les enregistrements d'utilisation de TokenLab.
 
 ## Référence API
 
-| Sujet                     | Référence                             |
-|---------------------------|---------------------------------------|
-| API Multi-Format          | [API Multi-Format](/fr/guides/api-formats) |
-| OpenAI SDK                | [OpenAI SDK](/fr/integrations/openai-sdk) |
-| Anthropic SDK             | [Anthropic SDK](/fr/integrations/anthropic-sdk) |
-| Génération d'Images       | [Génération d'Images](/fr/guides/image-generation) |
+| Sujet | Référence |
+|-------|-----------|
+| API Multi-Format | [API Multi-Format](/fr/guides/api-formats) |
+| SDK OpenAI | [SDK OpenAI](/fr/integrations/openai-sdk) |
+| SDK Anthropic | [SDK Anthropic](/fr/integrations/anthropic-sdk) |
+| Gemini Native | [API Gemini Native](/fr/api-reference/gemini/generate-content) |
+| Génération d'Images | [Génération d'Images](/fr/guides/image-generation) |
 | Travaux Asynchrones & Polling | [Travaux Asynchrones & Polling](/fr/guides/async-jobs-polling) |

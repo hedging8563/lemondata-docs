@@ -1,19 +1,20 @@
 ---
 title: "移行ガイド"
-description: "OpenAI、Anthropic、Gemini、およびメディアワークロードを、最小限の生産安全な変更でTokenLabに移動します。"
+description: "OpenAI、Anthropic、Gemini、およびメディアワークロードをTokenLabに小さく、プロダクション安全な変更で移行します。"
 ---
 
-TokenLabはネイティブファーストでOpenAI互換です。すべてのワークロードを1つの形式に変換するのではなく、必要なクライアントの動作に合ったルートを選択してください。
+TokenLabはマルチフォーマットです：OpenAI互換のクライアント、AnthropicネイティブのMessages呼び出し、GeminiネイティブのREST呼び出し、およびメディアエンドポイントをその自然な形で保持できます。最も安全な移行は、すべてのワークロードを1つのユニバーサルフォーマットに変換しないことです。アプリケーションに必要な動作を所有するルートを選択してください。
 
-## フォーマットを選択
+## ルートマッピング
 
-| 既存のワークロード | TokenLabベースURL | プライマリエンドポイント | ノート |
-|-------------------|-------------------|------------------|-------|
-| OpenAIチャット完了 | `https://api.tokenlab.sh/v1` | `/chat/completions` | OpenAI互換クライアントに対する最小限の変更 |
-| OpenAIレスポンス | `https://api.tokenlab.sh/v1` | `/responses` | レスポンス特有の動作にのみ使用 |
+| 既存のワークロード | TokenLabベースURL | プライマリエンドポイント | 移行ノート |
+|-------------------|-------------------|------------------|----------------|
+| OpenAIチャット完了 | `https://api.tokenlab.sh/v1` | `/chat/completions` | OpenAI互換のチャットおよび関数呼び出しに対する最小限の変更 |
+| OpenAIレスポンス | `https://api.tokenlab.sh/v1` | `/responses` | アプリがレスポンス特有の入力、ツール、または出力処理に依存する場合に使用 |
 | Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | SDKベースURLに`/v1`を追加しないでください |
-| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | ネイティブルートでGeminiネイティブフィールドを保持 |
+| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Geminiルート上でGeminiネイティブのフィールドを保持 |
 | メディア生成 | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | `recommended_for`でモデルを発見し、文書化されている場合は非同期ポーリングを期待 |
+| 管理と請求 | `https://api.tokenlab.sh/v1` | `/management/...` | サーバーサイドの使用と請求調整のために管理トークンを使用 |
 
 ## OpenAI互換の移行
 
@@ -31,7 +32,7 @@ response = client.chat.completions.create(
 )
 ```
 
-既存のリトライ、タイムアウト、およびストリーミングコードを保持しますが、モデルIDを`GET /v1/models`に対して検証してください。画像生成の場合は、`model`を明示的に送信し、画像モデルはチャットモデルよりも異なるため、画像ガイドを参照してください。
+既存のリトライ、タイムアウト、およびストリーミングコードを保持しますが、プロダクショントラフィックの前に`GET /v1/models`でモデルIDを検証してください。画像生成の場合は、`model`を明示的に送信し、画像モデルはチャットモデルよりも異なるため、画像ガイドを参照してください。
 
 ## Anthropic移行
 
@@ -50,34 +51,46 @@ message = client.messages.create(
 )
 ```
 
-メッセージツールの使用や拡張思考など、Claudeネイティブの動作にはこのルートを使用してください。機能がAnthropicネイティブである場合は、Chat Completionsを通じて翻訳するのではなく、`/v1/messages`に保持してください。
+Claudeネイティブのツール使用、思考フロー、およびAnthropicメッセージセマンティクスには`/v1/messages`を使用してください。意図的にOpenAI互換の動作変更を望まない限り、Chat Completionsを通じてAnthropic専用フィールドを翻訳しないでください。
 
 ## Gemini移行
 
 ```bash
-curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \\
-  -H "Authorization: Bearer sk-your-tokenlab-key" \\
-  -H "Content-Type: application/json" \\
+curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-tokenlab-key" \
+  -H "Content-Type: application/json" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-Geminiの組み込みツール、ファイルAPIリソース、キャッシュされたコンテンツ、および関数宣言は、Geminiネイティブの動作が必要な場合は`/v1beta`に留めておくべきです。
+アプリがGeminiネイティブの動作に依存する場合、Geminiの組み込みツール、ファイルAPI参照、キャッシュされたコンテンツ、関数宣言、およびネイティブコンテンツ部分を`/v1beta`で保持してください。
 
 ## メディア移行
 
-1. モデルを選択する前に`GET /v1/models?recommended_for=image|video|music|3d`をクエリしてください。
-2. `tokenlab.public_contract_summary`を読み、詳細ページでは完全な`tokenlab.public_contract`を確認してください。
-3. 明示的に`model`を送信してください。生産トラフィックのためにレガシーのデフォルトに依存しないでください。
-4. 非同期ジョブのために`task_id`と`poll_url`を保存してください。
-5. プロバイダーのタスクIDではなく、使用記録を通じてコストを調整してください。
+1. `GET /v1/models?recommended_for=image|video|music|3d`をクエリします。
+2. リストレスポンスで`tokenlab.public_contract_summary`を読み、利用可能な場合は完全な`tokenlab.public_contract`を読みます。
+3. 特に画像エンドポイントの場合は明示的に`model`を送信します。
+4. 非同期ジョブのために`task_id`、`poll_url`、エンドポイント、モデル、および独自のジョブIDを保存します。
+5. プロバイダーのタスクIDではなく、使用記録と`billing_transaction_id`を通じてコストを調整します。
 
-## 生産展開
+メディアワークロードには、レイテンシ、リトライ、および最終資産がチャット完了とは異なる動作をするため、独自の展開計画が必要です。
 
-- 1つのエンドポイントと1つのモデルファミリーから始めてください。
-- 同期画像ルートのためにHTTPタイムアウトを十分に高く設定してください。長時間の作業には利用可能な場合は非同期モードを使用してください。
-- 生産トラフィックを送信する前に、公開識別子とサニタイズされたリクエスト形状をログに記録してください。
-- レスポンス、使用記録、および顧客に見える出力のサンプルを比較してください。
-- ロールバックを簡単に保つ: TokenLabトラフィックが安定するまで、以前のプロバイダーのクライアントを保持してください。
+## プロダクション展開計画
+
+| フェーズ | 目標 | チェック |
+|-------|------|--------|
+| 1. インベントリ | エンドポイント、モデル、リクエストフィールド、ストリーミング/非同期動作、および請求所有者をリスト | 公開されていると仮定される隠れたプロバイダー専用フィールドはありません |
+| 2. シングルルートパイロット | 1つのエンドポイントと1つのモデルファミリーを移行 | レスポンスの形状、コスト、およびログが期待に一致 |
+| 3. シャドウまたはサンプル | 選択した出力を以前のプロバイダーと比較 | ユーザーに見える品質とレイテンシが許容範囲内 |
+| 4. 段階的展開 | キー、組織、または機能フラグによってトラフィックを増加 | `4xx`、`5xx`、レイテンシ、バランス、および重複した非同期ジョブを監視 |
+| 5. クリーンアップ | 安定した使用の後にのみ古いプロバイダーパスを削除 | ロールバックパスとサポートプレイブックが文書化されている |
+
+## 移行の落とし穴
+
+- アプリがネイティブのAnthropic、Gemini、またはResponsesの動作を必要とする場合、すべてのモデルを1つのOpenAI Chat Completionsパスの背後に置かないでください。
+- 古い画像デフォルトを仮定しないでください。`model`を明示的に送信します。
+- タスクがすでに作成されているかどうかを確認せずに非同期作成リクエストをリトライしないでください。
+- ログやUIにプロバイダーのルーティングメタデータを公開しないでください。
+- 請求をプロバイダーのタスクIDと比較しないでください。TokenLabの使用記録を使用します。
 
 ## APIリファレンス
 
@@ -86,5 +99,6 @@ Geminiの組み込みツール、ファイルAPIリソース、キャッシュ�
 | マルチフォーマットAPI | [マルチフォーマットAPI](/ja/guides/api-formats) |
 | OpenAI SDK | [OpenAI SDK](/ja/integrations/openai-sdk) |
 | Anthropic SDK | [Anthropic SDK](/ja/integrations/anthropic-sdk) |
+| Geminiネイティブ | [GeminiネイティブAPI](/ja/api-reference/gemini/generate-content) |
 | 画像生成 | [画像生成](/ja/guides/image-generation) |
 | 非同期ジョブとポーリング | [非同期ジョブとポーリング](/ja/guides/async-jobs-polling) |

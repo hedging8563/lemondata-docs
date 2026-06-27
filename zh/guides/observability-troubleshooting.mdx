@@ -1,54 +1,78 @@
 ---
 title: "可观察性与故障排除"
-description: "捕获 TokenLab 为支持、使用对账和异步任务调试所暴露的公共标识符。"
+description: "记录支持所需的公共 TokenLab 标识符、使用对账和异步媒体调试。"
 ---
 
-本页面是为在生产环境中操作 TokenLab 的应用团队编写的。它专注于公共标识符和用户安全日志，而不是提供者路由的内部细节。
+良好的 TokenLab 可观察性始于公共标识符。您的日志应帮助您回答“用户请求了什么，TokenLab 创建了什么公共任务，以及如何计费？”而不暴露供应商路由内部或敏感用户数据。
 
-## 公共标识符
+## 要捕获的公共标识符
 
 | 标识符 | 出现位置 | 用途 |
 |--------|----------|------|
-| `request_id` | 错误主体、管理 API 使用记录、仪表板日志 | 支持和请求级对账 |
-| `task_id` / `id` | 异步创建和状态响应 | 轮询图像、视频、音乐和 3D 作业 |
-| `poll_url` | 异步创建响应 | 优选状态 URL |
-| `billing_transaction_id` | 结算时的非流式响应、任务状态响应、管理 API 使用记录、`X-Billing-Transaction-ID` 头 | 账单对账 |
-| `X-Task-ID` | 异步任务响应 | 头级任务关联 |
+| `request_id` | 错误主体、仪表板日志、使用记录 | 请求级支持和对账 |
+| `id` / `task_id` | 异步创建和状态响应 | 轮询图像、视频、音乐和 3D 作业 |
+| `poll_url` | 异步创建响应 | 首选状态 URL |
+| `billing_transaction_id` | 结算时的非流式响应、异步任务状态响应、使用记录、`X-Billing-Transaction-ID` | 成本对账 |
+| `X-Task-ID` | 异步任务响应头 | 头级任务关联 |
+| 您自己的作业/用户 ID | 您的应用程序 | 将 TokenLab 活动与用户工作流关联 |
+
+请勿将供应商任务 ID、上游 URL、路由通道 ID、Redis 键或私有执行元数据存储为面向客户的事实依据。
 
 ## 记录内容
 
-1. 记录端点、模型、状态码、时间戳和公共标识符。
-2. 默认情况下，隐去 `Authorization`、API 密钥、签名 URL、私有媒体 URL 和完整提示。
-3. 对于异步作业，记录创建响应和每个终端状态响应。
-4. 对于使用问题，使用 API 密钥 ID 和日期过滤器调用管理 API。
-5. 使用响应主体中的错误 `type`、`code` 和 `param`，而不是解析提供者文本。
+记录足够的信息以诊断请求而不泄露机密：
 
-## 故障排除清单
+- 端点、HTTP 方法、模型、状态码、时间戳和延迟。
+- 公共标识符：`request_id`、`task_id`、`poll_url` 和 `billing_transaction_id`（如存在）。
+- 清理后的请求形状：哪些字段存在，而不是完整的提示或私有媒体内容。
+- 终端异步状态响应，包括公共错误字段。
+- 客户端重试计数以及重试是否创建了新任务或恢复了现有任务。
+
+除非您获得明确的保留权限，否则始终删除 `Authorization`、API 密钥、管理令牌、签名 URL、私有媒体 URL、完整提示和用户个人数据。
+
+## 故障排除矩阵
 
 | 症状 | 首先检查 | 有用页面 |
 |------|----------|----------|
-| `401` 或 `403` | API 密钥、管理令牌、组织访问 | [身份验证](/zh/authentication) |
-| `429` | 速率限制级别和客户端重试行为 | [速率限制](/zh/guides/rate-limits) |
-| `400 invalid_request_error` | 不支持的字段、错误的端点或模型特定合同不匹配 | [错误处理](/zh/guides/error-handling) |
-| 异步任务从未完成 | 轮询 `poll_url`，检查最终 `status`，避免重复任务创建 | [异步作业与轮询](/zh/guides/async-jobs-polling) |
-| 成本与 UI 不匹配 | 比较使用记录中的 `request_id` 和 `billing_transaction_id` | [账单与定价](/zh/guides/billing) |
+| `401` 或 `403` | API 密钥、管理令牌、组织访问、密钥范围 | [身份验证](/zh/authentication) |
+| `402` | 余额、API 密钥消费限制、模型价格可用性 | [计费与定价](/zh/guides/billing) |
+| `429` | 账户等级、端点速率限制、重试行为 | [速率限制](/zh/guides/rate-limits) |
+| `400 invalid_request_error` | 不支持的字段、错误的端点、缺少必需字段或模型契约不匹配 | [错误处理](/zh/guides/error-handling) |
+| 找不到异步任务 | 错误的 API 密钥、过期的任务 ID、过期任务或非公共任务 ID | [异步作业与轮询](/zh/guides/async-jobs-polling) |
+| 成本与 UI 不匹配 | 结算时间或比较错误的标识符 | [计费与定价](/zh/guides/billing) |
 
 ## 使用对账
 
-`GET /v1/management/api-keys/{keyId}/usage` 返回分页的密钥级使用情况。可以按 `scene`、`accessChannel`、`logicalModel`、`modelVendor`、`startDate` 和 `endDate` 进行过滤。用于服务器端对账，而不是抓取仪表板。
+使用管理 API 进行服务器端对账：
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-流式响应可能在流发送后结算，因此即使使用情况稍后被记录，账单头也可能缺失。对于异步媒体任务，结算可能在终端轮询后出现。
+`GET /v1/management/api-keys/{keyId}/usage` 可以按 `scene`、`accessChannel`、`logicalModel`、`modelVendor`、`startDate` 和 `endDate` 进行过滤。使用这些记录，而不是抓取仪表板页面或依赖上游供应商任务 ID。
 
-## 支持包
+流式响应可能在流发送后结算，因此即使使用稍后记录，计费头也可能缺失。异步媒体任务可能在终端轮询后结算。
 
-联系支持时，请包括 `request_id`、`task_id`、`billing_transaction_id`（如果存在）、端点、模型、时间戳和经过清理的请求格式。除非支持要求提供经过编辑的示例，否则请勿包含 API 密钥、私有媒体或完整提示。
+## 支持包模板
 
-除非 TokenLab 支持明确要求，否则请勿在客户日志或支持票中包含提供者名称、频道 ID、路由标识符、Redis 键或上游任务 URL。
+联系支持时，请包括：
+
+- `request_id`。
+- 异步工作的 `task_id` 和 `poll_url`。
+- 如果存在，包含 `billing_transaction_id`。
+- 端点、方法、模型、时间戳和状态码。
+- 清理后的请求形状和公共错误主体。
+- 您期望的结果和用户实际看到的内容。
+
+除非 TokenLab 支持明确要求提供已编辑的示例，否则请勿包含 API 密钥、管理令牌、私有媒体、完整提示、供应商 URL、通道 ID 或内部路由标识符。
+
+## 操作检查
+
+- 对重复的 `401`、`402`、`429` 和 `5xx` 响应单独发出警报；它们通常有不同的负责人。
+- 跟踪在您的产品 SLA 之上仍然非终端的异步作业。
+- 跟踪同一用户作业 ID 的重复创建尝试。
+- 采样已完成的作业，并验证用户可见资产、使用记录和存储的任务记录是否一致。
 
 ## API 参考
 
@@ -56,6 +80,6 @@ curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page
 |------|------|
 | 错误处理 | [错误处理](/zh/guides/error-handling) |
 | 速率限制 | [速率限制](/zh/guides/rate-limits) |
-| 账单与定价 | [账单与定价](/zh/guides/billing) |
+| 计费与定价 | [计费与定价](/zh/guides/billing) |
 | 获取 API 密钥使用情况 | [获取 API 密钥使用情况](/zh/api-reference/management/get-api-key-usage) |
 | 获取任务状态 | [获取任务状态](/zh/api-reference/tasks/get-task-status) |

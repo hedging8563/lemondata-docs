@@ -1,25 +1,32 @@
 ---
 title: "Generación 3D"
-description: "Crea activos 3D a partir de texto o imágenes y descarga archivos de modelo completados de los resultados de tareas asíncronas."
+description: "Crea tareas de texto a 3D o de imagen a 3D, consulta activos completados y maneja archivos de modelo descargables."
 ---
 
-La generación 3D es asíncrona. `POST /v1/3d/generations` crea una tarea; las respuestas de estado completadas devuelven URLs de activos de modelo descargables.
+La generación 3D es asincrónica. `POST /v1/3d/generations` crea una tarea de TokenLab; las respuestas de estado completadas devuelven activos de modelo descargables como `model_url` y, cuando están disponibles, URLs específicas de formato.
 
-## Descubrimiento de Modelos
+## Elegir El Tipo De Entrada
+
+| Flujo de trabajo | Entrada requerida | Campos opcionales | Notas |
+|------------------|------------------|-------------------|-------|
+| Texto a 3D | `model`, `prompt` | `format`, `quality`, `style`, `seed` | Mejor para generar un nuevo activo a partir de una descripción |
+| Imagen a 3D | `model`, `prompt`, `image` o `image_url` | `format`, `quality`, `style`, `seed` | Usar solo cuando el modelo seleccionado soporte entrada de imagen |
+
+Consulta el catálogo de modelos antes de decidir qué opciones exponer:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-No asumas que cada modelo 3D soporta tanto texto-a-3D como imagen-a-3D. Verifica el contrato del modelo seleccionado antes de enviar `image`, `image_url`, `format`, `quality`, `style` o `seed`.
+No asumas que cada modelo 3D soporta ambos tipos de entrada o cada formato de salida. Verifica el contrato del modelo seleccionado antes de enviar `image`, `image_url`, `format`, `quality`, `style` o `seed`.
 
-## Crear Solicitud
+## Crear Una Tarea 3D
 
 ```bash
-curl https://api.tokenlab.sh/v1/3d/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "tripo3d-v2.5",
     "prompt": "Un robot mascota estilizado de baja poligonización con topología limpia",
@@ -28,28 +35,45 @@ curl https://api.tokenlab.sh/v1/3d/generations \\
   }'
 ```
 
-Texto-a-3D requiere un `prompt`. Imagen-a-3D utiliza `image` o `image_url` cuando el modelo lo soporta. Prefiere URLs públicas para entradas de producción a menos que la imagen fuente sea privada y tu cliente suba intencionalmente datos en base64.
+Para imagen a 3D, usa un `image_url` público cuando sea posible. Usa `image` en línea/base64 solo cuando tu cliente envíe intencionalmente medios privados y tu backend esté preparado para cuerpos de solicitud más grandes.
 
-## Opciones de Salida
+## Opciones De Formato De Salida
 
-- `format` puede solicitar empaquetado de salida como `glb`, `fbx`, `obj` o `usdz` cuando se soporta.
-- Los valores de `quality` como `draft`, `standard` o `high` afectan la latencia y el costo cuando el modelo los expone.
-- `style` y `seed` son dependientes del modelo; omítelos a menos que el contrato seleccionado los documente.
+- `glb` es generalmente el valor predeterminado más seguro para vistas previas web.
+- `fbx` y `obj` son útiles para flujos de trabajo DCC cuando el modelo seleccionado los soporte.
+- `usdz` es útil para flujos de trabajo de AR de Apple cuando es expuesto por el modelo.
+- Valores de `quality` más altos pueden aumentar la latencia y el costo. Exponlos como opciones explícitas para el usuario, no como valores predeterminados ocultos.
+- `seed` es útil para la reproducibilidad solo cuando el modelo lo respeta.
 
-## Consultar Resultados
+## Consultar Y Almacenar Activos
 
-Utiliza primero el `poll_url` devuelto. Si necesitas un endpoint fijo, utiliza `GET /v1/tasks/{id}` con el mismo `id` / `task_id` de la respuesta de creación.
+Usa primero el `poll_url` devuelto. Si tu cliente necesita una ruta fija, usa `GET /v1/tasks/{id}`.
 
-Las tareas completadas devuelven `model_url` y pueden incluir URLs específicas de formato como `glb_url`, `fbx_url`, `obj_url` o `usdz_url`. Descarga y almacena el activo en tu propio producto si los usuarios necesitan acceso repetido.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+Las tareas completadas devuelven `model_url` y pueden incluir `glb_url`, `fbx_url`, `obj_url` o `usdz_url`. Descarga o almacena el activo seleccionado en tu propio producto si los usuarios necesitan acceso repetido, historial de versiones o descargas prolongadas.
+
+## Lista De Verificación De Producción
+
+- Persiste `task_id`, `poll_url`, modelo, formato solicitado y tu propio ID de registro de activo.
+- Reanuda la consulta después de la actualización de la página en lugar de crear una tarea duplicada.
+- Valida el tamaño y la accesibilidad de la imagen de origen antes de crear la tarea.
+- Mantén las URLs de activos generados fuera de las páginas públicas a menos que el usuario tenga permiso para acceder al activo.
+- Registra `billing_transaction_id` cuando esté presente para una reconciliación posterior.
 
 ## Errores Comunes
 
-- No esperes un activo 3D en la respuesta de creación; consulta hasta obtener un estado terminal.
-- No prometas cada formato para cada modelo.
-- No reintentes solicitudes de creación después de un tiempo de espera del cliente sin verificar si la tarea ya existe.
-- No expongas los IDs de tareas del proveedor en tu interfaz de usuario.
+| Síntoma | Causa probable | Solución |
+|---------|----------------|----------|
+| La respuesta de creación no tiene URL de activo | La generación 3D es asíncrona | Consulta hasta obtener un estado terminal |
+| Formato solicitado faltante | El modelo no devolvió ese formato | Recurre a `model_url` o elige un modelo que soporte el formato |
+| Imagen a 3D rechazada | El modelo seleccionado es solo de texto o la URL de la imagen no es accesible | Verifica el contrato del modelo y valida la URL |
+| Activos duplicados | La ruta de reintento recreó la tarea después de un tiempo de espera | Almacena la identidad de la tarea antes de reintentar |
 
-## Referencia de API
+## Referencia API
 
 | Tema | Referencia |
 |------|------------|

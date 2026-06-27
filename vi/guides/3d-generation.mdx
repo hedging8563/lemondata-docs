@@ -1,25 +1,32 @@
 ---
 title: "Tạo 3D"
-description: "Tạo tài sản 3D từ văn bản hoặc hình ảnh và tải xuống các tệp mô hình hoàn chỉnh từ kết quả tác vụ bất đồng bộ."
+description: "Tạo các tác vụ từ văn bản sang 3D hoặc từ hình ảnh sang 3D, kiểm tra các tài sản đã hoàn thành và xử lý các tệp mô hình có thể tải xuống."
 ---
 
-Tạo 3D là bất đồng bộ. `POST /v1/3d/generations` tạo một tác vụ; phản hồi trạng thái hoàn thành trả về các URL tài sản mô hình có thể tải xuống.
+Tạo 3D là bất đồng bộ. `POST /v1/3d/generations` tạo một tác vụ TokenLab; các phản hồi trạng thái hoàn thành trả về các tài sản mô hình có thể tải xuống như `model_url` và, khi có, các URL cụ thể theo định dạng.
 
-## Khám Phá Mô Hình
+## Chọn Loại Đầu Vào
+
+| Quy trình | Đầu vào bắt buộc | Các trường tùy chọn | Ghi chú |
+|-----------|------------------|---------------------|---------|
+| Văn bản sang 3D | `model`, `prompt` | `format`, `quality`, `style`, `seed` | Tốt nhất để tạo ra một tài sản mới từ mô tả |
+| Hình ảnh sang 3D | `model`, `prompt`, `image` hoặc `image_url` | `format`, `quality`, `style`, `seed` | Chỉ sử dụng khi mô hình đã chọn hỗ trợ đầu vào hình ảnh |
+
+Kiểm tra danh mục mô hình trước khi quyết định các tùy chọn nào sẽ được hiển thị:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Đừng giả định rằng mọi mô hình 3D đều hỗ trợ cả text-to-3D và image-to-3D. Kiểm tra hợp đồng mô hình đã chọn trước khi gửi `image`, `image_url`, `format`, `quality`, `style`, hoặc `seed`.
+Đừng giả định rằng mọi mô hình 3D đều hỗ trợ cả hai loại đầu vào hoặc mọi định dạng đầu ra. Kiểm tra hợp đồng mô hình đã chọn trước khi gửi `image`, `image_url`, `format`, `quality`, `style`, hoặc `seed`.
 
-## Tạo Yêu Cầu
+## Tạo Một Tác Vụ 3D
 
 ```bash
-curl https://api.tokenlab.sh/v1/3d/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "tripo3d-v2.5",
     "prompt": "Một linh vật robot low-poly phong cách với topo sạch",
@@ -28,31 +35,48 @@ curl https://api.tokenlab.sh/v1/3d/generations \\
   }'
 ```
 
-Text-to-3D yêu cầu một `prompt`. Image-to-3D sử dụng `image` hoặc `image_url` khi được mô hình hỗ trợ. Ưu tiên các URL công khai cho đầu vào sản xuất trừ khi hình ảnh nguồn là riêng tư và khách hàng của bạn cố ý tải lên dữ liệu base64.
+Đối với hình ảnh sang 3D, hãy sử dụng `image_url` công khai khi có thể. Chỉ sử dụng `image` inline/base64 khi khách hàng của bạn cố tình gửi phương tiện riêng tư và backend của bạn đã chuẩn bị cho các thân yêu cầu lớn hơn.
 
-## Lựa Chọn Đầu Ra
+## Lựa Chọn Định Dạng Đầu Ra
 
-- `format` có thể yêu cầu đóng gói đầu ra như `glb`, `fbx`, `obj`, hoặc `usdz` khi được hỗ trợ.
-- Các giá trị `quality` như `draft`, `standard`, hoặc `high` ảnh hưởng đến độ trễ và chi phí khi mô hình công khai chúng.
-- `style` và `seed` phụ thuộc vào mô hình; bỏ qua chúng trừ khi hợp đồng đã chọn tài liệu chúng.
+- `glb` thường là mặc định an toàn nhất cho các bản xem trước trên web.
+- `fbx` và `obj` hữu ích cho các quy trình DCC khi mô hình đã chọn hỗ trợ chúng.
+- `usdz` hữu ích cho các quy trình AR của Apple khi được mô hình cung cấp.
+- Các giá trị `quality` cao hơn có thể làm tăng độ trễ và chi phí. Hiển thị chúng như là các lựa chọn rõ ràng cho người dùng, không phải là mặc định ẩn.
+- `seed` hữu ích cho khả năng tái tạo chỉ khi mô hình tôn trọng nó.
 
-## Kiểm Tra Kết Quả
+## Kiểm Tra Và Lưu Tài Sản
 
-Sử dụng `poll_url` trả về trước. Nếu bạn cần một điểm cuối cố định, sử dụng `GET /v1/tasks/{id}` với cùng một `id` / `task_id` từ phản hồi tạo.
+Sử dụng `poll_url` được trả về trước. Nếu khách hàng của bạn cần một tuyến đường cố định, hãy sử dụng `GET /v1/tasks/{id}`.
 
-Các tác vụ hoàn thành trả về `model_url` và có thể bao gồm các URL cụ thể theo định dạng như `glb_url`, `fbx_url`, `obj_url`, hoặc `usdz_url`. Tải xuống và lưu trữ tài sản trong sản phẩm của bạn nếu người dùng cần truy cập lặp lại.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Những Cạm Bẫy Thường Gặp
+Các tác vụ đã hoàn thành trả về `model_url` và có thể bao gồm `glb_url`, `fbx_url`, `obj_url`, hoặc `usdz_url`. Tải xuống hoặc lưu trữ tài sản đã chọn trong sản phẩm của bạn nếu người dùng cần truy cập lặp lại, lịch sử phiên bản, hoặc tải xuống lâu dài.
 
-- Đừng mong đợi một tài sản 3D trong phản hồi tạo; kiểm tra cho đến khi có trạng thái cuối cùng.
-- Đừng hứa hẹn mọi định dạng cho mọi mô hình.
-- Đừng thử lại các yêu cầu tạo sau khi thời gian chờ của khách hàng mà không kiểm tra xem tác vụ đã tồn tại hay chưa.
-- Đừng tiết lộ ID tác vụ của nhà cung cấp trong giao diện người dùng của bạn.
+## Danh Sách Kiểm Tra Sản Xuất
+
+- Lưu trữ `task_id`, `poll_url`, mô hình, định dạng yêu cầu, và ID bản ghi tài sản của riêng bạn.
+- Tiếp tục kiểm tra sau khi làm mới trang thay vì tạo một tác vụ trùng lặp.
+- Xác thực kích thước và khả năng truy cập của hình ảnh nguồn trước khi tạo tác vụ.
+- Giữ các URL tài sản đã tạo ra ngoài các trang công khai trừ khi người dùng có quyền truy cập vào tài sản.
+- Ghi lại `billing_transaction_id` khi có để đối chiếu sau này.
+
+## Lỗi Thường Gặp
+
+| Triệu chứng | Nguyên nhân có thể | Cách khắc phục |
+|-------------|-------------------|----------------|
+| Phản hồi tạo không có URL tài sản | Tạo 3D là bất đồng bộ | Kiểm tra cho đến khi có trạng thái cuối cùng |
+| Định dạng yêu cầu bị thiếu | Mô hình không trả về định dạng đó | Quay lại `model_url` hoặc chọn một mô hình hỗ trợ định dạng |
+| Hình ảnh sang 3D bị từ chối | Mô hình đã chọn chỉ hỗ trợ văn bản hoặc URL hình ảnh không thể truy cập | Kiểm tra hợp đồng mô hình và xác thực URL |
+| Tài sản trùng lặp | Đường dẫn thử lại đã tạo lại tác vụ sau thời gian chờ | Lưu trữ danh tính tác vụ trước khi thử lại |
 
 ## Tài Liệu API
 
-| Chủ Đề | Tài Liệu |
-|-------|-----------|
+| Chủ đề | Tài liệu tham khảo |
+|--------|--------------------|
 | Tạo 3D | [Tạo 3D](/vi/api-reference/3d/create-3d) |
 | Lấy Trạng Thái 3D | [Lấy Trạng Thái 3D](/vi/api-reference/3d/get-3d-status) |
 | Lấy Trạng Thái Tác Vụ | [Lấy Trạng Thái Tác Vụ](/vi/api-reference/tasks/get-task-status) |

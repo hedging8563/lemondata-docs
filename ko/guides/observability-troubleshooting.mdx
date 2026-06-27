@@ -1,61 +1,85 @@
 ---
 title: "관측 가능성 및 문제 해결"
-description: "지원, 사용 조정 및 비동기 작업 디버깅을 위해 TokenLab이 노출하는 공개 식별자를 캡처합니다."
+description: "지원, 사용 조정 및 비동기 미디어 디버깅에 필요한 공개 TokenLab 식별자를 기록합니다."
 ---
 
-이 페이지는 프로덕션에서 TokenLab을 운영하는 애플리케이션 팀을 위해 작성되었습니다. 공개 식별자와 사용자 안전 로그에 중점을 두며, 제공자 라우팅 내부에 대한 내용은 포함하지 않습니다.
+좋은 TokenLab 관측 가능성은 공개 식별자로 시작됩니다. 귀하의 로그는 "사용자가 무엇을 요청했는지, TokenLab이 어떤 공개 작업을 생성했는지, 그리고 어떻게 청구되었는지?"에 대한 답변을 제공해야 하며, 제공자의 라우팅 내부 또는 민감한 사용자 데이터를 노출해서는 안 됩니다.
 
-## 공개 식별자
+## 기록해야 할 공개 식별자
 
 | 식별자 | 나타나는 위치 | 용도 |
 |--------|---------------|------|
-| `request_id` | 오류 본문, 관리 API 사용 기록, 대시보드 로그 | 지원 및 요청 수준 조정 |
-| `task_id` / `id` | 비동기 생성 및 상태 응답 | 이미지, 비디오, 음악 및 3D 작업 폴링 |
+| `request_id` | 오류 본문, 대시보드 로그, 사용 기록 | 요청 수준 지원 및 조정 |
+| `id` / `task_id` | 비동기 생성 및 상태 응답 | 이미지, 비디오, 음악 및 3D 작업 폴링 |
 | `poll_url` | 비동기 생성 응답 | 선호하는 상태 URL |
-| `billing_transaction_id` | 정산된 비스트리밍 응답, 작업 상태 응답, 관리 API 사용 기록, `X-Billing-Transaction-ID` 헤더 | 청구 조정 |
-| `X-Task-ID` | 비동기 작업 응답 | 헤더 수준 작업 상관관계 |
+| `billing_transaction_id` | 정산된 비스트리밍 응답, 비동기 작업 상태 응답, 사용 기록, `X-Billing-Transaction-ID` | 비용 조정 |
+| `X-Task-ID` | 비동기 작업 응답 헤더 | 헤더 수준 작업 상관 관계 |
+| 귀하의 작업/사용자 ID | 귀하의 애플리케이션 | TokenLab 활동을 사용자 워크플로우에 연결 |
 
-## 로그에 기록할 내용
+제공자의 작업 ID, 업스트림 URL, 라우팅 채널 ID, Redis 키 또는 개인 실행 메타데이터를 고객에게 노출되는 진실로 저장하지 마십시오.
 
-1. 엔드포인트, 모델, 상태 코드, 타임스탬프 및 공개 식별자를 기록합니다.
-2. 기본적으로 `Authorization`, API 키, 서명된 URL, 개인 미디어 URL 및 전체 프롬프트를 삭제합니다.
-3. 비동기 작업의 경우, 생성 응답 및 모든 최종 상태 응답을 기록합니다.
-4. 사용 질문의 경우, API 키 ID 및 날짜 필터와 함께 관리 API를 호출합니다.
-5. 제공자 텍스트를 파싱하는 대신 응답 본문에서 오류 `type`, `code`, 및 `param`을 사용합니다.
+## 기록할 내용
 
-## 문제 해결 체크리스트
+비밀을 누출하지 않고 요청을 진단할 수 있을 만큼 기록하십시오:
+
+- 엔드포인트, HTTP 메서드, 모델, 상태 코드, 타임스탬프 및 대기 시간.
+- 공개 식별자: `request_id`, `task_id`, `poll_url`, 및 `billing_transaction_id`가 있을 경우.
+- 정제된 요청 형태: 어떤 필드가 존재했는지, 전체 프롬프트나 개인 미디어 콘텐츠는 포함하지 마십시오.
+- 최종 비동기 상태 응답, 공개 오류 필드 포함.
+- 클라이언트 재시도 횟수 및 재시도가 새로운 작업을 생성했는지 또는 기존 작업을 재개했는지 여부.
+
+명시적인 허가가 없는 한 `Authorization`, API 키, 관리 토큰, 서명된 URL, 개인 미디어 URL, 전체 프롬프트 및 사용자 개인 데이터를 항상 삭제하십시오.
+
+## 문제 해결 매트릭스
 
 | 증상 | 첫 번째 확인 | 유용한 페이지 |
 |------|--------------|----------------|
-| `401` 또는 `403` | API 키, 관리 토큰, 조직 접근 | [인증](/ko/authentication) |
-| `429` | 비율 제한 계층 및 클라이언트 재시도 동작 | [비율 제한](/ko/guides/rate-limits) |
-| `400 invalid_request_error` | 지원되지 않는 필드, 잘못된 엔드포인트 또는 모델 특정 계약 불일치 | [오류 처리](/ko/guides/error-handling) |
-| 비동기 작업이 끝나지 않음 | `poll_url` 폴링, 최종 `status` 검사, 중복 작업 생성을 피함 | [비동기 작업 및 폴링](/ko/guides/async-jobs-polling) |
-| 비용이 UI와 일치하지 않음 | 사용 기록에서 `request_id` 및 `billing_transaction_id` 비교 | [청구 및 가격 책정](/ko/guides/billing) |
+| `401` 또는 `403` | API 키, 관리 토큰, 조직 접근, 키 범위 | [인증](/ko/authentication) |
+| `402` | 잔액, API 키 사용 한도, 모델 가격 가용성 | [청구 및 가격 책정](/ko/guides/billing) |
+| `429` | 계정 등급, 엔드포인트 속도 제한, 재시도 동작 | [속도 제한](/ko/guides/rate-limits) |
+| `400 invalid_request_error` | 지원되지 않는 필드, 잘못된 엔드포인트, 필수 필드 누락 또는 모델 계약 불일치 | [오류 처리](/ko/guides/error-handling) |
+| 비동기 작업을 찾을 수 없음 | 잘못된 API 키, 오래된 작업 ID, 만료된 작업 또는 비공식 작업 ID | [비동기 작업 및 폴링](/ko/guides/async-jobs-polling) |
+| 비용이 UI와 일치하지 않음 | 정산 타이밍 또는 잘못된 식별자 비교 | [청구 및 가격 책정](/ko/guides/billing) |
 
 ## 사용 조정
 
-`GET /v1/management/api-keys/{keyId}/usage`는 페이지 매김된 키 수준 사용을 반환합니다. `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, 및 `endDate`로 필터링할 수 있습니다. 대시보드를 스크래핑하는 대신 서버 측 조정에 사용합니다.
+서버 측 조정을 위해 Management API를 사용하십시오:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-스트리밍 응답은 스트림이 전송된 후 정산될 수 있으므로, 사용이 나중에 기록되더라도 청구 헤더가 없을 수 있습니다. 비동기 미디어 작업의 경우, 최종 폴링 후에 정산이 나타날 수 있습니다.
+`GET /v1/management/api-keys/{keyId}/usage`는 `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, 및 `endDate`로 필터링할 수 있습니다. 이러한 기록을 사용하여 대시보드 페이지를 스크랩하거나 업스트림 제공자의 작업 ID에 의존하지 마십시오.
 
-## 지원 패킷
+스트리밍 응답은 스트림이 전송된 후 정산될 수 있으므로, 사용이 나중에 기록되더라도 청구 헤더가 없을 수 있습니다. 비동기 미디어 작업은 최종 폴링 후 정산될 수 있습니다.
 
-지원에 연락할 때는 `request_id`, `task_id`, `billing_transaction_id`가 있을 경우 포함하고, 엔드포인트, 모델, 타임스탬프 및 정리된 요청 형식을 포함합니다. 지원에서 삭제된 샘플을 요청하지 않는 한 API 키, 개인 미디어 또는 전체 프롬프트를 포함하지 마십시오.
+## 지원 패킷 템플릿
 
-TokenLab 지원이 명시적으로 요청하지 않는 한 고객 로그나 지원 티켓에 제공자 이름, 채널 ID, 라우팅 식별자, Redis 키 또는 상위 작업 URL을 포함하지 마십시오.
+지원에 연락할 때 포함하십시오:
+
+- `request_id`.
+- 비동기 작업을 위한 `task_id` 및 `poll_url`.
+- 있을 경우 `billing_transaction_id`.
+- 엔드포인트, 메서드, 모델, 타임스탬프 및 상태 코드.
+- 정제된 요청 형태 및 공개 오류 본문.
+- 예상 결과 및 사용자가 실제로 본 내용.
+
+TokenLab 지원이 명시적으로 삭제된 샘플을 요청하지 않는 한 API 키, 관리 토큰, 개인 미디어, 전체 프롬프트, 제공자 URL, 채널 ID 또는 내부 라우팅 식별자를 포함하지 마십시오.
+
+## 운영 점검
+
+- 반복되는 `401`, `402`, `429`, 및 `5xx` 응답에 대해 별도로 경고하십시오; 이들은 보통 다른 소유자가 있습니다.
+- 제품 SLA보다 비종료 상태로 남아 있는 비동기 작업을 추적하십시오.
+- 동일한 사용자 작업 ID에 대한 중복 생성 시도를 추적하십시오.
+- 완료된 작업을 샘플링하고 사용자에게 표시되는 자산, 사용 기록 및 저장된 작업 기록이 일치하는지 확인하십시오.
 
 ## API 참조
 
 | 주제 | 참조 |
 |------|------|
 | 오류 처리 | [오류 처리](/ko/guides/error-handling) |
-| 비율 제한 | [비율 제한](/ko/guides/rate-limits) |
+| 속도 제한 | [속도 제한](/ko/guides/rate-limits) |
 | 청구 및 가격 책정 | [청구 및 가격 책정](/ko/guides/billing) |
 | API 키 사용 가져오기 | [API 키 사용 가져오기](/ko/api-reference/management/get-api-key-usage) |
 | 작업 상태 가져오기 | [작업 상태 가져오기](/ko/api-reference/tasks/get-task-status) |

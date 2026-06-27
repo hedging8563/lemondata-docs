@@ -1,43 +1,52 @@
 ---
 title: "Tạo Hình Ảnh"
-description: "Xây dựng các quy trình từ văn bản sang hình ảnh, từ hình ảnh sang hình ảnh, và chỉnh sửa hình ảnh dựa trên các hợp đồng hình ảnh công khai của TokenLab."
+description: "Chọn đúng endpoint hình ảnh của TokenLab, gửi các yêu cầu nhận thức mô hình và xử lý kết quả hình ảnh đồng bộ hoặc không đồng bộ một cách an toàn."
 ---
 
-Các API hình ảnh của TokenLab bao gồm nhiều gia đình mô hình với các hình thức yêu cầu khác nhau. Sử dụng hợp đồng mô hình công khai và tài liệu tham khảo API cụ thể cho điểm cuối trước khi giả định một trường hoạt động trên mọi mô hình hình ảnh.
+TokenLab hỗ trợ chuyển đổi văn bản thành hình ảnh, hình ảnh thành hình ảnh và chỉnh sửa hình ảnh thông qua các endpoint hình ảnh công khai. Các mô hình hình ảnh không chia sẻ một tập hợp tham số chung, vì vậy các khách hàng sản xuất nên chọn endpoint trước, sau đó chọn mô hình, và chỉ gửi các trường được mô hình đó hỗ trợ.
 
-## Chọn Điểm Cuối
+## Khi Nào Sử Dụng Mỗi Endpoint
 
-| Mục Tiêu | Điểm Cuối | Ghi Chú |
-|----------|-----------|---------|
-| Từ văn bản sang hình ảnh | `POST /v1/images/generations` | Sử dụng `prompt` và một `model` rõ ràng |
-| Từ hình ảnh sang hình ảnh / hình ảnh tham chiếu | `POST /v1/images/generations` | Sử dụng `operation: "image-to-image"` cộng với `image_url`, `image_urls`, hoặc `reference_image_urls` khi mô hình hỗ trợ |
-| Chỉnh sửa hình ảnh GPT | `POST /v1/images/edits` | Hỗ trợ `image` đa phần, `image_url` / `image_urls` JSON, và các tham chiếu `images[]` chính thức cho các mô hình chỉnh sửa được hỗ trợ |
-| Biến thể cũ | `POST /v1/images/variations` | Ưu tiên các tuyến đường tạo mới hoặc chỉnh sửa cho công việc mới |
-| Trạng thái bất đồng bộ | `GET /v1/tasks/{id}` | Sử dụng `poll_url` trước tiên khi có |
+| Quy trình người dùng | Endpoint | Sử dụng khi | Tránh khi |
+|----------------------|----------|-------------|-----------|
+| Chuyển đổi văn bản thành hình ảnh | `POST /v1/images/generations` | Người dùng bắt đầu từ một lời nhắc duy nhất | Bạn cần một quy trình chỉnh sửa hình ảnh GPT chính thức |
+| Hình ảnh thành hình ảnh | `POST /v1/images/generations` | Các tài liệu mô hình tham chiếu hình ảnh thông qua `operation: "image-to-image"` cộng với `image_url`, `image_urls`, hoặc `reference_image_urls` | Mô hình mong đợi đầu vào chỉnh sửa đa phần |
+| Chỉnh sửa hình ảnh | `POST /v1/images/edits` | Bạn đang chỉnh sửa một hình ảnh hiện có với một mô hình chỉnh sửa được hỗ trợ như mô hình gia đình GPT Image | Bạn đang sử dụng phong cách tạo hình ảnh Nano Banana |
+| Biến thể | `POST /v1/images/variations` | Bạn duy trì một tích hợp tương thích với biến thể cũ | Bạn đang xây dựng một quy trình hình ảnh tham chiếu mới |
+| Trạng thái | `GET /v1/tasks/{id}` | Một phản hồi tạo ra trả về `task_id`, `status: "pending"`, hoặc `poll_url` | Phản hồi tạo ra đã chứa `data[]` cuối cùng |
 
-## Khám Phá Mô Hình
+Luôn gửi `model`. Các endpoint hình ảnh cố ý không dựa vào một mô hình mặc định ngầm định lịch sử cho lưu lượng sản xuất.
+
+## Chọn Một Mô Hình
+
+Bắt đầu với việc khám phá mô hình, sau đó kiểm tra hợp đồng TokenLab của mô hình đã chọn:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Các tham số mô hình hình ảnh khác nhau rất nhiều. Đọc hợp đồng mô hình đã chọn trước khi gửi `size`, `quality`, `aspect_ratio`, `resolution`, `async`, `background`, hoặc `output_format`.
+Đối với các mô hình không trò chuyện, phản hồi danh sách có thể bao gồm `tokenlab.public_contract_summary`. Các trang chi tiết mô hình có thể tiết lộ `tokenlab.public_contract` đầy đủ hơn. Sử dụng các trường đó để xác nhận:
 
-## Các Tham Số Đầu Vào Và Trường Cụ Thể Của Mô Hình
+- Hoạt động được hỗ trợ, chẳng hạn như `text-to-image`, `image-to-image`, hoặc `image-edit`.
+- Endpoint yêu cầu mà mô hình mong đợi.
+- Hình dạng nào để sử dụng cho các tham chiếu, chẳng hạn như `image_url`, `image_urls`, `reference_image_urls`, đa phần `image`, hoặc JSON `images[]`.
+- Liệu mô hình có chấp nhận `size`, `aspect_ratio`, `resolution`, `quality`, `background`, `output_format`, hoặc `response_format` hay không.
 
-- `gpt-image-2` sử dụng `size` và `quality` theo kiểu OpenAI; bỏ qua `size` hoặc `quality` để cho TokenLab sử dụng `auto` nơi được hỗ trợ.
-- Các gia đình hình ảnh Gemini và Nano Banana thường sử dụng `aspect_ratio`; chỉ gửi `resolution` khi mô hình đã chọn công khai nó.
-- Các yêu cầu hình ảnh tham chiếu Nano Banana thuộc về `/v1/images/generations` với `operation: "image-to-image"` và `image_urls`, không phải trên `/v1/images/edits`.
-- `/v1/images/generations` không chấp nhận `images[]` hoặc `file_id` ở cấp độ cao nhất; đó là các hình thức quy trình chỉnh sửa.
-- Các URL hình ảnh từ xa phải là các URL công khai `http`/`https`. Tránh các mạng riêng, thông tin xác thực nhúng, các đoạn, và các URL ký tạm thời ngắn hạn.
+## Quy Tắc Hình Dạng Yêu Cầu
 
-## Tạo Yêu Cầu
+- Các yêu cầu kiểu `gpt-image-2` sử dụng các trường `size`, `quality`, và chỉnh sửa giống như OpenAI. Bỏ qua các trường tùy chọn khi bạn muốn mô hình hoặc TokenLab sử dụng các giá trị mặc định tự động.
+- Các gia đình hình ảnh Gemini và Nano Banana thường sử dụng `aspect_ratio`; chỉ gửi `resolution` khi hợp đồng mô hình tiết lộ nó.
+- Hình ảnh Nano Banana thành hình ảnh thuộc về `/v1/images/generations` với `operation: "image-to-image"` và các URL hình ảnh tham chiếu.
+- `/v1/images/generations` không chấp nhận `images[]` hoặc `file_id` ở cấp độ cao; đó là các hình dạng quy trình chỉnh sửa.
+- Các tham chiếu hình ảnh từ xa phải là các URL công khai `http` hoặc `https`. Không gửi các URL mạng riêng, thông tin xác thực nhúng, đoạn URL, hoặc các URL đã ký có thể hết hạn trước khi xử lý bắt đầu.
+
+## Ví Dụ Chuyển Đổi Văn Bản Thành Hình Ảnh
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
     "prompt": "Một bức ảnh sản phẩm sạch của một chiếc cốc cà phê bằng gốm trên một cái bàn óc chó",
@@ -46,27 +55,58 @@ curl https://api.tokenlab.sh/v1/images/generations \\
   }'
 ```
 
-## Lấy Kết Quả
-
-Một số tuyến đường hình ảnh trả về `data[].url` hoặc `data[].b64_json` trong dòng. Các tuyến đường khác trả về `status: "pending"`, `task_id`, và `poll_url`. Nếu bạn yêu cầu tạo hình ảnh hoặc chỉnh sửa bất đồng bộ, kết quả nhiệm vụ hoàn thành sẽ trả về các URL; sử dụng các yêu cầu đồng bộ khi bạn cần cụ thể `b64_json`.
+## Ví Dụ Hình Ảnh Tham Chiếu
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "Giữ nguyên hình dạng sản phẩm, thay đổi nền thành một thiết lập studio sáng",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Xử Lý Kết Quả
+
+Các phản hồi hình ảnh có thể đồng bộ hoặc không đồng bộ:
+
+- Các phản hồi đồng bộ trả về `data[]` cuối cùng với `url` hoặc `b64_json`.
+- Các phản hồi không đồng bộ trả về `id`, `task_id`, `status`, và thường là `poll_url`.
+- Ưu tiên `poll_url` khi nó có mặt. Nếu bạn cần một tuyến đường cố định, hãy kiểm tra `GET /v1/tasks/{id}`.
+- Sử dụng các yêu cầu đồng bộ khi bạn cần cụ thể `b64_json`; các kết quả hình ảnh không đồng bộ có định hướng URL.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-## Những Cạm Bẫy Thường Gặp
+Lưu trữ URL hình ảnh trả về, ID nhiệm vụ, mô hình, và ID người dùng/công việc của riêng bạn. Không tiếp tục kiểm tra sau khi có trạng thái cuối cùng.
 
-- Không giả định rằng mọi mô hình hình ảnh đều đồng bộ.
-- Không yêu cầu `b64_json` từ các nhiệm vụ hình ảnh bất đồng bộ; kết quả bất đồng bộ có định hướng URL.
-- Không gửi `resolution` đến các mô hình hình ảnh Gemini chỉ tỷ lệ.
-- Không sử dụng `/v1/images/edits` cho các quy trình hình ảnh Nano Banana.
-- Đặt thời gian chờ của khách hàng HTTP ít nhất là `120s` cho các yêu cầu hình ảnh độ phân giải cao đồng bộ.
+## Danh Sách Kiểm Tra Sản Xuất
 
-## Tài Liệu Tham Khảo API
+- Xác thực đầu vào của người dùng trước khi gọi TokenLab: độ dài lời nhắc, số lượng hình ảnh, khả năng tiếp cận URL, và loại tệp.
+- Đặt thời gian chờ HTTP đủ cao cho các yêu cầu đồng bộ độ phân giải cao. Sử dụng chế độ không đồng bộ khi có sẵn cho công việc dài.
+- Lưu trữ `request_id`, `task_id`, `poll_url`, mô hình, endpoint, và hình dạng yêu cầu đã được làm sạch để hỗ trợ.
+- Khi khách hàng hết thời gian chờ, kiểm tra xem một nhiệm vụ đã được tạo ra trước khi thử lại yêu cầu tạo.
+- Đối chiếu chi phí với hồ sơ sử dụng và `billing_transaction_id` khi có mặt, không phải với ID nhiệm vụ của nhà cung cấp.
 
-| Chủ Đề | Tài Liệu Tham Khảo |
-|--------|--------------------|
+## Lỗi Thường Gặp
+
+| Triệu chứng | Nguyên nhân có thể | Cách khắc phục |
+|-------------|--------------------|----------------|
+| `400` với `param: "model"` | Thiếu mô hình rõ ràng | Truy vấn `/v1/models?recommended_for=image` và gửi `model` |
+| Trường không được hỗ trợ | Trường không có trong hợp đồng công khai của mô hình đó | Xóa trường hoặc chọn một mô hình/endpoint tài liệu nó |
+| Không có `b64_json` trên kết quả không đồng bộ | Các nhiệm vụ hình ảnh không đồng bộ trả về kết quả định hướng URL | Sử dụng chế độ đồng bộ cho đầu ra base64 |
+| Hình ảnh tham chiếu bị từ chối | Endpoint sai hoặc URL riêng/hết hạn | Khớp hình dạng tham chiếu được tài liệu của mô hình và sử dụng các URL có thể tiếp cận |
+
+## Tham Khảo API
+
+| Chủ đề | Tham khảo |
+|--------|-----------|
 | Tạo Hình Ảnh | [Tạo Hình Ảnh](/vi/api-reference/images/create-image) |
 | Chỉnh Sửa Hình Ảnh | [Chỉnh Sửa Hình Ảnh](/vi/api-reference/images/edit-image) |
 | Tạo Biến Thể Hình Ảnh | [Tạo Biến Thể Hình Ảnh](/vi/api-reference/images/create-variation) |

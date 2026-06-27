@@ -1,60 +1,84 @@
 ---
 title: "3D 생성"
-description: "텍스트 또는 이미지에서 3D 자산을 생성하고 비동기 작업 결과에서 완료된 모델 파일을 다운로드합니다."
+description: "텍스트-투-3D 또는 이미지-투-3D 작업을 생성하고, 완료된 자산을 폴링하며, 다운로드 가능한 모델 파일을 처리합니다."
 ---
 
-3D 생성은 비동기입니다. `POST /v1/3d/generations`는 작업을 생성하며, 완료된 상태 응답은 다운로드 가능한 모델 자산 URL을 반환합니다.
+3D 생성은 비동기적입니다. `POST /v1/3d/generations`는 TokenLab 작업을 생성하며, 완료 상태 응답은 `model_url`과 같은 다운로드 가능한 모델 자산을 반환하고, 사용 가능한 경우 형식별 URL을 반환합니다.
 
-## 모델 검색
+## 입력 유형 선택
+
+| 워크플로우 | 필수 입력 | 선택적 필드 | 비고 |
+|------------|------------|--------------|------|
+| 텍스트-투-3D | `model`, `prompt` | `format`, `quality`, `style`, `seed` | 설명에서 새로운 자산을 생성하는 데 가장 적합합니다. |
+| 이미지-투-3D | `model`, `prompt`, `image` 또는 `image_url` | `format`, `quality`, `style`, `seed` | 선택한 모델이 이미지 입력을 지원할 때만 사용하십시오. |
+
+어떤 옵션을 노출할지 결정하기 전에 모델 카탈로그를 쿼리하십시오:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-모든 3D 모델이 텍스트-투-3D 및 이미지-투-3D를 지원한다고 가정하지 마십시오. `image`, `image_url`, `format`, `quality`, `style`, 또는 `seed`를 전송하기 전에 선택한 모델 계약을 확인하십시오.
+모든 3D 모델이 두 가지 입력 유형을 지원하거나 모든 출력 형식을 지원한다고 가정하지 마십시오. `image`, `image_url`, `format`, `quality`, `style`, 또는 `seed`를 전송하기 전에 선택한 모델 계약을 확인하십시오.
 
-## 요청 생성
+## 3D 작업 생성
 
 ```bash
-curl https://api.tokenlab.sh/v1/3d/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "tripo3d-v2.5",
-    "prompt": "정확한 토폴로지를 가진 스타일화된 로우 폴리 로봇 마스코트",
+    "prompt": "깔끔한 토폴로지를 가진 스타일화된 로우 폴리 로봇 마스코트",
     "format": "glb",
     "quality": "standard"
   }'
 ```
 
-텍스트-투-3D는 `prompt`가 필요합니다. 이미지-투-3D는 모델이 지원할 경우 `image` 또는 `image_url`을 사용합니다. 소스 이미지가 비공개가 아닌 한, 프로덕션 입력에는 공개 URL을 사용하는 것이 좋습니다.
+이미지-투-3D의 경우 가능한 경우 공개 `image_url`을 사용하십시오. 클라이언트가 의도적으로 비공식 미디어를 전송하고 백엔드가 더 큰 요청 본문을 처리할 준비가 되어 있을 때만 인라인/base64 `image`를 사용하십시오.
 
-## 출력 선택
+## 출력 형식 선택
 
-- `format`은 지원되는 경우 `glb`, `fbx`, `obj`, 또는 `usdz`와 같은 출력 패키징을 요청할 수 있습니다.
-- `quality` 값은 `draft`, `standard`, 또는 `high`와 같이 모델이 노출할 경우 지연 시간 및 비용에 영향을 미칩니다.
-- `style` 및 `seed`는 모델에 따라 다르므로 선택한 계약서에 문서화되어 있지 않은 한 생략하십시오.
+- `glb`는 일반적으로 웹 미리보기를 위한 가장 안전한 기본값입니다.
+- `fbx` 및 `obj`는 선택한 모델이 이를 지원할 때 DCC 파이프라인에 유용합니다.
+- `usdz`는 모델이 노출할 때 Apple AR 워크플로우에 유용합니다.
+- 더 높은 `quality` 값은 대기 시간과 비용을 증가시킬 수 있습니다. 이를 숨겨진 기본값이 아닌 명시적인 사용자 선택으로 노출하십시오.
+- `seed`는 모델이 이를 존중할 때만 재현 가능성에 유용합니다.
 
-## 결과 폴링
+## 자산 폴링 및 저장
 
-반환된 `poll_url`을 먼저 사용하십시오. 고정 엔드포인트가 필요한 경우, 생성 응답에서 동일한 `id` / `task_id`를 사용하여 `GET /v1/tasks/{id}`를 사용하십시오.
+반환된 `poll_url`을 먼저 사용하십시오. 클라이언트가 고정 경로가 필요하면 `GET /v1/tasks/{id}`를 사용하십시오.
 
-완료된 작업은 `model_url`을 반환하며, `glb_url`, `fbx_url`, `obj_url`, 또는 `usdz_url`과 같은 형식별 URL을 포함할 수 있습니다. 사용자가 반복적으로 접근해야 하는 경우 자산을 다운로드하여 자신의 제품에 캐시하십시오.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## 일반적인 함정
+완료된 작업은 `model_url`을 반환하며 `glb_url`, `fbx_url`, `obj_url`, 또는 `usdz_url`을 포함할 수 있습니다. 사용자가 반복 접근, 버전 기록 또는 장기 다운로드가 필요할 경우 선택한 자산을 다운로드하거나 캐시하십시오.
 
-- 생성 응답에서 3D 자산을 기대하지 마십시오; 최종 상태가 될 때까지 폴링하십시오.
-- 모든 모델에 대해 모든 형식을 약속하지 마십시오.
-- 클라이언트 타임아웃 후 작업이 이미 존재하는지 확인하지 않고 생성 요청을 재시도하지 마십시오.
-- UI에서 공급자 작업 ID를 노출하지 마십시오.
+## 생산 체크리스트
+
+- `task_id`, `poll_url`, 모델, 요청된 형식 및 자신의 자산 기록 ID를 유지하십시오.
+- 페이지 새로 고침 후에는 중복 작업을 생성하는 대신 폴링을 재개하십시오.
+- 작업을 생성하기 전에 소스 이미지 크기와 접근 가능성을 검증하십시오.
+- 사용자가 자산에 접근할 권한이 없는 한 생성된 자산 URL을 공개 페이지에 두지 마십시오.
+- 나중에 조정을 위해 존재할 경우 `billing_transaction_id`를 기록하십시오.
+
+## 일반 오류
+
+| 증상 | 가능한 원인 | 수정 |
+|------|-------------|------|
+| 생성 응답에 자산 URL 없음 | 3D 생성은 비동기적입니다. | 최종 상태까지 폴링하십시오. |
+| 요청된 형식 없음 | 모델이 해당 형식을 반환하지 않았습니다. | `model_url`로 대체하거나 형식을 지원하는 모델을 선택하십시오. |
+| 이미지-투-3D 거부됨 | 선택한 모델이 텍스트 전용이거나 이미지 URL에 접근할 수 없습니다. | 모델 계약을 확인하고 URL을 검증하십시오. |
+| 중복 자산 | 재시도 경로가 타임아웃 후 작업을 재생성했습니다. | 재시도하기 전에 작업 ID를 저장하십시오. |
 
 ## API 참조
 
 | 주제 | 참조 |
-|-------|-----------|
+|------|------|
 | 3D 생성 | [3D 생성](/ko/api-reference/3d/create-3d) |
 | 3D 상태 가져오기 | [3D 상태 가져오기](/ko/api-reference/3d/get-3d-status) |
 | 작업 상태 가져오기 | [작업 상태 가져오기](/ko/api-reference/tasks/get-task-status) |
 | 모델 목록 | [모델 목록](/ko/api-reference/models/list-models) |
-| 청구 및 가격 | [청구 및 가격](/ko/guides/billing) |
+| 청구 및 가격 책정 | [청구 및 가격 책정](/ko/guides/billing) |

@@ -1,25 +1,32 @@
 ---
 title: "Generasi 3D"
-description: "Buat aset 3D dari teks atau gambar dan unduh file model yang telah selesai dari hasil tugas asinkron."
+description: "Buat tugas teks-ke-3D atau gambar-ke-3D, polling untuk aset yang selesai, dan tangani file model yang dapat diunduh."
 ---
 
-Generasi 3D bersifat asinkron. `POST /v1/3d/generations` membuat sebuah tugas; respons status yang selesai mengembalikan URL aset model yang dapat diunduh.
+Generasi 3D bersifat asinkron. `POST /v1/3d/generations` membuat tugas TokenLab; respons status yang selesai mengembalikan aset model yang dapat diunduh seperti `model_url` dan, ketika tersedia, URL spesifik format.
 
-## Penemuan Model
+## Pilih Jenis Input
+
+| Alur Kerja | Input yang Diperlukan | Bidang Opsional | Catatan |
+|------------|-----------------------|------------------|---------|
+| Teks-ke-3D | `model`, `prompt` | `format`, `quality`, `style`, `seed` | Terbaik untuk menghasilkan aset baru dari deskripsi |
+| Gambar-ke-3D | `model`, `prompt`, `image` atau `image_url` | `format`, `quality`, `style`, `seed` | Gunakan hanya ketika model yang dipilih mendukung input gambar |
+
+Kueri katalog model sebelum memutuskan opsi mana yang akan diekspos:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Jangan menganggap setiap model 3D mendukung baik teks-ke-3D maupun gambar-ke-3D. Periksa kontrak model yang dipilih sebelum mengirim `image`, `image_url`, `format`, `quality`, `style`, atau `seed`.
+Jangan menganggap setiap model 3D mendukung kedua jenis input atau setiap format output. Periksa kontrak model yang dipilih sebelum mengirim `image`, `image_url`, `format`, `quality`, `style`, atau `seed`.
 
-## Buat Permintaan
+## Buat Tugas 3D
 
 ```bash
-curl https://api.tokenlab.sh/v1/3d/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "tripo3d-v2.5",
     "prompt": "Sebuah maskot robot low-poly bergaya dengan topologi yang bersih",
@@ -28,26 +35,43 @@ curl https://api.tokenlab.sh/v1/3d/generations \\
   }'
 ```
 
-Teks-ke-3D memerlukan `prompt`. Gambar-ke-3D menggunakan `image` atau `image_url` ketika didukung oleh model. Utamakan URL publik untuk input produksi kecuali gambar sumber bersifat pribadi dan klien Anda sengaja mengunggah data base64.
+Untuk gambar-ke-3D, gunakan `image_url` publik jika memungkinkan. Gunakan `image` inline/base64 hanya ketika klien Anda sengaja mengirim media pribadi dan backend Anda siap untuk tubuh permintaan yang lebih besar.
 
-## Pilihan Output
+## Pilihan Format Output
 
-- `format` dapat meminta pengemasan output seperti `glb`, `fbx`, `obj`, atau `usdz` ketika didukung.
-- Nilai `quality` seperti `draft`, `standard`, atau `high` mempengaruhi latensi dan biaya ketika model mengeksposnya.
-- `style` dan `seed` tergantung pada model; hilangkan mereka kecuali kontrak yang dipilih mendokumentasikannya.
+- `glb` biasanya adalah default yang paling aman untuk pratinjau web.
+- `fbx` dan `obj` berguna untuk alur kerja DCC ketika model yang dipilih mendukungnya.
+- `usdz` berguna untuk alur kerja AR Apple ketika diekspos oleh model.
+- Nilai `quality` yang lebih tinggi dapat meningkatkan latensi dan biaya. Ekspos sebagai pilihan pengguna yang eksplisit, bukan default tersembunyi.
+- `seed` berguna untuk reproduktifitas hanya ketika model menghormatinya.
 
-## Memantau Hasil
+## Polling dan Simpan Aset
 
-Gunakan `poll_url` yang dikembalikan terlebih dahulu. Jika Anda memerlukan endpoint tetap, gunakan `GET /v1/tasks/{id}` dengan `id` / `task_id` yang sama dari respons pembuatan.
+Gunakan `poll_url` yang dikembalikan terlebih dahulu. Jika klien Anda memerlukan rute tetap, gunakan `GET /v1/tasks/{id}`.
 
-Tugas yang selesai mengembalikan `model_url` dan mungkin menyertakan URL spesifik format seperti `glb_url`, `fbx_url`, `obj_url`, atau `usdz_url`. Unduh dan simpan aset dalam produk Anda sendiri jika pengguna memerlukan akses ulang.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+Tugas yang selesai mengembalikan `model_url` dan mungkin menyertakan `glb_url`, `fbx_url`, `obj_url`, atau `usdz_url`. Unduh atau cache aset yang dipilih dalam produk Anda sendiri jika pengguna memerlukan akses ulang, riwayat versi, atau unduhan jangka panjang.
+
+## Daftar Periksa Produksi
+
+- Simpan `task_id`, `poll_url`, model, format yang diminta, dan ID catatan aset Anda sendiri.
+- Lanjutkan polling setelah penyegaran halaman daripada membuat tugas duplikat.
+- Validasi ukuran dan keterjangkauan gambar sumber sebelum membuat tugas.
+- Jaga agar URL aset yang dihasilkan tidak muncul di halaman publik kecuali pengguna memiliki izin untuk mengakses aset tersebut.
+- Catat `billing_transaction_id` ketika ada untuk rekonsiliasi di kemudian hari.
 
 ## Kesalahan Umum
 
-- Jangan mengharapkan aset 3D dalam respons pembuatan; pantau hingga status terminal.
-- Jangan menjanjikan setiap format untuk setiap model.
-- Jangan mencoba ulang permintaan pembuatan setelah waktu tunggu klien tanpa memeriksa apakah tugas sudah ada.
-- Jangan mengekspos ID tugas penyedia di UI Anda.
+| Gejala | Penyebab yang Mungkin | Perbaikan |
+|--------|-----------------------|-----------|
+| Respons pembuatan tidak memiliki URL aset | Generasi 3D bersifat asinkron | Polling hingga status terminal |
+| Format yang diminta hilang | Model tidak mengembalikan format tersebut | Kembali ke `model_url` atau pilih model yang mendukung format tersebut |
+| Gambar-ke-3D ditolak | Model yang dipilih hanya teks atau URL gambar tidak dapat dijangkau | Periksa kontrak model dan validasi URL |
+| Aset duplikat | Jalur coba ulang membuat tugas setelah waktu habis | Simpan identitas tugas sebelum mencoba ulang |
 
 ## Referensi API
 

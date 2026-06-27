@@ -1,43 +1,52 @@
 ---
-title: "影像生成"
-description: "建立文本到影像、影像到影像及影像編輯工作流程，針對 TokenLab 公共影像合約。"
+title: "圖像生成"
+description: "選擇合適的 TokenLab 圖像端點，發送模型感知請求，並安全地處理同步或異步圖像結果。"
 ---
 
-TokenLab 影像 API 涵蓋幾個模型系列，具有不同的請求格式。在假設某個欄位在每個影像模型中都有效之前，請使用公共模型合約和特定端點的 API 參考。
+TokenLab 支援透過公共圖像端點進行文本到圖像、圖像到圖像和圖像編輯。圖像模型不共享一組通用參數，因此生產客戶端應首先選擇端點，然後選擇模型，然後僅發送該模型支持的字段。
 
-## 選擇端點
+## 何時使用每個端點
 
-| 目標 | 端點 | 備註 |
-|------|----------|-------|
-| 文本到影像 | `POST /v1/images/generations` | 使用 `prompt` 和明確的 `model` |
-| 影像到影像 / 參考影像 | `POST /v1/images/generations` | 當模型支持時，使用 `operation: "image-to-image"` 加上 `image_url`、`image_urls` 或 `reference_image_urls` |
-| GPT 影像編輯 | `POST /v1/images/edits` | 支持多部分 `image`、JSON `image_url` / `image_urls`，以及官方 `images[]` 參考，適用於支持的編輯模型 |
-| 過時變體 | `POST /v1/images/variations` | 對於新工作，優先使用當前生成或編輯路徑 |
-| 非同步狀態 | `GET /v1/tasks/{id}` | 當存在時，首先使用 `poll_url` |
+| 用戶工作流程 | 端點 | 使用時機 | 避免時機 |
+|---------------|----------|----------|------------|
+| 文本到圖像 | `POST /v1/images/generations` | 用戶僅從提示開始 | 需要官方的 GPT 圖像編輯流程 |
+| 圖像到圖像 | `POST /v1/images/generations` | 模型文檔通過 `operation: "image-to-image"` 加上 `image_url`、`image_urls` 或 `reference_image_urls` 參考圖像 | 模型期望多部分編輯輸入 |
+| 圖像編輯 | `POST /v1/images/edits` | 您正在使用支持的編輯模型編輯現有圖像，例如 GPT 圖像系列模型 | 您正在使用 Nano Banana 風格的圖像到圖像生成 |
+| 變體 | `POST /v1/images/variations` | 您維護一個舊版變體兼容的集成 | 您正在構建一個新的參考圖像工作流程 |
+| 狀態 | `GET /v1/tasks/{id}` | 創建響應返回 `task_id`、`status: "pending"` 或 `poll_url` | 創建響應已包含最終的 `data[]` |
 
-## 模型發現
+始終發送 `model`。圖像端點故意不依賴於歷史隱式默認模型來處理生產流量。
+
+## 選擇模型
+
+從模型發現開始，然後檢查所選模型的 TokenLab 合約：
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-影像模型參數差異很大。在發送 `size`、`quality`、`aspect_ratio`、`resolution`、`async`、`background` 或 `output_format` 之前，請閱讀所選模型合約。
+對於非聊天模型，列表響應可能包括 `tokenlab.public_contract_summary`。模型詳細頁面可能會顯示更完整的 `tokenlab.public_contract`。使用這些字段來確認：
 
-## 輸入和模型特定欄位
+- 支持的操作，例如 `text-to-image`、`image-to-image` 或 `image-edit`。
+- 模型預期的請求端點。
+- 用於參考的形狀，例如 `image_url`、`image_urls`、`reference_image_urls`、multipart `image` 或 JSON `images[]`。
+- 模型是否接受 `size`、`aspect_ratio`、`resolution`、`quality`、`background`、`output_format` 或 `response_format`。
 
-- `gpt-image-2` 使用 OpenAI 風格的 `size` 和 `quality`；省略 `size` 或 `quality` 以讓 TokenLab 在支持的情況下使用 `auto`。
-- Gemini 和 Nano Banana 影像系列通常使用 `aspect_ratio`；僅在所選模型公開時發送 `resolution`。
-- Nano Banana 參考影像請求應放在 `/v1/images/generations`，並使用 `operation: "image-to-image"` 和 `image_urls`，而不是 `/v1/images/edits`。
-- `/v1/images/generations` 不接受頂層的 `images[]` 或 `file_id`；這些是編輯流程格式。
-- 遠端影像 URL 必須是公共的 `http`/`https` URL。避免使用私有網絡、嵌入憑證、片段和短期簽名 URL。
+## 請求形狀規則
 
-## 創建請求
+- `gpt-image-2` 風格的請求使用 OpenAI 類似的 `size`、`quality` 和編輯字段。當您希望模型或 TokenLab 使用自動默認值時，請省略可選字段。
+- Gemini 和 Nano Banana 圖像系列通常使用 `aspect_ratio`；僅在模型合約公開時發送 `resolution`。
+- Nano Banana 圖像到圖像應位於 `/v1/images/generations`，並帶有 `operation: "image-to-image"` 和參考圖像 URL。
+- `/v1/images/generations` 不接受頂層的 `images[]` 或 `file_id`；這些是編輯流程形狀。
+- 遠程圖像參考必須是公共的 `http` 或 `https` URL。請勿發送私有網絡 URL、嵌入的憑證、URL 片段或可能在處理開始之前過期的簽名 URL。
+
+## 文本到圖像範例
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
     "prompt": "一張乾淨的陶瓷咖啡杯在胡桃木桌上的產品照片",
@@ -46,29 +55,60 @@ curl https://api.tokenlab.sh/v1/images/generations \\
   }'
 ```
 
-## 輪詢結果
-
-某些影像路徑返回內聯的 `data[].url` 或 `data[].b64_json`。其他路徑返回 `status: "pending"`、`task_id` 和 `poll_url`。如果您請求非同步影像生成或編輯，完成的任務結果將返回 URL；當您特別需要 `b64_json` 時，請使用同步請求。
+## 參考圖像範例
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "保持產品形狀，將背景更改為明亮的工作室設置",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## 處理結果
+
+圖像響應可以是同步或異步的：
+
+- 同步響應返回最終的 `data[]`，包含 `url` 或 `b64_json`。
+- 異步響應返回 `id`、`task_id`、`status`，通常還有 `poll_url`。
+- 當 `poll_url` 存在時，優先使用它。如果您需要固定路由，請輪詢 `GET /v1/tasks/{id}`。
+- 當您特別需要 `b64_json` 時，使用同步請求；異步圖像結果是以 URL 為導向的。
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-## 常見陷阱
+持久化返回的圖像 URL、任務 ID、模型和您自己的用戶/作業 ID。在終端狀態後請勿繼續輪詢。
 
-- 不要假設每個影像模型都是同步的。
-- 不要從非同步影像任務請求 `b64_json`；非同步結果是以 URL 為導向的。
-- 不要對僅比例的 Gemini 影像模型發送 `resolution`。
-- 不要對 Nano Banana 影像到影像流程使用 `/v1/images/edits`。
-- 對於同步高解析度影像請求，將 HTTP 客戶端超時設置為至少 `120s`。
+## 生產檢查清單
+
+- 在調用 TokenLab 之前驗證用戶輸入：提示長度、圖像數量、URL 可達性和文件類型。
+- 對於同步高解析度請求，設置足夠高的 HTTP 超時。對於長時間工作，使用可用的異步模式。
+- 存儲 `request_id`、`task_id`、`poll_url`、模型、端點和清理過的請求形狀以便支持。
+- 在客戶端超時時，檢查任務是否已創建，然後再重試創建請求。
+- 在存在時，根據使用記錄和 `billing_transaction_id` 來對賬成本，而不是根據供應商任務 ID。
+
+## 常見錯誤
+
+| 症狀 | 可能原因 | 修復 |
+|---------|--------------|-----|
+| `400` 與 `param: "model"` | 缺少明確模型 | 查詢 `/v1/models?recommended_for=image` 並發送 `model` |
+| 不支持的字段 | 該字段不在該模型的公共合約中 | 刪除該字段或選擇一個記錄它的模型/端點 |
+| 異步結果中沒有 `b64_json` | 異步圖像任務返回以 URL 為導向的結果 | 使用同步模式以獲取 base64 輸出 |
+| 參考圖像被拒絕 | 錯誤的端點或私有/過期的 URL | 匹配模型的文檔參考形狀並使用可達的 URL |
 
 ## API 參考
 
 | 主題 | 參考 |
 |-------|-----------|
-| 創建影像 | [創建影像](/zh-Hant/api-reference/images/create-image) |
-| 編輯影像 | [編輯影像](/zh-Hant/api-reference/images/edit-image) |
-| 創建影像變體 | [創建影像變體](/zh-Hant/api-reference/images/create-variation) |
-| 獲取影像狀態 | [獲取影像狀態](/zh-Hant/api-reference/images/get-image-status) |
+| 創建圖像 | [創建圖像](/zh-Hant/api-reference/images/create-image) |
+| 編輯圖像 | [編輯圖像](/zh-Hant/api-reference/images/edit-image) |
+| 創建圖像變體 | [創建圖像變體](/zh-Hant/api-reference/images/create-variation) |
+| 獲取圖像狀態 | [獲取圖像狀態](/zh-Hant/api-reference/images/get-image-status) |
 | 獲取任務狀態 | [獲取任務狀態](/zh-Hant/api-reference/tasks/get-task-status) |

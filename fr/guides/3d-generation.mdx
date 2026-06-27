@@ -1,60 +1,84 @@
 ---
 title: "Génération 3D"
-description: "Créez des actifs 3D à partir de texte ou d'images et téléchargez les fichiers de modèle complétés à partir des résultats de tâches asynchrones."
+description: "Créez des tâches de texte à 3D ou d'image à 3D, interrogez les actifs terminés et gérez les fichiers de modèle téléchargeables."
 ---
 
-La génération 3D est asynchrone. `POST /v1/3d/generations` crée une tâche ; les réponses de statut complètes retournent des URL d'actifs de modèle téléchargeables.
+La génération 3D est asynchrone. `POST /v1/3d/generations` crée une tâche TokenLab ; les réponses de statut complété retournent des actifs de modèle téléchargeables tels que `model_url` et, lorsque disponible, des URL spécifiques au format.
 
-## Découverte de Modèle
+## Choisissez le type d'entrée
+
+| Flux de travail | Entrée requise | Champs optionnels | Remarques |
+|------------------|----------------|-------------------|-----------|
+| Texte à 3D | `model`, `prompt` | `format`, `quality`, `style`, `seed` | Meilleur pour générer un nouvel actif à partir d'une description |
+| Image à 3D | `model`, `prompt`, `image` ou `image_url` | `format`, `quality`, `style`, `seed` | Utilisez uniquement lorsque le modèle sélectionné prend en charge l'entrée d'image |
+
+Interrogez le catalogue de modèles avant de décider quelles options exposer :
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Ne supposez pas que chaque modèle 3D prend en charge à la fois le texte vers 3D et l'image vers 3D. Vérifiez le contrat du modèle sélectionné avant d'envoyer `image`, `image_url`, `format`, `quality`, `style` ou `seed`.
+Ne supposez pas que chaque modèle 3D prend en charge les deux types d'entrée ou chaque format de sortie. Vérifiez le contrat du modèle sélectionné avant d'envoyer `image`, `image_url`, `format`, `quality`, `style` ou `seed`.
 
-## Créer une Demande
+## Créer une tâche 3D
 
 ```bash
-curl https://api.tokenlab.sh/v1/3d/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "tripo3d-v2.5",
-    "prompt": "Un mascotte robot stylisé en low-poly avec une topologie propre",
+    "prompt": "Un robot mascotte stylisé en low-poly avec une topologie propre",
     "format": "glb",
     "quality": "standard"
   }'
 ```
 
-Le texte vers 3D nécessite un `prompt`. L'image vers 3D utilise `image` ou `image_url` lorsque cela est pris en charge par le modèle. Préférez les URL publiques pour les entrées de production, sauf si l'image source est privée et que votre client télécharge intentionnellement des données en base64.
+Pour l'image à 3D, utilisez une `image_url` publique lorsque cela est possible. Utilisez `image` en ligne/base64 uniquement lorsque votre client envoie intentionnellement des médias privés et que votre backend est préparé pour des corps de requête plus volumineux.
 
-## Choix de Sortie
+## Choix de format de sortie
 
-- `format` peut demander un emballage de sortie tel que `glb`, `fbx`, `obj` ou `usdz` lorsque cela est pris en charge.
-- Les valeurs de `quality` telles que `draft`, `standard` ou `high` affectent la latence et le coût lorsque le modèle les expose.
-- `style` et `seed` dépendent du modèle ; omettez-les à moins que le contrat sélectionné ne les documente.
+- `glb` est généralement le meilleur choix par défaut pour les aperçus web.
+- `fbx` et `obj` sont utiles pour les pipelines DCC lorsque le modèle sélectionné les prend en charge.
+- `usdz` est utile pour les flux de travail AR d'Apple lorsqu'il est exposé par le modèle.
+- Des valeurs de `quality` plus élevées peuvent augmenter la latence et le coût. Exposez-les comme des choix explicites pour l'utilisateur, pas comme des valeurs par défaut cachées.
+- `seed` est utile pour la reproductibilité uniquement lorsque le modèle le respecte.
 
-## Interrogation des Résultats
+## Interroger et stocker des actifs
 
-Utilisez d'abord le `poll_url` retourné. Si vous avez besoin d'un point de terminaison fixe, utilisez `GET /v1/tasks/{id}` avec le même `id` / `task_id` de la réponse de création.
+Utilisez d'abord le `poll_url` retourné. Si votre client a besoin d'un itinéraire fixe, utilisez `GET /v1/tasks/{id}`.
 
-Les tâches complètes retournent `model_url` et peuvent inclure des URL spécifiques au format telles que `glb_url`, `fbx_url`, `obj_url` ou `usdz_url`. Téléchargez et mettez en cache l'actif dans votre propre produit si les utilisateurs ont besoin d'un accès répété.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Pièges Courants
+Les tâches complétées retournent `model_url` et peuvent inclure `glb_url`, `fbx_url`, `obj_url` ou `usdz_url`. Téléchargez ou mettez en cache l'actif sélectionné dans votre propre produit si les utilisateurs ont besoin d'un accès répété, d'un historique de versions ou de téléchargements à long terme.
 
-- Ne vous attendez pas à un actif 3D dans la réponse de création ; interrogez jusqu'à un statut terminal.
-- Ne promettez pas chaque format pour chaque modèle.
-- Ne réessayez pas les demandes de création après un délai d'attente du client sans vérifier si la tâche existe déjà.
-- Ne divulguez pas les ID de tâche du fournisseur dans votre interface utilisateur.
+## Liste de contrôle de production
+
+- Conservez `task_id`, `poll_url`, modèle, format demandé et votre propre ID d'enregistrement d'actif.
+- Reprenez l'interrogation après un rafraîchissement de page plutôt que de créer une tâche en double.
+- Validez la taille et l'accessibilité de l'image source avant de créer la tâche.
+- Gardez les URL des actifs générés hors des pages publiques, sauf si l'utilisateur a la permission d'accéder à l'actif.
+- Enregistrez `billing_transaction_id` lorsqu'il est présent pour une réconciliation ultérieure.
+
+## Erreurs courantes
+
+| Symptôme | Cause probable | Solution |
+|----------|----------------|----------|
+| La réponse de création n'a pas d'URL d'actif | La génération 3D est asynchrone | Interrogez jusqu'à un statut terminal |
+| Format demandé manquant | Le modèle n'a pas retourné ce format | Revenez à `model_url` ou choisissez un modèle qui prend en charge le format |
+| Image à 3D rejetée | Le modèle sélectionné est uniquement textuel ou l'URL de l'image est inaccessible | Vérifiez le contrat du modèle et validez l'URL |
+| Actifs en double | Le chemin de réessai a recréé la tâche après un délai d'attente | Conservez l'identité de la tâche avant de réessayer |
 
 ## Référence API
 
 | Sujet | Référence |
 |-------|-----------|
 | Créer 3D | [Créer 3D](/fr/api-reference/3d/create-3d) |
-| Obtenir le Statut 3D | [Obtenir le Statut 3D](/fr/api-reference/3d/get-3d-status) |
-| Obtenir le Statut de la Tâche | [Obtenir le Statut de la Tâche](/fr/api-reference/tasks/get-task-status) |
-| Lister les Modèles | [Lister les Modèles](/fr/api-reference/models/list-models) |
-| Facturation & Tarification | [Facturation & Tarification](/fr/guides/billing) |
+| Obtenir le statut 3D | [Obtenir le statut 3D](/fr/api-reference/3d/get-3d-status) |
+| Obtenir le statut de la tâche | [Obtenir le statut de la tâche](/fr/api-reference/tasks/get-task-status) |
+| Lister les modèles | [Lister les modèles](/fr/api-reference/models/list-models) |
+| Facturation et tarification | [Facturation et tarification](/fr/guides/billing) |

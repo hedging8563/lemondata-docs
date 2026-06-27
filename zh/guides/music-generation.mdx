@@ -1,53 +1,80 @@
 ---
 title: "音乐生成"
-description: "使用 TokenLab 音乐任务创建歌曲、器乐、歌词和续集。"
+description: "创建音乐或歌词任务，轮询最终音频，并安全存储用户可见的音乐输出。"
 ---
 
-音乐生成是异步的。 `POST /v1/music/generations` 创建一个任务并返回 `id` / `task_id`、`status`，通常还会返回 `poll_url`。最终音频和元数据在轮询后出现。
+音乐生成是异步的。 `POST /v1/music/generations` 创建一个公共的 TokenLab 任务并返回 `id` / `task_id`、`status`，通常还有 `poll_url`。您的应用程序应存储该任务标识，显示进度，并轮询直到达到终态。
 
-## 模型发现
+## 选择工作流程
+
+| 工作流程 | 关键字段 | 备注 |
+|----------|----------|------|
+| 完整歌曲或伴奏 | `model`、`prompt`、可选 `title`、`tags`、`action: "MUSIC"` | 当用户期望最终音频时使用 |
+| 仅歌词 | `model`、`prompt`、`action: "LYRICS"` | 仅与公开提供歌词生成的模型一起使用 |
+| 继续现有片段 | `continue_clip_id`、可选 `continue_at` | 在提供继续之前存储之前的公共片段/任务标识 |
+
+在发布硬编码模型列表之前查询当前模型目录：
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-当前公共合同公开了 `suno_music` 用于音乐生成和 `suno_lyrics` 用于仅歌词流。在生产使用之前查询模型目录，而不是固定提供者假设。
+当前公共示例使用 `suno_music` 进行音乐生成。对于仅歌词的流程，发送 `action: "LYRICS"` 与公开契约文档中包含歌词生成的模型。将模型 ID 视为公共 TokenLab ID，而不是保证供应商特定字段是公共契约字段。
 
-## 创建请求
+## 创建音乐任务
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
     "prompt": "一首充满活力的合成流行曲，伴有温暖的声乐和干净的合唱",
     "title": "晨间静电",
-    "tags": "合成流行, 充满活力",
+    "tags": "合成流行，充满活力",
     "action": "MUSIC"
   }'
 ```
 
-对于歌曲或器乐使用 `action: "MUSIC"`。仅在支持仅歌词生成的模型中使用 `action: "LYRICS"`。续集字段如 `continue_clip_id` 和 `continue_at` 用于续集工作流，仅在您的产品继续之前的片段时发送。
+保持提示、标题和标签对用户可见且安全存储。不要在任何提示字段中放置 API 密钥、私有 URL 或内部路由信息。
 
-## 轮询结果
+## 轮询完成状态
 
-首先使用返回的 `poll_url`。如果您需要固定端点，请使用 `GET /v1/tasks/{id}`，并使用创建响应中的相同 `id` / `task_id`。
+首先使用 `poll_url`。如果您的客户端需要固定路由，请使用返回的 `id` 或 `task_id` 调用 `GET /v1/tasks/{id}`。
 
-完成的音乐任务可以包括 `audio_url`、`video_url`、`title`、`lyrics` 和模型标准化的元数据。将最终的 URL 存储在您的应用程序中，而不是在终端状态后重复轮询。
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## 常见陷阱
+预期的公共状态为 `pending`、`processing`、`completed` 和 `failed`。完成的音乐任务可以包括 `audio_url`、`video_url`、`title`、`lyrics` 和标准化元数据。将最终 URL 存储在您自己的数据库中，以便用户可以在不重新生成的情况下重新打开结果。
 
+## 用户界面和状态处理
+
+- 在任务创建后立即显示待处理状态。
+- 对于长任务每 `5-10s` 轮询一次，然后在 `completed` 或 `failed` 时停止。
 - 在任务 `completed` 且存在 `audio_url` 之前，不要显示最终播放器。
-- 不要在您的应用状态中使用提供者任务 ID 或提供者获取 URL。
-- 不要在一个 UI 后面混合仅歌词和完整音乐操作，而不向用户显示区别。
-- 不要在每次页面刷新时重新创建任务；从存储的 `task_id` 恢复。
+- 对于仅歌词的任务，将文本输出与音频任务分开渲染，以便用户理解他们所购买的内容。
+- 刷新时，从存储的 `task_id` 恢复，而不是创建新任务。
+
+## 计费和对账
+
+音乐任务可以在创建时保留估计金额，并在知道终态后结算。存储 `request_id`、`task_id`、模型、端点和 `billing_transaction_id`，当它出现时。使用管理 API 使用记录进行对账，而不是供应商任务 ID。
+
+## 常见错误
+
+| 症状 | 可能原因 | 修复 |
+|------|----------|------|
+| 任务创建但没有播放器 | 任务仍在待处理或完成但没有 `audio_url` | 持续轮询直到终态，然后将缺失输出处理为失败的用户任务 |
+| 刷新后重复歌曲 | 用户界面重新创建了任务而不是恢复 | 持久化并重用 `task_id` |
+| 歌词任务返回没有音频 | `action: "LYRICS"` 仅为文本 | 将歌词和音乐用户界面路径分开 |
+| 不支持的参数 | 字段不在模型公共契约中 | 删除供应商特定字段或选择文档中包含它们的模型 |
 
 ## API 参考
 
 | 主题 | 参考 |
-|-------|-----------|
+|------|------|
 | 创建音乐 | [创建音乐](/zh/api-reference/music/create-music) |
 | 获取音乐状态 | [获取音乐状态](/zh/api-reference/music/get-music-status) |
 | 获取任务状态 | [获取任务状态](/zh/api-reference/tasks/get-task-status) |

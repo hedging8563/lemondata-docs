@@ -1,25 +1,33 @@
 ---
 title: "Geração de Música"
-description: "Crie canções, instrumentais, letras e continuações com as tarefas de música do TokenLab."
+description: "Crie tarefas de música ou letras, consulte o áudio final e armazene as saídas de música voltadas para o usuário de forma segura."
 ---
 
-A geração de música é assíncrona. `POST /v1/music/generations` cria uma tarefa e retorna `id` / `task_id`, `status` e geralmente `poll_url`. O áudio final e os metadados aparecem após a consulta.
+A geração de música é assíncrona. `POST /v1/music/generations` cria uma tarefa pública do TokenLab e retorna `id` / `task_id`, `status` e geralmente `poll_url`. Seu aplicativo deve armazenar essa identidade de tarefa, mostrar o progresso e consultar até um status terminal.
 
-## Descoberta de Modelos
+## Escolha O Fluxo de Trabalho
+
+| Fluxo de Trabalho | Campos principais | Notas |
+|-------------------|------------------|-------|
+| Música completa ou instrumental | `model`, `prompt`, `title` opcional, `tags`, `action: "MUSIC"` | Use quando o usuário espera áudio final |
+| Apenas letras | `model`, `prompt`, `action: "LYRICS"` | Use apenas com modelos que expõem a geração de letras |
+| Continuar um clipe existente | `continue_clip_id`, `continue_at` opcional | Armazene a identidade do clipe/tarefa pública anterior antes de oferecer a continuação |
+
+Consulte o catálogo de modelos atual antes de enviar uma lista de modelos codificada:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-O contrato público atual expõe `suno_music` para geração de música e `suno_lyrics` para fluxos apenas de letras. Consulte o catálogo de modelos antes do uso em produção, em vez de assumir suposições do provedor.
+Os exemplos públicos atuais usam `suno_music` para geração de música. Para fluxos apenas de letras, envie `action: "LYRICS"` com um modelo cujo contrato público documente a geração de letras. Trate os IDs de modelo como IDs públicos do TokenLab, não como uma garantia de que campos específicos do provedor são campos de contrato público.
 
-## Criar Solicitação
+## Criar Uma Tarefa de Música
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
     "prompt": "Uma faixa de synth-pop animada com vocais quentes e um refrão limpo",
@@ -29,27 +37,46 @@ curl https://api.tokenlab.sh/v1/music/generations \\
   }'
 ```
 
-Use `action: "MUSIC"` para canções ou instrumentais. Use `action: "LYRICS"` apenas com modelos que suportam geração apenas de letras. Campos de continuação, como `continue_clip_id` e `continue_at`, são para fluxos de continuação e devem ser enviados apenas quando seu produto estiver continuando um clipe anterior.
+Mantenha prompts, títulos e tags visíveis para o usuário e seguros para armazenar. Não coloque chaves de API, URLs privadas ou informações de roteamento internas em nenhum campo de prompt.
 
-## Consultando Resultados
+## Consultar Para Conclusão
 
-Use o `poll_url` retornado primeiro. Se precisar de um endpoint fixo, use `GET /v1/tasks/{id}` com o mesmo `id` / `task_id` da resposta de criação.
+Use `poll_url` primeiro. Se seu cliente precisar de uma rota fixa, chame `GET /v1/tasks/{id}` com o `id` ou `task_id` retornado.
 
-Tarefas de música concluídas podem incluir `audio_url`, `video_url`, `title`, `lyrics` e metadados normalizados pelo modelo. Armazene as URLs finais em seu aplicativo em vez de consultar repetidamente após o status terminal.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Armadilhas Comuns
+Os status públicos esperados são `pending`, `processing`, `completed` e `failed`. Uma tarefa de música concluída pode incluir `audio_url`, `video_url`, `title`, `lyrics` e metadados normalizados. Armazene URLs finais em seu próprio banco de dados para que o usuário possa reabrir o resultado sem reiniciar a geração.
 
+## UI E Manipulação de Estado
+
+- Mostre um estado pendente imediatamente após a criação da tarefa.
+- Consulte a cada `5-10s` para tarefas longas, depois pare em `completed` ou `failed`.
 - Não exiba um player final até que a tarefa esteja `completed` e um `audio_url` exista.
-- Não use IDs de tarefas do provedor ou URLs de busca do provedor no estado do seu aplicativo.
-- Não misture ações apenas de letras e ações de música completa em uma única interface sem mostrar a diferença para os usuários.
-- Não recrie tarefas em cada atualização de página; retome a partir do `task_id` armazenado.
+- Para tarefas apenas de letras, renderize a saída de texto separadamente das tarefas de áudio para que os usuários entendam o que estão comprando.
+- Ao atualizar, retome do `task_id` armazenado em vez de criar uma nova tarefa.
+
+## Cobrança E Reconciliação
+
+Tarefas de música podem reservar um valor estimado no momento da criação e liquidar após o status terminal ser conhecido. Armazene `request_id`, `task_id`, modelo, endpoint e `billing_transaction_id` quando aparecer. Use registros de uso da API de Gerenciamento para reconciliação em vez de IDs de tarefas do provedor.
+
+## Erros Comuns
+
+| Sintoma | Causa provável | Correção |
+|---------|----------------|----------|
+| Tarefa criada, mas sem player | A tarefa ainda está pendente ou concluída sem `audio_url` | Continue consultando até o terminal, depois trate a saída ausente como um trabalho de usuário falhado |
+| Músicas duplicadas após atualização | A UI recriou a tarefa em vez de retomar | Persista e reutilize `task_id` |
+| Tarefa de letra não retorna áudio | `action: "LYRICS"` é apenas texto | Separe os caminhos de UI de letras e música |
+| Parâmetro não suportado | Campo não está no contrato público do modelo | Remova campos específicos do provedor ou escolha um modelo que os documente |
 
 ## Referência da API
 
 | Tópico | Referência |
-|-------|-----------|
+|--------|------------|
 | Criar Música | [Criar Música](/pt/api-reference/music/create-music) |
 | Obter Status da Música | [Obter Status da Música](/pt/api-reference/music/get-music-status) |
 | Obter Status da Tarefa | [Obter Status da Tarefa](/pt/api-reference/tasks/get-task-status) |
 | Listar Modelos | [Listar Modelos](/pt/api-reference/models/list-models) |
-| Faturamento & Preços | [Faturamento & Preços](/pt/guides/billing) |
+| Cobrança & Preços | [Cobrança & Preços](/pt/guides/billing) |

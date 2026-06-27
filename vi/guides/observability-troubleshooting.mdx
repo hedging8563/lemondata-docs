@@ -1,61 +1,85 @@
 ---
 title: "Khả Năng Quan Sát & Khắc Phục Sự Cố"
-description: "Ghi lại các định danh công khai mà TokenLab cung cấp cho hỗ trợ, đối chiếu sử dụng và gỡ lỗi tác vụ bất đồng bộ."
+description: "Ghi lại các định danh công khai của TokenLab cần thiết cho hỗ trợ, đối chiếu sử dụng và gỡ lỗi phương tiện không đồng bộ."
 ---
 
-Trang này được viết cho các nhóm ứng dụng vận hành TokenLab trong môi trường sản xuất. Nó tập trung vào các định danh công khai và nhật ký an toàn cho người dùng, không phải nội bộ định tuyến nhà cung cấp.
+Khả năng quan sát TokenLab tốt bắt đầu với các định danh công khai. Các bản ghi của bạn nên giúp bạn trả lời "người dùng đã yêu cầu gì, nhiệm vụ công khai nào đã được TokenLab tạo ra, và nó đã được tính phí như thế nào?" mà không tiết lộ các thông tin nội bộ về định tuyến của nhà cung cấp hoặc dữ liệu nhạy cảm của người dùng.
 
-## Định Danh Công Khai
+## Các Định Danh Công Khai Cần Ghi Nhận
 
 | Định danh | Nơi xuất hiện | Sử dụng cho |
 |-----------|---------------|-------------|
-| `request_id` | Nội dung lỗi, hồ sơ sử dụng API quản lý, nhật ký bảng điều khiển | Hỗ trợ và đối chiếu cấp yêu cầu |
-| `task_id` / `id` | Phản hồi tạo và trạng thái bất đồng bộ | Lấy thông tin hình ảnh, video, âm nhạc và công việc 3D |
-| `poll_url` | Phản hồi tạo bất đồng bộ | URL trạng thái ưa thích |
-| `billing_transaction_id` | Phản hồi không phát trực tiếp khi đã thanh toán, phản hồi trạng thái tác vụ, hồ sơ sử dụng API quản lý, tiêu đề `X-Billing-Transaction-ID` | Đối chiếu thanh toán |
-| `X-Task-ID` | Phản hồi tác vụ bất đồng bộ | Tương quan tác vụ cấp tiêu đề |
+| `request_id` | Nội dung lỗi, bản ghi bảng điều khiển, hồ sơ sử dụng | Hỗ trợ và đối chiếu ở cấp độ yêu cầu |
+| `id` / `task_id` | Phản hồi tạo không đồng bộ và trạng thái | Lấy thông tin hình ảnh, video, âm nhạc và công việc 3D |
+| `poll_url` | Phản hồi tạo không đồng bộ | URL trạng thái ưa thích |
+| `billing_transaction_id` | Phản hồi không phát trực tiếp khi đã thanh toán, phản hồi trạng thái nhiệm vụ không đồng bộ, hồ sơ sử dụng, `X-Billing-Transaction-ID` | Đối chiếu chi phí |
+| `X-Task-ID` | Tiêu đề phản hồi nhiệm vụ không đồng bộ | Tương quan nhiệm vụ ở cấp độ tiêu đề |
+| ID công việc/người dùng của bạn | Ứng dụng của bạn | Kết nối hoạt động của TokenLab trở lại quy trình làm việc của người dùng |
 
-## Những Gì Cần Ghi Lại
+Không lưu trữ ID nhiệm vụ của nhà cung cấp, URL upstream, ID kênh định tuyến, khóa Redis, hoặc siêu dữ liệu thực thi riêng tư như là sự thật đối diện với khách hàng.
 
-1. Ghi lại điểm cuối, mô hình, mã trạng thái, dấu thời gian và các định danh công khai.
-2. Xóa thông tin `Authorization`, khóa API, URL đã ký, URL phương tiện riêng tư và toàn bộ yêu cầu theo mặc định.
-3. Đối với các công việc bất đồng bộ, ghi lại phản hồi tạo và mọi phản hồi trạng thái cuối cùng.
-4. Đối với các câu hỏi về sử dụng, gọi API quản lý với ID khóa API và bộ lọc ngày tháng.
-5. Sử dụng `type`, `code`, và `param` lỗi từ nội dung phản hồi thay vì phân tích văn bản nhà cung cấp.
+## Những Gì Cần Ghi Nhận
 
-## Danh Sách Kiểm Tra Khắc Phục Sự Cố
+Ghi lại đủ thông tin để chẩn đoán yêu cầu mà không tiết lộ bí mật:
 
-| Triệu Chứng | Kiểm Tra Đầu Tiên | Trang Hữu Ích |
+- Điểm cuối, phương thức HTTP, mô hình, mã trạng thái, dấu thời gian và độ trễ.
+- Các định danh công khai: `request_id`, `task_id`, `poll_url`, và `billing_transaction_id` khi có.
+- Hình dạng yêu cầu đã được làm sạch: các trường nào có mặt, không phải toàn bộ lời nhắc hoặc nội dung phương tiện riêng tư.
+- Phản hồi trạng thái không đồng bộ cuối cùng, bao gồm các trường lỗi công khai.
+- Số lần thử lại của khách hàng và liệu lần thử lại có tạo ra một nhiệm vụ mới hay tiếp tục một nhiệm vụ hiện có.
+
+Luôn xóa bỏ `Authorization`, API keys, management tokens, signed URLs, private media URLs, toàn bộ lời nhắc, và dữ liệu cá nhân của người dùng trừ khi bạn có sự cho phép rõ ràng để giữ lại chúng.
+
+## Ma Trận Khắc Phục Sự Cố
+
+| Triệu chứng | Kiểm tra đầu tiên | Trang hữu ích |
 |-------------|-------------------|---------------|
-| `401` hoặc `403` | Khóa API, mã thông báo quản lý, quyền truy cập tổ chức | [Xác Thực](/vi/authentication) |
-| `429` | Tầng giới hạn tần suất và hành vi thử lại của khách hàng | [Giới Hạn Tần Suất](/vi/guides/rate-limits) |
-| `400 invalid_request_error` | Trường không được hỗ trợ, điểm cuối sai, hoặc không khớp hợp đồng theo mô hình | [Xử Lý Lỗi](/vi/guides/error-handling) |
-| Tác vụ bất đồng bộ không bao giờ hoàn thành | Lấy thông tin từ `poll_url`, kiểm tra `status` cuối cùng, tránh tạo tác vụ trùng lặp | [Công Việc Bất Đồng Bộ & Lấy Thông Tin](/vi/guides/async-jobs-polling) |
-| Chi phí không khớp với UI | So sánh `request_id` và `billing_transaction_id` trong hồ sơ sử dụng | [Thanh Toán & Giá Cả](/vi/guides/billing) |
+| `401` hoặc `403` | API key, management token, quyền truy cập tổ chức, phạm vi khóa | [Xác thực](/vi/authentication) |
+| `402` | Số dư, giới hạn chi tiêu API key, giá mô hình có sẵn | [Thanh toán & Giá cả](/vi/guides/billing) |
+| `429` | Cấp tài khoản, giới hạn tỷ lệ điểm cuối, hành vi thử lại | [Giới hạn Tỷ lệ](/vi/guides/rate-limits) |
+| `400 invalid_request_error` | Trường không được hỗ trợ, điểm cuối sai, thiếu trường bắt buộc, hoặc không khớp hợp đồng mô hình | [Xử lý Lỗi](/vi/guides/error-handling) |
+| Nhiệm vụ không đồng bộ không thể tìm thấy | API key sai, ID nhiệm vụ cũ, nhiệm vụ hết hạn, hoặc ID nhiệm vụ không công khai | [Công việc Không đồng bộ & Lấy thông tin](/vi/guides/async-jobs-polling) |
+| Chi phí không khớp với UI | Thời gian thanh toán hoặc so sánh định danh sai | [Thanh toán & Giá cả](/vi/guides/billing) |
 
 ## Đối Chiếu Sử Dụng
 
-`GET /v1/management/api-keys/{keyId}/usage` trả về mức sử dụng theo khóa được phân trang. Nó có thể lọc theo `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, và `endDate`. Sử dụng nó cho đối chiếu phía máy chủ thay vì thu thập thông tin từ bảng điều khiển.
+Sử dụng Management API để đối chiếu phía máy chủ:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-Các phản hồi phát trực tiếp có thể được thanh toán sau khi luồng được gửi, vì vậy tiêu đề thanh toán có thể không có ngay cả khi việc sử dụng được ghi lại sau đó. Đối với các tác vụ phương tiện bất đồng bộ, việc thanh toán có thể xuất hiện sau khi lấy thông tin cuối cùng.
+`GET /v1/management/api-keys/{keyId}/usage` có thể lọc theo `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, và `endDate`. Sử dụng các bản ghi này thay vì lấy thông tin từ các trang bảng điều khiển hoặc dựa vào ID nhiệm vụ của nhà cung cấp upstream.
 
-## Gói Hỗ Trợ
+Các phản hồi phát trực tiếp có thể được thanh toán sau khi luồng được gửi, vì vậy một tiêu đề thanh toán có thể không có ngay cả khi việc sử dụng được ghi lại sau đó. Các nhiệm vụ phương tiện không đồng bộ có thể được thanh toán sau khi lấy thông tin cuối cùng.
 
-Khi liên hệ với hỗ trợ, bao gồm `request_id`, `task_id`, `billing_transaction_id` khi có, điểm cuối, mô hình, dấu thời gian, và hình dạng yêu cầu đã được làm sạch. Không bao gồm khóa API, phương tiện riêng tư, hoặc toàn bộ yêu cầu trừ khi hỗ trợ yêu cầu mẫu đã được xóa.
+## Mẫu Gói Hỗ Trợ
 
-Không bao gồm tên nhà cung cấp, ID kênh, định danh định tuyến, khóa Redis, hoặc URL tác vụ upstream trong nhật ký khách hàng hoặc vé hỗ trợ trừ khi hỗ trợ TokenLab yêu cầu rõ ràng.
+Khi liên hệ với hỗ trợ, bao gồm:
+
+- `request_id`.
+- `task_id` và `poll_url` cho công việc không đồng bộ.
+- `billing_transaction_id` khi có.
+- Điểm cuối, phương thức, mô hình, dấu thời gian, và mã trạng thái.
+- Hình dạng yêu cầu đã được làm sạch và nội dung lỗi công khai.
+- Kết quả mong đợi của bạn và những gì người dùng thực sự thấy.
+
+Không bao gồm API keys, management tokens, phương tiện riêng tư, toàn bộ lời nhắc, URL của nhà cung cấp, ID kênh, hoặc các định danh định tuyến nội bộ trừ khi hỗ trợ TokenLab yêu cầu rõ ràng một mẫu đã được xóa bỏ.
+
+## Kiểm Tra Vận Hành
+
+- Cảnh báo về các phản hồi `401`, `402`, `429`, và `5xx` lặp lại riêng biệt; chúng thường có các chủ sở hữu khác nhau.
+- Theo dõi các công việc không đồng bộ vẫn không kết thúc lâu hơn SLA sản phẩm của bạn.
+- Theo dõi các nỗ lực tạo trùng lặp cho cùng một ID công việc của người dùng.
+- Lấy mẫu các công việc đã hoàn thành và xác minh tài sản có thể nhìn thấy của người dùng, hồ sơ sử dụng, và bản ghi nhiệm vụ đã lưu trữ đồng ý.
 
 ## Tài Liệu API
 
-| Chủ Đề | Tài Liệu |
-|--------|----------|
-| Xử Lý Lỗi | [Xử Lý Lỗi](/vi/guides/error-handling) |
-| Giới Hạn Tần Suất | [Giới Hạn Tần Suất](/vi/guides/rate-limits) |
-| Thanh Toán & Giá Cả | [Thanh Toán & Giá Cả](/vi/guides/billing) |
-| Lấy Sử Dụng Khóa API | [Lấy Sử Dụng Khóa API](/vi/api-reference/management/get-api-key-usage) |
-| Lấy Trạng Thái Tác Vụ | [Lấy Trạng Thái Tác Vụ](/vi/api-reference/tasks/get-task-status) |
+| Chủ đề | Tài liệu tham khảo |
+|--------|--------------------|
+| Xử lý Lỗi | [Xử lý Lỗi](/vi/guides/error-handling) |
+| Giới hạn Tỷ lệ | [Giới hạn Tỷ lệ](/vi/guides/rate-limits) |
+| Thanh toán & Giá cả | [Thanh toán & Giá cả](/vi/guides/billing) |
+| Lấy Thông tin Sử dụng API Key | [Lấy Thông tin Sử dụng API Key](/vi/api-reference/management/get-api-key-usage) |
+| Lấy Trạng thái Nhiệm vụ | [Lấy Trạng thái Nhiệm vụ](/vi/api-reference/tasks/get-task-status) |

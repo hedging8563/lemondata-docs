@@ -1762,27 +1762,34 @@ Contact support@tokenlab.sh for billing inquiries.
 
 ### Async Jobs & Polling
 
-> Create async generation jobs, poll public task status, and reconcile final results without provider-specific task details.
+> Create asynchronous media jobs, poll public TokenLab task status, and reconcile final results without provider-specific IDs.
 
 URL: https://docs.tokenlab.sh/guides/async-jobs-polling
 
-This page reflects TokenLab's public async task contract. It does not treat provider task URLs, routing IDs, or upstream callback behavior as user-facing integration contracts.
+Many media endpoints are asynchronous. A create request starts work and returns a public TokenLab task identity; your application polls until that task reaches a terminal status. Do not build customer workflows around upstream task URLs, routing IDs, or provider callback behavior.
 
-## Public Contract
+## Public Task Contract
 
-TokenLab exposes one public async task contract for generated media. Create endpoints may return `id`, `task_id`, `status`, and `poll_url`. Treat `id` and `task_id` as the same public task identity and store both the task ID and `poll_url` with your own job record.
+Create responses can include:
 
-Use the returned `poll_url` first. If you need a fixed endpoint, use `GET /v1/tasks/{id}` with the same `id` / `task_id` from the create response.
+| Field | Meaning | What to do |
+|-------|---------|------------|
+| `id` | Public TokenLab task ID | Store it with your own job record |
+| `task_id` | Compatibility alias for the same public task identity | Treat it as equivalent to `id` |
+| `status` | Current public task status | Start polling when it is not terminal |
+| `poll_url` | Preferred status URL | Use this first when present |
+| `model` | Model requested or resolved by the endpoint | Store it for support and billing reconciliation |
 
-Public generation tasks are polling-based today. TokenLab has upstream callback receivers internally, but they are not customer webhooks and should not be used as an integration contract.
+`/v1/tasks/{id}` is the canonical fixed status endpoint for public async media jobs. Media-specific status routes may exist for compatibility, but new integrations should prefer `poll_url` or `/v1/tasks/{id}`.
 
 ## Recommended Flow
 
-1. Send the create request with an explicit `model`.
-2. If the response is inline, read the final result immediately.
-3. If the response contains `status: "pending"`, `task_id`, or `poll_url`, persist the task and start polling.
-4. Poll every `5-10s` for long media tasks. Stop only on a terminal status.
-5. On `completed`, read the result fields for that media type. On `failed`, store the public error and show a retry action only when retrying will create a new user-visible job.
+1. Validate the user request and send the create call with an explicit `model`.
+2. Persist `id` / `task_id`, `poll_url`, endpoint, model, user ID, and your own job ID before returning control to the UI.
+3. Poll every `5-10s` for long-running media tasks.
+4. Stop only when the task is `completed` or `failed`.
+5. On `completed`, read the media-specific result fields and store final URLs or metadata.
+6. On `failed`, store the public error and offer retry only as a new user-visible job.
 
 ```json
 {
@@ -1794,36 +1801,58 @@ Public generation tasks are polling-based today. TokenLab has upstream callback 
 }
 ```
 
-## Polling Results
+## Polling Example
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
 Expected public statuses are `pending`, `processing`, `completed`, and `failed`. Cancelled tasks are represented as `failed` with `cancelled: true` and `cancellation_status: "cancelled"` so older status handling keeps working.
 
-Do not poll provider-specific URLs, upstream task IDs, routing IDs, or private execution metadata. They are not stable public contracts.
+## Client Retry Rules
 
-## Billing And Reconciliation
+Network timeouts are the most common source of duplicate jobs. Use this rule:
 
-- A create response can reserve an estimated amount for asynchronous work.
-- Final settlement happens after the task reaches a terminal state.
-- When settlement is available, task status responses can expose `billing_transaction_id` and the `X-Billing-Transaction-ID` header.
-- If a client timeout happens after task creation, do not recreate the job blindly. Resume from the stored `task_id` / `poll_url`.
+| Where timeout happens | Safer behavior |
+|-----------------------|----------------|
+| Before your server receives a create response | Check server logs for `request_id`; retry only if no task was created |
+| After a create response was stored | Resume polling the stored `task_id` |
+| During polling | Retry the status request with backoff |
+| After terminal status | Do not poll again unless the user explicitly refreshes the record |
+
+Do not send a second create request just because the browser refreshed or a status poll failed.
+
+## Billing And Settlement
+
+Async jobs can reserve an estimated amount when the create request is accepted. Final settlement happens after terminal status. When available, task status responses can expose `billing_transaction_id` and the `X-Billing-Transaction-ID` header.
+
+For reconciliation, join these identifiers in your logs:
+
+- `request_id` from the create request.
+- `task_id` / `id` from the task.
+- `billing_transaction_id` when present.
+- Your own user ID, project ID, or job ID.
 
 ## Cancellation
 
-`DELETE /v1/tasks/{id}` is intentionally narrow. It currently supports queued Volcengine Seedance video tasks such as `seedance-1.5-pro`, `seedance-2.0`, and `seedance-2.0-fast`. Unsupported tasks return `400 unsupported_task_cancel`; tasks already running or terminal return `409 task_not_cancellable`.
+`DELETE /v1/tasks/{id}` is intentionally narrow. It currently supports queued Volcengine Seedance video tasks such as `seedance-1.5-pro`, `seedance-2.0`, and `seedance-2.0-fast`.
 
-## Troubleshooting Checklist
+Unsupported tasks return `400 unsupported_task_cancel`. Tasks that are already running or terminal return `409 task_not_cancellable`. Build cancellation UI as "request cancellation" rather than a guaranteed stop button.
 
-- `async_task_not_found`: the task is unknown, expired, inaccessible to this API key, or not part of the public async-task contract.
-- Missing final media URL: keep polling until terminal; do not assume `pending` responses include outputs.
-- Duplicate jobs: check whether your retry path created a second task after an HTTP timeout.
-- Billing mismatch: compare `request_id`, `task_id`, and `billing_transaction_id` in the dashboard or Management API.
+## Troubleshooting
 
-When contacting support, include `request_id`, `task_id`, `billing_transaction_id` when present, endpoint, model, timestamp, and a sanitized request shape. Do not include API keys, private media, or full prompts unless support asks for a redacted sample.
+| Symptom | Likely cause | What to check |
+|---------|--------------|---------------|
+| `async_task_not_found` | Task is unknown, expired, inaccessible to this API key, or not a public async task | Confirm API key ownership and the stored public `task_id` |
+| Task never appears to finish | Client keeps polling the wrong URL or stopped before terminal status | Use `poll_url` or `/v1/tasks/{id}` and inspect the latest status |
+| Final media URL missing | Task is not completed, or the upstream job completed without usable output | Keep polling until terminal, then handle missing output as failed |
+| User sees duplicates | Retry path created a new task after timeout or refresh | Deduplicate by your own job ID and stored `task_id` |
+| Billing mismatch | Settlement is async or client is comparing provider IDs | Compare `request_id`, `task_id`, and `billing_transaction_id` |
+
+## Support Packet
+
+When contacting support, include `request_id`, `task_id`, `billing_transaction_id` when present, endpoint, model, timestamp, and a sanitized request shape. Do not include API keys, private media, signed URLs, or full prompts unless support asks for a redacted sample.
 
 ## API Reference
 
@@ -1833,62 +1862,88 @@ When contacting support, include `request_id`, `task_id`, `billing_transaction_i
 | Cancel Task | [Cancel Task](/api-reference/tasks/cancel-task) |
 | Image Generation | [Image Generation](/guides/image-generation) |
 | Video Generation | [Video Generation](/guides/video-generation) |
+| Music Generation | [Music Generation](/guides/music-generation) |
+| 3D Generation | [3D Generation](/guides/3d-generation) |
 | Billing & Pricing | [Billing & Pricing](/guides/billing) |
 
 ---
 
 ### Observability & Troubleshooting
 
-> Capture the public identifiers TokenLab exposes for support, usage reconciliation, and async task debugging.
+> Log the public TokenLab identifiers needed for support, usage reconciliation, and async media debugging.
 
 URL: https://docs.tokenlab.sh/guides/observability-troubleshooting
 
-This page is written for application teams operating TokenLab in production. It focuses on public identifiers and user-safe logs, not provider routing internals.
+Good TokenLab observability starts with public identifiers. Your logs should help you answer "what did the user request, what public task did TokenLab create, and how was it billed?" without exposing provider routing internals or sensitive user data.
 
-## Public Identifiers
+## Public Identifiers To Capture
 
 | Identifier | Where it appears | Use it for |
 |------------|------------------|------------|
-| `request_id` | Error bodies, Management API usage records, dashboard logs | Support and request-level reconciliation |
-| `task_id` / `id` | Async create and status responses | Polling image, video, music, and 3D jobs |
+| `request_id` | Error bodies, dashboard logs, usage records | Request-level support and reconciliation |
+| `id` / `task_id` | Async create and status responses | Polling image, video, music, and 3D jobs |
 | `poll_url` | Async create responses | Preferred status URL |
-| `billing_transaction_id` | Non-streaming responses when settled, task status responses, Management API usage records, `X-Billing-Transaction-ID` header | Billing reconciliation |
-| `X-Task-ID` | Async task responses | Header-level task correlation |
+| `billing_transaction_id` | Non-streaming responses when settled, async task status responses, usage records, `X-Billing-Transaction-ID` | Cost reconciliation |
+| `X-Task-ID` | Async task response headers | Header-level task correlation |
+| Your own job/user ID | Your application | Joining TokenLab activity back to the user workflow |
+
+Do not store provider task IDs, upstream URLs, routing channel IDs, Redis keys, or private execution metadata as customer-facing truth.
 
 ## What To Log
 
-1. Log endpoint, model, status code, timestamp, and public identifiers.
-2. Redact `Authorization`, API keys, signed URLs, private media URLs, and full prompts by default.
-3. For async jobs, log the create response and every terminal status response.
-4. For usage questions, call the Management API with the API key ID and date filters.
-5. Use error `type`, `code`, and `param` from the response body instead of parsing provider text.
+Log enough to diagnose the request without leaking secrets:
 
-## Troubleshooting Checklist
+- Endpoint, HTTP method, model, status code, timestamp, and latency.
+- Public identifiers: `request_id`, `task_id`, `poll_url`, and `billing_transaction_id` when present.
+- Sanitized request shape: which fields were present, not the full prompt or private media content.
+- Terminal async status responses, including public error fields.
+- Client retry count and whether the retry created a new task or resumed an existing one.
+
+Always redact `Authorization`, API keys, management tokens, signed URLs, private media URLs, full prompts, and user personal data unless you have explicit permission to retain them.
+
+## Troubleshooting Matrix
 
 | Symptom | First check | Useful page |
 |---------|-------------|-------------|
-| `401` or `403` | API key, management token, organization access | [Authentication](/authentication) |
-| `429` | Rate-limit tier and client retry behavior | [Rate Limits](/guides/rate-limits) |
-| `400 invalid_request_error` | Unsupported field, wrong endpoint, or model-specific contract mismatch | [Error Handling](/guides/error-handling) |
-| Async task never finishes | Poll `poll_url`, inspect final `status`, avoid duplicate task creation | [Async Jobs & Polling](/guides/async-jobs-polling) |
-| Cost does not match UI | Compare `request_id` and `billing_transaction_id` in usage records | [Billing & Pricing](/guides/billing) |
+| `401` or `403` | API key, management token, organization access, key scope | [Authentication](/authentication) |
+| `402` | Balance, API key spend limit, model price availability | [Billing & Pricing](/guides/billing) |
+| `429` | Account tier, endpoint rate limit, retry behavior | [Rate Limits](/guides/rate-limits) |
+| `400 invalid_request_error` | Unsupported field, wrong endpoint, missing required field, or model contract mismatch | [Error Handling](/guides/error-handling) |
+| Async task cannot be found | Wrong API key, stale task ID, expired task, or non-public task ID | [Async Jobs & Polling](/guides/async-jobs-polling) |
+| Cost does not match UI | Settlement timing or comparing the wrong identifier | [Billing & Pricing](/guides/billing) |
 
 ## Usage Reconciliation
 
-`GET /v1/management/api-keys/{keyId}/usage` returns paginated key-level usage. It can filter by `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, and `endDate`. Use it for server-side reconciliation instead of scraping the dashboard.
+Use the Management API for server-side reconciliation:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-Streaming responses may settle after the stream is sent, so the billing header can be absent even when usage is later recorded. For async media tasks, settlement can appear after terminal polling.
+`GET /v1/management/api-keys/{keyId}/usage` can filter by `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, and `endDate`. Use these records instead of scraping dashboard pages or relying on upstream provider task IDs.
 
-## Support Packet
+Streaming responses may settle after the stream is sent, so a billing header can be absent even when usage is later recorded. Async media tasks may settle after terminal polling.
 
-When contacting support, include `request_id`, `task_id`, `billing_transaction_id` when present, endpoint, model, timestamp, and a sanitized request shape. Do not include API keys, private media, or full prompts unless support asks for a redacted sample.
+## Support Packet Template
 
-Do not include provider names, channel IDs, routing identifiers, Redis keys, or upstream task URLs in customer logs or support tickets unless TokenLab support explicitly asks for them.
+When contacting support, include:
+
+- `request_id`.
+- `task_id` and `poll_url` for async work.
+- `billing_transaction_id` when present.
+- Endpoint, method, model, timestamp, and status code.
+- Sanitized request shape and public error body.
+- Your expected result and what the user actually saw.
+
+Do not include API keys, management tokens, private media, full prompts, provider URLs, channel IDs, or internal routing identifiers unless TokenLab support explicitly asks for a redacted sample.
+
+## Operational Checks
+
+- Alert on repeated `401`, `402`, `429`, and `5xx` responses separately; they usually have different owners.
+- Track async jobs that remain non-terminal longer than your product SLA.
+- Track duplicate create attempts for the same user job ID.
+- Sample completed jobs and verify the user-visible asset, usage record, and stored task record agree.
 
 ## API Reference
 
@@ -1908,65 +1963,102 @@ Do not include provider names, channel IDs, routing identifiers, Redis keys, or 
 
 URL: https://docs.tokenlab.sh/guides/structured-outputs-tool-calling
 
-Structured outputs and tools are real TokenLab API paths, but they are not one universal capability across every model and route. Choose the route that owns the behavior you need.
+Structured outputs and tool calls are route-specific contracts. TokenLab forwards several public API formats, so the safest production pattern is to keep each provider-native tool shape on the route that owns it and validate model output in your own application.
 
-## JSON And Structured Output
+## Choose The Route
 
-For portable structured responses, start with Chat Completions `response_format: {"type":"json_object"}` and validate the output in your application. This is the stable public request shape in TokenLab shared validation.
+| Need | Route | Use this shape |
+|------|-------|----------------|
+| Portable JSON object responses | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| OpenAI-compatible function calling | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| OpenAI Responses tools | `/v1/responses` | Responses `tools`, `tool_choice`, and `text` fields |
+| Claude-native tool use or thinking | `/v1/messages` | Anthropic Messages tool schema |
+| Gemini function declarations or built-in tools | `/v1beta/models/:model:generateContent` | Gemini-native `tools` and content parts |
+
+Do not send provider-native built-in tools through a different route and expect TokenLab to silently translate them.
+
+## JSON Mode
+
+For portable structured responses, start with Chat Completions JSON mode:
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Return a JSON object with city and weather."}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "Return a JSON object with city and weather."
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-`json_schema` and `strict` structured output paths exist in some upstream and conversion code, but they are model- and route-dependent. Treat them as a capability to verify with the selected model, not as a blanket promise across every TokenLab route.
+The stable shared validation for Chat Completions accepts `text` and `json_object`. `json_schema`, `strict`, and provider-specific schema enforcement may exist for some upstream routes or conversion paths, but they are not a blanket promise across every TokenLab route and model. Verify them against the selected model before relying on them.
 
-## Tool Calling Boundary
+Always parse and validate the returned JSON on your server. JSON mode improves the shape, but it does not replace application-level schema validation.
 
-| Tool shape | Route to prefer | Production note |
-|------------|-----------------|-----------------|
-| OpenAI function tools | `/v1/chat/completions` | Portable for user-defined function calls |
-| OpenAI Responses tools | `/v1/responses` | Use for Responses-specific built-in or hosted tools |
-| Anthropic tools | `/v1/messages` | Use for Claude-native tool use and thinking flows |
-| Gemini function declarations / built-in tools | `/v1beta/models/:model:generateContent` | Keep Gemini-native tool fields on the Gemini route |
+## Tool Calling Loop
 
-TokenLab does not execute your function for you. When a model returns `tool_calls`, `function_call`, `tool_use`, or Gemini function call parts, your application must run the tool, append the tool result in the format required by the route, and continue the conversation.
+TokenLab does not execute your functions. Your application owns the loop:
 
-## Common Pitfalls
+1. Send messages plus tool definitions.
+2. Read the model response for `tool_calls`, `function_call`, Anthropic `tool_use`, or Gemini function call parts.
+3. Execute the tool in your own backend.
+4. Append the tool result in the format required by the same route.
+5. Continue the conversation until the model returns a final answer.
 
-- Do not send provider-native built-in tools through Chat Completions and expect them to be silently translated.
-- Do not rely on strict JSON Schema unless the selected route and model have been tested.
-- Keep schemas small and explicit; large schemas add tokens and can reduce reliability.
-- Validate model output server-side even when JSON mode is enabled.
-- Treat unsupported-field errors as contract feedback. Remove the field or use the native route that owns it.
+Keep the same route throughout a tool loop. Mixing Chat Completions, Responses, Messages, and Gemini formats in one conversation usually creates subtle state and schema bugs.
 
-## Example
+## Chat Completions Example
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"Extract name and email as JSON."}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "Look up a customer by email",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "Extract name and email as JSON. If needed, look up the customer."
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "Look up a customer by email",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
+
+## Schema Design
+
+- Keep schemas small and explicit. Large nested schemas add tokens and reduce reliability.
+- Prefer required fields for values your product cannot continue without.
+- Use enums for closed sets that your UI or backend depends on.
+- Include examples in the prompt when the model struggles with a shape.
+- Treat unsupported-field errors as contract feedback. Remove the field or use the native route that documents it.
+
+## Production Checklist
+
+- Record route, model, tool names, and sanitized schema shape in logs.
+- Validate tool arguments before executing any side effect.
+- Apply your own permission checks before tool execution.
+- Make tool execution idempotent when a client retry can repeat the same tool call.
+- Do not log secrets returned by tools into model-visible messages.
 
 ## API Reference
 
@@ -1982,21 +2074,22 @@ curl https://api.tokenlab.sh/v1/chat/completions \\
 
 ### Migration Guides
 
-> Move OpenAI, Anthropic, Gemini, and media workloads to TokenLab with the smallest production-safe changes.
+> Move OpenAI, Anthropic, Gemini, and media workloads to TokenLab with small, production-safe changes.
 
 URL: https://docs.tokenlab.sh/guides/migration-guides
 
-TokenLab is native-first and OpenAI-compatible. Pick the route that matches the client behavior you need instead of converting every workload into one format.
+TokenLab is multi-format: you can keep OpenAI-compatible clients, Anthropic-native Messages calls, Gemini-native REST calls, and media endpoints in their natural shapes. The safest migration is not to translate every workload into one universal format. Choose the route that owns the behavior your application needs.
 
-## Choose The Format
+## Route Mapping
 
-| Existing workload | TokenLab base URL | Primary endpoint | Notes |
-|-------------------|-------------------|------------------|-------|
-| OpenAI Chat Completions | `https://api.tokenlab.sh/v1` | `/chat/completions` | Smallest change for OpenAI-compatible clients |
-| OpenAI Responses | `https://api.tokenlab.sh/v1` | `/responses` | Use only for Responses-specific behavior |
-| Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | Do not append `/v1` in the SDK base URL |
-| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Keep Gemini-native fields on the native route |
+| Existing workload | TokenLab base URL | Primary endpoint | Migration note |
+|-------------------|-------------------|------------------|----------------|
+| OpenAI Chat Completions | `https://api.tokenlab.sh/v1` | `/chat/completions` | Smallest change for OpenAI-compatible chat and function calling |
+| OpenAI Responses | `https://api.tokenlab.sh/v1` | `/responses` | Use when your app depends on Responses-specific input, tools, or output handling |
+| Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | Do not append `/v1` to the SDK base URL |
+| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Keep Gemini-native fields on the Gemini route |
 | Media generation | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Discover models with `recommended_for` and expect async polling where documented |
+| Management and billing | `https://api.tokenlab.sh/v1` | `/management/...` | Use management tokens for server-side usage and billing reconciliation |
 
 ## OpenAI-Compatible Migration
 
@@ -2014,7 +2107,7 @@ response = client.chat.completions.create(
 )
 ```
 
-Keep your existing retry, timeout, and streaming code, but validate model IDs against `GET /v1/models`. For image generation, send `model` explicitly and read the image guide because image models differ more than chat models.
+Keep your existing retry, timeout, and streaming code, but validate model IDs with `GET /v1/models` before production traffic. For image generation, send `model` explicitly and read the image guide because image models differ more than chat models.
 
 ## Anthropic Migration
 
@@ -2033,34 +2126,46 @@ message = client.messages.create(
 )
 ```
 
-Use this route for Claude-native behavior such as Messages tool use and extended thinking. If a feature is Anthropic-native, keep it on `/v1/messages` instead of translating it through Chat Completions.
+Use `/v1/messages` for Claude-native tool use, thinking flows, and Anthropic message semantics. Do not translate Anthropic-only fields through Chat Completions unless you intentionally want an OpenAI-compatible behavior change.
 
 ## Gemini Migration
 
 ```bash
-curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \\
-  -H "Authorization: Bearer sk-your-tokenlab-key" \\
-  -H "Content-Type: application/json" \\
+curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-tokenlab-key" \
+  -H "Content-Type: application/json" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-Gemini built-in tools, File API resources, cached contents, and function declarations should stay on `/v1beta` when you need Gemini-native behavior.
+Keep Gemini built-in tools, File API references, cached contents, function declarations, and native content parts on `/v1beta` when your app depends on Gemini-native behavior.
 
 ## Media Migration
 
-1. Query `GET /v1/models?recommended_for=image|video|music|3d` before choosing a model.
-2. Read `tokenlab.public_contract_summary` and, on detail pages, the full `tokenlab.public_contract`.
-3. Send an explicit `model`. Do not rely on legacy defaults for production traffic.
-4. Store `task_id` and `poll_url` for async jobs.
-5. Reconcile costs through usage records, not through provider task IDs.
+1. Query `GET /v1/models?recommended_for=image|video|music|3d`.
+2. Read `tokenlab.public_contract_summary` in list responses and the full `tokenlab.public_contract` where available.
+3. Send an explicit `model`, especially for image endpoints.
+4. Store `task_id`, `poll_url`, endpoint, model, and your own job ID for async jobs.
+5. Reconcile costs through usage records and `billing_transaction_id`, not provider task IDs.
 
-## Production Rollout
+Media workloads need their own rollout plan because latency, retries, and final assets behave differently from chat completions.
 
-- Start with one endpoint and one model family.
-- Set HTTP timeouts high enough for synchronous image routes; use async mode when available for long work.
-- Log public identifiers and sanitized request shape before sending production traffic.
-- Compare a sample of responses, usage records, and customer-visible outputs.
-- Keep rollback simple: preserve the previous provider client until TokenLab traffic is stable.
+## Production Rollout Plan
+
+| Phase | Goal | Checks |
+|-------|------|--------|
+| 1. Inventory | List endpoints, models, request fields, streaming/async behavior, and billing owner | No hidden provider-only fields are assumed public |
+| 2. Single-route pilot | Move one endpoint and one model family | Response shape, cost, and logs match expectations |
+| 3. Shadow or sample | Compare selected outputs against the previous provider | User-visible quality and latency are acceptable |
+| 4. Gradual rollout | Increase traffic by key, org, or feature flag | Watch `4xx`, `5xx`, latency, balance, and duplicate async jobs |
+| 5. Cleanup | Remove old provider path only after stable usage | Rollback path and support playbook are documented |
+
+## Migration Pitfalls
+
+- Do not put every model behind one OpenAI Chat Completions path if your app needs native Anthropic, Gemini, or Responses behavior.
+- Do not assume old image defaults. Send `model` explicitly.
+- Do not retry async create requests without checking whether a task was already created.
+- Do not expose provider routing metadata in your logs or UI.
+- Do not compare billing with provider task IDs. Use TokenLab usage records.
 
 ## API Reference
 
@@ -2069,6 +2174,7 @@ Gemini built-in tools, File API resources, cached contents, and function declara
 | Multi-Format API | [Multi-Format API](/guides/api-formats) |
 | OpenAI SDK | [OpenAI SDK](/integrations/openai-sdk) |
 | Anthropic SDK | [Anthropic SDK](/integrations/anthropic-sdk) |
+| Gemini Native | [Gemini Native API](/api-reference/gemini/generate-content) |
 | Image Generation | [Image Generation](/guides/image-generation) |
 | Async Jobs & Polling | [Async Jobs & Polling](/guides/async-jobs-polling) |
 
@@ -2379,45 +2485,54 @@ Configure low balance alerts in your dashboard to avoid service interruption.
 
 ### Image Generation
 
-> Build text-to-image, image-to-image, and image edit workflows against TokenLab public image contracts.
+> Choose the right TokenLab image endpoint, send model-aware requests, and handle synchronous or async image results safely.
 
 URL: https://docs.tokenlab.sh/guides/image-generation
 
-TokenLab image APIs cover several model families with different request shapes. Use the public model contract and the endpoint-specific API reference before assuming a field works across every image model.
+TokenLab supports text-to-image, image-to-image, and image editing through public image endpoints. Image models do not share one universal parameter set, so production clients should first choose the endpoint, then choose the model, then send only the fields supported by that model.
 
-## Choose The Endpoint
+## When To Use Each Endpoint
 
-| Goal | Endpoint | Notes |
-|------|----------|-------|
-| Text-to-image | `POST /v1/images/generations` | Use `prompt` and an explicit `model` |
-| Image-to-image / reference image | `POST /v1/images/generations` | Use `operation: "image-to-image"` plus `image_url`, `image_urls`, or `reference_image_urls` when the model supports it |
-| GPT Image edit | `POST /v1/images/edits` | Supports multipart `image`, JSON `image_url` / `image_urls`, and official `images[]` references for supported edit models |
-| Legacy variation | `POST /v1/images/variations` | Prefer current generation or edit routes for new work |
-| Async status | `GET /v1/tasks/{id}` | Use `poll_url` first when present |
+| User workflow | Endpoint | Use when | Avoid when |
+|---------------|----------|----------|------------|
+| Text-to-image | `POST /v1/images/generations` | The user starts from a prompt only | You need an official GPT Image edit flow |
+| Image-to-image | `POST /v1/images/generations` | The model documents reference images through `operation: "image-to-image"` plus `image_url`, `image_urls`, or `reference_image_urls` | The model expects multipart edit input |
+| Image edit | `POST /v1/images/edits` | You are editing an existing image with a supported edit model such as a GPT Image family model | You are using Nano Banana style image-to-image generation |
+| Variation | `POST /v1/images/variations` | You maintain a legacy variation-compatible integration | You are building a new reference-image workflow |
+| Status | `GET /v1/tasks/{id}` | A create response returns `task_id`, `status: "pending"`, or `poll_url` | The create response already contains final `data[]` |
 
-## Model Discovery
+Always send `model`. Image endpoints intentionally do not rely on a historical implicit default model for production traffic.
+
+## Pick A Model
+
+Start with model discovery, then inspect the selected model's TokenLab contract:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Image model parameters differ a lot. Read the selected model contract before sending `size`, `quality`, `aspect_ratio`, `resolution`, `async`, `background`, or `output_format`.
+For non-chat models, the list response may include `tokenlab.public_contract_summary`. Model detail pages may expose the fuller `tokenlab.public_contract`. Use those fields to confirm:
 
-## Inputs And Model-Specific Fields
+- The supported operation, such as `text-to-image`, `image-to-image`, or `image-edit`.
+- The request endpoint expected by the model.
+- Which shape to use for references, such as `image_url`, `image_urls`, `reference_image_urls`, multipart `image`, or JSON `images[]`.
+- Whether the model accepts `size`, `aspect_ratio`, `resolution`, `quality`, `background`, `output_format`, or `response_format`.
 
-- `gpt-image-2` uses OpenAI-style `size` and `quality`; omit `size` or `quality` to let TokenLab use `auto` where supported.
-- Gemini and Nano Banana image families generally use `aspect_ratio`; only send `resolution` when the selected model exposes it.
-- Nano Banana reference-image requests belong on `/v1/images/generations` with `operation: "image-to-image"` and `image_urls`, not on `/v1/images/edits`.
+## Request Shape Rules
+
+- `gpt-image-2` style requests use OpenAI-like `size`, `quality`, and edit fields. Leave optional fields out when you want the model or TokenLab to use automatic defaults.
+- Gemini and Nano Banana image families usually use `aspect_ratio`; only send `resolution` when the model contract exposes it.
+- Nano Banana image-to-image belongs on `/v1/images/generations` with `operation: "image-to-image"` and reference image URLs.
 - `/v1/images/generations` does not accept top-level `images[]` or `file_id`; those are edit-flow shapes.
-- Remote image URLs must be public `http`/`https` URLs. Avoid private networks, embedded credentials, fragments, and short-lived signed URLs.
+- Remote image references must be public `http` or `https` URLs. Do not send private network URLs, embedded credentials, URL fragments, or signed URLs that may expire before processing starts.
 
-## Create Request
+## Text-To-Image Example
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
     "prompt": "A clean product photo of a ceramic coffee cup on a walnut desk",
@@ -2426,22 +2541,53 @@ curl https://api.tokenlab.sh/v1/images/generations \\
   }'
 ```
 
-## Polling Results
-
-Some image routes return inline `data[].url` or `data[].b64_json`. Other routes return `status: "pending"`, `task_id`, and `poll_url`. If you request async image generation or editing, completed task results return URLs; use synchronous requests when you specifically need `b64_json`.
+## Reference-Image Example
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "Keep the product shape, change the background to a bright studio setup",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Handling Results
+
+Image responses can be synchronous or asynchronous:
+
+- Synchronous responses return final `data[]` with `url` or `b64_json`.
+- Async responses return `id`, `task_id`, `status`, and usually `poll_url`.
+- Prefer `poll_url` when it is present. If you need a fixed route, poll `GET /v1/tasks/{id}`.
+- Use synchronous requests when you specifically need `b64_json`; async image results are URL-oriented.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-## Common Pitfalls
+Persist the returned image URL, task ID, model, and your own user/job ID. Do not keep polling after a terminal status.
 
-- Do not assume every image model is synchronous.
-- Do not request `b64_json` from async image tasks; async results are URL-oriented.
-- Do not send `resolution` to ratio-only Gemini image models.
-- Do not use `/v1/images/edits` for Nano Banana image-to-image flows.
-- Set HTTP client timeouts to at least `120s` for synchronous high-resolution image requests.
+## Production Checklist
+
+- Validate user inputs before calling TokenLab: prompt length, image count, URL reachability, and file type.
+- Set HTTP timeouts high enough for synchronous high-resolution requests. Use async mode where available for long work.
+- Store `request_id`, `task_id`, `poll_url`, model, endpoint, and sanitized request shape for support.
+- On client timeout, check whether a task was created before retrying the create request.
+- Reconcile cost with usage records and `billing_transaction_id` when present, not with provider task IDs.
+
+## Common Errors
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `400` with `param: "model"` | Missing explicit model | Query `/v1/models?recommended_for=image` and send `model` |
+| Unsupported field | Field is not in that model's public contract | Remove the field or choose a model/endpoint that documents it |
+| No `b64_json` on async result | Async image tasks return URL-oriented results | Use synchronous mode for base64 output |
+| Reference image rejected | Wrong endpoint or private/expired URL | Match the model's documented reference shape and use reachable URLs |
 
 ## API Reference
 
@@ -2538,27 +2684,35 @@ Completed video tasks may return `video_url`, `video`, or `videos` depending on 
 
 ### Music Generation
 
-> Create songs, instrumentals, lyrics, and continuations with TokenLab music tasks.
+> Create music or lyrics tasks, poll for final audio, and store user-facing music outputs safely.
 
 URL: https://docs.tokenlab.sh/guides/music-generation
 
-Music generation is asynchronous. `POST /v1/music/generations` creates a task and returns `id` / `task_id`, `status`, and usually `poll_url`. Final audio and metadata appear after polling.
+Music generation is asynchronous. `POST /v1/music/generations` creates a public TokenLab task and returns `id` / `task_id`, `status`, and usually `poll_url`. Your application should store that task identity, show progress, and poll until a terminal status.
 
-## Model Discovery
+## Choose The Workflow
+
+| Workflow | Key fields | Notes |
+|----------|------------|-------|
+| Full song or instrumental | `model`, `prompt`, optional `title`, `tags`, `action: "MUSIC"` | Use when the user expects final audio |
+| Lyrics only | `model`, `prompt`, `action: "LYRICS"` | Use only with models that expose lyric generation |
+| Continue an existing clip | `continue_clip_id`, optional `continue_at` | Store the previous public clip/task identity before offering continuation |
+
+Query the current model catalog before shipping a hard-coded model list:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-The current public contract exposes `suno_music` for music generation and `suno_lyrics` for lyric-only flows. Query the model catalog before production use instead of pinning provider assumptions.
+The current public examples use `suno_music` for music generation. For lyric-only flows, send `action: "LYRICS"` with a model whose public contract documents lyric generation. Treat model IDs as public TokenLab IDs, not as a guarantee that provider-specific fields are public contract fields.
 
-## Create Request
+## Create A Music Task
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
     "prompt": "An upbeat synth-pop track with warm vocals and a clean chorus",
@@ -2568,20 +2722,39 @@ curl https://api.tokenlab.sh/v1/music/generations \\
   }'
 ```
 
-Use `action: "MUSIC"` for songs or instrumentals. Use `action: "LYRICS"` only with models that support lyric-only generation. Continuation fields such as `continue_clip_id` and `continue_at` are for continuation workflows and should be sent only when your product is continuing a previous clip.
+Keep prompts, titles, and tags user-visible and safe to store. Do not place API keys, private URLs, or internal routing information in any prompt field.
 
-## Polling Results
+## Poll For Completion
 
-Use the returned `poll_url` first. If you need a fixed endpoint, use `GET /v1/tasks/{id}` with the same `id` / `task_id` from the create response.
+Use `poll_url` first. If your client needs a fixed route, call `GET /v1/tasks/{id}` with the returned `id` or `task_id`.
 
-Completed music tasks can include `audio_url`, `video_url`, `title`, `lyrics`, and model-normalized metadata. Store the final URLs in your application rather than polling repeatedly after terminal status.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Common Pitfalls
+Expected public statuses are `pending`, `processing`, `completed`, and `failed`. A completed music task can include `audio_url`, `video_url`, `title`, `lyrics`, and normalized metadata. Store final URLs in your own database so the user can reopen the result without restarting generation.
 
+## UI And State Handling
+
+- Show a pending state immediately after task creation.
+- Poll every `5-10s` for long tasks, then stop on `completed` or `failed`.
 - Do not display a final player until the task is `completed` and an `audio_url` exists.
-- Do not use provider task IDs or provider fetch URLs in your app state.
-- Do not mix lyric-only and full-music actions behind one UI without showing the difference to users.
-- Do not recreate tasks on every page refresh; resume from stored `task_id`.
+- For lyric-only tasks, render text output separately from audio tasks so users understand what they are buying.
+- On refresh, resume from the stored `task_id` instead of creating a new task.
+
+## Billing And Reconciliation
+
+Music tasks can reserve an estimated amount at create time and settle after the terminal status is known. Store `request_id`, `task_id`, model, endpoint, and `billing_transaction_id` when it appears. Use Management API usage records for reconciliation instead of provider task IDs.
+
+## Common Errors
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Task created but no player | Task is still pending or completed without `audio_url` | Keep polling until terminal, then handle missing output as a failed user job |
+| Duplicate songs after refresh | UI recreated the task instead of resuming | Persist and reuse `task_id` |
+| Lyric task returns no audio | `action: "LYRICS"` is text-only | Separate lyrics and music UI paths |
+| Unsupported parameter | Field is not in the model public contract | Remove provider-specific fields or choose a model that documents them |
 
 ## API Reference
 
@@ -2597,27 +2770,34 @@ Completed music tasks can include `audio_url`, `video_url`, `title`, `lyrics`, a
 
 ### 3D Generation
 
-> Create 3D assets from text or images and download completed model files from async task results.
+> Create text-to-3D or image-to-3D tasks, poll for completed assets, and handle downloadable model files.
 
 URL: https://docs.tokenlab.sh/guides/3d-generation
 
-3D generation is asynchronous. `POST /v1/3d/generations` creates a task; completed status responses return downloadable model asset URLs.
+3D generation is asynchronous. `POST /v1/3d/generations` creates a TokenLab task; completed status responses return downloadable model assets such as `model_url` and, when available, format-specific URLs.
 
-## Model Discovery
+## Choose The Input Type
+
+| Workflow | Required input | Optional fields | Notes |
+|----------|----------------|-----------------|-------|
+| Text-to-3D | `model`, `prompt` | `format`, `quality`, `style`, `seed` | Best for generating a new asset from a description |
+| Image-to-3D | `model`, `prompt`, `image` or `image_url` | `format`, `quality`, `style`, `seed` | Use only when the selected model supports image input |
+
+Query the model catalog before deciding which options to expose:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Do not assume every 3D model supports both text-to-3D and image-to-3D. Check the selected model contract before sending `image`, `image_url`, `format`, `quality`, `style`, or `seed`.
+Do not assume every 3D model supports both input types or every output format. Check the selected model contract before sending `image`, `image_url`, `format`, `quality`, `style`, or `seed`.
 
-## Create Request
+## Create A 3D Task
 
 ```bash
-curl https://api.tokenlab.sh/v1/3d/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "tripo3d-v2.5",
     "prompt": "A stylized low-poly robot mascot with clean topology",
@@ -2626,26 +2806,43 @@ curl https://api.tokenlab.sh/v1/3d/generations \\
   }'
 ```
 
-Text-to-3D requires a `prompt`. Image-to-3D uses `image` or `image_url` when supported by the model. Prefer public URLs for production inputs unless the source image is private and your client intentionally uploads base64 data.
+For image-to-3D, use a public `image_url` when possible. Use inline/base64 `image` only when your client intentionally sends private media and your backend is prepared for larger request bodies.
 
-## Output Choices
+## Output Format Choices
 
-- `format` can request output packaging such as `glb`, `fbx`, `obj`, or `usdz` when supported.
-- `quality` values such as `draft`, `standard`, or `high` affect latency and cost when the model exposes them.
-- `style` and `seed` are model-dependent; omit them unless the selected contract documents them.
+- `glb` is usually the safest default for web previews.
+- `fbx` and `obj` are useful for DCC pipelines when the selected model supports them.
+- `usdz` is useful for Apple AR workflows when exposed by the model.
+- Higher `quality` values can increase latency and cost. Expose them as explicit user choices, not hidden defaults.
+- `seed` is useful for reproducibility only when the model honors it.
 
-## Polling Results
+## Poll And Store Assets
 
-Use the returned `poll_url` first. If you need a fixed endpoint, use `GET /v1/tasks/{id}` with the same `id` / `task_id` from the create response.
+Use the returned `poll_url` first. If your client needs a fixed route, use `GET /v1/tasks/{id}`.
 
-Completed tasks return `model_url` and may include format-specific URLs such as `glb_url`, `fbx_url`, `obj_url`, or `usdz_url`. Download and cache the asset in your own product if users need repeat access.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Common Pitfalls
+Completed tasks return `model_url` and may include `glb_url`, `fbx_url`, `obj_url`, or `usdz_url`. Download or cache the selected asset in your own product if users need repeat access, version history, or long-lived downloads.
 
-- Do not expect a 3D asset in the create response; poll until terminal status.
-- Do not promise every format for every model.
-- Do not retry create requests after client timeout without checking whether the task already exists.
-- Do not expose provider task IDs in your UI.
+## Production Checklist
+
+- Persist `task_id`, `poll_url`, model, requested format, and your own asset record ID.
+- Resume polling after page refresh rather than creating a duplicate task.
+- Validate source image size and reachability before creating the task.
+- Keep generated asset URLs out of public pages unless the user has permission to access the asset.
+- Record `billing_transaction_id` when present for later reconciliation.
+
+## Common Errors
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Create response has no asset URL | 3D generation is async | Poll until terminal status |
+| Requested format missing | Model did not return that format | Fall back to `model_url` or choose a model that supports the format |
+| Image-to-3D rejected | Selected model is text-only or image URL is unreachable | Check the model contract and validate the URL |
+| Duplicate assets | Retry path recreated the task after timeout | Store task identity before retrying |
 
 ## API Reference
 

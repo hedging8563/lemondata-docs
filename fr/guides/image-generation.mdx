@@ -1,43 +1,52 @@
 ---
 title: "Génération d'Image"
-description: "Construisez des flux de travail de texte à image, d'image à image et d'édition d'image contre les contrats d'image publics de TokenLab."
+description: "Choisissez le bon point de terminaison d'image TokenLab, envoyez des requêtes conscientes du modèle et gérez les résultats d'image synchrones ou asynchrones en toute sécurité."
 ---
 
-Les API d'image de TokenLab couvrent plusieurs familles de modèles avec différentes formes de requêtes. Utilisez le contrat de modèle public et la référence API spécifique à l'endpoint avant de supposer qu'un champ fonctionne pour chaque modèle d'image.
+TokenLab prend en charge la génération d'images à partir de texte, d'images à partir d'images et l'édition d'images via des points de terminaison d'image publics. Les modèles d'image ne partagent pas un ensemble de paramètres universel, donc les clients de production doivent d'abord choisir le point de terminaison, puis choisir le modèle, puis envoyer uniquement les champs pris en charge par ce modèle.
 
-## Choisissez L'Endpoint
+## Quand Utiliser Chaque Point de Terminaison
 
-| Objectif | Endpoint | Remarques |
-|----------|----------|-----------|
-| Texte à image | `POST /v1/images/generations` | Utilisez `prompt` et un `model` explicite |
-| Image à image / image de référence | `POST /v1/images/generations` | Utilisez `operation: "image-to-image"` plus `image_url`, `image_urls`, ou `reference_image_urls` lorsque le modèle le prend en charge |
-| Édition d'image GPT | `POST /v1/images/edits` | Prend en charge `image` multipart, `image_url` / `image_urls` JSON, et références officielles `images[]` pour les modèles d'édition pris en charge |
-| Variation héritée | `POST /v1/images/variations` | Préférez les routes de génération ou d'édition actuelles pour un nouveau travail |
-| Statut asynchrone | `GET /v1/tasks/{id}` | Utilisez `poll_url` en premier lorsque présent |
+| Flux de travail utilisateur | Point de terminaison | Utiliser quand | Éviter quand |
+|----------------------------|----------------------|----------------|---------------|
+| Texte à image              | `POST /v1/images/generations` | L'utilisateur commence uniquement par un prompt | Vous avez besoin d'un flux d'édition d'image GPT officiel |
+| Image à image              | `POST /v1/images/generations` | Les documents du modèle font référence à des images via `operation: "image-to-image"` plus `image_url`, `image_urls`, ou `reference_image_urls` | Le modèle attend une entrée d'édition multipart |
+| Édition d'image            | `POST /v1/images/edits` | Vous éditez une image existante avec un modèle d'édition pris en charge tel qu'un modèle de la famille GPT Image | Vous utilisez la génération d'image à partir d'image de style Nano Banana |
+| Variation                   | `POST /v1/images/variations` | Vous maintenez une intégration compatible avec les variations héritées | Vous construisez un nouveau flux d'image de référence |
+| Statut                     | `GET /v1/tasks/{id}` | Une réponse de création retourne `task_id`, `status: "pending"`, ou `poll_url` | La réponse de création contient déjà les `data[]` finales |
 
-## Découverte de Modèle
+Envoyez toujours `model`. Les points de terminaison d'image ne s'appuient intentionnellement pas sur un modèle par défaut implicite historique pour le trafic de production.
+
+## Choisissez Un Modèle
+
+Commencez par la découverte de modèles, puis inspectez le contrat TokenLab du modèle sélectionné :
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Les paramètres du modèle d'image diffèrent beaucoup. Lisez le contrat du modèle sélectionné avant d'envoyer `size`, `quality`, `aspect_ratio`, `resolution`, `async`, `background`, ou `output_format`.
+Pour les modèles non liés aux chats, la réponse de la liste peut inclure `tokenlab.public_contract_summary`. Les pages de détails des modèles peuvent exposer le `tokenlab.public_contract` complet. Utilisez ces champs pour confirmer :
 
-## Entrées Et Champs Spécifiques au Modèle
+- L'opération prise en charge, telle que `text-to-image`, `image-to-image`, ou `image-edit`.
+- Le point de terminaison de requête attendu par le modèle.
+- Quelle forme utiliser pour les références, comme `image_url`, `image_urls`, `reference_image_urls`, multipart `image`, ou JSON `images[]`.
+- Si le modèle accepte `size`, `aspect_ratio`, `resolution`, `quality`, `background`, `output_format`, ou `response_format`.
 
-- `gpt-image-2` utilise `size` et `quality` au style OpenAI ; omettez `size` ou `quality` pour laisser TokenLab utiliser `auto` là où c'est pris en charge.
-- Les familles d'images Gemini et Nano Banana utilisent généralement `aspect_ratio` ; n'envoyez `resolution` que lorsque le modèle sélectionné l'expose.
-- Les requêtes d'image de référence Nano Banana appartiennent à `/v1/images/generations` avec `operation: "image-to-image"` et `image_urls`, pas à `/v1/images/edits`.
-- `/v1/images/generations` n'accepte pas `images[]` ou `file_id` au niveau supérieur ; ceux-ci sont des formes de flux d'édition.
-- Les URLs d'images distantes doivent être des URLs publiques `http`/`https`. Évitez les réseaux privés, les identifiants intégrés, les fragments, et les URLs signées à durée de vie courte.
+## Règles de Forme de Requête
 
-## Créer une Requête
+- Les requêtes de style `gpt-image-2` utilisent des champs `size`, `quality`, et d'édition similaires à OpenAI. Laissez de côté les champs optionnels lorsque vous souhaitez que le modèle ou TokenLab utilise des valeurs par défaut automatiques.
+- Les familles d'images Gemini et Nano Banana utilisent généralement `aspect_ratio`; n'envoyez `resolution` que lorsque le contrat du modèle l'expose.
+- L'image à image Nano Banana appartient à `/v1/images/generations` avec `operation: "image-to-image"` et des URLs d'images de référence.
+- `/v1/images/generations` n'accepte pas `images[]` ou `file_id` au niveau supérieur; ce sont des formes de flux d'édition.
+- Les références d'images distantes doivent être des URLs publiques `http` ou `https`. N'envoyez pas d'URLs de réseau privé, de credentials intégrés, de fragments d'URL, ou d'URLs signées qui pourraient expirer avant le début du traitement.
+
+## Exemple Texte-à-Image
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
     "prompt": "Une photo de produit propre d'une tasse à café en céramique sur un bureau en noyer",
@@ -46,22 +55,53 @@ curl https://api.tokenlab.sh/v1/images/generations \\
   }'
 ```
 
-## Interrogation des Résultats
-
-Certaines routes d'image retournent `data[].url` ou `data[].b64_json` en ligne. D'autres routes retournent `status: "pending"`, `task_id`, et `poll_url`. Si vous demandez une génération ou une édition d'image asynchrone, les résultats de tâche complétés retournent des URLs ; utilisez des requêtes synchrones lorsque vous avez spécifiquement besoin de `b64_json`.
+## Exemple Image de Référence
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "Conservez la forme du produit, changez l'arrière-plan pour un éclairage de studio lumineux",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Gestion des Résultats
+
+Les réponses d'image peuvent être synchrones ou asynchrones :
+
+- Les réponses synchrones retournent les `data[]` finales avec `url` ou `b64_json`.
+- Les réponses asynchrones retournent `id`, `task_id`, `status`, et généralement `poll_url`.
+- Préférez `poll_url` lorsqu'il est présent. Si vous avez besoin d'une route fixe, interrogez `GET /v1/tasks/{id}`.
+- Utilisez des requêtes synchrones lorsque vous avez spécifiquement besoin de `b64_json`; les résultats d'image asynchrones sont orientés URL.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-## Pièges Communs
+Conservez l'URL d'image retournée, l'ID de tâche, le modèle, et votre propre ID utilisateur/travail. Ne continuez pas à interroger après un statut terminal.
 
-- Ne supposez pas que chaque modèle d'image est synchrone.
-- Ne demandez pas `b64_json` à partir de tâches d'image asynchrones ; les résultats asynchrones sont orientés URL.
-- Ne pas envoyer `resolution` aux modèles d'image Gemini uniquement basés sur le ratio.
-- Ne pas utiliser `/v1/images/edits` pour les flux d'image à image Nano Banana.
-- Réglez les délais d'attente du client HTTP à au moins `120s` pour les requêtes d'image haute résolution synchrones.
+## Liste de Vérification de Production
+
+- Validez les entrées utilisateur avant d'appeler TokenLab : longueur du prompt, nombre d'images, accessibilité des URLs, et type de fichier.
+- Réglez les délais d'attente HTTP suffisamment élevés pour les requêtes synchrones haute résolution. Utilisez le mode asynchrone lorsque disponible pour un travail long.
+- Stockez `request_id`, `task_id`, `poll_url`, modèle, point de terminaison, et forme de requête assainie pour le support.
+- En cas de délai d'attente client, vérifiez si une tâche a été créée avant de réessayer la requête de création.
+- Réconciliez le coût avec les enregistrements d'utilisation et `billing_transaction_id` lorsqu'il est présent, pas avec les IDs de tâche du fournisseur.
+
+## Erreurs Courantes
+
+| Symptôme | Cause probable | Solution |
+|----------|----------------|----------|
+| `400` avec `param: "model"` | Modèle explicite manquant | Interrogez `/v1/models?recommended_for=image` et envoyez `model` |
+| Champ non pris en charge | Le champ n'est pas dans le contrat public de ce modèle | Supprimez le champ ou choisissez un modèle/point de terminaison qui le documente |
+| Pas de `b64_json` sur le résultat asynchrone | Les tâches d'image asynchrones retournent des résultats orientés URL | Utilisez le mode synchrone pour la sortie base64 |
+| Image de référence rejetée | Mauvais point de terminaison ou URL privée/expirée | Correspondre à la forme de référence documentée du modèle et utiliser des URLs accessibles |
 
 ## Référence API
 

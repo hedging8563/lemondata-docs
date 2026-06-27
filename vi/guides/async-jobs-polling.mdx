@@ -1,25 +1,32 @@
 ---
-title: "Công Việc Async & Polling"
-description: "Tạo các công việc tạo ra bất đồng bộ, kiểm tra trạng thái tác vụ công khai và đối chiếu kết quả cuối cùng mà không cần chi tiết tác vụ cụ thể của nhà cung cấp."
+title: "Công Việc Không Đồng Bộ & Kiểm Tra"
+description: "Tạo các công việc truyền thông không đồng bộ, kiểm tra trạng thái công việc TokenLab công khai, và đối chiếu kết quả cuối cùng mà không cần ID cụ thể của nhà cung cấp."
 ---
 
-Trang này phản ánh hợp đồng tác vụ bất đồng bộ công khai của TokenLab. Nó không coi các URL tác vụ của nhà cung cấp, ID định tuyến, hoặc hành vi callback upstream là các hợp đồng tích hợp hướng tới người dùng.
+Nhiều điểm cuối truyền thông là không đồng bộ. Một yêu cầu tạo bắt đầu công việc và trả về một danh tính công việc TokenLab công khai; ứng dụng của bạn sẽ kiểm tra cho đến khi công việc đó đạt trạng thái cuối cùng. Không xây dựng quy trình làm việc của khách hàng xung quanh các URL công việc upstream, ID định tuyến, hoặc hành vi callback của nhà cung cấp.
 
-## Hợp Đồng Công Khai
+## Hợp Đồng Công Việc Công Khai
 
-TokenLab cung cấp một hợp đồng tác vụ bất đồng bộ công khai cho các phương tiện được tạo ra. Các điểm cuối tạo có thể trả về `id`, `task_id`, `status`, và `poll_url`. Xem `id` và `task_id` như cùng một danh tính tác vụ công khai và lưu trữ cả ID tác vụ và `poll_url` với bản ghi công việc của bạn.
+Các phản hồi tạo có thể bao gồm:
 
-Sử dụng `poll_url` được trả về trước. Nếu bạn cần một điểm cuối cố định, hãy sử dụng `GET /v1/tasks/{id}` với cùng `id` / `task_id` từ phản hồi tạo.
+| Trường | Ý nghĩa | Hành động |
+|-------|---------|------------|
+| `id` | ID công việc TokenLab công khai | Lưu trữ nó cùng với bản ghi công việc của bạn |
+| `task_id` | Bí danh tương thích cho cùng một danh tính công việc công khai | Xem nó như tương đương với `id` |
+| `status` | Trạng thái công việc công khai hiện tại | Bắt đầu kiểm tra khi nó không phải là trạng thái cuối cùng |
+| `poll_url` | URL trạng thái ưu tiên | Sử dụng cái này trước khi có mặt |
+| `model` | Mô hình được yêu cầu hoặc giải quyết bởi điểm cuối | Lưu trữ nó để hỗ trợ và đối chiếu thanh toán |
 
-Các tác vụ tạo công khai hiện nay dựa trên polling. TokenLab có các bộ nhận callback upstream nội bộ, nhưng chúng không phải là webhook của khách hàng và không nên được sử dụng như một hợp đồng tích hợp.
+`/v1/tasks/{id}` là điểm cuối trạng thái cố định chuẩn cho các công việc truyền thông không đồng bộ công khai. Các tuyến trạng thái cụ thể cho truyền thông có thể tồn tại để tương thích, nhưng các tích hợp mới nên ưu tiên `poll_url` hoặc `/v1/tasks/{id}`.
 
 ## Quy Trình Được Khuyến Nghị
 
-1. Gửi yêu cầu tạo với một `model` rõ ràng.
-2. Nếu phản hồi là inline, đọc kết quả cuối cùng ngay lập tức.
-3. Nếu phản hồi chứa `status: "pending"`, `task_id`, hoặc `poll_url`, lưu trữ tác vụ và bắt đầu polling.
-4. Poll mỗi `5-10s` cho các tác vụ phương tiện dài. Dừng lại chỉ khi có trạng thái cuối cùng.
-5. Khi `completed`, đọc các trường kết quả cho loại phương tiện đó. Khi `failed`, lưu trữ lỗi công khai và chỉ hiển thị hành động thử lại khi việc thử lại sẽ tạo ra một công việc mới có thể nhìn thấy cho người dùng.
+1. Xác thực yêu cầu của người dùng và gửi cuộc gọi tạo với một `model` rõ ràng.
+2. Lưu trữ `id` / `task_id`, `poll_url`, điểm cuối, mô hình, ID người dùng, và ID công việc của bạn trước khi trả lại quyền kiểm soát cho UI.
+3. Kiểm tra mỗi `5-10s` cho các công việc truyền thông chạy lâu.
+4. Dừng lại chỉ khi công việc đã `hoàn thành` hoặc `thất bại`.
+5. Khi `hoàn thành`, đọc các trường kết quả cụ thể cho truyền thông và lưu trữ các URL hoặc siêu dữ liệu cuối cùng.
+6. Khi `thất bại`, lưu trữ lỗi công khai và chỉ đề nghị thử lại như một công việc mới có thể nhìn thấy bởi người dùng.
 
 ```json
 {
@@ -31,43 +38,67 @@ Các tác vụ tạo công khai hiện nay dựa trên polling. TokenLab có cá
 }
 ```
 
-## Kết Quả Polling
+## Ví Dụ Kiểm Tra
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Các trạng thái công khai mong đợi là `pending`, `processing`, `completed`, và `failed`. Các tác vụ bị hủy được biểu thị là `failed` với `cancelled: true` và `cancellation_status: "cancelled"` để việc xử lý trạng thái cũ vẫn hoạt động.
+Các trạng thái công khai mong đợi là `pending`, `processing`, `completed`, và `failed`. Các công việc bị hủy được biểu thị là `failed` với `cancelled: true` và `cancellation_status: "cancelled"` để xử lý trạng thái cũ vẫn hoạt động.
 
-Không polling các URL cụ thể của nhà cung cấp, ID tác vụ upstream, ID định tuyến, hoặc metadata thực thi riêng tư. Chúng không phải là các hợp đồng công khai ổn định.
+## Quy Tắc Thử Lại của Khách Hàng
 
-## Thanh Toán Và Đối Chiếu
+Thời gian chờ mạng là nguồn gốc phổ biến nhất của các công việc trùng lặp. Sử dụng quy tắc này:
 
-- Một phản hồi tạo có thể giữ chỗ một số tiền ước tính cho công việc bất đồng bộ.
-- Việc thanh toán cuối cùng xảy ra sau khi tác vụ đạt trạng thái cuối cùng.
-- Khi việc thanh toán có sẵn, các phản hồi trạng thái tác vụ có thể tiết lộ `billing_transaction_id` và tiêu đề `X-Billing-Transaction-ID`.
-- Nếu xảy ra timeout của khách hàng sau khi tạo tác vụ, đừng tạo lại công việc một cách mù quáng. Tiếp tục từ `task_id` / `poll_url` đã lưu trữ.
+| Nơi xảy ra thời gian chờ | Hành vi an toàn hơn |
+|--------------------------|---------------------|
+| Trước khi máy chủ của bạn nhận được phản hồi tạo | Kiểm tra nhật ký máy chủ cho `request_id`; thử lại chỉ nếu không có công việc nào được tạo |
+| Sau khi phản hồi tạo được lưu trữ | Tiếp tục kiểm tra `task_id` đã lưu |
+| Trong quá trình kiểm tra | Thử lại yêu cầu trạng thái với thời gian chờ |
+| Sau trạng thái cuối cùng | Không kiểm tra lại trừ khi người dùng làm mới bản ghi một cách rõ ràng |
+
+Không gửi yêu cầu tạo thứ hai chỉ vì trình duyệt đã làm mới hoặc một cuộc kiểm tra trạng thái thất bại.
+
+## Thanh Toán Và Giải Quyết
+
+Các công việc không đồng bộ có thể giữ một số tiền ước tính khi yêu cầu tạo được chấp nhận. Giải quyết cuối cùng xảy ra sau trạng thái cuối cùng. Khi có sẵn, phản hồi trạng thái công việc có thể tiết lộ `billing_transaction_id` và tiêu đề `X-Billing-Transaction-ID`.
+
+Để đối chiếu, kết hợp các định danh này trong nhật ký của bạn:
+
+- `request_id` từ yêu cầu tạo.
+- `task_id` / `id` từ công việc.
+- `billing_transaction_id` khi có mặt.
+- ID người dùng, ID dự án, hoặc ID công việc của riêng bạn.
 
 ## Hủy Bỏ
 
-`DELETE /v1/tasks/{id}` được thiết kế một cách có chủ đích. Nó hiện hỗ trợ các tác vụ video Volcengine Seedance đang chờ như `seedance-1.5-pro`, `seedance-2.0`, và `seedance-2.0-fast`. Các tác vụ không được hỗ trợ trả về `400 unsupported_task_cancel`; các tác vụ đã chạy hoặc ở trạng thái cuối cùng trả về `409 task_not_cancellable`.
+`DELETE /v1/tasks/{id}` được thiết kế một cách có chủ ý. Nó hiện hỗ trợ các công việc video Volcengine Seedance đang chờ như `seedance-1.5-pro`, `seedance-2.0`, và `seedance-2.0-fast`.
 
-## Danh Sách Kiểm Tra Khắc Phục Sự Cố
+Các công việc không được hỗ trợ trả về `400 unsupported_task_cancel`. Các công việc đã chạy hoặc ở trạng thái cuối cùng trả về `409 task_not_cancellable`. Xây dựng giao diện hủy bỏ như "yêu cầu hủy bỏ" thay vì một nút dừng đảm bảo.
 
-- `async_task_not_found`: tác vụ không xác định, đã hết hạn, không thể truy cập bằng khóa API này, hoặc không phải là một phần của hợp đồng tác vụ bất đồng bộ công khai.
-- Thiếu URL phương tiện cuối cùng: tiếp tục polling cho đến khi đạt trạng thái cuối cùng; đừng giả định rằng các phản hồi `pending` bao gồm đầu ra.
-- Công việc trùng lặp: kiểm tra xem đường dẫn thử lại của bạn có tạo ra một tác vụ thứ hai sau khi timeout HTTP hay không.
-- Sự không khớp trong thanh toán: so sánh `request_id`, `task_id`, và `billing_transaction_id` trong bảng điều khiển hoặc API Quản lý.
+## Khắc Phục Sự Cố
 
-Khi liên hệ với hỗ trợ, bao gồm `request_id`, `task_id`, `billing_transaction_id` khi có, điểm cuối, model, timestamp, và hình dạng yêu cầu đã được làm sạch. Đừng bao gồm khóa API, phương tiện riêng tư, hoặc các prompt đầy đủ trừ khi hỗ trợ yêu cầu một mẫu đã được chỉnh sửa.
+| Triệu Chứng | Nguyên Nhân Có Thể | Những gì cần kiểm tra |
+|-------------|--------------------|-----------------------|
+| `async_task_not_found` | Công việc không rõ, đã hết hạn, không thể truy cập bằng khóa API này, hoặc không phải là công việc không đồng bộ công khai | Xác nhận quyền sở hữu khóa API và `task_id` công khai đã lưu |
+| Công việc không bao giờ hoàn thành | Khách hàng tiếp tục kiểm tra URL sai hoặc dừng lại trước trạng thái cuối cùng | Sử dụng `poll_url` hoặc `/v1/tasks/{id}` và kiểm tra trạng thái mới nhất |
+| URL truyền thông cuối cùng bị thiếu | Công việc chưa hoàn thành, hoặc công việc upstream đã hoàn thành mà không có đầu ra sử dụng được | Tiếp tục kiểm tra cho đến khi đạt trạng thái cuối cùng, sau đó xử lý đầu ra bị thiếu như thất bại |
+| Người dùng thấy trùng lặp | Đường dẫn thử lại đã tạo một công việc mới sau thời gian chờ hoặc làm mới | Loại bỏ trùng lặp bằng ID công việc của bạn và `task_id` đã lưu |
+| Sự không khớp trong thanh toán | Giải quyết là không đồng bộ hoặc khách hàng đang so sánh ID của nhà cung cấp | So sánh `request_id`, `task_id`, và `billing_transaction_id` |
+
+## Gói Hỗ Trợ
+
+Khi liên hệ với hỗ trợ, bao gồm `request_id`, `task_id`, `billing_transaction_id` khi có mặt, điểm cuối, mô hình, dấu thời gian, và hình dạng yêu cầu đã được làm sạch. Không bao gồm khóa API, truyền thông riêng tư, URL đã ký, hoặc toàn bộ yêu cầu trừ khi hỗ trợ yêu cầu một mẫu đã được chỉnh sửa.
 
 ## Tài Liệu API
 
-| Chủ Đề | Tham Chiếu |
-|-------|-----------|
-| Lấy Trạng Thái Tác Vụ | [Lấy Trạng Thái Tác Vụ](/vi/api-reference/tasks/get-task-status) |
-| Hủy Tác Vụ | [Hủy Tác Vụ](/vi/api-reference/tasks/cancel-task) |
-| Tạo Hình Ảnh | [Tạo Hình Ảnh](/vi/guides/image-generation) |
-| Tạo Video | [Tạo Video](/vi/guides/video-generation) |
-| Thanh Toán & Giá Cả | [Thanh Toán & Giá Cả](/vi/guides/billing) |
+| Chủ Đề | Tài Liệu |
+|--------|----------|
+| Lấy Trạng Thái Công Việc | [Get Task Status](/vi/api-reference/tasks/get-task-status) |
+| Hủy Công Việc | [Cancel Task](/vi/api-reference/tasks/cancel-task) |
+| Tạo Hình Ảnh | [Image Generation](/vi/guides/image-generation) |
+| Tạo Video | [Video Generation](/vi/guides/video-generation) |
+| Tạo Nhạc | [Music Generation](/vi/guides/music-generation) |
+| Tạo 3D | [3D Generation](/vi/guides/3d-generation) |
+| Thanh Toán & Giá Cả | [Billing & Pricing](/vi/guides/billing) |

@@ -1,61 +1,85 @@
 ---
 title: "Gözlemlenebilirlik & Hata Ayıklama"
-description: "TokenLab'in destek, kullanım uzlaştırması ve asenkron görev hata ayıklama için sunduğu genel tanımlayıcıları yakalayın."
+description: "Destek, kullanım uzlaştırması ve asenkron medya hata ayıklama için gereken kamuya açık TokenLab tanımlayıcılarını kaydedin."
 ---
 
-Bu sayfa, TokenLab'i üretimde kullanan uygulama ekipleri için yazılmıştır. Genel tanımlayıcılara ve kullanıcı güvenliğine yönelik kayıtlara odaklanmaktadır, sağlayıcı yönlendirme iç detaylarına değil.
+İyi bir TokenLab gözlemlenebilirliği, kamuya açık tanımlayıcılarla başlar. Loglarınız, "kullanıcı ne talep etti, TokenLab hangi kamuya açık görevi oluşturdu ve nasıl faturalandırıldı?" sorularını yanıtlamanıza yardımcı olmalı; sağlayıcı yönlendirme iç detaylarını veya hassas kullanıcı verilerini ifşa etmeden.
 
-## Genel Tanımlayıcılar
+## Yakalanması Gereken Kamuya Açık Tanımlayıcılar
 
-| Tanımlayıcı | Nerede Görünür | Ne için Kullanılır |
-|-------------|----------------|--------------------|
-| `request_id` | Hata gövdesi, Yönetim API kullanım kayıtları, gösterge paneli günlükleri | Destek ve istek düzeyinde uzlaştırma |
-| `task_id` / `id` | Asenkron oluşturma ve durum yanıtları | Görüntü, video, müzik ve 3D işleri için anket |
+| Tanımlayıcı | Nerede Görünür | Kullanım Amacı |
+|-------------|----------------|----------------|
+| `request_id` | Hata gövdesi, gösterge paneli logları, kullanım kayıtları | Talep düzeyinde destek ve uzlaştırma |
+| `id` / `task_id` | Asenkron oluşturma ve durum yanıtları | Görüntü, video, müzik ve 3D işlerini anketleme |
 | `poll_url` | Asenkron oluşturma yanıtları | Tercih edilen durum URL'si |
-| `billing_transaction_id` | Yerleştiğinde akış dışı yanıtlar, görev durum yanıtları, Yönetim API kullanım kayıtları, `X-Billing-Transaction-ID` başlığı | Faturalama uzlaştırması |
-| `X-Task-ID` | Asenkron görev yanıtları | Başlık düzeyinde görev korelasyonu |
+| `billing_transaction_id` | Yerleştiğinde akış dışı yanıtlar, asenkron görev durum yanıtları, kullanım kayıtları, `X-Billing-Transaction-ID` | Maliyet uzlaştırması |
+| `X-Task-ID` | Asenkron görev yanıt başlıkları | Başlık düzeyinde görev korelasyonu |
+| Kendi işiniz/kullanıcı ID'niz | Uygulamanız | TokenLab etkinliğini kullanıcı iş akışına bağlama |
+
+Sağlayıcı görev ID'lerini, yukarı akış URL'lerini, yönlendirme kanal ID'lerini, Redis anahtarlarını veya özel yürütme meta verilerini müşteriyle yüzleşen gerçek olarak saklamayın.
 
 ## Ne Kaydedilmeli
 
-1. Kayıt uç noktası, model, durum kodu, zaman damgası ve genel tanımlayıcıları kaydedin.
-2. Varsayılan olarak `Authorization`, API anahtarları, imzalı URL'ler, özel medya URL'leri ve tam istemleri gizleyin.
-3. Asenkron işler için, oluşturma yanıtını ve her terminal durum yanıtını kaydedin.
-4. Kullanım soruları için, API anahtar ID'si ve tarih filtreleri ile Yönetim API'sini çağırın.
-5. Sağlayıcı metnini ayrıştırmak yerine yanıt gövdesinden hata `type`, `code` ve `param` kullanın.
+İsteği teşhis etmek için yeterince log kaydedin, sırları sızdırmadan:
 
-## Hata Ayıklama Kontrol Listesi
+- Uç nokta, HTTP yöntemi, model, durum kodu, zaman damgası ve gecikme.
+- Kamuya açık tanımlayıcılar: `request_id`, `task_id`, `poll_url` ve `billing_transaction_id` mevcutsa.
+- Sanitize edilmiş istek şekli: hangi alanların mevcut olduğu, tam istem veya özel medya içeriği değil.
+- Terminal asenkron durum yanıtları, kamuya açık hata alanları dahil.
+- İstemci tekrar sayısı ve tekrarın yeni bir görev oluşturup oluşturmadığı veya mevcut birini devam ettirip ettirmediği.
+
+Her zaman `Authorization`, API anahtarları, yönetim tokenları, imzalı URL'ler, özel medya URL'leri, tam istemler ve kullanıcı kişisel verilerini saklamaktan kaçının, aksi takdirde bunları saklamak için açık izin almadığınız sürece.
+
+## Hata Ayıklama Matrisi
 
 | Belirti | İlk Kontrol | Yararlı Sayfa |
-|---------|-------------|----------------|
-| `401` veya `403` | API anahtarı, yönetim belirteci, organizasyon erişimi | [Kimlik Doğrulama](/tr/authentication) |
-| `429` | Hız sınırlama katmanı ve istemci yeniden deneme davranışı | [Hız Sınırlamaları](/tr/guides/rate-limits) |
-| `400 invalid_request_error` | Desteklenmeyen alan, yanlış uç nokta veya model özel sözleşme uyumsuzluğu | [Hata Yönetimi](/tr/guides/error-handling) |
-| Asenkron görev asla bitmiyor | `poll_url`'u anket yapın, son `status`'u kontrol edin, tekrar eden görev oluşturma işlemlerinden kaçının | [Asenkron İşler & Anket](/tr/guides/async-jobs-polling) |
-| Maliyet UI ile eşleşmiyor | Kullanım kayıtlarında `request_id` ve `billing_transaction_id`'yi karşılaştırın | [Faturalama & Fiyatlandırma](/tr/guides/billing) |
+|---------|-------------|---------------|
+| `401` veya `403` | API anahtarı, yönetim tokenı, organizasyon erişimi, anahtar kapsamı | [Kimlik Doğrulama](/tr/authentication) |
+| `402` | Bakiye, API anahtarı harcama limiti, model fiyatı durumu | [Faturalama & Fiyatlandırma](/tr/guides/billing) |
+| `429` | Hesap katmanı, uç nokta hız limiti, tekrar davranışı | [Hız Limitleri](/tr/guides/rate-limits) |
+| `400 invalid_request_error` | Desteklenmeyen alan, yanlış uç nokta, gerekli alanın eksikliği veya model sözleşmesi uyuşmazlığı | [Hata Yönetimi](/tr/guides/error-handling) |
+| Asenkron görev bulunamıyor | Yanlış API anahtarı, eski görev ID'si, süresi dolmuş görev veya kamuya açık olmayan görev ID'si | [Asenkron İşler & Anketleme](/tr/guides/async-jobs-polling) |
+| Maliyet UI ile eşleşmiyor | Yerleşim zamanlaması veya yanlış tanımlayıcıyı karşılaştırma | [Faturalama & Fiyatlandırma](/tr/guides/billing) |
 
 ## Kullanım Uzlaştırması
 
-`GET /v1/management/api-keys/{keyId}/usage` sayfalanmış anahtar düzeyinde kullanımı döndürür. `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate` ve `endDate` ile filtreleyebilir. Gösterge panelini kazımak yerine sunucu tarafında uzlaştırma için kullanın.
+Sunucu tarafı uzlaştırması için Yönetim API'sini kullanın:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-Akış yanıtları, akış gönderildikten sonra yerleşebilir, bu nedenle faturalama başlığı, kullanım daha sonra kaydedilse bile mevcut olmayabilir. Asenkron medya görevleri için, yerleşim terminal anketinden sonra görünebilir.
+`GET /v1/management/api-keys/{keyId}/usage` `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate` ve `endDate` ile filtreleme yapabilir. Bu kayıtları gösterge paneli sayfalarını kazımak veya yukarı akış sağlayıcı görev ID'lerine güvenmek yerine kullanın.
 
-## Destek Paketi
+Akış yanıtları, akış gönderildikten sonra yerleşebilir, bu nedenle kullanım daha sonra kaydedilse bile bir faturalama başlığı mevcut olmayabilir. Asenkron medya görevleri, terminal anketlemesinden sonra yerleşebilir.
 
-Destekle iletişime geçerken, mevcutsa `request_id`, `task_id`, `billing_transaction_id`, uç nokta, model, zaman damgası ve temizlenmiş bir istek şekli ekleyin. Destek, gizlenmiş bir örnek istemedikçe API anahtarları, özel medya veya tam istemler eklemeyin.
+## Destek Paketi Şablonu
 
-Müşteri günlüklerinde veya destek taleplerinde sağlayıcı adları, kanal ID'leri, yönlendirme tanımlayıcıları, Redis anahtarları veya yukarı akış görev URL'lerini TokenLab destek açıkça istemedikçe eklemeyin.
+Destekle iletişime geçerken şunları dahil edin:
+
+- `request_id`.
+- Asenkron işler için `task_id` ve `poll_url`.
+- Mevcutsa `billing_transaction_id`.
+- Uç nokta, yöntem, model, zaman damgası ve durum kodu.
+- Sanitize edilmiş istek şekli ve kamuya açık hata gövdesi.
+- Beklenen sonucunuzu ve kullanıcının gerçekten gördüğünü.
+
+API anahtarları, yönetim tokenları, özel medya, tam istemler, sağlayıcı URL'leri, kanal ID'leri veya dahili yönlendirme tanımlayıcılarını dahil etmeyin, TokenLab desteği açıkça redakte edilmiş bir örnek istemedikçe.
+
+## Operasyonel Kontroller
+
+- Tekrar eden `401`, `402`, `429` ve `5xx` yanıtları için ayrı olarak uyarı verin; genellikle farklı sahipleri vardır.
+- Ürün SLA'nızdan daha uzun süre terminal olmayan asenkron işleri takip edin.
+- Aynı kullanıcı iş ID'si için tekrar eden oluşturma girişimlerini takip edin.
+- Tamamlanan işleri örnekleyin ve kullanıcıya görünür varlık, kullanım kaydı ve saklanan görev kaydının uyumlu olduğunu doğrulayın.
 
 ## API Referansı
 
 | Konu | Referans |
 |------|----------|
 | Hata Yönetimi | [Hata Yönetimi](/tr/guides/error-handling) |
-| Hız Sınırlamaları | [Hız Sınırlamaları](/tr/guides/rate-limits) |
+| Hız Limitleri | [Hız Limitleri](/tr/guides/rate-limits) |
 | Faturalama & Fiyatlandırma | [Faturalama & Fiyatlandırma](/tr/guides/billing) |
-| API Anahtar Kullanımını Al | [API Anahtar Kullanımını Al](/tr/api-reference/management/get-api-key-usage) |
+| API Anahtarı Kullanımını Al | [API Anahtarı Kullanımını Al](/tr/api-reference/management/get-api-key-usage) |
 | Görev Durumunu Al | [Görev Durumunu Al](/tr/api-reference/tasks/get-task-status) |

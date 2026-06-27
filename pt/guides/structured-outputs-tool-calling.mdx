@@ -1,67 +1,104 @@
 ---
 title: "Saídas Estruturadas & Chamada de Ferramentas"
-description: "Use o modo JSON, ferramentas de função e rotas de ferramentas nativas sem assumir que cada modelo suporta o mesmo contrato."
+description: "Use o modo JSON, ferramentas de função e rotas de ferramentas nativas sem assumir que todos os modelos suportam o mesmo contrato."
 ---
 
-Saídas estruturadas e ferramentas são caminhos reais da API TokenLab, mas não são uma capacidade universal em todos os modelos e rotas. Escolha a rota que possui o comportamento que você precisa.
+Saídas estruturadas e chamadas de ferramentas são contratos específicos de rota. O TokenLab encaminha vários formatos de API pública, portanto, o padrão de produção mais seguro é manter cada forma nativa da ferramenta do provedor na rota que a possui e validar a saída do modelo em sua própria aplicação.
 
-## JSON E Saída Estruturada
+## Escolha A Rota
 
-Para respostas estruturadas portáteis, comece com Chat Completions `response_format: {"type":"json_object"}` e valide a saída em sua aplicação. Esta é a forma de solicitação pública estável na validação compartilhada do TokenLab.
+| Necessidade | Rota | Use esta forma |
+|-------------|------|----------------|
+| Respostas de objeto JSON portáteis | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| Chamada de função compatível com OpenAI | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| Ferramentas de Respostas OpenAI | `/v1/responses` | Campos `tools`, `tool_choice` e `text` |
+| Uso ou pensamento de ferramenta nativa Claude | `/v1/messages` | Esquema de ferramenta Anthropic Messages |
+| Declarações de função Gemini ou ferramentas integradas | `/v1beta/models/:model:generateContent` | `tools` nativos do Gemini e partes de conteúdo |
+
+Não envie ferramentas integradas nativas do provedor por uma rota diferente e espere que o TokenLab as traduza silenciosamente.
+
+## Modo JSON
+
+Para respostas estruturadas portáteis, comece com o modo JSON de Chat Completions:
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Retorne um objeto JSON com cidade e clima."}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "Retorne um objeto JSON com cidade e clima."
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-Caminhos de saída estruturada `json_schema` e `strict` existem em algum código de upstream e conversão, mas são dependentes de modelo e rota. Trate-os como uma capacidade a ser verificada com o modelo selecionado, não como uma promessa geral em todas as rotas do TokenLab.
+A validação compartilhada estável para Chat Completions aceita `text` e `json_object`. `json_schema`, `strict` e a aplicação de esquema específica do provedor podem existir para algumas rotas upstream ou caminhos de conversão, mas não são uma promessa geral em todas as rotas e modelos do TokenLab. Verifique-os em relação ao modelo selecionado antes de confiar neles.
 
-## Limite de Chamada de Ferramentas
+Sempre analise e valide o JSON retornado em seu servidor. O modo JSON melhora a forma, mas não substitui a validação de esquema em nível de aplicação.
 
-| Forma da Ferramenta | Rota a preferir | Nota de Produção |
-|---------------------|------------------|------------------|
-| Ferramentas de função OpenAI | `/v1/chat/completions` | Portátil para chamadas de função definidas pelo usuário |
-| Ferramentas de Respostas OpenAI | `/v1/responses` | Use para ferramentas integradas ou hospedadas específicas de Respostas |
-| Ferramentas Anthropic | `/v1/messages` | Use para uso nativo de ferramentas Claude e fluxos de pensamento |
-| Declarações de função Gemini / ferramentas integradas | `/v1beta/models/:model:generateContent` | Mantenha campos de ferramentas nativas Gemini na rota Gemini |
+## Loop de Chamada de Ferramentas
 
-O TokenLab não executa sua função por você. Quando um modelo retorna `tool_calls`, `function_call`, `tool_use` ou partes de chamada de função Gemini, sua aplicação deve executar a ferramenta, anexar o resultado da ferramenta no formato exigido pela rota e continuar a conversa.
+O TokenLab não executa suas funções. Sua aplicação é responsável pelo loop:
 
-## Armadilhas Comuns
+1. Envie mensagens mais definições de ferramentas.
+2. Leia a resposta do modelo para `tool_calls`, `function_call`, `tool_use` da Anthropic ou partes da chamada de função Gemini.
+3. Execute a ferramenta em seu próprio backend.
+4. Anexe o resultado da ferramenta no formato exigido pela mesma rota.
+5. Continue a conversa até que o modelo retorne uma resposta final.
 
-- Não envie ferramentas integradas nativas do provedor através de Chat Completions e espere que sejam traduzidas silenciosamente.
-- Não confie em JSON Schema estrito a menos que a rota e o modelo selecionados tenham sido testados.
-- Mantenha esquemas pequenos e explícitos; esquemas grandes adicionam tokens e podem reduzir a confiabilidade.
-- Valide a saída do modelo no lado do servidor, mesmo quando o modo JSON está habilitado.
-- Trate erros de campo não suportado como feedback de contrato. Remova o campo ou use a rota nativa que o possui.
+Mantenha a mesma rota durante todo o loop de ferramentas. Misturar formatos de Chat Completions, Responses, Messages e Gemini em uma conversa geralmente cria bugs sutis de estado e esquema.
 
-## Exemplo
+## Exemplo de Chat Completions
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"Extraia nome e email como JSON."}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "Procure um cliente por email",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "Extraia nome e email como JSON. Se necessário, procure o cliente."
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "Procure um cliente por email",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
+
+## Design de Esquema
+
+- Mantenha esquemas pequenos e explícitos. Esquemas grandes e aninhados adicionam tokens e reduzem a confiabilidade.
+- Prefira campos obrigatórios para valores que seu produto não pode continuar sem.
+- Use enums para conjuntos fechados dos quais sua UI ou backend depende.
+- Inclua exemplos no prompt quando o modelo tiver dificuldades com uma forma.
+- Trate erros de campo não suportado como feedback de contrato. Remova o campo ou use a rota nativa que o documenta.
+
+## Lista de Verificação de Produção
+
+- Registre rota, modelo, nomes de ferramentas e forma de esquema sanitizada nos logs.
+- Valide os argumentos da ferramenta antes de executar qualquer efeito colateral.
+- Aplique suas próprias verificações de permissão antes da execução da ferramenta.
+- Torne a execução da ferramenta idempotente quando uma nova tentativa do cliente puder repetir a mesma chamada de ferramenta.
+- Não registre segredos retornados por ferramentas em mensagens visíveis para o modelo.
 
 ## Referência da API
 

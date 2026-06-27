@@ -1,54 +1,78 @@
 ---
-title: "Beobachtbarkeit & Fehlersuche"
-description: "Erfassen Sie die öffentlichen Identifikatoren, die TokenLab für Unterstützung, Nutzungsausgleich und Debugging asynchroner Aufgaben bereitstellt."
+title: "Observierbarkeit & Fehlersuche"
+description: "Protokollieren Sie die öffentlichen TokenLab-Identifikatoren, die für den Support, die Nutzungskontrolle und das asynchrone Medien-Debugging erforderlich sind."
 ---
 
-Diese Seite ist für Anwendungsteams geschrieben, die TokenLab in der Produktion betreiben. Sie konzentriert sich auf öffentliche Identifikatoren und benutzersichere Protokolle, nicht auf interne Anbieter-Routing-Details.
+Gute TokenLab-Observierbarkeit beginnt mit öffentlichen Identifikatoren. Ihre Protokolle sollten Ihnen helfen, die Fragen "Was hat der Benutzer angefordert, welche öffentliche Aufgabe hat TokenLab erstellt und wie wurde sie abgerechnet?" zu beantworten, ohne interne Routing-Details des Anbieters oder sensible Benutzerdaten offenzulegen.
 
-## Öffentliche Identifikatoren
+## Öffentliche Identifikatoren Zum Erfassen
 
 | Identifikator | Wo er erscheint | Verwendung |
-|---------------|----------------|------------|
-| `request_id` | Fehlertexte, Nutzungseinträge der Management-API, Dashboard-Protokolle | Unterstützung und Anforderungsabgleich |
-| `task_id` / `id` | Antworten auf asynchrone Erstellung und Status | Abfragen von Bild-, Video-, Musik- und 3D-Jobs |
-| `poll_url` | Antworten auf asynchrone Erstellung | Bevorzugte Status-URL |
-| `billing_transaction_id` | Nicht-Streaming-Antworten, wenn abgerechnet, Antworten auf Aufgabenstatus, Nutzungseinträge der Management-API, `X-Billing-Transaction-ID`-Header | Abrechnungsausgleich |
-| `X-Task-ID` | Antworten auf asynchrone Aufgaben | Header-Level-Aufgaben-Korrelation |
+|---------------|-----------------|------------|
+| `request_id` | Fehlertexte, Dashboard-Protokolle, Nutzungsaufzeichnungen | Unterstützung und Abgleich auf Anfrageebene |
+| `id` / `task_id` | Asynchrone Erstellungs- und Statusantworten | Abfragen von Bild-, Video-, Musik- und 3D-Jobs |
+| `poll_url` | Antworten auf asynchrone Erstellungen | Bevorzugte Status-URL |
+| `billing_transaction_id` | Nicht-Streaming-Antworten, wenn abgerechnet, asynchrone Aufgabenstatusantworten, Nutzungsaufzeichnungen, `X-Billing-Transaction-ID` | Kostenabgleich |
+| `X-Task-ID` | Header von asynchronen Aufgabenantworten | Header-Level-Aufgaben-Korrelation |
+| Ihre eigene Job-/Benutzer-ID | Ihre Anwendung | Verknüpfung der TokenLab-Aktivität mit dem Benutzer-Workflow |
 
-## Was zu protokollieren ist
+Speichern Sie keine Anbieter-Aufgaben-IDs, upstream-URLs, Routing-Kanal-IDs, Redis-Schlüssel oder private Ausführungsmetadaten als kundenorientierte Wahrheit.
 
-1. Protokollieren Sie den Endpunkt, das Modell, den Statuscode, den Zeitstempel und die öffentlichen Identifikatoren.
-2. Redigieren Sie standardmäßig `Authorization`, API-Schlüssel, signierte URLs, private Medien-URLs und vollständige Eingabeaufforderungen.
-3. Protokollieren Sie für asynchrone Jobs die Antwort auf die Erstellung und jede endgültige Statusantwort.
-4. Bei Fragen zur Nutzung rufen Sie die Management-API mit der API-Schlüssel-ID und Datumsfiltern auf.
-5. Verwenden Sie den Fehler `type`, `code` und `param` aus dem Antworttext anstelle des Parsens von Anbietertexten.
+## Was Zu Protokollieren Ist
 
-## Fehlersuche-Checkliste
+Protokollieren Sie genug, um die Anfrage zu diagnostizieren, ohne Geheimnisse preiszugeben:
 
-| Symptom | Zuerst überprüfen | Nützliche Seite |
-|---------|------------------|-----------------|
-| `401` oder `403` | API-Schlüssel, Management-Token, Organisationszugriff | [Authentifizierung](/de/authentication) |
-| `429` | Rate-Limit-Stufe und Client-Wiederholverhalten | [Rate Limits](/de/guides/rate-limits) |
-| `400 invalid_request_error` | Nicht unterstütztes Feld, falscher Endpunkt oder modell-spezifische Vertragsabweichung | [Fehlerbehandlung](/de/guides/error-handling) |
-| Asynchrone Aufgabe wird nie beendet | Abfragen von `poll_url`, endgültigen `status` überprüfen, doppelte Aufgabenerstellung vermeiden | [Asynchrone Jobs & Abfragen](/de/guides/async-jobs-polling) |
-| Kosten stimmen nicht mit UI überein | Vergleichen Sie `request_id` und `billing_transaction_id` in den Nutzungseinträgen | [Abrechnung & Preisgestaltung](/de/guides/billing) |
+- Endpunkt, HTTP-Methode, Modell, Statuscode, Zeitstempel und Latenz.
+- Öffentliche Identifikatoren: `request_id`, `task_id`, `poll_url` und `billing_transaction_id`, wenn vorhanden.
+- Sanitärisierte Anfrageform: welche Felder vorhanden waren, nicht das vollständige Prompt oder private Medieninhalte.
+- Terminal asynchrone Statusantworten, einschließlich öffentlicher Fehlerfelder.
+- Client-Wiederholungsanzahl und ob die Wiederholung eine neue Aufgabe erstellt oder eine bestehende fortgesetzt hat.
 
-## Nutzungsausgleich
+Redigieren Sie immer `Authorization`, API-Schlüssel, Verwaltungstoken, signierte URLs, private Medien-URLs, vollständige Prompts und persönliche Benutzerdaten, es sei denn, Sie haben ausdrückliche Erlaubnis, diese zu behalten.
 
-`GET /v1/management/api-keys/{keyId}/usage` gibt paginierte Nutzung auf Schlüssel-Ebene zurück. Es kann nach `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate` und `endDate` filtern. Verwenden Sie es für den serverseitigen Ausgleich anstelle des Scraping des Dashboards.
+## Fehlersuche-Matrix
+
+| Symptom | Erste Überprüfung | Nützliche Seite |
+|---------|-------------------|------------------|
+| `401` oder `403` | API-Schlüssel, Verwaltungstoken, Organisationszugriff, Schlüsselbereich | [Authentifizierung](/de/authentication) |
+| `402` | Guthaben, Ausgabenlimit des API-Schlüssels, Verfügbarkeit des Modellpreises | [Abrechnung & Preisgestaltung](/de/guides/billing) |
+| `429` | Kontostufe, Endpunkt-Rate-Limit, Wiederholverhalten | [Rate Limits](/de/guides/rate-limits) |
+| `400 invalid_request_error` | Nicht unterstütztes Feld, falscher Endpunkt, fehlendes erforderliches Feld oder Modellvertragsabweichung | [Fehlerbehandlung](/de/guides/error-handling) |
+| Asynchrone Aufgabe kann nicht gefunden werden | Falscher API-Schlüssel, veraltete Aufgaben-ID, abgelaufene Aufgabe oder nicht-öffentliche Aufgaben-ID | [Asynchrone Jobs & Abfragen](/de/guides/async-jobs-polling) |
+| Kosten stimmen nicht mit der UI überein | Abrechnungszeitpunkt oder Vergleich des falschen Identifikators | [Abrechnung & Preisgestaltung](/de/guides/billing) |
+
+## Nutzungskontrolle
+
+Verwenden Sie die Management-API für serverseitige Abgleiche:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-Streaming-Antworten können nach dem Senden des Streams abgerechnet werden, sodass der Abrechnungsheader fehlen kann, selbst wenn die Nutzung später aufgezeichnet wird. Bei asynchronen Medienaufgaben kann die Abrechnung nach der endgültigen Abfrage erscheinen.
+`GET /v1/management/api-keys/{keyId}/usage` kann nach `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate` und `endDate` filtern. Verwenden Sie diese Aufzeichnungen anstelle von Scraping-Dashboard-Seiten oder der Abhängigkeit von upstream-Anbieter-Aufgaben-IDs.
 
-## Support-Paket
+Streaming-Antworten können nach dem Senden des Streams abgerechnet werden, sodass ein Abrechnungsheader fehlen kann, selbst wenn die Nutzung später aufgezeichnet wird. Asynchrone Medienaufgaben können nach terminalen Abfragen abgerechnet werden.
 
-Wenn Sie den Support kontaktieren, fügen Sie `request_id`, `task_id`, `billing_transaction_id` (wenn vorhanden), Endpunkt, Modell, Zeitstempel und eine bereinigte Anforderungsform hinzu. Fügen Sie keine API-Schlüssel, privaten Medien oder vollständige Eingabeaufforderungen hinzu, es sei denn, der Support fordert ein redigiertes Beispiel an.
+## Support-Paketvorlage
 
-Fügen Sie keine Anbieternamen, Kanal-IDs, Routing-Identifikatoren, Redis-Schlüssel oder übergeordnete Aufgaben-URLs in Kundenprotokollen oder Support-Tickets hinzu, es sei denn, der TokenLab-Support fordert ausdrücklich danach.
+Beim Kontakt mit dem Support sollten Sie Folgendes einfügen:
+
+- `request_id`.
+- `task_id` und `poll_url` für asynchrone Arbeiten.
+- `billing_transaction_id`, wenn vorhanden.
+- Endpunkt, Methode, Modell, Zeitstempel und Statuscode.
+- Sanitärisierte Anfrageform und öffentlicher Fehlertext.
+- Ihr erwartetes Ergebnis und was der Benutzer tatsächlich gesehen hat.
+
+Schließen Sie keine API-Schlüssel, Verwaltungstoken, private Medien, vollständige Prompts, Anbieter-URLs, Kanal-IDs oder interne Routing-Identifikatoren ein, es sei denn, der TokenLab-Support fordert ausdrücklich ein redigiertes Beispiel an.
+
+## Betriebliche Überprüfungen
+
+- Alarmieren Sie bei wiederholten `401`, `402`, `429` und `5xx`-Antworten separat; sie haben normalerweise unterschiedliche Verantwortliche.
+- Verfolgen Sie asynchrone Jobs, die länger als Ihre Produkt-SLA nicht-terminal bleiben.
+- Verfolgen Sie doppelte Erstellungsversuche für dieselbe Benutzer-Job-ID.
+- Proben Sie abgeschlossene Jobs und überprüfen Sie, ob das benutzerseitig sichtbare Asset, die Nutzungsaufzeichnung und der gespeicherte Aufgabenaufzeichnung übereinstimmen.
 
 ## API-Referenz
 

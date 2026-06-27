@@ -1,53 +1,77 @@
 ---
 title: "3D Üretimi"
-description: "Metin veya görsellerden 3D varlıklar oluşturun ve tamamlanmış model dosyalarını asenkron görev sonuçlarından indirin."
+description: "Metinden-3D veya resimden-3D görevleri oluşturun, tamamlanan varlıklar için anket yapın ve indirilebilir model dosyalarını yönetin."
 ---
 
-3D üretimi asenkron bir işlemdir. `POST /v1/3d/generations` bir görev oluşturur; tamamlanmış durum yanıtları indirilebilir model varlık URL'leri döner.
+3D üretimi asenkron bir süreçtir. `POST /v1/3d/generations` bir TokenLab görevi oluşturur; tamamlanmış durum yanıtları, `model_url` gibi indirilebilir model varlıkları döndürür ve mevcut olduğunda format-spesifik URL'leri içerir.
 
-## Model Keşfi
+## Girdi Türünü Seçin
+
+| İş Akışı | Gerekli girdi | Opsiyonel alanlar | Notlar |
+|----------|---------------|-------------------|--------|
+| Metinden-3D | `model`, `prompt` | `format`, `quality`, `style`, `seed` | Bir tanımdan yeni bir varlık oluşturmak için en iyisi |
+| Resimden-3D | `model`, `prompt`, `image` veya `image_url` | `format`, `quality`, `style`, `seed` | Seçilen modelin resim girişi desteklediği durumlarda kullanın |
+
+Hangi seçeneklerin sunulacağına karar vermeden önce model kataloğunu sorgulayın:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Her 3D modelin hem metin-to-3D hem de görsel-to-3D'yi desteklediğini varsaymayın. `image`, `image_url`, `format`, `quality`, `style` veya `seed` göndermeden önce seçilen model sözleşmesini kontrol edin.
+Her 3D modelin her iki girdi türünü veya her çıktı formatını desteklediğini varsaymayın. `image`, `image_url`, `format`, `quality`, `style` veya `seed` göndermeden önce seçilen model sözleşmesini kontrol edin.
 
-## İstek Oluşturma
+## 3D Görevi Oluşturun
 
 ```bash
-curl https://api.tokenlab.sh/v1/3d/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "tripo3d-v2.5",
-    "prompt": "Temiz topolojiye sahip stilize edilmiş düşük poligonlu robot maskotu",
+    "prompt": "Temiz topolojiye sahip stilize edilmiş düşük poli robot maskotu",
     "format": "glb",
     "quality": "standard"
   }'
 ```
 
-Metin-to-3D bir `prompt` gerektirir. Görsel-to-3D, model tarafından destekleniyorsa `image` veya `image_url` kullanır. Kaynak görsel özel değilse ve istemciniz kasıtlı olarak base64 verisi yüklemiyorsa, üretim girdileri için genel URL'leri tercih edin.
+Resimden-3D için, mümkünse bir genel `image_url` kullanın. Müşterinizin kasıtlı olarak özel medya gönderdiği ve arka uç sisteminizin daha büyük istek gövdelerine hazır olduğu durumlarda yalnızca inline/base64 `image` kullanın.
 
-## Çıktı Seçenekleri
+## Çıktı Formatı Seçenekleri
 
-- `format`, destekleniyorsa `glb`, `fbx`, `obj` veya `usdz` gibi çıktı paketleme taleplerinde bulunabilir.
-- `quality` değerleri, model bunları sunduğunda gecikme ve maliyeti etkileyen `draft`, `standard` veya `high` gibi seçeneklerdir.
-- `style` ve `seed` model bağımlıdır; seçilen sözleşme bunları belgelemiyorsa atlayın.
+- `glb`, genellikle web önizlemeleri için en güvenli varsayılandır.
+- `fbx` ve `obj`, seçilen model bunları destekliyorsa DCC hatları için faydalıdır.
+- `usdz`, model tarafından sunulduğunda Apple AR iş akışları için faydalıdır.
+- Daha yüksek `quality` değerleri gecikmeyi ve maliyeti artırabilir. Bunları gizli varsayılanlar değil, açık kullanıcı seçimleri olarak sunun.
+- `seed`, yalnızca model bunu dikkate alıyorsa yeniden üretilebilirlik için faydalıdır.
 
-## Sonuçları Anket Etme
+## Varlıkları Anket Yapın ve Saklayın
 
-Öncelikle döndürülen `poll_url`'u kullanın. Sabit bir uç noktaya ihtiyacınız varsa, oluşturma yanıtındaki aynı `id` / `task_id` ile `GET /v1/tasks/{id}` kullanın.
+Öncelikle döndürülen `poll_url`'u kullanın. Müşterinizin sabit bir yola ihtiyacı varsa, `GET /v1/tasks/{id}` kullanın.
 
-Tamamlanan görevler `model_url` döner ve `glb_url`, `fbx_url`, `obj_url` veya `usdz_url` gibi format spesifik URL'leri içerebilir. Kullanıcıların tekrar erişim ihtiyacı varsa varlığı kendi ürününüzde indirin ve önbelleğe alın.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+Tamamlanan görevler `model_url` döndürür ve `glb_url`, `fbx_url`, `obj_url` veya `usdz_url` içerebilir. Kullanıcıların tekrar erişim, sürüm geçmişi veya uzun süreli indirmelere ihtiyacı varsa, seçilen varlığı kendi ürününüzde indirin veya önbelleğe alın.
+
+## Üretim Kontrol Listesi
+
+- `task_id`, `poll_url`, model, talep edilen format ve kendi varlık kayıt kimliğinizi saklayın.
+- Sayfa yenilemesinden sonra anket yapmaya devam edin, yeni bir görev oluşturmaktan kaçının.
+- Görevi oluşturmadan önce kaynak resim boyutunu ve erişilebilirliğini doğrulayın.
+- Kullanıcının varlığa erişim izni yoksa, oluşturulan varlık URL'lerini genel sayfalardan uzak tutun.
+- Daha sonra uzlaşma için mevcut olduğunda `billing_transaction_id` kaydedin.
 
 ## Yaygın Hatalar
 
-- Oluşturma yanıtında bir 3D varlık beklemeyin; terminal duruma kadar anket yapın.
-- Her model için her formatı vaat etmeyin.
-- Görev zaten mevcut değilse, istemci zaman aşımından sonra oluşturma isteklerini tekrar denemeyin.
-- Sağlayıcı görev kimliklerini UI'nizde açığa çıkarmayın.
+| Belirti | Muhtemel neden | Çözüm |
+|---------|----------------|-------|
+| Oluşturma yanıtında varlık URL'si yok | 3D üretimi asenkron | Terminal duruma kadar anket yapın |
+| Talep edilen format eksik | Model o formatı döndürmedi | `model_url`'a geri dönün veya formatı destekleyen bir model seçin |
+| Resimden-3D reddedildi | Seçilen model yalnızca metin destekli veya resim URL'si erişilemez | Model sözleşmesini kontrol edin ve URL'yi doğrulayın |
+| Çift varlıklar | Yeniden deneme yolu görevi zaman aşımından sonra yeniden oluşturdu | Yeniden denemeden önce görev kimliğini saklayın |
 
 ## API Referansı
 

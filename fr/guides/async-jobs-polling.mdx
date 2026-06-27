@@ -1,25 +1,32 @@
 ---
 title: "Travaux Asynchrones & Polling"
-description: "Créez des travaux de génération asynchrone, interrogez l'état des tâches publiques et réconciliez les résultats finaux sans détails spécifiques au fournisseur."
+description: "Créez des travaux médias asynchrones, interrogez l'état des tâches publiques de TokenLab et réconciliez les résultats finaux sans identifiants spécifiques au fournisseur."
 ---
 
-Cette page reflète le contrat public de tâche asynchrone de TokenLab. Elle ne traite pas des URL de tâches des fournisseurs, des ID de routage ou du comportement de rappel en amont comme des contrats d'intégration destinés aux utilisateurs.
+De nombreux points de terminaison médias sont asynchrones. Une requête de création démarre le travail et renvoie une identité de tâche publique TokenLab ; votre application interroge jusqu'à ce que cette tâche atteigne un état terminal. Ne construisez pas les flux de travail des clients autour des URL de tâches en amont, des ID de routage ou du comportement de rappel du fournisseur.
 
-## Contrat Public
+## Contrat de Tâche Publique
 
-TokenLab expose un contrat public de tâche asynchrone pour les médias générés. Les points de terminaison de création peuvent renvoyer `id`, `task_id`, `status` et `poll_url`. Traitez `id` et `task_id` comme la même identité de tâche publique et conservez à la fois l'ID de tâche et `poll_url` avec votre propre enregistrement de travail.
+Les réponses de création peuvent inclure :
 
-Utilisez d'abord le `poll_url` retourné. Si vous avez besoin d'un point de terminaison fixe, utilisez `GET /v1/tasks/{id}` avec le même `id` / `task_id` de la réponse de création.
+| Champ | Signification | Que faire |
+|-------|---------------|-----------|
+| `id` | ID de tâche publique TokenLab | Stockez-le avec votre propre enregistrement de travail |
+| `task_id` | Alias de compatibilité pour la même identité de tâche publique | Traitez-le comme équivalent à `id` |
+| `status` | État actuel de la tâche publique | Commencez à interroger lorsqu'il n'est pas terminal |
+| `poll_url` | URL de statut préférée | Utilisez ceci en premier lorsqu'il est présent |
+| `model` | Modèle demandé ou résolu par le point de terminaison | Stockez-le pour la réconciliation de support et de facturation |
 
-Les tâches de génération publiques sont basées sur le polling aujourd'hui. TokenLab a des récepteurs de rappels en amont en interne, mais ce ne sont pas des webhooks clients et ne doivent pas être utilisés comme contrat d'intégration.
+`/v1/tasks/{id}` est le point de terminaison d'état fixe canonique pour les travaux médias asynchrones publics. Des routes d'état spécifiques aux médias peuvent exister pour la compatibilité, mais les nouvelles intégrations devraient préférer `poll_url` ou `/v1/tasks/{id}`.
 
 ## Flux Recommandé
 
-1. Envoyez la demande de création avec un `model` explicite.
-2. Si la réponse est en ligne, lisez le résultat final immédiatement.
-3. Si la réponse contient `status: "pending"`, `task_id` ou `poll_url`, conservez la tâche et commencez à interroger.
-4. Interrogez toutes les `5-10s` pour les tâches médias longues. Arrêtez-vous uniquement sur un statut terminal.
-5. Sur `completed`, lisez les champs de résultat pour ce type de média. Sur `failed`, conservez l'erreur publique et montrez une action de réessai uniquement lorsque le réessai créera un nouveau travail visible par l'utilisateur.
+1. Validez la demande de l'utilisateur et envoyez l'appel de création avec un `model` explicite.
+2. Persistez `id` / `task_id`, `poll_url`, point de terminaison, modèle, ID utilisateur et votre propre ID de travail avant de rendre le contrôle à l'UI.
+3. Interrogez toutes les `5-10s` pour les tâches médias de longue durée.
+4. Arrêtez-vous uniquement lorsque la tâche est `completed` ou `failed`.
+5. Sur `completed`, lisez les champs de résultat spécifiques aux médias et stockez les URL finales ou les métadonnées.
+6. Sur `failed`, stockez l'erreur publique et proposez une nouvelle tentative uniquement en tant que nouveau travail visible par l'utilisateur.
 
 ```json
 {
@@ -31,36 +38,58 @@ Les tâches de génération publiques sont basées sur le polling aujourd'hui. T
 }
 ```
 
-## Résultats de Polling
+## Exemple de Polling
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Les statuts publics attendus sont `pending`, `processing`, `completed` et `failed`. Les tâches annulées sont représentées comme `failed` avec `cancelled: true` et `cancellation_status: "cancelled"` afin que le traitement des anciens statuts continue de fonctionner.
+Les états publics attendus sont `pending`, `processing`, `completed`, et `failed`. Les tâches annulées sont représentées comme `failed` avec `cancelled: true` et `cancellation_status: "cancelled"` afin que le traitement des anciens états continue de fonctionner.
 
-Ne polluez pas les URL spécifiques aux fournisseurs, les ID de tâches en amont, les ID de routage ou les métadonnées d'exécution privées. Ce ne sont pas des contrats publics stables.
+## Règles de Réessai Client
 
-## Facturation Et Réconciliation
+Les délais d'attente réseau sont la source la plus courante de travaux en double. Utilisez cette règle :
 
-- Une réponse de création peut réserver un montant estimé pour le travail asynchrone.
-- Le règlement final se produit après que la tâche atteint un état terminal.
-- Lorsque le règlement est disponible, les réponses de statut de tâche peuvent exposer `billing_transaction_id` et l'en-tête `X-Billing-Transaction-ID`.
-- Si un délai d'attente client se produit après la création de la tâche, ne recréez pas le travail aveuglément. Reprenez à partir de `task_id` / `poll_url` stockés.
+| Où le délai d'attente se produit | Comportement plus sûr |
+|-----------------------------------|-----------------------|
+| Avant que votre serveur ne reçoive une réponse de création | Vérifiez les journaux du serveur pour `request_id` ; réessayez uniquement si aucune tâche n'a été créée |
+| Après qu'une réponse de création a été stockée | Reprenez le polling du `task_id` stocké |
+| Pendant le polling | Réessayez la demande de statut avec un backoff |
+| Après un état terminal | Ne polluez plus à moins que l'utilisateur ne rafraîchisse explicitement l'enregistrement |
+
+Ne pas envoyer une seconde requête de création simplement parce que le navigateur a été rafraîchi ou qu'un polling de statut a échoué.
+
+## Facturation Et Règlement
+
+Les travaux asynchrones peuvent réserver un montant estimé lorsque la requête de création est acceptée. Le règlement final se produit après l'état terminal. Lorsque disponible, les réponses d'état de tâche peuvent exposer `billing_transaction_id` et l'en-tête `X-Billing-Transaction-ID`.
+
+Pour la réconciliation, joignez ces identifiants dans vos journaux :
+
+- `request_id` de la requête de création.
+- `task_id` / `id` de la tâche.
+- `billing_transaction_id` lorsqu'il est présent.
+- Votre propre ID utilisateur, ID de projet ou ID de travail.
 
 ## Annulation
 
-`DELETE /v1/tasks/{id}` est intentionnellement étroit. Il prend actuellement en charge les tâches vidéo Volcengine Seedance en file d'attente telles que `seedance-1.5-pro`, `seedance-2.0` et `seedance-2.0-fast`. Les tâches non prises en charge renvoient `400 unsupported_task_cancel`; les tâches déjà en cours ou terminales renvoient `409 task_not_cancellable`.
+`DELETE /v1/tasks/{id}` est intentionnellement étroit. Il prend actuellement en charge les tâches vidéo Volcengine Seedance en file d'attente telles que `seedance-1.5-pro`, `seedance-2.0`, et `seedance-2.0-fast`.
 
-## Liste de Vérification de Dépannage
+Les tâches non prises en charge renvoient `400 unsupported_task_cancel`. Les tâches qui sont déjà en cours d'exécution ou terminales renvoient `409 task_not_cancellable`. Construisez l'interface utilisateur d'annulation comme "demander l'annulation" plutôt qu'un bouton d'arrêt garanti.
 
-- `async_task_not_found`: la tâche est inconnue, expirée, inaccessible à cette clé API, ou ne fait pas partie du contrat de tâche asynchrone public.
-- URL finale de média manquante : continuez à interroger jusqu'à un état terminal ; ne supposez pas que les réponses `pending` incluent des sorties.
-- Travaux en double : vérifiez si votre chemin de réessai a créé une seconde tâche après un délai d'attente HTTP.
-- Mismatch de facturation : comparez `request_id`, `task_id` et `billing_transaction_id` dans le tableau de bord ou l'API de gestion.
+## Dépannage
 
-Lorsque vous contactez le support, incluez `request_id`, `task_id`, `billing_transaction_id` lorsqu'ils sont présents, le point de terminaison, le modèle, l'horodatage et une forme de demande assainie. N'incluez pas de clés API, de médias privés ou de prompts complets à moins que le support ne demande un échantillon expurgé.
+| Symptôme | Cause probable | Que vérifier |
+|----------|----------------|---------------|
+| `async_task_not_found` | La tâche est inconnue, expirée, inaccessible à cette clé API, ou n'est pas une tâche asynchrone publique | Confirmez la propriété de la clé API et le `task_id` public stocké |
+| La tâche ne semble jamais se terminer | Le client continue d'interroger la mauvaise URL ou s'est arrêté avant l'état terminal | Utilisez `poll_url` ou `/v1/tasks/{id}` et inspectez le dernier état |
+| URL finale des médias manquante | La tâche n'est pas terminée, ou le travail en amont s'est terminé sans sortie utilisable | Continuez à interroger jusqu'à l'état terminal, puis gérez la sortie manquante comme échouée |
+| L'utilisateur voit des doublons | Le chemin de réessai a créé une nouvelle tâche après un délai d'attente ou un rafraîchissement | Dédupliquez par votre propre ID de travail et `task_id` stocké |
+| Mismatch de facturation | Le règlement est asynchrone ou le client compare des ID de fournisseur | Comparez `request_id`, `task_id`, et `billing_transaction_id` |
+
+## Paquet de Support
+
+Lorsque vous contactez le support, incluez `request_id`, `task_id`, `billing_transaction_id` lorsqu'il est présent, point de terminaison, modèle, horodatage, et une forme de requête assainie. N'incluez pas de clés API, de médias privés, d'URLs signées, ou de prompts complets à moins que le support ne demande un échantillon expurgé.
 
 ## Référence API
 
@@ -70,4 +99,6 @@ Lorsque vous contactez le support, incluez `request_id`, `task_id`, `billing_tra
 | Annuler la tâche | [Annuler la tâche](/fr/api-reference/tasks/cancel-task) |
 | Génération d'images | [Génération d'images](/fr/guides/image-generation) |
 | Génération de vidéos | [Génération de vidéos](/fr/guides/video-generation) |
+| Génération de musique | [Génération de musique](/fr/guides/music-generation) |
+| Génération 3D | [Génération 3D](/fr/guides/3d-generation) |
 | Facturation & Tarification | [Facturation & Tarification](/fr/guides/billing) |

@@ -1,54 +1,78 @@
 ---
 title: "Observabilité & Dépannage"
-description: "Capturez les identifiants publics que TokenLab expose pour le support, la réconciliation d'utilisation et le débogage des tâches asynchrones."
+description: "Enregistrez les identifiants publics de TokenLab nécessaires pour le support, la réconciliation d'utilisation et le débogage de médias asynchrones."
 ---
 
-Cette page est rédigée pour les équipes d'application exploitant TokenLab en production. Elle se concentre sur les identifiants publics et les journaux sécurisés pour les utilisateurs, et non sur les détails internes de routage des fournisseurs.
+Une bonne observabilité de TokenLab commence par des identifiants publics. Vos journaux devraient vous aider à répondre à la question "qu'est-ce que l'utilisateur a demandé, quelle tâche publique TokenLab a-t-il créée, et comment a-t-elle été facturée ?" sans exposer les détails internes de routage du fournisseur ou des données utilisateur sensibles.
 
-## Identifiants Publics
+## Identifiants Publics À Capturer
 
 | Identifiant | Où il apparaît | Utilisez-le pour |
 |-------------|----------------|------------------|
-| `request_id` | Corps d'erreur, enregistrements d'utilisation de l'API de gestion, journaux de tableau de bord | Support et réconciliation au niveau de la demande |
-| `task_id` / `id` | Réponses de création asynchrone et de statut | Polling d'images, vidéos, musique et travaux 3D |
+| `request_id` | Corps d'erreur, journaux de tableau de bord, enregistrements d'utilisation | Support et réconciliation au niveau de la demande |
+| `id` / `task_id` | Réponses de création asynchrone et de statut | Polling d'images, vidéos, musique et travaux 3D |
 | `poll_url` | Réponses de création asynchrone | URL de statut préférée |
-| `billing_transaction_id` | Réponses non diffusées lorsqu'elles sont réglées, réponses de statut de tâche, enregistrements d'utilisation de l'API de gestion, en-tête `X-Billing-Transaction-ID` | Réconciliation de facturation |
-| `X-Task-ID` | Réponses de tâche asynchrone | Corrélation de tâche au niveau de l'en-tête |
+| `billing_transaction_id` | Réponses non-streaming lorsqu'elles sont réglées, réponses de statut de tâche asynchrone, enregistrements d'utilisation, `X-Billing-Transaction-ID` | Réconciliation des coûts |
+| `X-Task-ID` | En-têtes de réponse de tâche asynchrone | Corrélation de tâche au niveau de l'en-tête |
+| Votre propre ID de travail/utilisateur | Votre application | Lier l'activité de TokenLab au flux de travail de l'utilisateur |
 
-## Ce Qu'il Faut Journaliser
+Ne stockez pas les ID de tâches du fournisseur, les URL en amont, les ID de canal de routage, les clés Redis ou les métadonnées d'exécution privées comme vérité visible par le client.
 
-1. Journalisez l'endpoint, le modèle, le code d'état, l'horodatage et les identifiants publics.
-2. Rédigez par défaut `Authorization`, les clés API, les URLs signées, les URLs de médias privés et les prompts complets.
-3. Pour les travaux asynchrones, journalisez la réponse de création et chaque réponse de statut terminal.
-4. Pour les questions d'utilisation, appelez l'API de gestion avec l'ID de clé API et les filtres de date.
-5. Utilisez le `type`, le `code` et le `param` d'erreur du corps de réponse au lieu d'analyser le texte du fournisseur.
+## Ce Qu'il Faut Enregistrer
 
-## Liste de Vérification pour le Dépannage
+Enregistrez suffisamment d'informations pour diagnostiquer la demande sans divulguer de secrets :
+
+- Point de terminaison, méthode HTTP, modèle, code d'état, horodatage et latence.
+- Identifiants publics : `request_id`, `task_id`, `poll_url`, et `billing_transaction_id` lorsqu'ils sont présents.
+- Forme de demande assainie : quels champs étaient présents, pas l'intégralité de l'invite ou du contenu média privé.
+- Réponses de statut asynchrone terminales, y compris les champs d'erreur publics.
+- Compte de tentatives du client et si la tentative a créé une nouvelle tâche ou a repris une tâche existante.
+
+Toujours masquer `Authorization`, clés API, jetons de gestion, URLs signées, URLs de médias privés, invites complètes et données personnelles de l'utilisateur à moins que vous n'ayez une autorisation explicite de les conserver.
+
+## Matrice de Dépannage
 
 | Symptôme | Première vérification | Page utile |
 |----------|----------------------|------------|
-| `401` ou `403` | Clé API, jeton de gestion, accès à l'organisation | [Authentification](/fr/authentication) |
-| `429` | Niveau de limite de taux et comportement de réessai du client | [Limites de Taux](/fr/guides/rate-limits) |
-| `400 invalid_request_error` | Champ non pris en charge, mauvais endpoint ou incompatibilité de contrat spécifique au modèle | [Gestion des Erreurs](/fr/guides/error-handling) |
-| La tâche asynchrone ne se termine jamais | Poll `poll_url`, inspectez le `status` final, évitez la création de tâches en double | [Travaux Asynchrones & Polling](/fr/guides/async-jobs-polling) |
-| Le coût ne correspond pas à l'UI | Comparez `request_id` et `billing_transaction_id` dans les enregistrements d'utilisation | [Facturation & Tarification](/fr/guides/billing) |
+| `401` ou `403` | Clé API, jeton de gestion, accès à l'organisation, portée de la clé | [Authentification](/fr/authentication) |
+| `402` | Solde, limite de dépenses de la clé API, disponibilité des prix des modèles | [Facturation & Tarification](/fr/guides/billing) |
+| `429` | Niveau de compte, limite de taux de point de terminaison, comportement de réessai | [Limites de Taux](/fr/guides/rate-limits) |
+| `400 invalid_request_error` | Champ non pris en charge, mauvais point de terminaison, champ requis manquant, ou incompatibilité de contrat de modèle | [Gestion des Erreurs](/fr/guides/error-handling) |
+| Tâche asynchrone introuvable | Mauvaise clé API, ID de tâche périmé, tâche expirée, ou ID de tâche non publique | [Travaux Asynchrones & Polling](/fr/guides/async-jobs-polling) |
+| Le coût ne correspond pas à l'UI | Timing de règlement ou comparaison du mauvais identifiant | [Facturation & Tarification](/fr/guides/billing) |
 
 ## Réconciliation d'Utilisation
 
-`GET /v1/management/api-keys/{keyId}/usage` renvoie l'utilisation au niveau de la clé paginée. Il peut filtrer par `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate` et `endDate`. Utilisez-le pour la réconciliation côté serveur au lieu de scraper le tableau de bord.
+Utilisez l'API de Gestion pour la réconciliation côté serveur :
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-Les réponses de streaming peuvent se régler après l'envoi du flux, donc l'en-tête de facturation peut être absent même lorsque l'utilisation est enregistrée ultérieurement. Pour les tâches de médias asynchrones, le règlement peut apparaître après le polling terminal.
+`GET /v1/management/api-keys/{keyId}/usage` peut filtrer par `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, et `endDate`. Utilisez ces enregistrements au lieu de scraper les pages de tableau de bord ou de vous fier aux ID de tâches du fournisseur en amont.
 
-## Paquet de Support
+Les réponses de streaming peuvent se régler après l'envoi du flux, donc un en-tête de facturation peut être absent même lorsque l'utilisation est enregistrée ultérieurement. Les tâches de médias asynchrones peuvent se régler après un polling terminal.
 
-Lors de la prise de contact avec le support, incluez `request_id`, `task_id`, `billing_transaction_id` lorsqu'ils sont présents, l'endpoint, le modèle, l'horodatage et une forme de demande assainie. N'incluez pas les clés API, les médias privés ou les prompts complets à moins que le support ne demande un échantillon rédigé.
+## Modèle de Packet de Support
 
-N'incluez pas les noms de fournisseurs, les IDs de canal, les identifiants de routage, les clés Redis ou les URLs de tâches en amont dans les journaux clients ou les tickets de support à moins que le support TokenLab ne le demande explicitement.
+Lors de la prise de contact avec le support, incluez :
+
+- `request_id`.
+- `task_id` et `poll_url` pour le travail asynchrone.
+- `billing_transaction_id` lorsqu'il est présent.
+- Point de terminaison, méthode, modèle, horodatage et code d'état.
+- Forme de demande assainie et corps d'erreur public.
+- Votre résultat attendu et ce que l'utilisateur a réellement vu.
+
+N'incluez pas de clés API, de jetons de gestion, de médias privés, d'invites complètes, d'URLs de fournisseur, d'ID de canal, ou d'identifiants de routage internes à moins que le support de TokenLab ne demande explicitement un échantillon masqué.
+
+## Vérifications Opérationnelles
+
+- Alertez sur les réponses répétées `401`, `402`, `429`, et `5xx` séparément ; elles ont généralement des propriétaires différents.
+- Suivez les travaux asynchrones qui restent non terminaux plus longtemps que votre SLA produit.
+- Suivez les tentatives de création en double pour le même ID de travail utilisateur.
+- Échantillonnez les travaux complétés et vérifiez que l'actif visible par l'utilisateur, l'enregistrement d'utilisation, et l'enregistrement de tâche stocké sont d'accord.
 
 ## Référence API
 

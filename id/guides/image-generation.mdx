@@ -1,67 +1,107 @@
 ---
 title: "Generasi Gambar"
-description: "Membangun alur kerja teks-ke-gambar, gambar-ke-gambar, dan pengeditan gambar terhadap kontrak gambar publik TokenLab."
+description: "Pilih endpoint gambar TokenLab yang tepat, kirim permintaan yang memahami model, dan tangani hasil gambar sinkron atau asinkron dengan aman."
 ---
 
-API gambar TokenLab mencakup beberapa keluarga model dengan bentuk permintaan yang berbeda. Gunakan kontrak model publik dan referensi API spesifik endpoint sebelum mengasumsikan bahwa suatu field berfungsi di setiap model gambar.
+TokenLab mendukung teks-ke-gambar, gambar-ke-gambar, dan pengeditan gambar melalui endpoint gambar publik. Model gambar tidak berbagi satu set parameter universal, jadi klien produksi harus terlebih dahulu memilih endpoint, kemudian memilih model, lalu mengirim hanya bidang yang didukung oleh model tersebut.
 
-## Pilih Endpoint
+## Kapan Menggunakan Setiap Endpoint
 
-| Tujuan | Endpoint | Catatan |
-|--------|----------|---------|
-| Teks-ke-gambar | `POST /v1/images/generations` | Gunakan `prompt` dan `model` yang eksplisit |
-| Gambar-ke-gambar / gambar referensi | `POST /v1/images/generations` | Gunakan `operation: "image-to-image"` ditambah `image_url`, `image_urls`, atau `reference_image_urls` ketika model mendukungnya |
-| Pengeditan Gambar GPT | `POST /v1/images/edits` | Mendukung multipart `image`, JSON `image_url` / `image_urls`, dan referensi resmi `images[]` untuk model edit yang didukung |
-| Variasi warisan | `POST /v1/images/variations` | Utamakan rute generasi atau edit saat ini untuk pekerjaan baru |
-| Status Async | `GET /v1/tasks/{id}` | Gunakan `poll_url` terlebih dahulu jika ada |
+| Alur kerja pengguna | Endpoint | Gunakan saat | Hindari saat |
+|---------------------|----------|--------------|--------------|
+| Teks-ke-gambar      | `POST /v1/images/generations` | Pengguna memulai dari prompt saja | Anda memerlukan alur pengeditan Gambar GPT resmi |
+| Gambar-ke-gambar    | `POST /v1/images/generations` | Dokumen model merujuk gambar melalui `operation: "image-to-image"` ditambah `image_url`, `image_urls`, atau `reference_image_urls` | Model mengharapkan input edit multipart |
+| Pengeditan gambar    | `POST /v1/images/edits` | Anda mengedit gambar yang ada dengan model edit yang didukung seperti model keluarga Gambar GPT | Anda menggunakan gaya generasi gambar Nano Banana |
+| Variasi             | `POST /v1/images/variations` | Anda mempertahankan integrasi yang kompatibel dengan variasi legacy | Anda membangun alur kerja gambar-referensi baru |
+| Status              | `GET /v1/tasks/{id}` | Respon pembuatan mengembalikan `task_id`, `status: "pending"`, atau `poll_url` | Respon pembuatan sudah berisi `data[]` akhir |
 
-## Penemuan Model
+Selalu kirim `model`. Endpoint gambar secara sengaja tidak bergantung pada model default implisit historis untuk lalu lintas produksi.
+
+## Pilih Model
+
+Mulailah dengan penemuan model, kemudian periksa kontrak TokenLab model yang dipilih:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Parameter model gambar sangat bervariasi. Bacalah kontrak model yang dipilih sebelum mengirim `size`, `quality`, `aspect_ratio`, `resolution`, `async`, `background`, atau `output_format`.
+Untuk model non-obrolan, respon daftar mungkin mencakup `tokenlab.public_contract_summary`. Halaman detail model mungkin mengekspos `tokenlab.public_contract` yang lebih lengkap. Gunakan bidang tersebut untuk mengonfirmasi:
 
-## Input Dan Field Spesifik Model
+- Operasi yang didukung, seperti `text-to-image`, `image-to-image`, atau `image-edit`.
+- Endpoint permintaan yang diharapkan oleh model.
+- Bentuk mana yang harus digunakan untuk referensi, seperti `image_url`, `image_urls`, `reference_image_urls`, multipart `image`, atau JSON `images[]`.
+- Apakah model menerima `size`, `aspect_ratio`, `resolution`, `quality`, `background`, `output_format`, atau `response_format`.
 
-- `gpt-image-2` menggunakan `size` dan `quality` gaya OpenAI; hilangkan `size` atau `quality` untuk membiarkan TokenLab menggunakan `auto` di mana didukung.
-- Keluarga gambar Gemini dan Nano Banana umumnya menggunakan `aspect_ratio`; hanya kirim `resolution` ketika model yang dipilih mengeksposnya.
-- Permintaan gambar referensi Nano Banana harus berada di `/v1/images/generations` dengan `operation: "image-to-image"` dan `image_urls`, bukan di `/v1/images/edits`.
+## Aturan Bentuk Permintaan
+
+- Permintaan gaya `gpt-image-2` menggunakan bidang `size`, `quality`, dan edit yang mirip dengan OpenAI. Tinggalkan bidang opsional saat Anda ingin model atau TokenLab menggunakan default otomatis.
+- Keluarga gambar Gemini dan Nano Banana biasanya menggunakan `aspect_ratio`; hanya kirim `resolution` saat kontrak model mengeksposnya.
+- Gambar-ke-gambar Nano Banana berada di `/v1/images/generations` dengan `operation: "image-to-image"` dan URL gambar referensi.
 - `/v1/images/generations` tidak menerima `images[]` atau `file_id` di tingkat atas; itu adalah bentuk alur edit.
-- URL gambar jarak jauh harus berupa URL publik `http`/`https`. Hindari jaringan pribadi, kredensial yang tertanam, fragmen, dan URL bertanda tangan yang berumur pendek.
+- Referensi gambar jarak jauh harus berupa URL publik `http` atau `https`. Jangan kirim URL jaringan pribadi, kredensial yang tertanam, fragmen URL, atau URL yang ditandatangani yang mungkin kedaluwarsa sebelum pemrosesan dimulai.
 
-## Buat Permintaan
+## Contoh Teks-Ke-Gambar
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
-    "prompt": "Sebuah foto produk bersih dari cangkir kopi keramik di atas meja kenari",
+    "prompt": "Foto produk bersih dari cangkir kopi keramik di atas meja kenari",
     "size": "1024x1024",
     "response_format": "url"
   }'
 ```
 
-## Memantau Hasil
-
-Beberapa rute gambar mengembalikan `data[].url` atau `data[].b64_json` secara inline. Rute lainnya mengembalikan `status: "pending"`, `task_id`, dan `poll_url`. Jika Anda meminta generasi atau pengeditan gambar async, hasil tugas yang selesai mengembalikan URL; gunakan permintaan sinkron ketika Anda secara khusus membutuhkan `b64_json`.
+## Contoh Gambar-Referensi
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "Pertahankan bentuk produk, ubah latar belakang menjadi pengaturan studio yang cerah",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Menangani Hasil
+
+Respon gambar bisa bersifat sinkron atau asinkron:
+
+- Respon sinkron mengembalikan `data[]` akhir dengan `url` atau `b64_json`.
+- Respon asinkron mengembalikan `id`, `task_id`, `status`, dan biasanya `poll_url`.
+- Utamakan `poll_url` saat tersedia. Jika Anda memerlukan rute tetap, lakukan polling `GET /v1/tasks/{id}`.
+- Gunakan permintaan sinkron saat Anda secara khusus memerlukan `b64_json`; hasil gambar asinkron lebih berorientasi URL.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
+Simpan URL gambar yang dikembalikan, ID tugas, model, dan ID pengguna/pekerjaan Anda sendiri. Jangan terus melakukan polling setelah status terminal.
+
+## Daftar Periksa Produksi
+
+- Validasi input pengguna sebelum memanggil TokenLab: panjang prompt, jumlah gambar, keterjangkauan URL, dan jenis file.
+- Atur timeout HTTP cukup tinggi untuk permintaan sinkron resolusi tinggi. Gunakan mode asinkron di mana tersedia untuk pekerjaan yang lama.
+- Simpan `request_id`, `task_id`, `poll_url`, model, endpoint, dan bentuk permintaan yang disanitasi untuk dukungan.
+- Pada timeout klien, periksa apakah tugas telah dibuat sebelum mencoba ulang permintaan pembuatan.
+- Rekonsiliasi biaya dengan catatan penggunaan dan `billing_transaction_id` saat ada, bukan dengan ID tugas penyedia.
+
 ## Kesalahan Umum
 
-- Jangan mengasumsikan setiap model gambar bersifat sinkron.
-- Jangan meminta `b64_json` dari tugas gambar async; hasil async berorientasi URL.
-- Jangan mengirim `resolution` ke model gambar Gemini yang hanya menggunakan rasio.
-- Jangan gunakan `/v1/images/edits` untuk alur gambar-ke-gambar Nano Banana.
-- Atur waktu tunggu klien HTTP setidaknya `120s` untuk permintaan gambar resolusi tinggi yang sinkron.
+| Gejala | Penyebab yang Mungkin | Perbaikan |
+|--------|-----------------------|-----------|
+| `400` dengan `param: "model"` | Model eksplisit hilang | Kuery `/v1/models?recommended_for=image` dan kirim `model` |
+| Bidang tidak didukung | Bidang tidak ada dalam kontrak publik model tersebut | Hapus bidang tersebut atau pilih model/endpoint yang mendokumentasikannya |
+| Tidak ada `b64_json` pada hasil asinkron | Tugas gambar asinkron mengembalikan hasil yang berorientasi URL | Gunakan mode sinkron untuk output base64 |
+| Gambar referensi ditolak | Endpoint salah atau URL pribadi/kedaluwarsa | Sesuaikan bentuk referensi yang didokumentasikan model dan gunakan URL yang dapat dijangkau |
 
 ## Referensi API
 

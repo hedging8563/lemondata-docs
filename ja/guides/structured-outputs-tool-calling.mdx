@@ -3,65 +3,102 @@ title: "構造化出力とツール呼び出し"
 description: "すべてのモデルが同じ契約をサポートしているとは限らないため、JSONモード、関数ツール、およびネイティブツールルートを使用します。"
 ---
 
-構造化出力とツールは実際のTokenLab APIパスですが、すべてのモデルとルートに共通の機能ではありません。必要な動作を持つルートを選択してください。
+構造化出力とツール呼び出しは、ルート固有の契約です。TokenLabは複数の公開APIフォーマットを転送するため、最も安全なプロダクションパターンは、各プロバイダネイティブツールの形状を所有するルートに保持し、モデル出力を自分のアプリケーションで検証することです。
 
-## JSONと構造化出力
+## ルートを選択する
 
-ポータブルな構造化レスポンスのために、Chat Completions `response_format: {"type":"json_object"}` から始め、アプリケーションで出力を検証します。これはTokenLabの共有検証における安定した公開リクエスト形状です。
+| 必要 | ルート | この形状を使用 |
+|------|-------|----------------|
+| ポータブルJSONオブジェクトレスポンス | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| OpenAI互換の関数呼び出し | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| OpenAIレスポンツール | `/v1/responses` | レスポンス `tools`, `tool_choice`, および `text` フィールド |
+| Claudeネイティブツールの使用または思考 | `/v1/messages` | Anthropic Messagesツールスキーマ |
+| Gemini関数宣言または組み込みツール | `/v1beta/models/:model:generateContent` | Geminiネイティブ `tools` およびコンテンツ部分 |
+
+プロバイダネイティブの組み込みツールを異なるルートを通じて送信し、TokenLabが静かにそれらを翻訳することを期待しないでください。
+
+## JSONモード
+
+ポータブル構造化レスポンスのために、Chat Completions JSONモードから始めます：
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "Return a JSON object with city and weather."}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "都市と天気を含むJSONオブジェクトを返してください。"
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-`json_schema` および `strict` 構造化出力パスは、一部の上流および変換コードに存在しますが、モデルおよびルートに依存します。これらは選択したモデルで検証するための機能として扱い、すべてのTokenLabルートに対する包括的な約束として扱わないでください。
+Chat Completionsのための安定した共有検証は、`text` と `json_object` を受け入れます。`json_schema`、`strict`、およびプロバイダ固有のスキーマ強制は、一部の上流ルートや変換パスに存在する可能性がありますが、すべてのTokenLabルートとモデルに対する包括的な約束ではありません。依存する前に、選択したモデルに対してそれらを検証してください。
 
-## ツール呼び出しの境界
+常にサーバー上で返されたJSONを解析し、検証してください。JSONモードは形状を改善しますが、アプリケーションレベルのスキーマ検証を置き換えるものではありません。
 
-| ツール形状 | 優先すべきルート | 製品ノート |
-|------------|-----------------|-----------------|
-| OpenAI関数ツール | `/v1/chat/completions` | ユーザー定義の関数呼び出しにポータブル |
-| OpenAIレスポンツール | `/v1/responses` | レスポンス特有の組み込みまたはホストツールに使用 |
-| Anthropicツール | `/v1/messages` | Claudeネイティブツールの使用と思考フローに使用 |
-| Gemini関数宣言 / 組み込みツール | `/v1beta/models/:model:generateContent` | Geminiルート上のGeminiネイティブツールフィールドを保持 |
+## ツール呼び出しループ
 
-TokenLabはあなたの関数を実行しません。モデルが `tool_calls`、`function_call`、`tool_use`、またはGemini関数呼び出しの部分を返すとき、あなたのアプリケーションはツールを実行し、ルートが要求する形式でツールの結果を追加し、会話を続ける必要があります。
+TokenLabはあなたの関数を実行しません。あなたのアプリケーションがループを所有します：
 
-## 一般的な落とし穴
+1. メッセージとツール定義を送信します。
+2. モデルのレスポンスから `tool_calls`、`function_call`、Anthropic `tool_use`、またはGemini関数呼び出し部分を読み取ります。
+3. 自分のバックエンドでツールを実行します。
+4. 同じルートによって要求される形式でツールの結果を追加します。
+5. モデルが最終的な答えを返すまで会話を続けます。
 
-- プロバイダーのネイティブ組み込みツールをChat Completionsを通じて送信し、静かに翻訳されることを期待しないでください。
-- 選択したルートとモデルがテストされていない限り、厳密なJSONスキーマに依存しないでください。
-- スキーマは小さく明示的に保ってください。大きなスキーマはトークンを追加し、信頼性を低下させる可能性があります。
-- JSONモードが有効になっている場合でも、モデル出力をサーバー側で検証してください。
-- サポートされていないフィールドエラーを契約フィードバックとして扱ってください。フィールドを削除するか、それを所有するネイティブルートを使用してください。
+ツールループ全体で同じルートを維持してください。Chat Completions、Responses、Messages、およびGeminiフォーマットを1つの会話で混合すると、通常は微妙な状態やスキーマのバグが発生します。
 
-## 例
+## Chat Completionsの例
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"Extract name and email as JSON."}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "Look up a customer by email",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "名前とメールをJSONとして抽出してください。必要に応じて、顧客を検索してください。"
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "メールで顧客を検索する",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
+
+## スキーマ設計
+
+- スキーマは小さく明示的に保ちます。大きなネストされたスキーマはトークンを追加し、信頼性を低下させます。
+- 製品が継続できない値には必須フィールドを優先します。
+- UIやバックエンドが依存する閉じたセットにはenumを使用します。
+- モデルが形状に苦労している場合は、プロンプトに例を含めます。
+- サポートされていないフィールドエラーは契約フィードバックとして扱います。フィールドを削除するか、それを文書化しているネイティブルートを使用します。
+
+## プロダクションチェックリスト
+
+- ルート、モデル、ツール名、およびサニタイズされたスキーマ形状をログに記録します。
+- 副作用を実行する前にツール引数を検証します。
+- ツール実行前に独自の権限チェックを適用します。
+- クライアントの再試行が同じツール呼び出しを繰り返す可能性がある場合、ツール実行を冪等にします。
+- ツールから返された秘密をモデルが見えるメッセージにログしないでください。
 
 ## APIリファレンス
 

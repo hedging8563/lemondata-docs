@@ -1,25 +1,32 @@
 ---
 title: "3D-Generierung"
-description: "Erstellen Sie 3D-Assets aus Text oder Bildern und laden Sie die fertigen Modell-Dateien aus den Ergebnissen asynchroner Aufgaben herunter."
+description: "Erstellen Sie Text-zu-3D- oder Bild-zu-3D-Aufgaben, fragen Sie nach abgeschlossenen Assets und verwalten Sie herunterladbare Modell-Dateien."
 ---
 
-Die 3D-Generierung ist asynchron. `POST /v1/3d/generations` erstellt eine Aufgabe; abgeschlossene Statusantworten geben herunterladbare Modell-Asset-URLs zurück.
+Die 3D-Generierung ist asynchron. `POST /v1/3d/generations` erstellt eine TokenLab-Aufgabe; abgeschlossene Statusantworten geben herunterladbare Modell-Assets wie `model_url` zurück und, wenn verfügbar, format-spezifische URLs.
 
-## Modellerkennung
+## Wählen Sie den Eingabetyp
+
+| Workflow     | Erforderliche Eingabe | Optionale Felder | Hinweise |
+|--------------|-----------------------|------------------|----------|
+| Text-zu-3D   | `model`, `prompt`     | `format`, `quality`, `style`, `seed` | Am besten geeignet, um ein neues Asset aus einer Beschreibung zu generieren |
+| Bild-zu-3D   | `model`, `prompt`, `image` oder `image_url` | `format`, `quality`, `style`, `seed` | Nur verwenden, wenn das ausgewählte Modell die Bild-Eingabe unterstützt |
+
+Fragen Sie den Modellkatalog ab, bevor Sie entscheiden, welche Optionen angezeigt werden sollen:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Gehen Sie nicht davon aus, dass jedes 3D-Modell sowohl Text-zu-3D als auch Bild-zu-3D unterstützt. Überprüfen Sie den ausgewählten Modellvertrag, bevor Sie `image`, `image_url`, `format`, `quality`, `style` oder `seed` senden.
+Gehen Sie nicht davon aus, dass jedes 3D-Modell beide Eingabetypen oder jedes Ausgabeformat unterstützt. Überprüfen Sie den Vertrag des ausgewählten Modells, bevor Sie `image`, `image_url`, `format`, `quality`, `style` oder `seed` senden.
 
-## Anfrage erstellen
+## Erstellen Sie eine 3D-Aufgabe
 
 ```bash
-curl https://api.tokenlab.sh/v1/3d/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/3d/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "tripo3d-v2.5",
     "prompt": "Ein stilisierter Low-Poly-Roboter-Maskottchen mit sauberer Topologie",
@@ -28,33 +35,50 @@ curl https://api.tokenlab.sh/v1/3d/generations \\
   }'
 ```
 
-Text-zu-3D erfordert einen `prompt`. Bild-zu-3D verwendet `image` oder `image_url`, wenn dies vom Modell unterstützt wird. Bevorzugen Sie öffentliche URLs für Produktionsinputs, es sei denn, das Quellbild ist privat und Ihr Client lädt absichtlich base64-Daten hoch.
+Für Bild-zu-3D verwenden Sie, wenn möglich, eine öffentliche `image_url`. Verwenden Sie inline/base64 `image` nur, wenn Ihr Client absichtlich private Medien sendet und Ihr Backend auf größere Anforderungsinhalte vorbereitet ist.
 
-## Ausgabeoptionen
+## Auswahl der Ausgabeformate
 
-- `format` kann die Ausgabeverpackung wie `glb`, `fbx`, `obj` oder `usdz` anfordern, wenn dies unterstützt wird.
-- `quality`-Werte wie `draft`, `standard` oder `high` beeinflussen Latenz und Kosten, wenn das Modell sie bereitstellt.
-- `style` und `seed` sind modellabhängig; lassen Sie sie weg, es sei denn, der ausgewählte Vertrag dokumentiert sie.
+- `glb` ist normalerweise die sicherste Standardoption für Webvorschauen.
+- `fbx` und `obj` sind nützlich für DCC-Pipelines, wenn das ausgewählte Modell sie unterstützt.
+- `usdz` ist nützlich für Apple AR-Workflows, wenn es vom Modell bereitgestellt wird.
+- Höhere `quality`-Werte können Latenz und Kosten erhöhen. Stellen Sie sie als explizite Benutzeroptionen zur Verfügung, nicht als versteckte Standardwerte.
+- `seed` ist nur dann nützlich für Reproduzierbarkeit, wenn das Modell es berücksichtigt.
 
-## Ergebnisse abfragen
+## Abfragen und Speichern von Assets
 
-Verwenden Sie zuerst die zurückgegebene `poll_url`. Wenn Sie einen festen Endpunkt benötigen, verwenden Sie `GET /v1/tasks/{id}` mit der gleichen `id` / `task_id` aus der Erstellungsantwort.
+Verwenden Sie zuerst die zurückgegebene `poll_url`. Wenn Ihr Client eine feste Route benötigt, verwenden Sie `GET /v1/tasks/{id}`.
 
-Abgeschlossene Aufgaben geben `model_url` zurück und können format-spezifische URLs wie `glb_url`, `fbx_url`, `obj_url` oder `usdz_url` enthalten. Laden Sie das Asset herunter und cachen Sie es in Ihrem eigenen Produkt, wenn Benutzer wiederholten Zugriff benötigen.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Häufige Fallstricke
+Abgeschlossene Aufgaben geben `model_url` zurück und können `glb_url`, `fbx_url`, `obj_url` oder `usdz_url` enthalten. Laden Sie das ausgewählte Asset herunter oder speichern Sie es in Ihrem eigenen Produkt, wenn Benutzer wiederholten Zugriff, Versionshistorie oder langfristige Downloads benötigen.
 
-- Erwarten Sie kein 3D-Asset in der Erstellungsantwort; fragen Sie bis zum terminalen Status ab.
-- Versprechen Sie nicht jedes Format für jedes Modell.
-- Wiederholen Sie keine Erstellungsanfragen nach einem Client-Timeout, ohne zu überprüfen, ob die Aufgabe bereits existiert.
-- Geben Sie die Anbieter-Aufgaben-IDs nicht in Ihrer Benutzeroberfläche preis.
+## Produktions-Checkliste
+
+- Speichern Sie `task_id`, `poll_url`, Modell, angefordertes Format und Ihre eigene Asset-Aufzeichnungs-ID.
+- Setzen Sie das Abfragen nach einer Seitenaktualisierung fort, anstatt eine doppelte Aufgabe zu erstellen.
+- Validieren Sie die Größe und Erreichbarkeit des Quellbildes, bevor Sie die Aufgabe erstellen.
+- Halten Sie generierte Asset-URLs von öffentlichen Seiten fern, es sei denn, der Benutzer hat die Berechtigung, auf das Asset zuzugreifen.
+- Zeichnen Sie `billing_transaction_id` auf, wenn vorhanden, zur späteren Abrechnung.
+
+## Häufige Fehler
+
+| Symptom                                      | Wahrscheinliche Ursache                       | Lösung |
+|----------------------------------------------|----------------------------------------------|--------|
+| Die Antwort beim Erstellen hat keine Asset-URL | 3D-Generierung ist asynchron                 | Abfragen bis zum terminalen Status |
+| Angefordertes Format fehlt                   | Modell hat dieses Format nicht zurückgegeben | Fallback auf `model_url` oder wählen Sie ein Modell, das das Format unterstützt |
+| Bild-zu-3D abgelehnt                         | Ausgewähltes Modell ist nur für Text oder Bild-URL ist nicht erreichbar | Überprüfen Sie den Modellvertrag und validieren Sie die URL |
+| Doppelte Assets                              | Der Wiederholungsweg hat die Aufgabe nach der Zeitüberschreitung neu erstellt | Speichern Sie die Aufgabenidentität, bevor Sie es erneut versuchen |
 
 ## API-Referenz
 
-| Thema | Referenz |
-|-------|-----------|
-| 3D erstellen | [Create 3D](/de/api-reference/3d/create-3d) |
-| 3D-Status abrufen | [Get 3D Status](/de/api-reference/3d/get-3d-status) |
+| Thema               | Referenz                                   |
+|---------------------|--------------------------------------------|
+| 3D erstellen        | [Create 3D](/de/api-reference/3d/create-3d) |
+| 3D-Status abrufen   | [Get 3D Status](/de/api-reference/3d/get-3d-status) |
 | Aufgabenstatus abrufen | [Get Task Status](/de/api-reference/tasks/get-task-status) |
-| Modelle auflisten | [List Models](/de/api-reference/models/list-models) |
-| Abrechnung & Preisgestaltung | [Billing & Pricing](/de/guides/billing) |
+| Modelle auflisten   | [List Models](/de/api-reference/models/list-models) |
+| Abrechnung & Preise | [Billing & Pricing](/de/guides/billing)      |

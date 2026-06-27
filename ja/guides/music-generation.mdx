@@ -1,25 +1,33 @@
 ---
 title: "音楽生成"
-description: "TokenLabの音楽タスクを使用して、曲、インストゥルメンタル、歌詞、続きの生成を行います。"
+description: "音楽または歌詞のタスクを作成し、最終的なオーディオをポーリングし、ユーザー向けの音楽出力を安全に保存します。"
 ---
 
-音楽生成は非同期です。 `POST /v1/music/generations` はタスクを作成し、`id` / `task_id`、`status`、通常は `poll_url` を返します。最終的な音声とメタデータはポーリング後に表示されます。
+音楽生成は非同期です。 `POST /v1/music/generations` は公開されたTokenLabタスクを作成し、`id` / `task_id`、`status`、通常は`poll_url`を返します。アプリケーションはそのタスクの識別子を保存し、進行状況を表示し、最終的なステータスになるまでポーリングする必要があります。
 
-## モデル発見
+## ワークフローの選択
+
+| ワークフロー | 主要フィールド | 注意事項 |
+|--------------|----------------|----------|
+| フルソングまたはインストゥルメンタル | `model`, `prompt`, オプションの `title`, `tags`, `action: "MUSIC"` | ユーザーが最終的なオーディオを期待する場合に使用 |
+| 歌詞のみ | `model`, `prompt`, `action: "LYRICS"` | 歌詞生成を公開しているモデルのみで使用 |
+| 既存のクリップを続行 | `continue_clip_id`, オプションの `continue_at` | 続行を提供する前に、前の公開クリップ/タスクの識別子を保存 |
+
+ハードコーディングされたモデルリストを出荷する前に、現在のモデルカタログをクエリします：
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-現在の公開契約では、音楽生成のために `suno_music` を、歌詞のみのフローのために `suno_lyrics` を公開しています。プロダクション使用前にモデルカタログを照会し、プロバイダーの仮定を固定しないでください。
+現在の公開例では、音楽生成に`suno_music`を使用しています。歌詞のみのフローの場合、歌詞生成を文書化したモデルと共に`action: "LYRICS"`を送信します。モデルIDは公開されたTokenLab IDとして扱い、プロバイダー固有のフィールドが公開契約フィールドであることを保証するものではありません。
 
-## リクエストの作成
+## 音楽タスクの作成
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
     "prompt": "温かいボーカルとクリーンなコーラスを持つアップビートなシンセポップトラック",
@@ -29,27 +37,46 @@ curl https://api.tokenlab.sh/v1/music/generations \\
   }'
 ```
 
-曲やインストゥルメンタルには `action: "MUSIC"` を使用してください。歌詞のみの生成をサポートするモデルに対してのみ `action: "LYRICS"` を使用してください。`continue_clip_id` や `continue_at` などの続きフィールドは続きのワークフロー用であり、前のクリップを続ける場合にのみ送信する必要があります。
+プロンプト、タイトル、タグはユーザーに見えるようにし、安全に保存してください。プロンプトフィールドにAPIキー、プライベートURL、または内部ルーティング情報を配置しないでください。
 
-## 結果のポーリング
+## 完了のポーリング
 
-最初に返された `poll_url` を使用してください。固定エンドポイントが必要な場合は、作成応答から同じ `id` / `task_id` を使用して `GET /v1/tasks/{id}` を使用してください。
+まず`poll_url`を使用します。クライアントが固定ルートを必要とする場合は、返された`id`または`task_id`で`GET /v1/tasks/{id}`を呼び出します。
 
-完了した音楽タスクには `audio_url`、`video_url`、`title`、`lyrics`、およびモデル正規化メタデータが含まれる場合があります。最終的なURLは、端末状態の後に繰り返しポーリングするのではなく、アプリケーションに保存してください。
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## よくある落とし穴
+期待される公開ステータスは`pending`、`processing`、`completed`、および`failed`です。完了した音楽タスクには`audio_url`、`video_url`、`title`、`lyrics`、および正規化されたメタデータが含まれる場合があります。最終的なURLは自分のデータベースに保存し、ユーザーが生成を再開せずに結果を再度開けるようにします。
 
-- タスクが `completed` であり、`audio_url` が存在するまで最終プレーヤーを表示しないでください。
-- アプリの状態でプロバイダーのタスクIDやプロバイダーのフェッチURLを使用しないでください。
-- ユーザーに違いを示さずに、歌詞のみのアクションとフル音楽アクションを1つのUIの背後で混合しないでください。
-- ページをリフレッシュするたびにタスクを再作成しないでください。保存された `task_id` から再開してください。
+## UIと状態管理
+
+- タスク作成後すぐに保留状態を表示します。
+- 長いタスクの場合は、`5-10秒`ごとにポーリングし、`completed`または`failed`で停止します。
+- タスクが`completed`であり、`audio_url`が存在するまで最終プレーヤーを表示しないでください。
+- 歌詞のみのタスクの場合、ユーザーが購入している内容を理解できるように、オーディオタスクとは別にテキスト出力をレンダリングします。
+- リフレッシュ時には、新しいタスクを作成するのではなく、保存された`task_id`から再開します。
+
+## 請求と調整
+
+音楽タスクは作成時に推定額を予約し、最終ステータスがわかった後に決済できます。`request_id`、`task_id`、モデル、エンドポイント、および`billing_transaction_id`が表示されたときに保存します。プロバイダーのタスクIDの代わりに、管理APIの使用記録を調整に使用します。
+
+## 一般的なエラー
+
+| 症状 | 考えられる原因 | 修正 |
+|------|----------------|------|
+| タスクが作成されたがプレーヤーがない | タスクがまだ保留中または`audio_url`なしで完了している | 最終状態になるまでポーリングし、出力が欠落している場合は失敗したユーザーのジョブとして処理 |
+| リフレッシュ後に重複した曲 | UIがタスクを再開するのではなく再作成した | `task_id`を保持して再利用 |
+| 歌詞タスクがオーディオを返さない | `action: "LYRICS"`はテキストのみ | 歌詞と音楽のUIパスを分ける |
+| サポートされていないパラメータ | フィールドがモデルの公開契約に含まれていない | プロバイダー固有のフィールドを削除するか、それらを文書化したモデルを選択 |
 
 ## APIリファレンス
 
 | トピック | リファレンス |
-|-------|-----------|
+|----------|---------------|
 | 音楽の作成 | [音楽の作成](/ja/api-reference/music/create-music) |
 | 音楽のステータス取得 | [音楽のステータス取得](/ja/api-reference/music/get-music-status) |
 | タスクのステータス取得 | [タスクのステータス取得](/ja/api-reference/tasks/get-task-status) |
-| モデルの一覧 | [モデルの一覧](/ja/api-reference/models/list-models) |
+| モデルのリスト | [モデルのリスト](/ja/api-reference/models/list-models) |
 | 請求と価格設定 | [請求と価格設定](/ja/guides/billing) |

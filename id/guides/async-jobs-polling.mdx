@@ -1,25 +1,32 @@
 ---
 title: "Pekerjaan Async & Polling"
-description: "Buat pekerjaan generasi async, polling status tugas publik, dan rekonsiliasi hasil akhir tanpa rincian tugas spesifik penyedia."
+description: "Buat pekerjaan media asinkron, polling status tugas TokenLab publik, dan rekonsiliasi hasil akhir tanpa ID spesifik penyedia."
 ---
 
-Halaman ini mencerminkan kontrak tugas async publik TokenLab. Ini tidak memperlakukan URL tugas penyedia, ID routing, atau perilaku callback upstream sebagai kontrak integrasi yang dihadapi pengguna.
+Banyak endpoint media bersifat asinkron. Permintaan pembuatan memulai pekerjaan dan mengembalikan identitas tugas TokenLab publik; aplikasi Anda melakukan polling hingga tugas tersebut mencapai status terminal. Jangan membangun alur kerja pelanggan di sekitar URL tugas upstream, ID routing, atau perilaku callback penyedia.
 
-## Kontrak Publik
+## Kontrak Tugas Publik
 
-TokenLab mengekspos satu kontrak tugas async publik untuk media yang dihasilkan. Endpoint pembuatan dapat mengembalikan `id`, `task_id`, `status`, dan `poll_url`. Perlakukan `id` dan `task_id` sebagai identitas tugas publik yang sama dan simpan baik ID tugas maupun `poll_url` dengan catatan pekerjaan Anda sendiri.
+Respon pembuatan dapat mencakup:
 
-Gunakan `poll_url` yang dikembalikan terlebih dahulu. Jika Anda memerlukan endpoint tetap, gunakan `GET /v1/tasks/{id}` dengan `id` / `task_id` yang sama dari respons pembuatan.
+| Field | Arti | Apa yang harus dilakukan |
+|-------|------|-------------------------|
+| `id` | ID tugas TokenLab publik | Simpan bersama catatan pekerjaan Anda sendiri |
+| `task_id` | Alias kompatibilitas untuk identitas tugas publik yang sama | Anggap setara dengan `id` |
+| `status` | Status tugas publik saat ini | Mulai polling ketika tidak terminal |
+| `poll_url` | URL status yang disukai | Gunakan ini terlebih dahulu jika ada |
+| `model` | Model yang diminta atau diselesaikan oleh endpoint | Simpan untuk dukungan dan rekonsiliasi penagihan |
 
-Tugas generasi publik saat ini berbasis polling. TokenLab memiliki penerima callback upstream secara internal, tetapi mereka bukan webhook pelanggan dan tidak boleh digunakan sebagai kontrak integrasi.
+`/v1/tasks/{id}` adalah endpoint status tetap kanonik untuk pekerjaan media asinkron publik. Rute status spesifik media mungkin ada untuk kompatibilitas, tetapi integrasi baru harus lebih memilih `poll_url` atau `/v1/tasks/{id}`.
 
 ## Alur yang Direkomendasikan
 
-1. Kirim permintaan pembuatan dengan `model` yang eksplisit.
-2. Jika respons inline, baca hasil akhir segera.
-3. Jika respons berisi `status: "pending"`, `task_id`, atau `poll_url`, simpan tugas dan mulai polling.
-4. Poll setiap `5-10s` untuk tugas media yang panjang. Hentikan hanya pada status terminal.
-5. Pada `completed`, baca bidang hasil untuk jenis media tersebut. Pada `failed`, simpan kesalahan publik dan tampilkan tindakan coba lagi hanya ketika mencoba lagi akan membuat pekerjaan baru yang terlihat oleh pengguna.
+1. Validasi permintaan pengguna dan kirim panggilan pembuatan dengan `model` yang eksplisit.
+2. Simpan `id` / `task_id`, `poll_url`, endpoint, model, ID pengguna, dan ID pekerjaan Anda sendiri sebelum mengembalikan kontrol ke UI.
+3. Lakukan polling setiap `5-10s` untuk tugas media yang berjalan lama.
+4. Hentikan hanya ketika tugas sudah `completed` atau `failed`.
+5. Pada `completed`, baca bidang hasil spesifik media dan simpan URL atau metadata akhir.
+6. Pada `failed`, simpan kesalahan publik dan tawarkan pengulangan hanya sebagai pekerjaan baru yang terlihat oleh pengguna.
 
 ```json
 {
@@ -31,36 +38,58 @@ Tugas generasi publik saat ini berbasis polling. TokenLab memiliki penerima call
 }
 ```
 
-## Hasil Polling
+## Contoh Polling
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
 Status publik yang diharapkan adalah `pending`, `processing`, `completed`, dan `failed`. Tugas yang dibatalkan diwakili sebagai `failed` dengan `cancelled: true` dan `cancellation_status: "cancelled"` sehingga penanganan status yang lebih lama tetap berfungsi.
 
-Jangan polling URL spesifik penyedia, ID tugas upstream, ID routing, atau metadata eksekusi pribadi. Mereka bukan kontrak publik yang stabil.
+## Aturan Pengulangan Klien
 
-## Penagihan Dan Rekonsiliasi
+Timeout jaringan adalah sumber paling umum dari pekerjaan duplikat. Gunakan aturan ini:
 
-- Respons pembuatan dapat memesan jumlah yang diperkirakan untuk pekerjaan asinkron.
-- Penyelesaian akhir terjadi setelah tugas mencapai status terminal.
-- Ketika penyelesaian tersedia, respons status tugas dapat mengekspos `billing_transaction_id` dan header `X-Billing-Transaction-ID`.
-- Jika terjadi timeout klien setelah pembuatan tugas, jangan buat ulang pekerjaan secara membabi buta. Lanjutkan dari `task_id` / `poll_url` yang disimpan.
+| Di mana timeout terjadi | Perilaku yang lebih aman |
+|------------------------|--------------------------|
+| Sebelum server Anda menerima respon pembuatan | Periksa log server untuk `request_id`; ulangi hanya jika tidak ada tugas yang dibuat |
+| Setelah respon pembuatan disimpan | Lanjutkan polling `task_id` yang disimpan |
+| Selama polling | Ulangi permintaan status dengan backoff |
+| Setelah status terminal | Jangan polling lagi kecuali pengguna secara eksplisit menyegarkan catatan |
+
+Jangan kirim permintaan pembuatan kedua hanya karena browser diperbarui atau polling status gagal.
+
+## Penagihan dan Penyelesaian
+
+Pekerjaan asinkron dapat memesan jumlah yang diperkirakan ketika permintaan pembuatan diterima. Penyelesaian akhir terjadi setelah status terminal. Ketika tersedia, respon status tugas dapat mengekspos `billing_transaction_id` dan header `X-Billing-Transaction-ID`.
+
+Untuk rekonsiliasi, gabungkan pengidentifikasi ini di log Anda:
+
+- `request_id` dari permintaan pembuatan.
+- `task_id` / `id` dari tugas.
+- `billing_transaction_id` jika ada.
+- ID pengguna Anda sendiri, ID proyek, atau ID pekerjaan.
 
 ## Pembatalan
 
-`DELETE /v1/tasks/{id}` sengaja dibuat sempit. Saat ini mendukung tugas video Volcengine Seedance yang antre seperti `seedance-1.5-pro`, `seedance-2.0`, dan `seedance-2.0-fast`. Tugas yang tidak didukung mengembalikan `400 unsupported_task_cancel`; tugas yang sudah berjalan atau terminal mengembalikan `409 task_not_cancellable`.
+`DELETE /v1/tasks/{id}` sengaja sempit. Saat ini mendukung tugas video Volcengine Seedance yang antre seperti `seedance-1.5-pro`, `seedance-2.0`, dan `seedance-2.0-fast`.
 
-## Daftar Periksa Pemecahan Masalah
+Tugas yang tidak didukung mengembalikan `400 unsupported_task_cancel`. Tugas yang sudah berjalan atau terminal mengembalikan `409 task_not_cancellable`. Bangun UI pembatalan sebagai "permintaan pembatalan" daripada tombol berhenti yang dijamin.
 
-- `async_task_not_found`: tugas tidak dikenal, kedaluwarsa, tidak dapat diakses dengan kunci API ini, atau bukan bagian dari kontrak tugas async publik.
-- URL media akhir yang hilang: terus polling hingga terminal; jangan menganggap respons `pending` menyertakan output.
-- Pekerjaan duplikat: periksa apakah jalur coba lagi Anda membuat tugas kedua setelah timeout HTTP.
-- Ketidaksesuaian penagihan: bandingkan `request_id`, `task_id`, dan `billing_transaction_id` di dasbor atau Management API.
+## Pemecahan Masalah
 
-Saat menghubungi dukungan, sertakan `request_id`, `task_id`, `billing_transaction_id` jika ada, endpoint, model, timestamp, dan bentuk permintaan yang telah disanitasi. Jangan sertakan kunci API, media pribadi, atau prompt lengkap kecuali dukungan meminta contoh yang telah disunting.
+| Gejala | Penyebab yang mungkin | Apa yang harus diperiksa |
+|--------|-----------------------|--------------------------|
+| `async_task_not_found` | Tugas tidak dikenal, kedaluwarsa, tidak dapat diakses dengan kunci API ini, atau bukan tugas asinkron publik | Konfirmasi kepemilikan kunci API dan `task_id` publik yang disimpan |
+| Tugas tidak pernah tampak selesai | Klien terus polling URL yang salah atau berhenti sebelum status terminal | Gunakan `poll_url` atau `/v1/tasks/{id}` dan periksa status terbaru |
+| URL media akhir hilang | Tugas tidak selesai, atau pekerjaan upstream selesai tanpa output yang dapat digunakan | Terus polling hingga terminal, lalu tangani output yang hilang sebagai gagal |
+| Pengguna melihat duplikat | Jalur pengulangan membuat tugas baru setelah timeout atau penyegaran | Hapus duplikat berdasarkan ID pekerjaan Anda sendiri dan `task_id` yang disimpan |
+| Ketidaksesuaian penagihan | Penyelesaian bersifat asinkron atau klien membandingkan ID penyedia | Bandingkan `request_id`, `task_id`, dan `billing_transaction_id` |
+
+## Paket Dukungan
+
+Saat menghubungi dukungan, sertakan `request_id`, `task_id`, `billing_transaction_id` jika ada, endpoint, model, timestamp, dan bentuk permintaan yang telah disanitasi. Jangan sertakan kunci API, media pribadi, URL yang ditandatangani, atau prompt lengkap kecuali dukungan meminta contoh yang disunting.
 
 ## Referensi API
 
@@ -70,4 +99,6 @@ Saat menghubungi dukungan, sertakan `request_id`, `task_id`, `billing_transactio
 | Batalkan Tugas | [Batalkan Tugas](/id/api-reference/tasks/cancel-task) |
 | Generasi Gambar | [Generasi Gambar](/id/guides/image-generation) |
 | Generasi Video | [Generasi Video](/id/guides/video-generation) |
+| Generasi Musik | [Generasi Musik](/id/guides/music-generation) |
+| Generasi 3D | [Generasi 3D](/id/guides/3d-generation) |
 | Penagihan & Harga | [Penagihan & Harga](/id/guides/billing) |

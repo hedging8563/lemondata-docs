@@ -1,25 +1,32 @@
 ---
-title: "异步任务与轮询"
-description: "创建异步生成任务，轮询公共任务状态，并在没有提供者特定任务细节的情况下调和最终结果。"
+title: "异步作业与轮询"
+description: "创建异步媒体作业，轮询公共 TokenLab 任务状态，并在没有提供商特定 ID 的情况下对最终结果进行对账。"
 ---
 
-此页面反映了TokenLab的公共异步任务合同。它不将提供者任务URL、路由ID或上游回调行为视为面向用户的集成合同。
+许多媒体端点是异步的。创建请求开始工作并返回公共 TokenLab 任务标识；您的应用程序轮询直到该任务达到终止状态。请勿围绕上游任务 URL、路由 ID 或提供商回调行为构建客户工作流。
 
-## 公共合同
+## 公共任务契约
 
-TokenLab为生成的媒体公开一个异步任务合同。创建端点可能返回`id`、`task_id`、`status`和`poll_url`。将`id`和`task_id`视为相同的公共任务标识，并将任务ID和`poll_url`与您自己的任务记录一起存储。
+创建响应可以包括：
 
-首先使用返回的`poll_url`。如果您需要固定端点，请使用`GET /v1/tasks/{id}`，并使用创建响应中的相同`id` / `task_id`。
+| 字段 | 含义 | 操作 |
+|-------|---------|------------|
+| `id` | 公共 TokenLab 任务 ID | 将其与您自己的作业记录一起存储 |
+| `task_id` | 相同公共任务标识的兼容别名 | 将其视为与 `id` 等效 |
+| `status` | 当前公共任务状态 | 当状态不是终止时开始轮询 |
+| `poll_url` | 优选状态 URL | 存在时优先使用此 URL |
+| `model` | 端点请求或解析的模型 | 存储以便支持和计费对账 |
 
-公共生成任务今天是基于轮询的。TokenLab内部有上游回调接收器，但它们不是客户Webhook，不应作为集成合同使用。
+`/v1/tasks/{id}` 是公共异步媒体作业的规范固定状态端点。可能存在特定于媒体的状态路由以保持兼容性，但新的集成应优先使用 `poll_url` 或 `/v1/tasks/{id}`。
 
 ## 推荐流程
 
-1. 发送带有明确`model`的创建请求。
-2. 如果响应是内联的，立即读取最终结果。
-3. 如果响应包含`status: "pending"`、`task_id`或`poll_url`，请持久化任务并开始轮询。
-4. 对于长媒体任务，每`5-10s`轮询一次。仅在终端状态时停止。
-5. 在`completed`时，读取该媒体类型的结果字段。在`failed`时，存储公共错误，并仅在重试会创建新的用户可见任务时显示重试操作。
+1. 验证用户请求并发送带有显式 `model` 的创建调用。
+2. 在将控制权返回给 UI 之前，持久化 `id` / `task_id`、`poll_url`、端点、模型、用户 ID 和您自己的作业 ID。
+3. 对于长时间运行的媒体任务，每 `5-10s` 轮询一次。
+4. 仅在任务为 `completed` 或 `failed` 时停止。
+5. 在 `completed` 时，读取特定于媒体的结果字段并存储最终 URL 或元数据。
+6. 在 `failed` 时，存储公共错误，并仅作为新的用户可见作业提供重试。
 
 ```json
 {
@@ -31,38 +38,60 @@ TokenLab为生成的媒体公开一个异步任务合同。创建端点可能返
 }
 ```
 
-## 轮询结果
+## 轮询示例
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-预期的公共状态为`pending`、`processing`、`completed`和`failed`。取消的任务表示为`failed`，并带有`cancelled: true`和`cancellation_status: "cancelled"`，以便旧的状态处理继续有效。
+预期的公共状态为 `pending`、`processing`、`completed` 和 `failed`。取消的任务表示为 `failed`，并带有 `cancelled: true` 和 `cancellation_status: "cancelled"`，以便旧的状态处理继续有效。
 
-请勿轮询提供者特定的URL、上游任务ID、路由ID或私有执行元数据。它们不是稳定的公共合同。
+## 客户端重试规则
 
-## 计费与调和
+网络超时是重复作业的最常见来源。使用以下规则：
 
-- 创建响应可以为异步工作保留估计金额。
-- 最终结算发生在任务达到终端状态后。
-- 当结算可用时，任务状态响应可以暴露`billing_transaction_id`和`X-Billing-Transaction-ID`头。
-- 如果在任务创建后发生客户端超时，请勿盲目重新创建任务。请从存储的`task_id` / `poll_url`恢复。
+| 超时发生位置 | 更安全的行为 |
+|-----------------------|----------------|
+| 在您的服务器接收到创建响应之前 | 检查服务器日志中的 `request_id`；仅在未创建任务时重试 |
+| 在存储创建响应之后 | 恢复对存储的 `task_id` 的轮询 |
+| 在轮询期间 | 使用退避重试状态请求 |
+| 在终止状态之后 | 除非用户明确刷新记录，否则不要再次轮询 |
+
+不要仅因为浏览器刷新或状态轮询失败而发送第二个创建请求。
+
+## 计费与结算
+
+异步作业在创建请求被接受时可以保留估计金额。最终结算发生在终止状态之后。当可用时，任务状态响应可以暴露 `billing_transaction_id` 和 `X-Billing-Transaction-ID` 头。
+
+对于对账，请在您的日志中连接这些标识符：
+
+- 来自创建请求的 `request_id`。
+- 来自任务的 `task_id` / `id`。
+- 当存在时的 `billing_transaction_id`。
+- 您自己的用户 ID、项目 ID 或作业 ID。
 
 ## 取消
 
-`DELETE /v1/tasks/{id}`的范围故意狭窄。它目前支持排队的Volcengine Seedance视频任务，如`seedance-1.5-pro`、`seedance-2.0`和`seedance-2.0-fast`。不支持的任务返回`400 unsupported_task_cancel`；已经运行或处于终端状态的任务返回`409 task_not_cancellable`。
+`DELETE /v1/tasks/{id}` 是故意狭窄的。它当前支持排队的 Volcengine Seedance 视频任务，如 `seedance-1.5-pro`、`seedance-2.0` 和 `seedance-2.0-fast`。
 
-## 故障排除清单
+不支持的任务返回 `400 unsupported_task_cancel`。已经运行或处于终止状态的任务返回 `409 task_not_cancellable`。构建取消 UI 时应为“请求取消”，而不是保证停止按钮。
 
-- `async_task_not_found`：任务未知、过期、对该API密钥不可访问，或不属于公共异步任务合同。
-- 缺少最终媒体URL：保持轮询直到终端；不要假设`pending`响应包含输出。
-- 重复任务：检查您的重试路径是否在HTTP超时后创建了第二个任务。
-- 计费不匹配：在仪表板或管理API中比较`request_id`、`task_id`和`billing_transaction_id`。
+## 故障排除
 
-联系支持时，请包括`request_id`、`task_id`、`billing_transaction_id`（如果存在）、端点、模型、时间戳和经过清理的请求形状。除非支持要求提供经过编辑的示例，否则请勿包含API密钥、私有媒体或完整提示。
+| 症状 | 可能原因 | 检查内容 |
+|---------|--------------|---------------|
+| `async_task_not_found` | 任务未知、过期、对该 API 密钥不可访问或不是公共异步任务 | 确认 API 密钥所有权和存储的公共 `task_id` |
+| 任务似乎从未完成 | 客户端一直在轮询错误的 URL 或在终止状态之前停止 | 使用 `poll_url` 或 `/v1/tasks/{id}` 并检查最新状态 |
+| 最终媒体 URL 缺失 | 任务未完成，或上游作业完成但没有可用输出 | 继续轮询直到终止，然后将缺失输出处理为失败 |
+| 用户看到重复项 | 重试路径在超时或刷新后创建了新任务 | 通过您自己的作业 ID 和存储的 `task_id` 去重 |
+| 计费不匹配 | 结算是异步的或客户端在比较提供商 ID | 比较 `request_id`、`task_id` 和 `billing_transaction_id` |
 
-## API参考
+## 支持包
+
+联系支持时，请包括 `request_id`、`task_id`、`billing_transaction_id`（如有）、端点、模型、时间戳和经过清理的请求形状。除非支持要求提供经过编辑的示例，否则请勿包含 API 密钥、私人媒体、签名 URL 或完整提示。
+
+## API 参考
 
 | 主题 | 参考 |
 |-------|-----------|
@@ -70,4 +99,6 @@ curl "https://api.tokenlab.sh/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" 
 | 取消任务 | [取消任务](/zh/api-reference/tasks/cancel-task) |
 | 图像生成 | [图像生成](/zh/guides/image-generation) |
 | 视频生成 | [视频生成](/zh/guides/video-generation) |
+| 音乐生成 | [音乐生成](/zh/guides/music-generation) |
+| 3D 生成 | [3D 生成](/zh/guides/3d-generation) |
 | 计费与定价 | [计费与定价](/zh/guides/billing) |

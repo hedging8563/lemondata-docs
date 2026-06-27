@@ -1,25 +1,33 @@
 ---
 title: "Musikgenerierung"
-description: "Erstellen Sie Songs, Instrumentals, Texte und Fortsetzungen mit TokenLab-Musikaufgaben."
+description: "Erstellen Sie Musik- oder Liedaufgaben, fragen Sie nach der endgültigen Audiodatei und speichern Sie benutzerfreundliche Musikoutputs sicher."
 ---
 
-Die Musikgenerierung ist asynchron. `POST /v1/music/generations` erstellt eine Aufgabe und gibt `id` / `task_id`, `status` und normalerweise `poll_url` zurück. Endgültige Audiodateien und Metadaten erscheinen nach dem Abfragen.
+Die Musikgenerierung ist asynchron. `POST /v1/music/generations` erstellt eine öffentliche TokenLab-Aufgabe und gibt `id` / `task_id`, `status` und normalerweise `poll_url` zurück. Ihre Anwendung sollte diese Aufgabenidentität speichern, den Fortschritt anzeigen und bis zu einem terminalen Status abfragen.
 
-## Modellerkennung
+## Wählen Sie den Workflow
+
+| Workflow | Schlüsselattribute | Hinweise |
+|----------|-------------------|---------|
+| Vollständiges Lied oder Instrumental | `model`, `prompt`, optional `title`, `tags`, `action: "MUSIC"` | Verwenden, wenn der Benutzer mit finalem Audio rechnet |
+| Nur Texte | `model`, `prompt`, `action: "LYRICS"` | Nur verwenden mit Modellen, die die Liedgenerierung unterstützen |
+| Fortsetzung eines bestehenden Clips | `continue_clip_id`, optional `continue_at` | Speichern Sie die vorherige öffentliche Clip-/Aufgabenidentität, bevor Sie die Fortsetzung anbieten |
+
+Fragen Sie den aktuellen Modellkatalog ab, bevor Sie eine fest codierte Modellliste versenden:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Der aktuelle öffentliche Vertrag bietet `suno_music` für die Musikgenerierung und `suno_lyrics` für nur Textflüsse an. Abfragen Sie den Modellkatalog vor der Produktionsnutzung, anstatt Annahmen über den Anbieter zu treffen.
+Die aktuellen öffentlichen Beispiele verwenden `suno_music` für die Musikgenerierung. Für nur Textflüsse senden Sie `action: "LYRICS"` mit einem Modell, dessen öffentlicher Vertrag die Liedgenerierung dokumentiert. Behandeln Sie Modell-IDs als öffentliche TokenLab-IDs, nicht als Garantie, dass anbieter-spezifische Felder öffentliche Vertragsfelder sind.
 
-## Anfrage erstellen
+## Erstellen Sie eine Musikaufgabe
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
     "prompt": "Ein fröhlicher Synth-Pop-Track mit warmen Vocals und einem klaren Refrain",
@@ -29,25 +37,44 @@ curl https://api.tokenlab.sh/v1/music/generations \\
   }'
 ```
 
-Verwenden Sie `action: "MUSIC"` für Songs oder Instrumentals. Verwenden Sie `action: "LYRICS"` nur mit Modellen, die die Generierung von nur Text unterstützen. Fortsetzungsfelder wie `continue_clip_id` und `continue_at` sind für Fortsetzungs-Workflows und sollten nur gesendet werden, wenn Ihr Produkt einen vorherigen Clip fortsetzt.
+Halten Sie Prompts, Titel und Tags benutzer sichtbar und sicher zu speichern. Platzieren Sie keine API-Schlüssel, privaten URLs oder internen Routing-Informationen in einem Prompt-Feld.
 
-## Ergebnisse abfragen
+## Abfragen auf Abschluss
 
-Verwenden Sie zuerst die zurückgegebene `poll_url`. Wenn Sie einen festen Endpunkt benötigen, verwenden Sie `GET /v1/tasks/{id}` mit derselben `id` / `task_id` aus der Antwort zur Erstellung.
+Verwenden Sie zuerst `poll_url`. Wenn Ihr Client eine feste Route benötigt, rufen Sie `GET /v1/tasks/{id}` mit der zurückgegebenen `id` oder `task_id` auf.
 
-Abgeschlossene Musikaufgaben können `audio_url`, `video_url`, `title`, `lyrics` und modell-normalisierte Metadaten enthalten. Speichern Sie die endgültigen URLs in Ihrer Anwendung, anstatt nach dem endgültigen Status wiederholt abzufragen.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Häufige Fallstricke
+Erwartete öffentliche Status sind `pending`, `processing`, `completed` und `failed`. Eine abgeschlossene Musikaufgabe kann `audio_url`, `video_url`, `title`, `lyrics` und normalisierte Metadaten enthalten. Speichern Sie endgültige URLs in Ihrer eigenen Datenbank, damit der Benutzer das Ergebnis erneut öffnen kann, ohne die Generierung neu zu starten.
 
+## UI- und Statusverwaltung
+
+- Zeigen Sie sofort nach der Aufgabenerstellung einen ausstehenden Status an.
+- Abfragen Sie alle `5-10s` für lange Aufgaben, und stoppen Sie dann bei `completed` oder `failed`.
 - Zeigen Sie keinen endgültigen Player an, bis die Aufgabe `completed` ist und eine `audio_url` existiert.
-- Verwenden Sie keine Anbieter-Aufgaben-IDs oder Anbieter-Abfrage-URLs in Ihrem Anwendungsstatus.
-- Mischen Sie keine nur Text- und Vollmusikaktionen hinter einer Benutzeroberfläche, ohne den Unterschied den Benutzern zu zeigen.
-- Erstellen Sie keine Aufgaben bei jedem Seitenaktualisieren neu; setzen Sie die gespeicherte `task_id` fort.
+- Bei nur Textaufgaben rendern Sie die Textausgabe separat von Audioaufgaben, damit die Benutzer verstehen, was sie kaufen.
+- Bei einer Aktualisierung setzen Sie die Speicherung von `task_id` fort, anstatt eine neue Aufgabe zu erstellen.
+
+## Abrechnung und Abgleich
+
+Musikaufgaben können zum Zeitpunkt der Erstellung einen geschätzten Betrag reservieren und nach Bekanntwerden des terminalen Status abrechnen. Speichern Sie `request_id`, `task_id`, Modell, Endpunkt und `billing_transaction_id`, wenn sie erscheinen. Verwenden Sie die Nutzungsaufzeichnungen der Management-API für den Abgleich anstelle von anbieter-spezifischen Aufgaben-IDs.
+
+## Häufige Fehler
+
+| Symptom | Wahrscheinliche Ursache | Lösung |
+|---------|------------------------|--------|
+| Aufgabe erstellt, aber kein Player | Aufgabe ist noch ausstehend oder abgeschlossen ohne `audio_url` | Weiter abfragen, bis terminal, dann fehlende Ausgabe als fehlgeschlagene Benutzeraufgabe behandeln |
+| Doppelte Lieder nach Aktualisierung | UI hat die Aufgabe neu erstellt, anstatt fortzufahren | `task_id` speichern und wiederverwenden |
+| Liedaufgabe gibt kein Audio zurück | `action: "LYRICS"` ist nur textbasiert | Trennen Sie die UI-Pfade für Texte und Musik |
+| Nicht unterstützter Parameter | Feld ist nicht im öffentlichen Vertrag des Modells | Entfernen Sie anbieter-spezifische Felder oder wählen Sie ein Modell, das diese dokumentiert |
 
 ## API-Referenz
 
 | Thema | Referenz |
-|-------|-----------|
+|-------|----------|
 | Musik erstellen | [Musik erstellen](/de/api-reference/music/create-music) |
 | Musikstatus abrufen | [Musikstatus abrufen](/de/api-reference/music/get-music-status) |
 | Aufgabenstatus abrufen | [Aufgabenstatus abrufen](/de/api-reference/tasks/get-task-status) |

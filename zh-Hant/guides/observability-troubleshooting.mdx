@@ -1,54 +1,78 @@
 ---
 title: "可觀察性與故障排除"
-description: "捕捉 TokenLab 為支援、使用對帳和異步任務調試所公開的識別碼。"
+description: "記錄支援所需的公共 TokenLab 識別碼、使用情況對帳和非同步媒體除錯。"
 ---
 
-本頁面是為在生產環境中運行 TokenLab 的應用團隊編寫的。它專注於公共識別碼和用戶安全日誌，而非提供者路由的內部細節。
+良好的 TokenLab 可觀察性始於公共識別碼。您的日誌應該幫助您回答「用戶請求了什麼，TokenLab 創建了什麼公共任務，以及如何計費？」而不暴露供應商路由內部或敏感的用戶數據。
 
-## 公共識別碼
+## 要捕獲的公共識別碼
 
 | 識別碼 | 出現位置 | 用途 |
 |--------|----------|------|
-| `request_id` | 錯誤主體、管理 API 使用記錄、儀表板日誌 | 支援和請求級對帳 |
-| `task_id` / `id` | 異步創建和狀態響應 | 輪詢圖像、視頻、音樂和 3D 任務 |
-| `poll_url` | 異步創建響應 | 優先狀態 URL |
-| `billing_transaction_id` | 結算時的非串流響應、任務狀態響應、管理 API 使用記錄、`X-Billing-Transaction-ID` 標頭 | 計費對帳 |
-| `X-Task-ID` | 異步任務響應 | 標頭級任務關聯 |
+| `request_id` | 錯誤主體、儀表板日誌、使用記錄 | 請求級別的支援和對帳 |
+| `id` / `task_id` | 非同步創建和狀態響應 | 輪詢圖像、視頻、音樂和 3D 任務 |
+| `poll_url` | 非同步創建響應 | 首選狀態 URL |
+| `billing_transaction_id` | 結算時的非串流響應、非同步任務狀態響應、使用記錄、`X-Billing-Transaction-ID` | 成本對帳 |
+| `X-Task-ID` | 非同步任務響應標頭 | 標頭級別的任務關聯 |
+| 您自己的工作/用戶 ID | 您的應用程式 | 將 TokenLab 活動與用戶工作流程關聯 |
 
-## 記錄內容
+請勿將供應商任務 ID、上游 URL、路由通道 ID、Redis 鍵或私有執行元數據存儲為面向客戶的事實依據。
 
-1. 記錄端點、模型、狀態碼、時間戳和公共識別碼。
-2. 預設情況下，隱藏 `Authorization`、API 金鑰、簽名 URL、私有媒體 URL 和完整提示。
-3. 對於異步任務，記錄創建響應和每個終端狀態響應。
-4. 對於使用問題，使用 API 金鑰 ID 和日期過濾器調用管理 API。
-5. 使用響應主體中的錯誤 `type`、`code` 和 `param`，而不是解析提供者文本。
+## 要記錄的內容
 
-## 故障排除檢查清單
+記錄足夠的信息以診斷請求而不洩漏秘密：
 
-| 症狀 | 首先檢查 | 有用頁面 |
-|------|----------|----------|
-| `401` 或 `403` | API 金鑰、管理令牌、組織訪問 | [身份驗證](/zh-Hant/authentication) |
-| `429` | 速率限制層級和客戶端重試行為 | [速率限制](/zh-Hant/guides/rate-limits) |
-| `400 invalid_request_error` | 不支持的字段、錯誤的端點或模型特定的合約不匹配 | [錯誤處理](/zh-Hant/guides/error-handling) |
-| 異步任務永遠不會完成 | 輪詢 `poll_url`，檢查最終 `status`，避免重複創建任務 | [異步任務與輪詢](/zh-Hant/guides/async-jobs-polling) |
-| 成本與 UI 不匹配 | 比較使用記錄中的 `request_id` 和 `billing_transaction_id` | [計費與定價](/zh-Hant/guides/billing) |
+- 端點、HTTP 方法、模型、狀態碼、時間戳和延遲。
+- 公共識別碼：`request_id`、`task_id`、`poll_url` 和 `billing_transaction_id`（如果存在）。
+- 清理過的請求形狀：哪些字段存在，而不是完整的提示或私有媒體內容。
+- 終端非同步狀態響應，包括公共錯誤字段。
+- 客戶端重試計數以及重試是否創建了新任務或恢復了現有任務。
 
-## 使用對帳
+除非您獲得明確許可保留，否則始終隱去 `Authorization`、API 鍵、管理令牌、簽名 URL、私有媒體 URL、完整提示和用戶個人數據。
 
-`GET /v1/management/api-keys/{keyId}/usage` 返回分頁的金鑰級使用情況。它可以根據 `scene`、`accessChannel`、`logicalModel`、`modelVendor`、`startDate` 和 `endDate` 進行過濾。用於伺服器端對帳，而不是抓取儀表板。
+## 故障排除矩陣
+
+| 症狀 | 首先檢查 | 有用的頁面 |
+|------|----------|-------------|
+| `401` 或 `403` | API 鍵、管理令牌、組織訪問、鍵範圍 | [身份驗證](/zh-Hant/authentication) |
+| `402` | 餘額、API 鍵消費限制、模型價格可用性 | [計費與定價](/zh-Hant/guides/billing) |
+| `429` | 帳戶級別、端點速率限制、重試行為 | [速率限制](/zh-Hant/guides/rate-limits) |
+| `400 invalid_request_error` | 不支持的字段、錯誤的端點、缺少必需字段或模型合約不匹配 | [錯誤處理](/zh-Hant/guides/error-handling) |
+| 找不到非同步任務 | 錯誤的 API 鍵、過期的任務 ID、過期任務或非公共任務 ID | [非同步任務與輪詢](/zh-Hant/guides/async-jobs-polling) |
+| 成本與 UI 不匹配 | 結算時間或比較錯誤的識別碼 | [計費與定價](/zh-Hant/guides/billing) |
+
+## 使用情況對帳
+
+使用管理 API 進行伺服器端對帳：
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-串流響應可能在串流發送後結算，因此即使使用情況稍後被記錄，計費標頭也可能缺失。對於異步媒體任務，結算可能在終端輪詢後出現。
+`GET /v1/management/api-keys/{keyId}/usage` 可以根據 `scene`、`accessChannel`、`logicalModel`、`modelVendor`、`startDate` 和 `endDate` 進行過濾。使用這些記錄，而不是抓取儀表板頁面或依賴上游供應商任務 ID。
 
-## 支援包
+串流響應可能在串流發送後結算，因此即使稍後記錄使用情況，計費標頭也可能缺失。非同步媒體任務可能在終端輪詢後結算。
 
-聯繫支援時，請包括 `request_id`、`task_id`、`billing_transaction_id`（如果存在）、端點、模型、時間戳和經過清理的請求形狀。除非支援要求提供經過隱藏的範例，否則請勿包括 API 金鑰、私有媒體或完整提示。
+## 支援包模板
 
-在客戶日誌或支援票證中，除非 TokenLab 支援明確要求，否則請勿包括提供者名稱、通道 ID、路由識別碼、Redis 鍵或上游任務 URL。
+聯繫支援時，請包括：
+
+- `request_id`。
+- `task_id` 和 `poll_url` 用於非同步工作。
+- `billing_transaction_id`（如果存在）。
+- 端點、方法、模型、時間戳和狀態碼。
+- 清理過的請求形狀和公共錯誤主體。
+- 您的預期結果和用戶實際看到的內容。
+
+除非 TokenLab 支援明確要求提供已隱去的範本，否則請勿包括 API 鍵、管理令牌、私有媒體、完整提示、供應商 URL、通道 ID 或內部路由識別碼。
+
+## 操作檢查
+
+- 對重複的 `401`、`402`、`429` 和 `5xx` 響應分別發出警報；它們通常有不同的負責人。
+- 跟踪在您的產品 SLA 內長時間保持非終端的非同步任務。
+- 跟踪同一用戶工作 ID 的重複創建嘗試。
+- 抽樣已完成的任務，並驗證用戶可見資產、使用記錄和存儲的任務記錄是否一致。
 
 ## API 參考
 
@@ -57,5 +81,5 @@ curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page
 | 錯誤處理 | [錯誤處理](/zh-Hant/guides/error-handling) |
 | 速率限制 | [速率限制](/zh-Hant/guides/rate-limits) |
 | 計費與定價 | [計費與定價](/zh-Hant/guides/billing) |
-| 獲取 API 金鑰使用情況 | [獲取 API 金鑰使用情況](/zh-Hant/api-reference/management/get-api-key-usage) |
+| 獲取 API 鍵使用情況 | [獲取 API 鍵使用情況](/zh-Hant/api-reference/management/get-api-key-usage) |
 | 獲取任務狀態 | [獲取任務狀態](/zh-Hant/api-reference/tasks/get-task-status) |

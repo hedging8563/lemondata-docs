@@ -1,54 +1,78 @@
 ---
 title: "Observability & Troubleshooting"
-description: "Capture the public identifiers TokenLab exposes for support, usage reconciliation, and async task debugging."
+description: "Log the public TokenLab identifiers needed for support, usage reconciliation, and async media debugging."
 ---
 
-This page is written for application teams operating TokenLab in production. It focuses on public identifiers and user-safe logs, not provider routing internals.
+Good TokenLab observability starts with public identifiers. Your logs should help you answer "what did the user request, what public task did TokenLab create, and how was it billed?" without exposing provider routing internals or sensitive user data.
 
-## Public Identifiers
+## Public Identifiers To Capture
 
 | Identifier | Where it appears | Use it for |
 |------------|------------------|------------|
-| `request_id` | Error bodies, Management API usage records, dashboard logs | Support and request-level reconciliation |
-| `task_id` / `id` | Async create and status responses | Polling image, video, music, and 3D jobs |
+| `request_id` | Error bodies, dashboard logs, usage records | Request-level support and reconciliation |
+| `id` / `task_id` | Async create and status responses | Polling image, video, music, and 3D jobs |
 | `poll_url` | Async create responses | Preferred status URL |
-| `billing_transaction_id` | Non-streaming responses when settled, task status responses, Management API usage records, `X-Billing-Transaction-ID` header | Billing reconciliation |
-| `X-Task-ID` | Async task responses | Header-level task correlation |
+| `billing_transaction_id` | Non-streaming responses when settled, async task status responses, usage records, `X-Billing-Transaction-ID` | Cost reconciliation |
+| `X-Task-ID` | Async task response headers | Header-level task correlation |
+| Your own job/user ID | Your application | Joining TokenLab activity back to the user workflow |
+
+Do not store provider task IDs, upstream URLs, routing channel IDs, Redis keys, or private execution metadata as customer-facing truth.
 
 ## What To Log
 
-1. Log endpoint, model, status code, timestamp, and public identifiers.
-2. Redact `Authorization`, API keys, signed URLs, private media URLs, and full prompts by default.
-3. For async jobs, log the create response and every terminal status response.
-4. For usage questions, call the Management API with the API key ID and date filters.
-5. Use error `type`, `code`, and `param` from the response body instead of parsing provider text.
+Log enough to diagnose the request without leaking secrets:
 
-## Troubleshooting Checklist
+- Endpoint, HTTP method, model, status code, timestamp, and latency.
+- Public identifiers: `request_id`, `task_id`, `poll_url`, and `billing_transaction_id` when present.
+- Sanitized request shape: which fields were present, not the full prompt or private media content.
+- Terminal async status responses, including public error fields.
+- Client retry count and whether the retry created a new task or resumed an existing one.
+
+Always redact `Authorization`, API keys, management tokens, signed URLs, private media URLs, full prompts, and user personal data unless you have explicit permission to retain them.
+
+## Troubleshooting Matrix
 
 | Symptom | First check | Useful page |
 |---------|-------------|-------------|
-| `401` or `403` | API key, management token, organization access | [Authentication](/authentication) |
-| `429` | Rate-limit tier and client retry behavior | [Rate Limits](/guides/rate-limits) |
-| `400 invalid_request_error` | Unsupported field, wrong endpoint, or model-specific contract mismatch | [Error Handling](/guides/error-handling) |
-| Async task never finishes | Poll `poll_url`, inspect final `status`, avoid duplicate task creation | [Async Jobs & Polling](/guides/async-jobs-polling) |
-| Cost does not match UI | Compare `request_id` and `billing_transaction_id` in usage records | [Billing & Pricing](/guides/billing) |
+| `401` or `403` | API key, management token, organization access, key scope | [Authentication](/authentication) |
+| `402` | Balance, API key spend limit, model price availability | [Billing & Pricing](/guides/billing) |
+| `429` | Account tier, endpoint rate limit, retry behavior | [Rate Limits](/guides/rate-limits) |
+| `400 invalid_request_error` | Unsupported field, wrong endpoint, missing required field, or model contract mismatch | [Error Handling](/guides/error-handling) |
+| Async task cannot be found | Wrong API key, stale task ID, expired task, or non-public task ID | [Async Jobs & Polling](/guides/async-jobs-polling) |
+| Cost does not match UI | Settlement timing or comparing the wrong identifier | [Billing & Pricing](/guides/billing) |
 
 ## Usage Reconciliation
 
-`GET /v1/management/api-keys/{keyId}/usage` returns paginated key-level usage. It can filter by `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, and `endDate`. Use it for server-side reconciliation instead of scraping the dashboard.
+Use the Management API for server-side reconciliation:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-Streaming responses may settle after the stream is sent, so the billing header can be absent even when usage is later recorded. For async media tasks, settlement can appear after terminal polling.
+`GET /v1/management/api-keys/{keyId}/usage` can filter by `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate`, and `endDate`. Use these records instead of scraping dashboard pages or relying on upstream provider task IDs.
 
-## Support Packet
+Streaming responses may settle after the stream is sent, so a billing header can be absent even when usage is later recorded. Async media tasks may settle after terminal polling.
 
-When contacting support, include `request_id`, `task_id`, `billing_transaction_id` when present, endpoint, model, timestamp, and a sanitized request shape. Do not include API keys, private media, or full prompts unless support asks for a redacted sample.
+## Support Packet Template
 
-Do not include provider names, channel IDs, routing identifiers, Redis keys, or upstream task URLs in customer logs or support tickets unless TokenLab support explicitly asks for them.
+When contacting support, include:
+
+- `request_id`.
+- `task_id` and `poll_url` for async work.
+- `billing_transaction_id` when present.
+- Endpoint, method, model, timestamp, and status code.
+- Sanitized request shape and public error body.
+- Your expected result and what the user actually saw.
+
+Do not include API keys, management tokens, private media, full prompts, provider URLs, channel IDs, or internal routing identifiers unless TokenLab support explicitly asks for a redacted sample.
+
+## Operational Checks
+
+- Alert on repeated `401`, `402`, `429`, and `5xx` responses separately; they usually have different owners.
+- Track async jobs that remain non-terminal longer than your product SLA.
+- Track duplicate create attempts for the same user job ID.
+- Sample completed jobs and verify the user-visible asset, usage record, and stored task record agree.
 
 ## API Reference
 

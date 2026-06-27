@@ -1,72 +1,109 @@
 ---
 title: "结构化输出与工具调用"
-description: "使用 JSON 模式、功能工具和原生工具路由，而不假设每个模型都支持相同的合同。"
+description: "使用 JSON 模式、函数工具和原生工具路由，而不假设每个模型都支持相同的契约。"
 ---
 
-结构化输出和工具是真正的 TokenLab API 路径，但它们并不是每个模型和路由都具备的通用能力。选择拥有您所需行为的路由。
+结构化输出和工具调用是特定于路由的契约。TokenLab 转发多个公共 API 格式，因此最安全的生产模式是在拥有它的路由上保持每个供应商原生工具的形状，并在您自己的应用程序中验证模型输出。
 
-## JSON 和结构化输出
+## 选择路由
 
-对于可移植的结构化响应，从 Chat Completions 开始 `response_format: {"type":"json_object"}` 并在您的应用程序中验证输出。这是 TokenLab 共享验证中的稳定公共请求形状。
+| 需求 | 路由 | 使用此形状 |
+|------|-------|----------------|
+| 可移植的 JSON 对象响应 | `/v1/chat/completions` | `response_format: {"type": "json_object"}` |
+| OpenAI 兼容的函数调用 | `/v1/chat/completions` | `tools: [{ "type": "function", "function": ... }]` |
+| OpenAI 响应工具 | `/v1/responses` | 响应 `tools`、`tool_choice` 和 `text` 字段 |
+| Claude 原生工具使用或思考 | `/v1/messages` | Anthropic 消息工具架构 |
+| Gemini 函数声明或内置工具 | `/v1beta/models/:model:generateContent` | Gemini 原生 `tools` 和内容部分 |
+
+请勿通过不同的路由发送供应商原生内置工具，并期望 TokenLab 静默地将其转换。
+
+## JSON 模式
+
+对于可移植的结构化响应，从聊天完成 JSON 模式开始：
 
 ```json
 {
   "model": "gpt-5.4",
-  "messages": [{"role": "user", "content": "返回一个包含城市和天气的 JSON 对象。"}],
-  "response_format": {"type": "json_object"}
+  "messages": [
+    {
+      "role": "user",
+      "content": "返回一个包含城市和天气的 JSON 对象。"
+    }
+  ],
+  "response_format": { "type": "json_object" }
 }
 ```
 
-`json_schema` 和 `strict` 结构化输出路径在某些上游和转换代码中存在，但它们依赖于模型和路由。将它们视为与所选模型验证的能力，而不是 TokenLab 每个路由的普遍承诺。
+聊天完成的稳定共享验证接受 `text` 和 `json_object`。某些上游路由或转换路径可能存在 `json_schema`、`strict` 和供应商特定的架构强制，但它们并不是每个 TokenLab 路由和模型的普遍承诺。在依赖它们之前，请根据所选模型验证它们。
 
-## 工具调用边界
+始终在您的服务器上解析和验证返回的 JSON。JSON 模式改善了形状，但并不替代应用级架构验证。
 
-| 工具形状 | 优先选择的路由 | 生产注意事项 |
-|----------|----------------|---------------|
-| OpenAI 功能工具 | `/v1/chat/completions` | 适用于用户定义的函数调用 |
-| OpenAI 响应工具 | `/v1/responses` | 用于响应特定的内置或托管工具 |
-| Anthropic 工具 | `/v1/messages` | 用于 Claude 原生工具使用和思维流程 |
-| Gemini 函数声明 / 内置工具 | `/v1beta/models/:model:generateContent` | 在 Gemini 路由上保留 Gemini 原生工具字段 |
+## 工具调用循环
 
-TokenLab 不会为您执行函数。当模型返回 `tool_calls`、`function_call`、`tool_use` 或 Gemini 函数调用部分时，您的应用程序必须运行工具，将工具结果以路由所需的格式附加，并继续对话。
+TokenLab 不执行您的函数。您的应用程序拥有循环：
 
-## 常见陷阱
+1. 发送消息和工具定义。
+2. 读取模型响应中的 `tool_calls`、`function_call`、Anthropic `tool_use` 或 Gemini 函数调用部分。
+3. 在您自己的后端执行工具。
+4. 以相同路由所需的格式附加工具结果。
+5. 继续对话，直到模型返回最终答案。
 
-- 不要通过 Chat Completions 发送提供者原生的内置工具，并期望它们被静默翻译。
-- 不要依赖严格的 JSON Schema，除非所选路由和模型经过测试。
-- 保持模式小而明确；大型模式会增加令牌并降低可靠性。
-- 即使启用了 JSON 模式，也要在服务器端验证模型输出。
-- 将不支持字段错误视为合同反馈。删除该字段或使用拥有该字段的原生路由。
+在工具循环中保持相同的路由。在一次对话中混合聊天完成、响应、消息和 Gemini 格式通常会产生微妙的状态和架构错误。
 
-## 示例
+## 聊天完成示例
 
 ```bash
-curl https://api.tokenlab.sh/v1/chat/completions \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.4",
-    "messages": [{"role":"user","content":"提取名称和电子邮件作为 JSON。"}],
-    "response_format": {"type":"json_object"},
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "lookup_customer",
-        "description": "通过电子邮件查找客户",
-        "parameters": {
-          "type": "object",
-          "properties": {"email": {"type": "string"}},
-          "required": ["email"]
+    "messages": [
+      {
+        "role": "user",
+        "content": "提取名称和电子邮件作为 JSON。如果需要，请查找客户。"
+      }
+    ],
+    "response_format": { "type": "json_object" },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "lookup_customer",
+          "description": "通过电子邮件查找客户",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" }
+            },
+            "required": ["email"]
+          }
         }
       }
-    }]
+    ]
   }'
 ```
+
+## 架构设计
+
+- 保持架构小而明确。大型嵌套架构会增加令牌并降低可靠性。
+- 优先使用必需字段，以便您的产品无法继续的值。
+- 对于您的 UI 或后端依赖的封闭集合，使用枚举。
+- 当模型在形状上遇到困难时，在提示中包含示例。
+- 将不支持字段错误视为契约反馈。删除该字段或使用记录它的原生路由。
+
+## 生产检查清单
+
+- 在日志中记录路由、模型、工具名称和清理后的架构形状。
+- 在执行任何副作用之前验证工具参数。
+- 在工具执行之前应用您自己的权限检查。
+- 当客户端重试可以重复相同的工具调用时，使工具执行具有幂等性。
+- 不要将工具返回的秘密记录到模型可见的消息中。
 
 ## API 参考
 
 | 主题 | 参考 |
-|------|------|
+|-------|-----------|
 | 多格式 API | [多格式 API](/zh/guides/api-formats) |
 | 创建聊天完成 | [创建聊天完成](/zh/api-reference/chat/create-completion) |
 | 创建响应 | [创建响应](/zh/api-reference/responses/create-response) |

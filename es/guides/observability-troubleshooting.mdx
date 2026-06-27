@@ -1,54 +1,78 @@
 ---
 title: "Observabilidad y Solución de Problemas"
-description: "Captura los identificadores públicos que TokenLab expone para soporte, conciliación de uso y depuración de tareas asíncronas."
+description: "Registra los identificadores públicos de TokenLab necesarios para soporte, conciliación de uso y depuración de medios asíncronos."
 ---
 
-Esta página está escrita para equipos de aplicación que operan TokenLab en producción. Se centra en identificadores públicos y registros seguros para el usuario, no en los internos de enrutamiento del proveedor.
+Una buena observabilidad de TokenLab comienza con identificadores públicos. Tus registros deberían ayudarte a responder "¿qué solicitó el usuario, qué tarea pública creó TokenLab y cómo se facturó?" sin exponer los detalles internos de enrutamiento del proveedor o datos sensibles del usuario.
 
-## Identificadores Públicos
+## Identificadores Públicos a Capturar
 
-| Identificador | Dónde aparece | Usarlo para |
-|---------------|---------------|-------------|
-| `request_id` | Cuerpos de error, registros de uso de la API de gestión, registros del panel de control | Soporte y conciliación a nivel de solicitud |
-| `task_id` / `id` | Respuestas de creación y estado asíncronas | Sondeo de trabajos de imagen, video, música y 3D |
+| Identificador | Dónde aparece | Úsalo para |
+|---------------|---------------|------------|
+| `request_id` | Cuerpos de error, registros del panel, registros de uso | Soporte y conciliación a nivel de solicitud |
+| `id` / `task_id` | Respuestas de creación y estado asíncronas | Sondeo de trabajos de imagen, video, música y 3D |
 | `poll_url` | Respuestas de creación asíncronas | URL de estado preferida |
-| `billing_transaction_id` | Respuestas no en streaming cuando se liquidan, respuestas de estado de tareas, registros de uso de la API de gestión, encabezado `X-Billing-Transaction-ID` | Conciliación de facturación |
-| `X-Task-ID` | Respuestas de tareas asíncronas | Correlación de tareas a nivel de encabezado |
+| `billing_transaction_id` | Respuestas no de streaming cuando se liquidan, respuestas de estado de tareas asíncronas, registros de uso, `X-Billing-Transaction-ID` | Conciliación de costos |
+| `X-Task-ID` | Encabezados de respuesta de tareas asíncronas | Correlación de tareas a nivel de encabezado |
+| Tu propio ID de trabajo/usuario | Tu aplicación | Unir la actividad de TokenLab de nuevo al flujo de trabajo del usuario |
+
+No almacenes IDs de tareas del proveedor, URLs ascendentes, IDs de canales de enrutamiento, claves de Redis o metadatos de ejecución privados como verdad visible al cliente.
 
 ## Qué Registrar
 
-1. Registra el endpoint, modelo, código de estado, marca de tiempo e identificadores públicos.
-2. Redacta `Authorization`, claves de API, URLs firmadas, URLs de medios privados y prompts completos por defecto.
-3. Para trabajos asíncronos, registra la respuesta de creación y cada respuesta de estado terminal.
-4. Para preguntas de uso, llama a la API de gestión con el ID de clave de API y filtros de fecha.
-5. Usa `type`, `code` y `param` de la respuesta en lugar de analizar el texto del proveedor.
+Registra lo suficiente para diagnosticar la solicitud sin filtrar secretos:
 
-## Lista de Verificación para Solución de Problemas
+- Endpoint, método HTTP, modelo, código de estado, marca de tiempo y latencia.
+- Identificadores públicos: `request_id`, `task_id`, `poll_url` y `billing_transaction_id` cuando estén presentes.
+- Forma de solicitud sanitizada: qué campos estaban presentes, no el prompt completo o contenido de medios privados.
+- Respuestas de estado asíncronas terminales, incluidos campos de error públicos.
+- Conteo de reintentos del cliente y si el reintento creó una nueva tarea o reanudó una existente.
+
+Siempre redacta `Authorization`, claves de API, tokens de gestión, URLs firmadas, URLs de medios privados, prompts completos y datos personales del usuario a menos que tengas permiso explícito para retenerlos.
+
+## Matriz de Solución de Problemas
 
 | Síntoma | Primera verificación | Página útil |
 |---------|---------------------|-------------|
-| `401` o `403` | Clave de API, token de gestión, acceso a la organización | [Autenticación](/es/authentication) |
-| `429` | Nivel de límite de tasa y comportamiento de reintento del cliente | [Límites de Tasa](/es/guides/rate-limits) |
-| `400 invalid_request_error` | Campo no soportado, endpoint incorrecto o desajuste de contrato específico del modelo | [Manejo de Errores](/es/guides/error-handling) |
-| La tarea asíncrona nunca termina | Sondea `poll_url`, inspecciona el `status` final, evita la creación duplicada de tareas | [Trabajos Asíncronos y Sondeo](/es/guides/async-jobs-polling) |
-| El costo no coincide con la UI | Compara `request_id` y `billing_transaction_id` en los registros de uso | [Facturación y Precios](/es/guides/billing) |
+| `401` o `403` | Clave de API, token de gestión, acceso a la organización, alcance de la clave | [Autenticación](/es/authentication) |
+| `402` | Saldo, límite de gasto de clave de API, disponibilidad de precio del modelo | [Facturación y Precios](/es/guides/billing) |
+| `429` | Nivel de cuenta, límite de tasa del endpoint, comportamiento de reintento | [Límites de Tasa](/es/guides/rate-limits) |
+| `400 invalid_request_error` | Campo no soportado, endpoint incorrecto, campo requerido faltante o desajuste de contrato del modelo | [Manejo de Errores](/es/guides/error-handling) |
+| No se puede encontrar la tarea asíncrona | Clave de API incorrecta, ID de tarea obsoleto, tarea expirada o ID de tarea no pública | [Trabajos Asíncronos y Sondeo](/es/guides/async-jobs-polling) |
+| El costo no coincide con la UI | Tiempo de liquidación o comparación del identificador incorrecto | [Facturación y Precios](/es/guides/billing) |
 
 ## Conciliación de Uso
 
-`GET /v1/management/api-keys/{keyId}/usage` devuelve el uso a nivel de clave paginado. Puede filtrar por `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate` y `endDate`. Úsalo para conciliación del lado del servidor en lugar de raspar el panel de control.
+Utiliza la API de Gestión para la conciliación del lado del servidor:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \\
+curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page=1&limit=20&scene=video" \
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-Las respuestas en streaming pueden liquidarse después de que se envía el stream, por lo que el encabezado de facturación puede estar ausente incluso cuando el uso se registra más tarde. Para tareas de medios asíncronas, la liquidación puede aparecer después del sondeo terminal.
+`GET /v1/management/api-keys/{keyId}/usage` puede filtrar por `scene`, `accessChannel`, `logicalModel`, `modelVendor`, `startDate` y `endDate`. Utiliza estos registros en lugar de raspar páginas del panel o depender de IDs de tareas del proveedor ascendente.
 
-## Paquete de Soporte
+Las respuestas de streaming pueden liquidarse después de que se envía el stream, por lo que un encabezado de facturación puede estar ausente incluso cuando el uso se registra más tarde. Las tareas de medios asíncronas pueden liquidarse después del sondeo terminal.
 
-Al contactar con soporte, incluye `request_id`, `task_id`, `billing_transaction_id` cuando estén presentes, endpoint, modelo, marca de tiempo y una forma de solicitud saneada. No incluyas claves de API, medios privados o prompts completos a menos que el soporte pida una muestra redactada.
+## Plantilla de Paquete de Soporte
 
-No incluyas nombres de proveedores, IDs de canal, identificadores de enrutamiento, claves de Redis o URLs de tareas ascendentes en los registros de clientes o tickets de soporte a menos que el soporte de TokenLab lo pida explícitamente.
+Al contactar soporte, incluye:
+
+- `request_id`.
+- `task_id` y `poll_url` para trabajos asíncronos.
+- `billing_transaction_id` cuando esté presente.
+- Endpoint, método, modelo, marca de tiempo y código de estado.
+- Forma de solicitud sanitizada y cuerpo de error público.
+- Tu resultado esperado y lo que el usuario realmente vio.
+
+No incluyas claves de API, tokens de gestión, medios privados, prompts completos, URLs del proveedor, IDs de canales o identificadores de enrutamiento internos a menos que el soporte de TokenLab solicite explícitamente una muestra redactada.
+
+## Comprobaciones Operativas
+
+- Alerta sobre respuestas repetidas `401`, `402`, `429` y `5xx` por separado; generalmente tienen diferentes propietarios.
+- Rastrea trabajos asíncronos que permanecen no terminales más allá de tu SLA de producto.
+- Rastrea intentos de creación duplicados para el mismo ID de trabajo de usuario.
+- Muestra trabajos completados y verifica que el activo visible para el usuario, el registro de uso y el registro de tarea almacenado coincidan.
 
 ## Referencia de API
 

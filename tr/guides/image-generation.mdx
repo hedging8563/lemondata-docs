@@ -1,67 +1,107 @@
 ---
 title: "Görüntü Üretimi"
-description: "TokenLab kamu görüntü sözleşmeleri ile metinden görüntüye, görüntüden görüntüye ve görüntü düzenleme iş akışları oluşturun."
+description: "Doğru TokenLab görüntü uç noktasını seçin, model farkındalığına sahip istekler gönderin ve senkron veya asenkron görüntü sonuçlarını güvenli bir şekilde yönetin."
 ---
 
-TokenLab görüntü API'leri, farklı istek şekilleriyle birkaç model ailesini kapsamaktadır. Herhangi bir alanın her görüntü modelinde çalıştığını varsaymadan önce, kamu model sözleşmesini ve uç noktaya özgü API referansını kullanın.
+TokenLab, kamuya açık görüntü uç noktaları aracılığıyla metinden görüntüye, görüntüden görüntüye ve görüntü düzenleme desteği sunar. Görüntü modelleri tek bir evrensel parametre setini paylaşmaz, bu nedenle üretim istemcileri önce uç noktasını seçmeli, ardından modeli seçmeli ve yalnızca o model tarafından desteklenen alanları göndermelidir.
 
-## Uç Noktayı Seçin
+## Her Uç Noktayı Ne Zaman Kullanmalısınız
 
-| Hedef | Uç Nokta | Notlar |
-|-------|----------|--------|
-| Metinden görüntüye | `POST /v1/images/generations` | `prompt` ve açık bir `model` kullanın |
-| Görüntüden görüntüye / referans görüntü | `POST /v1/images/generations` | Model destekliyorsa `operation: "image-to-image"` artı `image_url`, `image_urls` veya `reference_image_urls` kullanın |
-| GPT Görüntü düzenleme | `POST /v1/images/edits` | Desteklenen düzenleme modelleri için çok parçalı `image`, JSON `image_url` / `image_urls` ve resmi `images[]` referanslarını destekler |
-| Eski varyasyon | `POST /v1/images/variations` | Yeni işler için mevcut üretim veya düzenleme yollarını tercih edin |
-| Asenkron durum | `GET /v1/tasks/{id}` | Varsa önce `poll_url` kullanın |
+| Kullanıcı iş akışı | Uç Nokta | Ne zaman kullanılır | Ne zaman kaçınılmalıdır |
+|---------------------|----------|---------------------|-------------------------|
+| Metinden görüntüye | `POST /v1/images/generations` | Kullanıcı yalnızca bir istemden başlıyorsa | Resmi bir GPT Görüntü düzenleme akışına ihtiyacınız varsa |
+| Görüntüden görüntüye | `POST /v1/images/generations` | Model belgeleri, `operation: "image-to-image"` artı `image_url`, `image_urls` veya `reference_image_urls` ile referans görüntüleri belirtir | Model çok parçalı düzenleme girişi bekliyorsa |
+| Görüntü düzenleme | `POST /v1/images/edits` | Desteklenen bir düzenleme modeli ile mevcut bir görüntüyü düzenliyorsanız, örneğin bir GPT Görüntü ailesi modeli | Nano Banana tarzı görüntüden görüntüye üretim kullanıyorsanız |
+| Varyasyon | `POST /v1/images/variations` | Bir miras varyasyon uyumlu entegrasyonu sürdürüyorsanız | Yeni bir referans-görüntü iş akışı oluşturuyorsanız |
+| Durum | `GET /v1/tasks/{id}` | Bir oluşturma yanıtı `task_id`, `status: "pending"` veya `poll_url` döner | Oluşturma yanıtı zaten nihai `data[]` içeriyorsa |
 
-## Model Keşfi
+Her zaman `model` gönderin. Görüntü uç noktaları, üretim trafiği için kasıtlı olarak tarihsel bir örtük varsayılan modele dayanmaz.
+
+## Bir Model Seçin
+
+Model keşfine başlayın, ardından seçilen modelin TokenLab sözleşmesini inceleyin:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Görüntü modeli parametreleri oldukça farklılık gösterir. `size`, `quality`, `aspect_ratio`, `resolution`, `async`, `background` veya `output_format` göndermeden önce seçilen model sözleşmesini okuyun.
+Sohbet dışı modeller için, liste yanıtı `tokenlab.public_contract_summary` içerebilir. Model detay sayfaları daha kapsamlı `tokenlab.public_contract` sunabilir. Bu alanları doğrulamak için kullanın:
 
-## Girdi ve Model-Özel Alanlar
+- Desteklenen işlem, örneğin `text-to-image`, `image-to-image` veya `image-edit`.
+- Modelin beklediği istek uç noktası.
+- Referanslar için hangi şeklin kullanılacağı, örneğin `image_url`, `image_urls`, `reference_image_urls`, çok parçalı `image` veya JSON `images[]`.
+- Modelin `size`, `aspect_ratio`, `resolution`, `quality`, `background`, `output_format` veya `response_format` kabul edip etmediği.
 
-- `gpt-image-2`, OpenAI tarzı `size` ve `quality` kullanır; destekleniyorsa TokenLab'ın `auto` kullanmasına izin vermek için `size` veya `quality`'yi atlayın.
-- Gemini ve Nano Banana görüntü aileleri genellikle `aspect_ratio` kullanır; yalnızca seçilen model bunu açığa çıkardığında `resolution` gönderin.
-- Nano Banana referans-görüntü istekleri, `operation: "image-to-image"` ve `image_urls` ile `/v1/images/generations` üzerinde yer almalıdır, `/v1/images/edits` üzerinde değil.
-- `/v1/images/generations` üst düzey `images[]` veya `file_id` kabul etmez; bunlar düzenleme akış şekilleridir.
-- Uzaktan görüntü URL'leri, kamuya açık `http`/`https` URL'leri olmalıdır. Özel ağlardan, gömülü kimlik bilgilerinden, parçacıklardan ve kısa ömürlü imzalı URL'lerden kaçının.
+## İstek Şekli Kuralları
 
-## İstek Oluşturma
+- `gpt-image-2` tarzı istekler, OpenAI benzeri `size`, `quality` ve düzenleme alanlarını kullanır. Modelin veya TokenLab'ın otomatik varsayılanları kullanmasını istiyorsanız isteğe bağlı alanları dışarıda bırakın.
+- Gemini ve Nano Banana görüntü aileleri genellikle `aspect_ratio` kullanır; yalnızca model sözleşmesi bunu açığa çıkardığında `resolution` gönderin.
+- Nano Banana görüntüden görüntüye, `operation: "image-to-image"` ve referans görüntü URL'leri ile `/v1/images/generations` üzerinde yer alır.
+- `/v1/images/generations` üst düzey `images[]` veya `file_id` kabul etmez; bunlar düzenleme akışı şekilleridir.
+- Uzaktan görüntü referansları, kamuya açık `http` veya `https` URL'leri olmalıdır. Özel ağ URL'leri, gömülü kimlik bilgileri, URL parçaları veya işleme başlamadan önce süresi dolabilecek imzalı URL'ler göndermeyin.
+
+## Metinden Görüntüye Örneği
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
-    "prompt": "Ceviz masası üzerinde bir seramik kahve fincanının temiz bir ürün fotoğrafı",
+    "prompt": "Ceviz masasında bir seramik kahve fincanının temiz bir ürün fotoğrafı",
     "size": "1024x1024",
     "response_format": "url"
   }'
 ```
 
-## Sonuçları Anketleme
-
-Bazı görüntü yolları satır içi `data[].url` veya `data[].b64_json` döndürür. Diğer yollar `status: "pending"`, `task_id` ve `poll_url` döndürür. Asenkron görüntü üretimi veya düzenleme talep ederseniz, tamamlanan görev sonuçları URL'leri döndürür; özellikle `b64_json` gerektiğinde senkron istekler kullanın.
+## Referans-Görüntü Örneği
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "Ürün şekli korunmalı, arka plan parlak bir stüdyo düzenine değiştirilmelidir",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Sonuçları Yönetme
+
+Görüntü yanıtları senkron veya asenkron olabilir:
+
+- Senkron yanıtlar, `url` veya `b64_json` ile nihai `data[]` döner.
+- Asenkron yanıtlar `id`, `task_id`, `status` ve genellikle `poll_url` döner.
+- `poll_url` mevcut olduğunda tercih edin. Sabit bir yol gerekiyorsa, `GET /v1/tasks/{id}` ile sorgulayın.
+- Özellikle `b64_json` gerektiğinde senkron istekler kullanın; asenkron görüntü sonuçları URL odaklıdır.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
+Dönen görüntü URL'sini, görev kimliğini, modeli ve kendi kullanıcı/görev kimliğinizi saklayın. Terminal durumu sonrasında sorgulamayı sürdürmeyin.
+
+## Üretim Kontrol Listesi
+
+- TokenLab'ı çağırmadan önce kullanıcı girdilerini doğrulayın: istem uzunluğu, görüntü sayısı, URL erişilebilirliği ve dosya türü.
+- Senkron yüksek çözünürlüklü istekler için HTTP zaman aşımını yeterince yüksek ayarlayın. Uzun işler için mevcut olan yerlerde asenkron modu kullanın.
+- Destek için `request_id`, `task_id`, `poll_url`, model, uç nokta ve temizlenmiş istek şekli saklayın.
+- İstemci zaman aşımında, yeniden oluşturma isteğini denemeden önce bir görevin oluşturulup oluşturulmadığını kontrol edin.
+- Maliyetleri kullanım kayıtları ve mevcutsa `billing_transaction_id` ile uzlaştırın, sağlayıcı görev kimlikleri ile değil.
+
 ## Yaygın Hatalar
 
-- Her görüntü modelinin senkron olduğunu varsaymayın.
-- Asenkron görüntü görevlerinden `b64_json` talep etmeyin; asenkron sonuçlar URL odaklıdır.
-- Oran yalnızca Gemini görüntü modellerine `resolution` göndermeyin.
-- Nano Banana görüntüden görüntü akışları için `/v1/images/edits` kullanmayın.
-- Senkron yüksek çözünürlüklü görüntü istekleri için HTTP istemci zaman aşımını en az `120s` olarak ayarlayın.
+| Belirti | Olası neden | Çözüm |
+|---------|-------------|-------|
+| `400` ile `param: "model"` | Açık bir model eksik | `/v1/models?recommended_for=image` sorgulayın ve `model` gönderin |
+| Desteklenmeyen alan | Alan, o modelin kamuya açık sözleşmesinde yok | Alanı kaldırın veya onu belgeleyen bir model/uç nokta seçin |
+| Asenkron sonuçta `b64_json` yok | Asenkron görüntü görevleri URL odaklı sonuçlar döner | Base64 çıktısı için senkron modu kullanın |
+| Referans görüntü reddedildi | Yanlış uç nokta veya özel/süresi dolmuş URL | Modelin belgelenmiş referans şekli ile eşleşin ve erişilebilir URL'ler kullanın |
 
 ## API Referansı
 

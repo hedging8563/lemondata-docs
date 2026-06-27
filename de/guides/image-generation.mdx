@@ -1,67 +1,107 @@
 ---
 title: "Bildgenerierung"
-description: "Erstellen Sie Text-zu-Bild-, Bild-zu-Bild- und Bildbearbeitungs-Workflows gegen die öffentlichen Bildverträge von TokenLab."
+description: "Wählen Sie den richtigen TokenLab-Bildendpunkt, senden Sie modellbewusste Anfragen und behandeln Sie synchrone oder asynchrone Bildresultate sicher."
 ---
 
-Die TokenLab-Bild-APIs decken mehrere Modellfamilien mit unterschiedlichen Anforderungsformaten ab. Verwenden Sie den öffentlichen Modellvertrag und die spezifische API-Referenz für den Endpunkt, bevor Sie davon ausgehen, dass ein Feld in jedem Bildmodell funktioniert.
+TokenLab unterstützt Text-zu-Bild, Bild-zu-Bild und Bildbearbeitung über öffentliche Bildendpunkte. Bildmodelle teilen sich kein universelles Parameterset, daher sollten Produktionsclients zuerst den Endpunkt wählen, dann das Modell auswählen und anschließend nur die von diesem Modell unterstützten Felder senden.
 
-## Wählen Sie den Endpunkt
+## Wann Jeder Endpunkt Verwendet Werden Soll
 
-| Ziel | Endpunkt | Hinweise |
-|------|----------|-------|
-| Text-zu-Bild | `POST /v1/images/generations` | Verwenden Sie `prompt` und ein explizites `model` |
-| Bild-zu-Bild / Referenzbild | `POST /v1/images/generations` | Verwenden Sie `operation: "image-to-image"` plus `image_url`, `image_urls` oder `reference_image_urls`, wenn das Modell dies unterstützt |
-| GPT Bildbearbeitung | `POST /v1/images/edits` | Unterstützt multipart `image`, JSON `image_url` / `image_urls` und offizielle `images[]` Referenzen für unterstützte Bearbeitungsmodelle |
-| Legacy-Variation | `POST /v1/images/variations` | Bevorzugen Sie aktuelle Generierungs- oder Bearbeitungsrouten für neue Arbeiten |
-| Async-Status | `GET /v1/tasks/{id}` | Verwenden Sie zuerst `poll_url`, wenn vorhanden |
+| Benutzer-Workflow | Endpunkt | Verwenden, wenn | Vermeiden, wenn |
+|-------------------|----------|------------------|------------------|
+| Text-zu-Bild      | `POST /v1/images/generations` | Der Benutzer beginnt nur mit einem Prompt | Sie benötigen einen offiziellen GPT-Bildbearbeitungsfluss |
+| Bild-zu-Bild      | `POST /v1/images/generations` | Die Modellspezifikationen beziehen sich auf Bilder über `operation: "image-to-image"` plus `image_url`, `image_urls` oder `reference_image_urls` | Das Modell erwartet multipart Bearbeitungseingaben |
+| Bildbearbeitung    | `POST /v1/images/edits` | Sie bearbeiten ein vorhandenes Bild mit einem unterstützten Bearbeitungsmodell wie einem GPT-Bildfamilienmodell | Sie verwenden die Nano Banana-Stil Bild-zu-Bild-Generierung |
+| Variation          | `POST /v1/images/variations` | Sie pflegen eine legacy-variationskompatible Integration | Sie erstellen einen neuen Referenzbild-Workflow |
+| Status             | `GET /v1/tasks/{id}` | Eine Erstellungsantwort gibt `task_id`, `status: "pending"` oder `poll_url` zurück | Die Erstellungsantwort enthält bereits die endgültigen `data[]` |
 
-## Modellerkennung
+Senden Sie immer `model`. Bildendpunkte verlassen sich absichtlich nicht auf ein historisches implizites Standardmodell für Produktionsverkehr.
+
+## Wählen Sie Ein Modell
+
+Beginnen Sie mit der Modellerkennung und überprüfen Sie den TokenLab-Vertrag des ausgewählten Modells:
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Die Bildmodellparameter unterscheiden sich stark. Lesen Sie den ausgewählten Modellvertrag, bevor Sie `size`, `quality`, `aspect_ratio`, `resolution`, `async`, `background` oder `output_format` senden.
+Für Nicht-Chat-Modelle kann die Listenantwort `tokenlab.public_contract_summary` enthalten. Modell-Detailseiten können den umfassenderen `tokenlab.public_contract` offenlegen. Verwenden Sie diese Felder zur Bestätigung:
 
-## Eingaben und modell-spezifische Felder
+- Die unterstützte Operation, wie `text-to-image`, `image-to-image` oder `image-edit`.
+- Den vom Modell erwarteten Anfrageendpunkt.
+- Welche Form für Referenzen verwendet werden soll, wie `image_url`, `image_urls`, `reference_image_urls`, multipart `image` oder JSON `images[]`.
+- Ob das Modell `size`, `aspect_ratio`, `resolution`, `quality`, `background`, `output_format` oder `response_format` akzeptiert.
 
-- `gpt-image-2` verwendet OpenAI-ähnliche `size` und `quality`; lassen Sie `size` oder `quality` weg, damit TokenLab `auto` verwenden kann, wo es unterstützt wird.
-- Die Bildfamilien Gemini und Nano Banana verwenden im Allgemeinen `aspect_ratio`; senden Sie `resolution` nur, wenn das ausgewählte Modell es bereitstellt.
-- Anfragen für Referenzbilder von Nano Banana gehören zu `/v1/images/generations` mit `operation: "image-to-image"` und `image_urls`, nicht zu `/v1/images/edits`.
-- `/v1/images/generations` akzeptiert keine obersten `images[]` oder `file_id`; das sind Formen des Bearbeitungsflusses.
-- Remote-Bild-URLs müssen öffentliche `http`/`https` URLs sein. Vermeiden Sie private Netzwerke, eingebettete Anmeldeinformationen, Fragmente und kurzlebige signierte URLs.
+## Regeln Für Die Anfrageform
 
-## Anfrage erstellen
+- Anfragen im Stil von `gpt-image-2` verwenden OpenAI-ähnliche Felder wie `size`, `quality` und Bearbeitungsfelder. Lassen Sie optionale Felder weg, wenn Sie möchten, dass das Modell oder TokenLab automatische Standardwerte verwendet.
+- Die Bildfamilien Gemini und Nano Banana verwenden normalerweise `aspect_ratio`; senden Sie `resolution` nur, wenn der Modellvertrag es offenlegt.
+- Nano Banana Bild-zu-Bild gehört zu `/v1/images/generations` mit `operation: "image-to-image"` und Referenzbild-URLs.
+- `/v1/images/generations` akzeptiert keine obersten `images[]` oder `file_id`; das sind Formen für den Bearbeitungsfluss.
+- Remote-Bildreferenzen müssen öffentliche `http` oder `https` URLs sein. Senden Sie keine privaten Netzwerk-URLs, eingebetteten Anmeldeinformationen, URL-Fragmenten oder signierten URLs, die vor Beginn der Verarbeitung ablaufen könnten.
+
+## Text-Zu-Bild Beispiel
 
 ```bash
-curl https://api.tokenlab.sh/v1/images/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2",
-    "prompt": "Ein sauberes Produktfoto einer keramischen Kaffeetasse auf einem Walnuss-Schreibtisch",
+    "prompt": "Ein sauberes Produktfoto einer keramischen Kaffeetasse auf einem Walnusstisch",
     "size": "1024x1024",
     "response_format": "url"
   }'
 ```
 
-## Ergebnisse abfragen
-
-Einige Bildrouten geben inline `data[].url` oder `data[].b64_json` zurück. Andere Routen geben `status: "pending"`, `task_id` und `poll_url` zurück. Wenn Sie die asynchrone Bildgenerierung oder -bearbeitung anfordern, geben die abgeschlossenen Aufgaben Ergebnisse in Form von URLs zurück; verwenden Sie synchrone Anfragen, wenn Sie speziell `b64_json` benötigen.
+## Referenzbild Beispiel
 
 ```bash
-curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
+curl https://api.tokenlab.sh/v1/images/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana",
+    "operation": "image-to-image",
+    "prompt": "Behalten Sie die Produktform bei, ändern Sie den Hintergrund in ein helles Studio-Setup",
+    "image_urls": ["https://example.com/input/product.png"],
+    "aspect_ratio": "1:1"
+  }'
+```
+
+## Ergebnisse Verarbeiten
+
+Bildantworten können synchron oder asynchron sein:
+
+- Synchrone Antworten geben endgültige `data[]` mit `url` oder `b64_json` zurück.
+- Asynchrone Antworten geben `id`, `task_id`, `status` und normalerweise `poll_url` zurück.
+- Bevorzugen Sie `poll_url`, wenn es vorhanden ist. Wenn Sie eine feste Route benötigen, poll `GET /v1/tasks/{id}`.
+- Verwenden Sie synchrone Anfragen, wenn Sie speziell `b64_json` benötigen; asynchrone Bildresultate sind URL-orientiert.
+
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-## Häufige Fallstricke
+Bewahren Sie die zurückgegebene Bild-URL, die Task-ID, das Modell und Ihre eigene Benutzer-/Job-ID auf. Pollen Sie nicht weiter, nachdem ein terminaler Status erreicht wurde.
 
-- Gehen Sie nicht davon aus, dass jedes Bildmodell synchron ist.
-- Fordern Sie `b64_json` nicht von asynchronen Bildaufgaben an; asynchrone Ergebnisse sind URL-orientiert.
-- Senden Sie `resolution` nicht an bildverhältnisbasierte Gemini-Bildmodelle.
-- Verwenden Sie `/v1/images/edits` nicht für Nano Banana Bild-zu-Bild-Flüsse.
-- Setzen Sie HTTP-Client-Timeouts auf mindestens `120s` für synchrone hochauflösende Bildanfragen.
+## Produktions-Checkliste
+
+- Validieren Sie Benutzereingaben, bevor Sie TokenLab aufrufen: Prompt-Länge, Bildanzahl, URL-Erreichbarkeit und Dateityp.
+- Setzen Sie HTTP-Timeouts hoch genug für synchrone hochauflösende Anfragen. Verwenden Sie den asynchronen Modus, wo verfügbar, für lange Arbeiten.
+- Speichern Sie `request_id`, `task_id`, `poll_url`, Modell, Endpunkt und bereinigte Anfrageform für den Support.
+- Überprüfen Sie bei einem Client-Timeout, ob eine Aufgabe erstellt wurde, bevor Sie die Erstellungsanfrage erneut versuchen.
+- Versöhnen Sie die Kosten mit den Nutzungsaufzeichnungen und `billing_transaction_id`, wenn vorhanden, nicht mit den Anbieter-Task-IDs.
+
+## Häufige Fehler
+
+| Symptom | Wahrscheinliche Ursache | Lösung |
+|---------|-------------------------|--------|
+| `400` mit `param: "model"` | Fehlendes explizites Modell | Abfragen von `/v1/models?recommended_for=image` und `model` senden |
+| Nicht unterstütztes Feld | Feld ist nicht im öffentlichen Vertrag dieses Modells enthalten | Entfernen Sie das Feld oder wählen Sie ein Modell/Endpunkt, das es dokumentiert |
+| Kein `b64_json` bei asynchronem Ergebnis | Asynchrone Bildaufgaben geben URL-orientierte Ergebnisse zurück | Verwenden Sie den synchronen Modus für base64-Ausgaben |
+| Referenzbild abgelehnt | Falscher Endpunkt oder private/abgelaufene URL | Entsprechen Sie der dokumentierten Referenzform des Modells und verwenden Sie erreichbare URLs |
 
 ## API-Referenz
 
@@ -71,4 +111,4 @@ curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \\
 | Bild bearbeiten | [Bild bearbeiten](/de/api-reference/images/edit-image) |
 | Bildvariation erstellen | [Bildvariation erstellen](/de/api-reference/images/create-variation) |
 | Bildstatus abrufen | [Bildstatus abrufen](/de/api-reference/images/get-image-status) |
-| Aufgabenstatus abrufen | [Aufgabenstatus abrufen](/de/api-reference/tasks/get-task-status) |
+| Taskstatus abrufen | [Taskstatus abrufen](/de/api-reference/tasks/get-task-status) |

@@ -1,21 +1,22 @@
 ---
 title: "Panduan Migrasi"
-description: "Pindahkan OpenAI, Anthropic, Gemini, dan beban kerja media ke TokenLab dengan perubahan terkecil yang aman untuk produksi."
+description: "Pindahkan OpenAI, Anthropic, Gemini, dan beban kerja media ke TokenLab dengan perubahan kecil yang aman untuk produksi."
 ---
 
-TokenLab adalah native-first dan kompatibel dengan OpenAI. Pilih rute yang sesuai dengan perilaku klien yang Anda butuhkan alih-alih mengonversi setiap beban kerja menjadi satu format.
+TokenLab adalah multi-format: Anda dapat mempertahankan klien yang kompatibel dengan OpenAI, panggilan Messages asli Anthropic, panggilan REST asli Gemini, dan titik akhir media dalam bentuk aslinya. Migrasi yang paling aman adalah tidak menerjemahkan setiap beban kerja ke dalam satu format universal. Pilih rute yang memiliki perilaku yang dibutuhkan aplikasi Anda.
 
-## Pilih Format
+## Pemetaan Rute
 
-| Beban kerja yang ada | URL dasar TokenLab | Endpoint utama | Catatan |
-|----------------------|--------------------|----------------|---------|
-| OpenAI Chat Completions | `https://api.tokenlab.sh/v1` | `/chat/completions` | Perubahan terkecil untuk klien yang kompatibel dengan OpenAI |
-| OpenAI Responses | `https://api.tokenlab.sh/v1` | `/responses` | Gunakan hanya untuk perilaku khusus Responses |
-| Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | Jangan tambahkan `/v1` di URL dasar SDK |
-| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Pertahankan bidang native Gemini di rute native |
-| Generasi media | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Temukan model dengan `recommended_for` dan harapkan polling async di mana didokumentasikan |
+| Beban kerja yang ada | URL dasar TokenLab | Titik akhir utama | Catatan migrasi |
+|----------------------|--------------------|-------------------|-----------------|
+| OpenAI Chat Completions | `https://api.tokenlab.sh/v1` | `/chat/completions` | Perubahan terkecil untuk chat dan pemanggilan fungsi yang kompatibel dengan OpenAI |
+| OpenAI Responses | `https://api.tokenlab.sh/v1` | `/responses` | Gunakan ketika aplikasi Anda bergantung pada input, alat, atau penanganan output yang spesifik untuk Responses |
+| Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | Jangan tambahkan `/v1` ke URL dasar SDK |
+| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Pertahankan bidang asli Gemini di rute Gemini |
+| Generasi media | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Temukan model dengan `recommended_for` dan harapkan polling asinkron di mana didokumentasikan |
+| Manajemen dan penagihan | `https://api.tokenlab.sh/v1` | `/management/...` | Gunakan token manajemen untuk penggunaan sisi server dan rekonsiliasi penagihan |
 
-## Migrasi Kompatibel OpenAI
+## Migrasi yang Kompatibel dengan OpenAI
 
 ```python
 from openai import OpenAI
@@ -31,7 +32,7 @@ response = client.chat.completions.create(
 )
 ```
 
-Pertahankan kode retry, timeout, dan streaming yang ada, tetapi validasi ID model terhadap `GET /v1/models`. Untuk generasi gambar, kirim `model` secara eksplisit dan baca panduan gambar karena model gambar berbeda lebih dari model chat.
+Pertahankan kode retry, timeout, dan streaming yang ada, tetapi validasi ID model dengan `GET /v1/models` sebelum lalu lintas produksi. Untuk generasi gambar, kirim `model` secara eksplisit dan baca panduan gambar karena model gambar berbeda lebih dari model chat.
 
 ## Migrasi Anthropic
 
@@ -50,34 +51,46 @@ message = client.messages.create(
 )
 ```
 
-Gunakan rute ini untuk perilaku native Claude seperti penggunaan alat Messages dan pemikiran yang diperluas. Jika suatu fitur adalah native Anthropic, pertahankan di `/v1/messages` alih-alih menerjemahkannya melalui Chat Completions.
+Gunakan `/v1/messages` untuk penggunaan alat asli Claude, alur pemikiran, dan semantik pesan Anthropic. Jangan terjemahkan bidang yang hanya ada di Anthropic melalui Chat Completions kecuali Anda sengaja ingin mengubah perilaku menjadi kompatibel dengan OpenAI.
 
 ## Migrasi Gemini
 
 ```bash
-curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \\
-  -H "Authorization: Bearer sk-your-tokenlab-key" \\
-  -H "Content-Type: application/json" \\
+curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
+  -H "Authorization: Bearer sk-your-tokenlab-key" \
+  -H "Content-Type: application/json" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-Alat bawaan Gemini, sumber daya API File, konten yang di-cache, dan deklarasi fungsi harus tetap di `/v1beta` ketika Anda memerlukan perilaku native Gemini.
+Pertahankan alat bawaan Gemini, referensi API File, konten yang di-cache, deklarasi fungsi, dan bagian konten asli di `/v1beta` ketika aplikasi Anda bergantung pada perilaku asli Gemini.
 
 ## Migrasi Media
 
-1. Kuery `GET /v1/models?recommended_for=image|video|music|3d` sebelum memilih model.
-2. Baca `tokenlab.public_contract_summary` dan, di halaman detail, `tokenlab.public_contract` lengkap.
-3. Kirim `model` secara eksplisit. Jangan bergantung pada default lama untuk lalu lintas produksi.
-4. Simpan `task_id` dan `poll_url` untuk pekerjaan async.
-5. Rekonsiliasi biaya melalui catatan penggunaan, bukan melalui ID tugas penyedia.
+1. Kuery `GET /v1/models?recommended_for=image|video|music|3d`.
+2. Baca `tokenlab.public_contract_summary` dalam respons daftar dan `tokenlab.public_contract` lengkap di mana tersedia.
+3. Kirim `model` secara eksplisit, terutama untuk titik akhir gambar.
+4. Simpan `task_id`, `poll_url`, titik akhir, model, dan ID pekerjaan Anda sendiri untuk pekerjaan asinkron.
+5. Rekonsiliasi biaya melalui catatan penggunaan dan `billing_transaction_id`, bukan ID tugas penyedia.
 
-## Peluncuran Produksi
+Beban kerja media memerlukan rencana peluncuran mereka sendiri karena latensi, retry, dan aset akhir berperilaku berbeda dari chat completions.
 
-- Mulailah dengan satu endpoint dan satu keluarga model.
-- Atur timeout HTTP cukup tinggi untuk rute gambar sinkron; gunakan mode async saat tersedia untuk pekerjaan panjang.
-- Catat pengenal publik dan bentuk permintaan yang disanitasi sebelum mengirim lalu lintas produksi.
-- Bandingkan sampel respons, catatan penggunaan, dan keluaran yang terlihat oleh pelanggan.
-- Pertahankan rollback sederhana: simpan klien penyedia sebelumnya sampai lalu lintas TokenLab stabil.
+## Rencana Peluncuran Produksi
+
+| Fase | Tujuan | Pemeriksaan |
+|------|--------|-------------|
+| 1. Inventaris | Daftar titik akhir, model, bidang permintaan, perilaku streaming/asinkron, dan pemilik penagihan | Tidak ada bidang penyedia yang tersembunyi yang dianggap publik |
+| 2. Pilot satu rute | Pindahkan satu titik akhir dan satu keluarga model | Bentuk respons, biaya, dan log sesuai harapan |
+| 3. Bayangan atau sampel | Bandingkan output yang dipilih dengan penyedia sebelumnya | Kualitas dan latensi yang terlihat oleh pengguna dapat diterima |
+| 4. Peluncuran bertahap | Tingkatkan lalu lintas berdasarkan kunci, organisasi, atau fitur flag | Pantau `4xx`, `5xx`, latensi, keseimbangan, dan pekerjaan asinkron duplikat |
+| 5. Pembersihan | Hapus jalur penyedia lama hanya setelah penggunaan stabil | Jalur rollback dan buku panduan dukungan didokumentasikan |
+
+## Perangkap Migrasi
+
+- Jangan letakkan setiap model di belakang satu jalur OpenAI Chat Completions jika aplikasi Anda membutuhkan perilaku asli Anthropic, Gemini, atau Responses.
+- Jangan menganggap default gambar lama. Kirim `model` secara eksplisit.
+- Jangan coba ulang permintaan pembuatan asinkron tanpa memeriksa apakah tugas sudah dibuat.
+- Jangan ungkapkan metadata routing penyedia di log atau UI Anda.
+- Jangan bandingkan penagihan dengan ID tugas penyedia. Gunakan catatan penggunaan TokenLab.
 
 ## Referensi API
 
@@ -86,5 +99,6 @@ Alat bawaan Gemini, sumber daya API File, konten yang di-cache, dan deklarasi fu
 | API Multi-Format | [API Multi-Format](/id/guides/api-formats) |
 | OpenAI SDK | [OpenAI SDK](/id/integrations/openai-sdk) |
 | Anthropic SDK | [Anthropic SDK](/id/integrations/anthropic-sdk) |
+| Gemini Native | [Gemini Native API](/id/api-reference/gemini/generate-content) |
 | Generasi Gambar | [Generasi Gambar](/id/guides/image-generation) |
-| Pekerjaan Async & Polling | [Pekerjaan Async & Polling](/id/guides/async-jobs-polling) |
+| Pekerjaan Asinkron & Polling | [Pekerjaan Asinkron & Polling](/id/guides/async-jobs-polling) |

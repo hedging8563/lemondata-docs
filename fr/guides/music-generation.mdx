@@ -1,25 +1,33 @@
 ---
 title: "Génération de Musique"
-description: "Créez des chansons, des instrumentaux, des paroles et des continuations avec les tâches musicales de TokenLab."
+description: "Créez des tâches de musique ou de paroles, interrogez pour l'audio final et stockez les sorties musicales visibles par l'utilisateur en toute sécurité."
 ---
 
-La génération de musique est asynchrone. `POST /v1/music/generations` crée une tâche et renvoie `id` / `task_id`, `status`, et généralement `poll_url`. L'audio final et les métadonnées apparaissent après le polling.
+La génération de musique est asynchrone. `POST /v1/music/generations` crée une tâche publique TokenLab et renvoie `id` / `task_id`, `status`, et généralement `poll_url`. Votre application doit stocker cette identité de tâche, afficher la progression et interroger jusqu'à un statut terminal.
 
-## Découverte de Modèles
+## Choisissez le Flux de Travail
+
+| Flux de travail | Champs clés | Remarques |
+|-----------------|--------------|-----------|
+| Chanson complète ou instrumentale | `model`, `prompt`, `title` optionnel, `tags`, `action: "MUSIC"` | À utiliser lorsque l'utilisateur s'attend à un audio final |
+| Paroles uniquement | `model`, `prompt`, `action: "LYRICS"` | À utiliser uniquement avec des modèles qui exposent la génération de paroles |
+| Continuer un clip existant | `continue_clip_id`, `continue_at` optionnel | Stockez l'identité du clip/tâche publique précédente avant d'offrir la continuation |
+
+Interrogez le catalogue de modèles actuel avant d'expédier une liste de modèles codée en dur :
 
 ```bash
-curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \\
+curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Le contrat public actuel expose `suno_music` pour la génération de musique et `suno_lyrics` pour les flux uniquement de paroles. Interrogez le catalogue de modèles avant une utilisation en production au lieu de supposer des fournisseurs.
+Les exemples publics actuels utilisent `suno_music` pour la génération de musique. Pour les flux uniquement de paroles, envoyez `action: "LYRICS"` avec un modèle dont le contrat public documente la génération de paroles. Traitez les ID de modèle comme des ID publics TokenLab, et non comme une garantie que les champs spécifiques au fournisseur sont des champs de contrat public.
 
-## Créer une Demande
+## Créer une Tâche de Musique
 
 ```bash
-curl https://api.tokenlab.sh/v1/music/generations \\
-  -H "Authorization: Bearer sk-your-api-key" \\
-  -H "Content-Type: application/json" \\
+curl https://api.tokenlab.sh/v1/music/generations \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "suno_music",
     "prompt": "Une piste synth-pop entraînante avec des voix chaleureuses et un refrain clair",
@@ -29,20 +37,39 @@ curl https://api.tokenlab.sh/v1/music/generations \\
   }'
 ```
 
-Utilisez `action: "MUSIC"` pour les chansons ou les instrumentaux. Utilisez `action: "LYRICS"` uniquement avec des modèles qui supportent la génération uniquement de paroles. Les champs de continuation tels que `continue_clip_id` et `continue_at` sont destinés aux flux de continuation et doivent être envoyés uniquement lorsque votre produit continue un clip précédent.
+Gardez les prompts, titres et tags visibles par l'utilisateur et sûrs à stocker. Ne placez pas de clés API, d'URLs privées ou d'informations de routage internes dans aucun champ de prompt.
 
-## Résultats de Polling
+## Interroger pour la Complétion
 
-Utilisez d'abord le `poll_url` retourné. Si vous avez besoin d'un point de terminaison fixe, utilisez `GET /v1/tasks/{id}` avec le même `id` / `task_id` de la réponse de création.
+Utilisez d'abord `poll_url`. Si votre client a besoin d'une route fixe, appelez `GET /v1/tasks/{id}` avec le `id` ou `task_id` retourné.
 
-Les tâches musicales complètes peuvent inclure `audio_url`, `video_url`, `title`, `lyrics`, et des métadonnées normalisées par le modèle. Stockez les URL finales dans votre application plutôt que de faire du polling de manière répétée après un statut terminal.
+```bash
+curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
 
-## Pièges Courants
+Les statuts publics attendus sont `pending`, `processing`, `completed`, et `failed`. Une tâche de musique complétée peut inclure `audio_url`, `video_url`, `title`, `lyrics`, et des métadonnées normalisées. Stockez les URLs finales dans votre propre base de données afin que l'utilisateur puisse rouvrir le résultat sans redémarrer la génération.
 
-- Ne pas afficher un lecteur final tant que la tâche n'est pas `completed` et qu'un `audio_url` n'existe pas.
-- Ne pas utiliser les IDs de tâches du fournisseur ou les URLs de récupération du fournisseur dans l'état de votre application.
-- Ne pas mélanger les actions uniquement de paroles et les actions de musique complète derrière une seule interface utilisateur sans montrer la différence aux utilisateurs.
-- Ne pas recréer des tâches à chaque actualisation de page ; reprenez à partir du `task_id` stocké.
+## Gestion de l'Interface Utilisateur et de l'État
+
+- Affichez un état en attente immédiatement après la création de la tâche.
+- Interrogez toutes les `5-10s` pour les tâches longues, puis arrêtez sur `completed` ou `failed`.
+- Ne pas afficher de lecteur final tant que la tâche n'est pas `completed` et qu'un `audio_url` existe.
+- Pour les tâches uniquement de paroles, affichez la sortie texte séparément des tâches audio afin que les utilisateurs comprennent ce qu'ils achètent.
+- Lors d'un rafraîchissement, reprenez à partir du `task_id` stocké au lieu de créer une nouvelle tâche.
+
+## Facturation et Rapprochement
+
+Les tâches de musique peuvent réserver un montant estimé au moment de la création et se régler après que le statut terminal soit connu. Stockez `request_id`, `task_id`, modèle, point de terminaison, et `billing_transaction_id` lorsqu'il apparaît. Utilisez les enregistrements d'utilisation de l'API de gestion pour le rapprochement au lieu des ID de tâche du fournisseur.
+
+## Erreurs Courantes
+
+| Symptôme | Cause probable | Solution |
+|----------|----------------|---------|
+| Tâche créée mais pas de lecteur | La tâche est toujours en attente ou complétée sans `audio_url` | Continuez à interroger jusqu'à un statut terminal, puis traitez la sortie manquante comme un travail utilisateur échoué |
+| Chansons dupliquées après rafraîchissement | L'interface utilisateur a recréé la tâche au lieu de reprendre | Persistez et réutilisez `task_id` |
+| La tâche de paroles ne renvoie pas d'audio | `action: "LYRICS"` est uniquement textuel | Séparez les chemins UI de paroles et de musique |
+| Paramètre non pris en charge | Le champ n'est pas dans le contrat public du modèle | Supprimez les champs spécifiques au fournisseur ou choisissez un modèle qui les documente |
 
 ## Référence API
 
