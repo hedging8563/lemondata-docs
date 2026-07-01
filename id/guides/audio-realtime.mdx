@@ -1,0 +1,75 @@
+---
+title: "Audio & realtime"
+description: "Pilih speech, transkripsi, terjemahan, atau WebSocket realtime untuk aplikasi audio."
+---
+
+Beban kerja audio terbagi dua. Gunakan endpoint audio untuk permintaan seperti file, misalnya text-to-speech, transkripsi, dan terjemahan audio. Gunakan endpoint WebSocket realtime ketika pengalaman pengguna membutuhkan audio interaktif latensi rendah atau event multimodal.
+
+## Pilih Alur
+
+| Alur | Endpoint | Gunakan saat |
+|----------|----------|-------------|
+| Teks ke suara | `POST /v1/audio/speech` | Anda membutuhkan file audio dari teks. |
+| Transkripsi | `POST /v1/audio/transcriptions` | Anda membutuhkan teks dari file audio. |
+| Terjemahan audio | `POST /v1/audio/translations` | Anda membutuhkan teks terjemahan dari file audio. |
+| Sesi realtime | `GET /v1/realtime` | Anda membutuhkan audio streaming dua arah atau event multimodal realtime. |
+
+## Temukan Model
+
+Query katalog model sebelum hard-code model. Gunakan daftar rekomendasi untuk speech dan transcription, lalu pastikan dukungan realtime di detail model sebelum membuka socket.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Permintaan Audio Sinkron
+
+Permintaan speech, transcription, dan translation mengembalikan respons langsung dari HTTP request. Input besar bisa lebih lama dari timeout umum client, jadi gunakan timeout longgar dan simpan request ID untuk dukungan.
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## Sesi Realtime
+
+Buka WebSocket dengan model di query string dan API key di header Authorization. Gunakan format event yang didokumentasikan untuk model realtime yang dipilih, lalu tutup socket saat sesi selesai.
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## Penanganan Status
+
+- Simpan file audio yang dibuat alih-alih mengulang permintaan yang sama saat refresh.
+- Untuk transkripsi dan terjemahan, tampilkan status upload dan pemrosesan meski API call sinkron.
+- Untuk realtime, tangani event close dan reconnect hanya setelah pengguna memulai sesi baru.
+- Jangan taruh API key, URL privat, atau rahasia akun di input teks audio.
+
+## Referensi API
+
+| Topik | Referensi |
+|-------|-----------|
+| Buat Speech | [Buat Speech](/id/api-reference/audio/create-speech) |
+| Buat Transkripsi | [Buat Transkripsi](/id/api-reference/audio/create-transcription) |
+| Buat Terjemahan | [Buat Terjemahan](/id/api-reference/audio/create-translation) |
+| WebSocket Realtime | [WebSocket Realtime](/id/api-reference/realtime/connect) |
+| Daftar Model | [Daftar Model](/id/api-reference/models/list-models) |
+| Billing & Harga | [Billing & Harga](/id/guides/billing) |

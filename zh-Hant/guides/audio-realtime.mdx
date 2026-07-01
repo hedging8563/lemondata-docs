@@ -1,0 +1,75 @@
+---
+title: "音訊與即時"
+description: "為音訊應用選擇語音、轉寫、翻譯或即時 WebSocket 流程。"
+---
+
+音訊工作負載分成兩類。文字轉語音、轉寫、音訊翻譯這類檔案式請求使用音訊端點；需要低延遲互動音訊或多模態事件時，使用即時 WebSocket 端點。
+
+## 選擇流程
+
+| 流程 | 端點 | 適用場景 |
+|----------|----------|-------------|
+| 文字轉語音 | `POST /v1/audio/speech` | 需要從文字生成音訊檔案。 |
+| 轉寫 | `POST /v1/audio/transcriptions` | 需要從音訊檔案得到文字。 |
+| 音訊翻譯 | `POST /v1/audio/translations` | 需要從音訊檔案得到翻譯後的文字。 |
+| 即時會話 | `GET /v1/realtime` | 需要雙向串流音訊或即時多模態事件。 |
+
+## 發現模型
+
+不要在客戶端硬編碼模型列表。語音和轉寫可使用推薦模型短名單；即時能力需要在開啟 socket 前透過模型詳情確認。
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 同步音訊請求
+
+語音、轉寫和翻譯會在 HTTP 請求中直接返回。大輸入可能超過常見客戶端逾時，建議設定更寬鬆的逾時並保存 request ID 方便排查。
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## 即時會話
+
+開啟 WebSocket 時在查詢參數中傳 model，並在 Authorization header 中傳 API key。事件格式按所選即時模型文件發送；會話結束時主動關閉 socket。
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## 狀態處理
+
+- 保存生成的音訊檔案，刷新頁面時不要重複發起同一請求。
+- 轉寫和翻譯即使是同步呼叫，也應展示上傳和處理中狀態。
+- 即時會話要處理關閉事件，只有使用者重新開始會話時才重連。
+- 不要把 API key、私有 URL 或帳戶密鑰放進音訊文字輸入。
+
+## API 參考
+
+| 主題 | 參考 |
+|-------|-----------|
+| 建立語音 | [建立語音](/zh-Hant/api-reference/audio/create-speech) |
+| 建立轉寫 | [建立轉寫](/zh-Hant/api-reference/audio/create-transcription) |
+| 建立翻譯 | [建立翻譯](/zh-Hant/api-reference/audio/create-translation) |
+| 即時 WebSocket | [即時 WebSocket](/zh-Hant/api-reference/realtime/connect) |
+| 列出模型 | [列出模型](/zh-Hant/api-reference/models/list-models) |
+| 計費與價格 | [計費與價格](/zh-Hant/guides/billing) |

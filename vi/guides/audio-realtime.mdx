@@ -1,0 +1,75 @@
+---
+title: "Âm thanh & thời gian thực"
+description: "Chọn giọng nói, phiên âm, dịch hoặc WebSocket thời gian thực cho ứng dụng âm thanh."
+---
+
+Tác vụ âm thanh có hai dạng. Dùng endpoint audio cho yêu cầu kiểu tệp như text-to-speech, phiên âm và dịch âm thanh. Dùng endpoint WebSocket thời gian thực khi trải nghiệm cần âm thanh tương tác độ trễ thấp hoặc sự kiện đa phương thức.
+
+## Chọn Luồng
+
+| Luồng | Endpoint | Dùng khi |
+|----------|----------|-------------|
+| Văn bản thành giọng nói | `POST /v1/audio/speech` | Bạn cần tệp âm thanh từ văn bản. |
+| Phiên âm | `POST /v1/audio/transcriptions` | Bạn cần văn bản từ tệp âm thanh. |
+| Dịch âm thanh | `POST /v1/audio/translations` | Bạn cần văn bản đã dịch từ tệp âm thanh. |
+| Phiên thời gian thực | `GET /v1/realtime` | Bạn cần âm thanh streaming hai chiều hoặc sự kiện đa phương thức thời gian thực. |
+
+## Khám Phá Mô Hình
+
+Hãy truy vấn danh mục mô hình trước khi hard-code model. Dùng danh sách đề xuất cho speech và transcription, đồng thời kiểm tra hỗ trợ realtime trong chi tiết model trước khi mở socket.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Yêu Cầu Âm Thanh Đồng Bộ
+
+Yêu cầu speech, transcription và translation trả về trực tiếp trong HTTP request. Đầu vào lớn có thể lâu hơn timeout phổ biến của client, vì vậy hãy đặt timeout rộng và lưu request ID để hỗ trợ.
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## Phiên Thời Gian Thực
+
+Mở WebSocket với model trong query string và API key trong header Authorization. Dùng định dạng sự kiện được tài liệu hóa cho realtime model đã chọn, rồi đóng socket khi phiên hoàn tất.
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## Xử Lý Trạng Thái
+
+- Lưu tệp âm thanh đã tạo thay vì phát lại cùng một yêu cầu khi refresh.
+- Với phiên âm và dịch, vẫn hiển thị trạng thái tải lên và xử lý dù API call là đồng bộ.
+- Với realtime, xử lý sự kiện đóng và chỉ kết nối lại khi người dùng bắt đầu phiên mới.
+- Không đặt API key, URL riêng tư hoặc bí mật tài khoản trong văn bản âm thanh.
+
+## Tham Chiếu API
+
+| Chủ đề | Tham chiếu |
+|-------|-----------|
+| Tạo Giọng Nói | [Tạo Giọng Nói](/vi/api-reference/audio/create-speech) |
+| Tạo Phiên Âm | [Tạo Phiên Âm](/vi/api-reference/audio/create-transcription) |
+| Tạo Bản Dịch | [Tạo Bản Dịch](/vi/api-reference/audio/create-translation) |
+| WebSocket Thời Gian Thực | [WebSocket Thời Gian Thực](/vi/api-reference/realtime/connect) |
+| Liệt Kê Mô Hình | [Liệt Kê Mô Hình](/vi/api-reference/models/list-models) |
+| Thanh toán & giá | [Thanh toán & giá](/vi/guides/billing) |

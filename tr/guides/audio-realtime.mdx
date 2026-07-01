@@ -1,0 +1,75 @@
+---
+title: "Ses ve gerçek zamanlı"
+description: "Ses uygulamaları için konuşma, transkripsiyon, çeviri veya gerçek zamanlı WebSocket akışlarını seçin."
+---
+
+Ses işleri iki biçimdedir. Text-to-speech, transkripsiyon ve ses çevirisi gibi dosya benzeri istekler için audio endpointlerini kullanın. Düşük gecikmeli etkileşimli ses veya multimodal olaylar gerektiğinde gerçek zamanlı WebSocket endpointini kullanın.
+
+## Akışı Seç
+
+| Akış | Endpoint | Ne zaman kullanılır |
+|----------|----------|-------------|
+| Metinden sese | `POST /v1/audio/speech` | Metinden ses dosyası gerektiğinde. |
+| Transkripsiyon | `POST /v1/audio/transcriptions` | Ses dosyasından metin gerektiğinde. |
+| Ses çevirisi | `POST /v1/audio/translations` | Ses dosyasından çevrilmiş metin gerektiğinde. |
+| Gerçek zamanlı oturum | `GET /v1/realtime` | Çift yönlü streaming ses veya gerçek zamanlı multimodal olaylar gerektiğinde. |
+
+## Modelleri Keşfet
+
+Bir modeli hard-code etmeden önce model kataloğunu sorgulayın. Speech ve transcription için önerilen listeleri kullanın; socket açmadan önce model detaylarında realtime desteğini doğrulayın.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Senkron Ses İstekleri
+
+Speech, transcription ve translation istekleri doğrudan HTTP isteğinden döner. Büyük girdiler yaygın client timeout değerlerinden uzun sürebilir, bu yüzden geniş timeout belirleyin ve destek için request ID saklayın.
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## Gerçek Zamanlı Oturumlar
+
+Model query string içinde, API key Authorization header içinde olacak şekilde WebSocket açın. Seçilen realtime model için belgelenen olay formatını kullanın ve oturum tamamlanınca socketi kapatın.
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## Durum Yönetimi
+
+- Sayfa yenilenince aynı isteği tekrar çalıştırmak yerine üretilen ses dosyalarını saklayın.
+- Transkripsiyon ve çeviride API çağrısı senkron olsa bile yükleme ve işleme durumlarını gösterin.
+- Realtime için close olaylarını ele alın ve yalnızca kullanıcı yeni oturum başlatınca yeniden bağlanın.
+- API key, özel URL veya hesap sırlarını ses metni girişine koymayın.
+
+## API Referansı
+
+| Konu | Referans |
+|-------|-----------|
+| Speech Oluştur | [Speech Oluştur](/tr/api-reference/audio/create-speech) |
+| Transkripsiyon Oluştur | [Transkripsiyon Oluştur](/tr/api-reference/audio/create-transcription) |
+| Çeviri Oluştur | [Çeviri Oluştur](/tr/api-reference/audio/create-translation) |
+| Gerçek Zamanlı WebSocket | [Gerçek Zamanlı WebSocket](/tr/api-reference/realtime/connect) |
+| Modelleri Listele | [Modelleri Listele](/tr/api-reference/models/list-models) |
+| Faturalama ve fiyatlandırma | [Faturalama ve fiyatlandırma](/tr/guides/billing) |

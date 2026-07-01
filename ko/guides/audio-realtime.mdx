@@ -1,0 +1,75 @@
+---
+title: "오디오 및 실시간"
+description: "오디오 앱에 맞게 음성, 전사, 번역, 실시간 WebSocket 흐름을 선택합니다."
+---
+
+오디오 작업은 두 가지 형태로 나뉩니다. 텍스트 음성 변환, 전사, 오디오 번역처럼 파일에 가까운 요청은 audio endpoint를 사용합니다. 낮은 지연의 대화형 오디오나 실시간 멀티모달 이벤트가 필요하면 realtime WebSocket endpoint를 사용합니다.
+
+## 워크플로 선택
+
+| 워크플로 | Endpoint | 사용 시점 |
+|----------|----------|-------------|
+| 텍스트 음성 변환 | `POST /v1/audio/speech` | 텍스트에서 오디오 파일이 필요할 때. |
+| 전사 | `POST /v1/audio/transcriptions` | 오디오 파일에서 텍스트가 필요할 때. |
+| 오디오 번역 | `POST /v1/audio/translations` | 오디오 파일에서 번역된 텍스트가 필요할 때. |
+| 실시간 세션 | `GET /v1/realtime` | 양방향 스트리밍 오디오나 실시간 멀티모달 이벤트가 필요할 때. |
+
+## 모델 찾기
+
+클라이언트에 모델 목록을 고정하지 마세요. 음성과 전사는 추천 목록을 사용하고, realtime은 socket을 열기 전에 모델 상세에서 지원 여부를 확인하세요.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 동기 오디오 요청
+
+음성, 전사, 번역은 HTTP 요청에서 직접 반환됩니다. 큰 입력은 일반적인 클라이언트 timeout보다 오래 걸릴 수 있으므로 넉넉한 timeout과 request ID 저장을 권장합니다.
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## 실시간 세션
+
+WebSocket을 열 때 query string에 model을, Authorization header에 API key를 넣습니다. 선택한 realtime 모델 문서의 이벤트 형식을 사용하고, 세션이 끝나면 socket을 닫으세요.
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## 상태 처리
+
+- 생성된 오디오 파일을 저장하고 새로고침 때 같은 요청을 반복하지 마세요.
+- 전사와 번역은 동기 호출이어도 업로드 및 처리 상태를 보여주세요.
+- realtime은 close 이벤트를 처리하고 사용자가 새 세션을 시작할 때만 재연결하세요.
+- API key, 비공개 URL, 계정 secret을 오디오 텍스트 입력에 넣지 마세요.
+
+## API 레퍼런스
+
+| 주제 | 레퍼런스 |
+|-------|-----------|
+| 음성 생성 | [음성 생성](/ko/api-reference/audio/create-speech) |
+| 전사 생성 | [전사 생성](/ko/api-reference/audio/create-transcription) |
+| 번역 생성 | [번역 생성](/ko/api-reference/audio/create-translation) |
+| Realtime WebSocket | [Realtime WebSocket](/ko/api-reference/realtime/connect) |
+| 모델 목록 | [모델 목록](/ko/api-reference/models/list-models) |
+| 청구 및 가격 | [청구 및 가격](/ko/guides/billing) |

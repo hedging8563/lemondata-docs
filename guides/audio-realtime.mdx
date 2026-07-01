@@ -1,0 +1,75 @@
+---
+title: "Audio & Realtime"
+description: "Choose speech, transcription, translation, or realtime WebSocket flows for audio applications."
+---
+
+Audio workloads split into two shapes. Use the audio endpoints for file-like requests such as text-to-speech, transcription, and audio translation. Use the realtime WebSocket endpoint when the user experience needs low-latency, interactive audio or multimodal events.
+
+## Choose The Workflow
+
+| Workflow | Endpoint | Use it when |
+|----------|----------|-------------|
+| Text to speech | `POST /v1/audio/speech` | You need an audio file from text. |
+| Transcription | `POST /v1/audio/transcriptions` | You need text from an audio file. |
+| Audio translation | `POST /v1/audio/translations` | You need translated text from an audio file. |
+| Realtime session | `GET /v1/realtime` | You need bidirectional streaming audio or realtime multimodal events. |
+
+## Discover Models
+
+Query the model catalog before hard-coding a model. Use recommended shortlists for speech and transcription, and use model details to confirm realtime support before opening a socket.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Synchronous Audio Requests
+
+Speech, transcription, and translation requests return directly from the HTTP request. Large inputs can take longer than common client defaults, so set a generous timeout and store request IDs for support.
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## Realtime Sessions
+
+Open a WebSocket with the model in the query string and the API key in the Authorization header. Keep the event format documented for the selected realtime model, and close the socket when the session is complete.
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## State Handling
+
+- Save generated audio files instead of replaying the same request on refresh.
+- For transcription and translation, show upload and processing states even when the API call is synchronous.
+- For realtime, handle close events and reconnect only after the user starts a new session.
+- Do not put API keys, private URLs, or account secrets in audio text input.
+
+## API Reference
+
+| Topic | Reference |
+|-------|-----------|
+| Create Speech | [Create Speech](/api-reference/audio/create-speech) |
+| Create Transcription | [Create Transcription](/api-reference/audio/create-transcription) |
+| Create Translation | [Create Translation](/api-reference/audio/create-translation) |
+| Realtime WebSocket | [Realtime WebSocket](/api-reference/realtime/connect) |
+| List Models | [List Models](/api-reference/models/list-models) |
+| Billing & Pricing | [Billing & Pricing](/guides/billing) |

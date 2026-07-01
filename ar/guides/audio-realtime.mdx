@@ -1,0 +1,75 @@
+---
+title: "الصوت والوقت الفعلي"
+description: "اختر الكلام أو التفريغ أو الترجمة أو WebSocket في الوقت الفعلي لتطبيقات الصوت."
+---
+
+تنقسم أعمال الصوت إلى شكلين. استخدم نقاط نهاية الصوت للطلبات الشبيهة بالملفات مثل تحويل النص إلى كلام والتفريغ والترجمة الصوتية. استخدم WebSocket في الوقت الفعلي عندما تحتاج التجربة إلى صوت تفاعلي منخفض التأخير أو أحداث متعددة الوسائط.
+
+## اختيار سير العمل
+
+| سير العمل | النقطة | استخدمه عندما |
+|----------|----------|-------------|
+| النص إلى كلام | `POST /v1/audio/speech` | تحتاج إلى ملف صوتي من نص. |
+| التفريغ | `POST /v1/audio/transcriptions` | تحتاج إلى نص من ملف صوتي. |
+| ترجمة الصوت | `POST /v1/audio/translations` | تحتاج إلى نص مترجم من ملف صوتي. |
+| جلسة وقت فعلي | `GET /v1/realtime` | تحتاج إلى صوت ثنائي الاتجاه أو أحداث متعددة الوسائط في الوقت الفعلي. |
+
+## اكتشاف النماذج
+
+استعلم عن كتالوج النماذج قبل تثبيت نموذج في الكود. استخدم القوائم الموصى بها للكلام والتفريغ، وتحقق من دعم الوقت الفعلي في تفاصيل النموذج قبل فتح socket.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## طلبات الصوت المتزامنة
+
+تعيد طلبات الكلام والتفريغ والترجمة النتيجة مباشرة من طلب HTTP. قد تستغرق المدخلات الكبيرة وقتًا أطول من مهلات العملاء الشائعة، لذلك عيّن مهلة واسعة واحفظ request IDs للدعم.
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## جلسات الوقت الفعلي
+
+افتح WebSocket مع model في query string ومفتاح API في ترويسة Authorization. استخدم تنسيق الأحداث الموثق للنموذج الفعلي المختار وأغلق socket عند انتهاء الجلسة.
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## معالجة الحالة
+
+- احفظ ملفات الصوت الناتجة بدل إعادة نفس الطلب عند التحديث.
+- للتفريغ والترجمة، اعرض حالات الرفع والمعالجة حتى عندما يكون استدعاء API متزامنًا.
+- في الوقت الفعلي، عالج أحداث الإغلاق ولا تعاود الاتصال إلا عندما يبدأ المستخدم جلسة جديدة.
+- لا تضع مفاتيح API أو URLs خاصة أو أسرار الحساب في نص الصوت.
+
+## مرجع API
+
+| الموضوع | المرجع |
+|-------|-----------|
+| إنشاء كلام | [إنشاء كلام](/ar/api-reference/audio/create-speech) |
+| إنشاء تفريغ | [إنشاء تفريغ](/ar/api-reference/audio/create-transcription) |
+| إنشاء ترجمة | [إنشاء ترجمة](/ar/api-reference/audio/create-translation) |
+| WebSocket وقت فعلي | [WebSocket وقت فعلي](/ar/api-reference/realtime/connect) |
+| عرض النماذج | [عرض النماذج](/ar/api-reference/models/list-models) |
+| الفوترة والتسعير | [الفوترة والتسعير](/ar/guides/billing) |

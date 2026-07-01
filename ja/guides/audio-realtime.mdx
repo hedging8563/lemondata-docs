@@ -1,0 +1,75 @@
+---
+title: "オーディオとリアルタイム"
+description: "音声アプリ向けに、音声生成、文字起こし、翻訳、リアルタイム WebSocket を選びます。"
+---
+
+オーディオ処理は二つに分かれます。テキスト読み上げ、文字起こし、音声翻訳のようなファイル型の処理は Audio endpoint を使います。低遅延の対話音声やリアルタイムのマルチモーダルイベントが必要な場合は Realtime WebSocket を使います。
+
+## ワークフローを選ぶ
+
+| ワークフロー | Endpoint | 使う場面 |
+|----------|----------|-------------|
+| テキスト読み上げ | `POST /v1/audio/speech` | テキストから音声ファイルを作る場合。 |
+| 文字起こし | `POST /v1/audio/transcriptions` | 音声ファイルからテキストを得る場合。 |
+| 音声翻訳 | `POST /v1/audio/translations` | 音声ファイルから翻訳済みテキストを得る場合。 |
+| リアルタイムセッション | `GET /v1/realtime` | 双方向ストリーミング音声またはリアルタイムイベントが必要な場合。 |
+
+## モデルを確認する
+
+モデル一覧をクライアントに固定しないでください。音声生成と文字起こしは推奨モデルを使い、リアルタイム対応は socket を開く前にモデル詳細で確認します。
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 同期オーディオリクエスト
+
+音声生成、文字起こし、翻訳は HTTP リクエスト内で直接返ります。大きな入力は一般的なクライアントの timeout を超えることがあるため、余裕のある timeout と request ID の保存を推奨します。
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## リアルタイムセッション
+
+WebSocket では query string に model、Authorization header に API key を入れます。選択したリアルタイムモデルのドキュメントに沿ったイベント形式を使い、完了時に socket を閉じます。
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## 状態管理
+
+- 生成済み音声ファイルを保存し、更新時に同じリクエストを再実行しない。
+- 文字起こしと翻訳は同期でもアップロード中・処理中の状態を表示する。
+- リアルタイムでは close イベントを処理し、ユーザーが新しいセッションを始めた時だけ再接続する。
+- API key、非公開 URL、アカウント秘密情報を音声テキスト入力に入れない。
+
+## API リファレンス
+
+| トピック | リファレンス |
+|-------|-----------|
+| 音声を作成 | [音声を作成](/ja/api-reference/audio/create-speech) |
+| 文字起こしを作成 | [文字起こしを作成](/ja/api-reference/audio/create-transcription) |
+| 翻訳を作成 | [翻訳を作成](/ja/api-reference/audio/create-translation) |
+| Realtime WebSocket | [Realtime WebSocket](/ja/api-reference/realtime/connect) |
+| モデル一覧 | [モデル一覧](/ja/api-reference/models/list-models) |
+| 請求と価格 | [請求と価格](/ja/guides/billing) |

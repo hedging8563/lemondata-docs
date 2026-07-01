@@ -1,0 +1,75 @@
+---
+title: "Audio & Echtzeit"
+description: "Wählen Sie Sprachsynthese, Transkription, Übersetzung oder Realtime-WebSocket-Flows für Audioanwendungen."
+---
+
+Audio-Workloads haben zwei Formen. Verwenden Sie die Audio-Endpunkte für dateiähnliche Anfragen wie Text-to-Speech, Transkription und Audioübersetzung. Verwenden Sie den Realtime-WebSocket-Endpunkt, wenn die Nutzererfahrung interaktive Audio- oder multimodale Ereignisse mit niedriger Latenz benötigt.
+
+## Workflow Wählen
+
+| Workflow | Endpunkt | Verwenden, wenn |
+|----------|----------|-------------|
+| Text zu Sprache | `POST /v1/audio/speech` | Sie eine Audiodatei aus Text benötigen. |
+| Transkription | `POST /v1/audio/transcriptions` | Sie Text aus einer Audiodatei benötigen. |
+| Audioübersetzung | `POST /v1/audio/translations` | Sie übersetzten Text aus einer Audiodatei benötigen. |
+| Realtime-Sitzung | `GET /v1/realtime` | Sie bidirektionales Streaming-Audio oder Echtzeitereignisse benötigen. |
+
+## Modelle Finden
+
+Fragen Sie den Modellkatalog ab, bevor Sie ein Modell fest einbauen. Nutzen Sie empfohlene Shortlists für Speech und Transkription, und prüfen Sie Realtime-Unterstützung in den Modelldetails, bevor Sie einen Socket öffnen.
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## Synchrone Audioanfragen
+
+Speech-, Transkriptions- und Übersetzungsanfragen antworten direkt im HTTP-Request. Große Eingaben können länger dauern als übliche Client-Timeouts, daher sollten Sie großzügige Timeouts setzen und Request-IDs für Support speichern.
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## Realtime-Sitzungen
+
+Öffnen Sie einen WebSocket mit dem Modell in der Query und dem API-Key im Authorization-Header. Nutzen Sie das Ereignisformat aus der Dokumentation des gewählten Realtime-Modells und schließen Sie den Socket am Ende der Sitzung.
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## Statusbehandlung
+
+- Speichern Sie generierte Audiodateien, statt dieselbe Anfrage beim Aktualisieren erneut auszuführen.
+- Zeigen Sie Upload- und Verarbeitungsstatus auch bei synchroner Transkription und Übersetzung.
+- Behandeln Sie Close-Events bei Realtime und verbinden Sie erst neu, wenn der Nutzer eine neue Sitzung startet.
+- Legen Sie keine API-Keys, privaten URLs oder Konto-Geheimnisse in Audio-Texteingaben ab.
+
+## API-Referenz
+
+| Thema | Referenz |
+|-------|-----------|
+| Speech Erstellen | [Speech Erstellen](/de/api-reference/audio/create-speech) |
+| Transkription Erstellen | [Transkription Erstellen](/de/api-reference/audio/create-transcription) |
+| Übersetzung Erstellen | [Übersetzung Erstellen](/de/api-reference/audio/create-translation) |
+| Realtime WebSocket | [Realtime WebSocket](/de/api-reference/realtime/connect) |
+| Modelle Auflisten | [Modelle Auflisten](/de/api-reference/models/list-models) |
+| Abrechnung & Preise | [Abrechnung & Preise](/de/guides/billing) |

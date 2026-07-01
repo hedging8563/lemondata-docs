@@ -1,0 +1,75 @@
+---
+title: "音频与实时"
+description: "为音频应用选择语音、转写、翻译或实时 WebSocket 流程。"
+---
+
+音频工作负载分成两类。文本转语音、转写、音频翻译这类文件式请求使用音频端点；需要低延迟互动音频或多模态事件时，使用实时 WebSocket 端点。
+
+## 选择流程
+
+| 流程 | 端点 | 适用场景 |
+|----------|----------|-------------|
+| 文本转语音 | `POST /v1/audio/speech` | 需要从文本生成音频文件。 |
+| 转写 | `POST /v1/audio/transcriptions` | 需要从音频文件得到文本。 |
+| 音频翻译 | `POST /v1/audio/translations` | 需要从音频文件得到翻译后的文本。 |
+| 实时会话 | `GET /v1/realtime` | 需要双向流式音频或实时多模态事件。 |
+
+## 发现模型
+
+不要在客户端硬编码模型列表。语音和转写可使用推荐模型短名单；实时能力需要在打开 socket 前通过模型详情确认。
+
+```bash
+curl "https://api.tokenlab.sh/v1/models?recommended_for=tts" \
+  -H "Authorization: Bearer sk-your-api-key"
+
+curl "https://api.tokenlab.sh/v1/models?recommended_for=stt" \
+  -H "Authorization: Bearer sk-your-api-key"
+```
+
+## 同步音频请求
+
+语音、转写和翻译会在 HTTP 请求中直接返回。大输入可能超过常见客户端超时，建议设置更宽松的超时并保存 request ID 方便排查。
+
+```bash
+curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "tts-1-hd",
+    "voice": "nova",
+    "input": "Welcome to TokenLab."
+  }' \
+  --output speech.mp3
+```
+
+## 实时会话
+
+打开 WebSocket 时在查询参数中传 model，并在 Authorization header 中传 API key。事件格式按所选实时模型文档发送；会话结束时主动关闭 socket。
+
+```javascript
+import WebSocket from 'ws';
+
+const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realtime', {
+  headers: { Authorization: 'Bearer sk-your-api-key' }
+});
+
+socket.on('message', (event) => console.log(event.toString()));
+```
+
+## 状态处理
+
+- 保存生成的音频文件，刷新页面时不要重复发起同一请求。
+- 转写和翻译即使是同步调用，也应展示上传和处理中状态。
+- 实时会话要处理关闭事件，只有用户重新开始会话时才重连。
+- 不要把 API key、私有 URL 或账户密钥放进音频文本输入。
+
+## API 参考
+
+| 主题 | 参考 |
+|-------|-----------|
+| 创建语音 | [创建语音](/zh/api-reference/audio/create-speech) |
+| 创建转写 | [创建转写](/zh/api-reference/audio/create-transcription) |
+| 创建翻译 | [创建翻译](/zh/api-reference/audio/create-translation) |
+| 实时 WebSocket | [实时 WebSocket](/zh/api-reference/realtime/connect) |
+| 列出模型 | [列出模型](/zh/api-reference/models/list-models) |
+| 计费与价格 | [计费与价格](/zh/guides/billing) |
