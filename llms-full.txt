@@ -1936,7 +1936,7 @@ When contacting support, include:
 - Sanitized request shape and public error body.
 - Your expected result and what the user actually saw.
 
-Do not include API keys, management tokens, private media, full prompts, provider URLs, channel IDs, or internal routing identifiers unless TokenLab support explicitly asks for a redacted sample.
+Do not include API keys, management tokens, private media, full prompts, provider URLs, channel IDs, or private diagnostic identifiers unless TokenLab support explicitly asks for a redacted sample.
 
 ## Operational Checks
 
@@ -2900,7 +2900,7 @@ curl https://api.tokenlab.sh/v1/music/generations \
   }'
 ```
 
-Keep prompts, titles, and tags user-visible and safe to store. Do not place API keys, private URLs, or internal routing information in any prompt field.
+Keep prompts, titles, and tags user-visible and safe to store. Do not place API keys, private URLs, or private diagnostic details in any prompt field.
 
 ## Poll For Completion
 
@@ -4035,11 +4035,11 @@ Google Gemini image-family models do not share the same selector contract:
 
 For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
 
-xAI Grok Imagine image models (`grok-imagine-image`, `grok-imagine-image-quality`, and legacy `grok-imagine-image-pro`) support `aspect_ratio` plus `resolution` (`1k`, `2k`). `grok-imagine-image-pro` is retained as a compatibility ID and routes upstream to `grok-imagine-image-quality`.
+xAI Grok Imagine image models (`grok-imagine-image`, `grok-imagine-image-quality`, and legacy `grok-imagine-image-pro`) support `aspect_ratio` plus `resolution` (`1k`, `2k`). `grok-imagine-image-pro` is retained as a compatibility ID for `grok-imagine-image-quality`.
 
 ## Request Body
 
-**Synchronous request timeout:** Some routed image providers return the final image inline and wait for generation to finish. High-resolution or high-quality requests can take close to a minute or longer, so set your HTTP client timeout to at least `120s`. If the create response includes `status: "pending"`, `task_id`, or `poll_url`, follow the returned `poll_url` instead.
+**Synchronous request timeout:** Some image requests return the final image inline and wait for generation to finish. High-resolution or high-quality requests can take close to a minute or longer, so set your HTTP client timeout to at least `120s`. If the create response includes `status: "pending"`, `task_id`, or `poll_url`, follow the returned `poll_url` instead.
 
 ## Response
 
@@ -4128,7 +4128,7 @@ URL: https://docs.tokenlab.sh/api-reference/images/edit-image
 
 Creates an edited or extended image given an original image and a prompt.
 
-The route supports both:
+This endpoint supports both:
 
 - the OpenAI-compatible `multipart/form-data` upload flow documented below
 - JSON requests that provide `image_url`, `image_urls`, or official `images` references for supported image-to-image families
@@ -4139,15 +4139,15 @@ The route supports both:
 
 Nano Banana reference-image requests (`nano-banana`, `nano-banana-2`, and `nano-banana-pro`) are exposed on `/v1/images/generations` with `operation: "image-to-image"` and `image_urls`, not on this `/v1/images/edits` endpoint.
 
-xAI Grok Imagine image edit models (`grok-imagine-image`, `grok-imagine-image-quality`, and legacy `grok-imagine-image-pro`) accept at most 3 source images. Requests with more than 3 source images fail before upstream forwarding with `400 too_many_images`.
+xAI Grok Imagine image edit models (`grok-imagine-image`, `grok-imagine-image-quality`, and legacy `grok-imagine-image-pro`) accept at most 3 source images. Requests with more than 3 source images fail input validation with `400 too_many_images`.
 
-Compatibility note: if `input_fidelity` is sent with `gpt-image-2`, TokenLab removes it before forwarding because GPT Image 2 already handles image inputs at high fidelity.
+Compatibility note: if `input_fidelity` is sent with `gpt-image-2`, TokenLab removes it because GPT Image 2 already handles image inputs at high fidelity.
 
 ## Request Body
 
-**Synchronous request timeout:** Some routed image providers return the final image inline and wait for generation to finish. High-resolution or high-quality requests can take close to a minute or longer, so set your HTTP client timeout to at least `120s`. If the create response includes `status: "pending"`, `task_id`, or `poll_url`, follow the returned `poll_url` instead.
+**Synchronous request timeout:** Some image requests return the final image inline and wait for generation to finish. High-resolution or high-quality requests can take close to a minute or longer, so set your HTTP client timeout to at least `120s`. If the create response includes `status: "pending"`, `task_id`, or `poll_url`, follow the returned `poll_url` instead.
 
-Remote image URLs: when the routed provider requires multipart input, TokenLab fetches JSON `image_url`, `image_urls`, or `images[].image_url` and forwards the bytes as multipart `image` parts. URLs must be public `http`/`https`, without embedded credentials or fragments, and must not resolve to localhost, private, or reserved IP ranges; each redirect is checked again. The fetched payload must be a real PNG, JPEG, or WebP image. Limits are `50MB` per image, `200MB` total for URL-fetched images in one request, `10s` fetch timeout, and up to `3` redirects.
+Remote image URLs: when multipart input is needed, TokenLab fetches JSON `image_url`, `image_urls`, or `images[].image_url` and sends the bytes as multipart `image` parts. URLs must be public `http`/`https`, without embedded credentials or fragments, and must not resolve to localhost, private, or reserved IP ranges; each redirect is checked again. The fetched payload must be a real PNG, JPEG, or WebP image. Limits are `50MB` per image, `200MB` total for URL-fetched images in one request, `10s` fetch timeout, and up to `3` redirects.
 
 ## Response
 
@@ -4161,7 +4161,7 @@ Billing may reserve the estimated amount when the task is created. Completed tas
 
 ## Notes
 
-> Note: Remote image fetch failures are returned as input errors before the upstream request is sent. Unreachable URLs, timeouts, 403/404 responses, private/internal hosts, credentials or fragments in the URL, non-image content, unsupported formats, and size-limit violations return `400` or `413` and identify the `image_url` / `image_urls[n]` input. For private or header-protected assets, upload multipart `image` files directly or create `/v1/files` references.
+> Note: Remote image fetch failures are returned as input errors before generation begins. Unreachable URLs, timeouts, 403/404 responses, private/internal hosts, credentials or fragments in the URL, non-image content, unsupported formats, and size-limit violations return `400` or `413` and identify the `image_url` / `image_urls[n]` input. For private or header-protected assets, upload multipart `image` files directly or create `/v1/files` references.
 
 ---
 
@@ -6197,7 +6197,7 @@ URL: https://docs.tokenlab.sh/guides/coding-agent-models
 | `deepseek-v4-pro` | Moderate | Very Good | $ | 1M | Reasoning-heavy tasks |
 | `deepseek-v4-flash` | Fast | Good | $ | 1M | Bulk generation, boilerplate |
 
-For the newer coding-oriented pool, also consider `qwen-long-latest` for very large repositories, `minimax-m3` for large-context agent work, `kimi-k2.7-code-highspeed` for fast coding loops, and `deepseek-v4-pro` / `deepseek-v4-flash`, `glm-5.2`, `step-3.7-flash`, and `mimo-v2.5-pro` for OpenAI-compatible chat routing.
+For the newer coding-oriented pool, also consider `qwen-long-latest` for very large repositories, `minimax-m3` for large-context agent work, `kimi-k2.7-code-highspeed` for fast coding loops, and `deepseek-v4-pro` / `deepseek-v4-flash`, `glm-5.2`, `step-3.7-flash`, and `mimo-v2.5-pro` for OpenAI-compatible chat requests.
 
 ## Task-Specific Recommendations
 
@@ -6239,34 +6239,34 @@ For the newer coding-oriented pool, also consider `qwen-long-latest` for very la
 
     Speed is critical for interactive use. Budget models with fast response times provide the best experience. Don't waste premium tokens on autocomplete.
 
-## How TokenLab Routing Works
+## Provider Selection
 
-TokenLab routes your requests to the best available provider automatically.
+TokenLab selects an available provider for the requested model automatically.
 
-### Routing Strategies
+### Selection Strategies
 
 | Strategy | Behavior | Best For |
 |----------|----------|----------|
-| **PRIORITY** | Routes to highest-priority available provider | Reliability-focused |
-| **COST** | Routes to cheapest available provider | Cost-focused |
+| **PRIORITY** | Uses the highest-priority available provider | Reliability-focused |
+| **COST** | Uses the lowest-cost available provider | Cost-focused |
 
 You can set your preferred strategy in the dashboard.
 
-### Automatic Fallback
+### Automatic Retry
 
-If a provider is unavailable or returns an error, TokenLab automatically retries with the next provider:
+If a provider is unavailable or returns an error, TokenLab automatically retries with another available provider:
 
 ```
 Request: claude-sonnet-4-6
   → Provider A (primary): 503 error
-  → Provider B (fallback): ✓ Success
+  → Provider B (retry): ✓ Success
 ```
 
 This happens transparently — your coding agent sees a normal response.
 
-### Native Format Routing
+### Native API Formats
 
-When the selected model and routed channel support it, TokenLab can route requests through the model family's native API format for better compatibility:
+When the selected model supports a native API format, TokenLab can use that format for better compatibility:
 
 | Model Family | API Format | Base URL |
 |-------------|------------|----------|
@@ -7729,7 +7729,7 @@ for block in message.content:
 
 ### LiteLLM
 
-> Use TokenLab with LiteLLM either as a provider endpoint or as your gateway layer
+> Use TokenLab with LiteLLM as an OpenAI-compatible endpoint or as part of your team gateway
 
 URL: https://docs.tokenlab.sh/integrations/litellm
 
@@ -7737,8 +7737,8 @@ URL: https://docs.tokenlab.sh/integrations/litellm
 
 LiteLLM fits TokenLab in two common ways:
 
-- use TokenLab as an **OpenAI-compatible upstream** behind LiteLLM
-- put LiteLLM in front of TokenLab when your team wants one more internal gateway layer for routing, virtual keys, or centralized observability
+- use TokenLab as an **OpenAI-compatible endpoint** behind LiteLLM
+- put LiteLLM in front of TokenLab when your team wants team-managed virtual keys, model-selection policy, or centralized observability
 
 For TokenLab, the cleanest default is LiteLLM's **custom OpenAI / OpenAI-compatible** path pointed at `https://api.tokenlab.sh/v1`.
 
@@ -7746,7 +7746,7 @@ For TokenLab, the cleanest default is LiteLLM's **custom OpenAI / OpenAI-compati
 
 > Note: **Type**: Framework or Platform
 
-**Primary Path**: OpenAI-compatible upstream
+**Primary Path**: OpenAI-compatible endpoint
 
 **Support Confidence**: Supported path
 
@@ -7819,12 +7819,12 @@ response = litellm.completion(
 
 #### Prefer custom_openai for TokenLab
 
-Treat TokenLab as an OpenAI-compatible upstream unless you have a very specific reason to build a more complex provider mapping.
+Treat TokenLab as an OpenAI-compatible endpoint unless you have a very specific reason to build a more complex provider mapping.
 
 
 #### Use LiteLLM when you need one more gateway layer
 
-LiteLLM makes sense when your own platform wants virtual keys, extra routing policy, or centralized logs in front of TokenLab.
+LiteLLM makes sense when your own platform wants virtual keys, extra model-selection policy, or centralized logs in front of TokenLab.
 
 
 #### Keep native-provider expectations realistic

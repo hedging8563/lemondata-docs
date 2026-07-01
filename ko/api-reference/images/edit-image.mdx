@@ -20,16 +20,16 @@ description: "프롬프트와 원본 이미지를 기반으로 이미지를 편�
 
 Nano Banana 참조 이미지 요청(`nano-banana`, `nano-banana-2`, `nano-banana-pro`)은 `/v1/images/generations` 에서 제공되며 `operation: "image-to-image"` 와 `image_urls` 를 사용합니다. 이 `/v1/images/edits` 엔드포인트로 보내지 마세요.
 
-xAI Grok Imagine 이미지 편집 모델(`grok-imagine-image`, `grok-imagine-image-quality`, legacy `grok-imagine-image-pro`)은 최대 3개의 원본 이미지만 허용합니다. 3개를 초과하는 요청은 업스트림으로 전달되기 전에 `400 too_many_images`로 실패합니다.
+xAI Grok Imagine 이미지 편집 모델(`grok-imagine-image`, `grok-imagine-image-quality`, legacy `grok-imagine-image-pro`)은 최대 3개의 원본 이미지만 허용합니다. 3개를 초과하는 요청은 입력 검증 단계에서 `400 too_many_images`로 실패합니다.
 
-호환성 참고: `gpt-image-2` 요청에 `input_fidelity`가 포함되어 있으면 GPT Image 2가 이미지 입력을 자동으로 고충실도로 처리하므로 TokenLab는 업스트림으로 전달하기 전에 이 필드를 제거합니다.
+호환성 참고: `gpt-image-2` 요청에 `input_fidelity`가 포함되어 있으면 GPT Image 2가 이미지 입력을 자동으로 고충실도로 처리하므로 TokenLab는 이 필드를 제거합니다.
 </Note>
 
 ## 요청 본문
 
-**동기 요청 타임아웃:** 일부 라우팅된 이미지 제공자는 생성이 완료될 때까지 기다린 뒤 최종 이미지를 inline 으로 반환합니다. 고해상도 또는 고품질 요청은 1분 안팎이거나 그 이상 걸릴 수 있으므로 HTTP 클라이언트 타임아웃을 최소 `120s` 로 설정하세요. 생성 응답에 `status: "pending"`, `task_id`, 또는 `poll_url` 이 포함되어 있으면 반환된 `poll_url` 을 따라 폴링하세요.
+**동기 요청 타임아웃:** 일부 이미지 요청은 생성이 완료될 때까지 기다린 뒤 최종 이미지를 inline 으로 반환합니다. 고해상도 또는 고품질 요청은 1분 안팎이거나 그 이상 걸릴 수 있으므로 HTTP 클라이언트 타임아웃을 최소 `120s` 로 설정하세요. 생성 응답에 `status: "pending"`, `task_id`, 또는 `poll_url` 이 포함되어 있으면 반환된 `poll_url` 을 따라 폴링하세요.
 
-원격 이미지 URL: 라우팅된 제공자가 multipart 입력을 요구하면 TokenLab는 JSON `image_url`, `image_urls`, 또는 `images[].image_url`을 가져와 바이트를 multipart `image` 파트로 전달합니다. URL은 공개 `http`/`https`여야 하며, 내장 자격 증명이나 fragment가 없어야 하고, localhost, private 또는 reserved IP 범위로 해석되면 안 됩니다. 각 redirect 대상도 다시 검사됩니다. 가져온 payload는 실제 PNG, JPEG, WebP 이미지여야 합니다. 제한은 이미지당 `50MB`, 한 요청에서 URL로 가져오는 이미지 합계 `200MB`, fetch timeout `10s`, 최대 `3`회 redirect입니다.
+원격 이미지 URL: multipart 입력이 필요하면 TokenLab는 JSON `image_url`, `image_urls`, 또는 `images[].image_url`을 가져와 바이트를 multipart `image` 파트로 보냅니다. URL은 공개 `http`/`https`여야 하며, 내장 자격 증명이나 fragment가 없어야 하고, localhost, private 또는 reserved IP 범위로 해석되면 안 됩니다. 각 redirect 대상도 다시 검사됩니다. 가져온 payload는 실제 PNG, JPEG, WebP 이미지여야 합니다. 제한은 이미지당 `50MB`, 한 요청에서 URL로 가져오는 이미지 합계 `200MB`, fetch timeout `10s`, 최대 `3`회 redirect입니다.
 
 <ParamField body="image" type="file">
   multipart 원본 이미지입니다. 여러 GPT Image 원본을 제공하려면 `image` 필드를 반복해서 보내세요. 파일은 PNG, JPEG, WebP여야 하며 최대 16개 원본 이미지, 각 `50MB`까지 지원됩니다. xAI Grok Imagine 편집 모델은 같은 입력 필드를 사용하지만 원본 이미지는 3개로 제한됩니다.
@@ -58,7 +58,7 @@ xAI Grok Imagine 이미지 편집 모델(`grok-imagine-image`, `grok-imagine-ima
 <ParamField body="response_format" type="string" default="url">
   생성된 이미지가 반환되는 형식입니다. `url` 또는 `b64_json`이어야 하며 기본값은 `url`입니다.
 
-  Azure Official 또는 Azure-compatible `gpt-image-2` 라우팅에서는 TokenLab가 `response_format`을 upstream으로 전달하지 않습니다. 게이트웨이는 항상 upstream 이미지 데이터를 `b64_json`으로 받습니다. `url` 요청에서는 각 이미지를 CDN에 업로드한 뒤 `data[].url`을 반환합니다. CDN 스토리지를 사용할 수 없거나 업로드가 실패하면 Base64로 fallback하지 않고 요청을 실패시킵니다. `b64_json` 요청에서는 원본 Base64를 반환합니다.
+  Azure Official 또는 Azure-compatible `gpt-image-2` 요청에서는 TokenLab가 이미지 결과를 `b64_json`으로 받습니다. `url` 요청에서는 각 이미지를 CDN에 업로드한 뒤 `data[].url`을 반환합니다. CDN 스토리지를 사용할 수 없거나 업로드가 실패하면 Base64 응답으로 바꾸지 않고 요청을 실패시킵니다. `b64_json` 요청에서는 원본 Base64를 반환합니다.
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
@@ -237,5 +237,5 @@ echo $data['data'][0]['url'];
 ## 참고 사항
 
 <Note>
-  원격 이미지 가져오기 실패는 upstream 요청을 보내기 전에 입력 오류로 반환됩니다. 접근 불가 URL, timeout, 403/404 응답, private/internal host, URL 내 자격 증명 또는 fragment, 이미지가 아닌 콘텐츠, 지원하지 않는 형식, 크기 초과는 `400` 또는 `413`을 반환하고 `image_url` / `image_urls[n]` 입력을 표시합니다. private 또는 header로 보호된 asset은 multipart `image` 파일로 직접 업로드하거나 `/v1/files` 참조를 생성하세요.
+  원격 이미지 가져오기 실패는 생성이 시작되기 전에 입력 오류로 반환됩니다. 접근 불가 URL, timeout, 403/404 응답, private/internal host, URL 내 자격 증명 또는 fragment, 이미지가 아닌 콘텐츠, 지원하지 않는 형식, 크기 초과는 `400` 또는 `413`을 반환하고 `image_url` / `image_urls[n]` 입력을 표시합니다. private 또는 header로 보호된 asset은 multipart `image` 파일로 직접 업로드하거나 `/v1/files` 참조를 생성하세요.
 </Note>

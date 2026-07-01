@@ -20,16 +20,16 @@ Edit dengan `gpt-image-2` tidak menerima `resolution` atau `background`; gunakan
 
 Request Nano Banana dengan gambar referensi (`nano-banana`, `nano-banana-2`, dan `nano-banana-pro`) tersedia melalui `/v1/images/generations` dengan `operation: "image-to-image"` dan `image_urls`, bukan endpoint `/v1/images/edits` ini.
 
-Model edit gambar xAI Grok Imagine (`grok-imagine-image`, `grok-imagine-image-quality`, dan legacy `grok-imagine-image-pro`) menerima maksimal 3 gambar sumber. Request dengan lebih dari 3 gambar sumber gagal sebelum diteruskan ke upstream dengan `400 too_many_images`.
+Model edit gambar xAI Grok Imagine (`grok-imagine-image`, `grok-imagine-image-quality`, dan legacy `grok-imagine-image-pro`) menerima maksimal 3 gambar sumber. Request dengan lebih dari 3 gambar sumber gagal saat validasi input dengan `400 too_many_images`.
 
-Catatan kompatibilitas: jika permintaan `gpt-image-2` mengirim `input_fidelity`, TokenLab menghapus kolom itu sebelum meneruskan karena GPT Image 2 sudah otomatis memproses input gambar dengan fidelitas tinggi.
+Catatan kompatibilitas: jika permintaan `gpt-image-2` mengirim `input_fidelity`, TokenLab menghapus kolom itu karena GPT Image 2 sudah otomatis memproses input gambar dengan fidelitas tinggi.
 </Note>
 
 ## Body Request
 
-**Timeout permintaan sinkron:** beberapa penyedia gambar yang dirutekan mengembalikan gambar final secara inline dan menunggu proses generasi selesai. Permintaan resolusi tinggi atau kualitas tinggi dapat memakan waktu hampir satu menit atau lebih, jadi atur timeout HTTP client Anda minimal `120s`. Jika respons pembuatan berisi `status: "pending"`, `task_id`, atau `poll_url`, ikuti `poll_url` yang dikembalikan.
+**Timeout permintaan sinkron:** beberapa request gambar mengembalikan gambar final secara inline dan menunggu proses generasi selesai. Permintaan resolusi tinggi atau kualitas tinggi dapat memakan waktu hampir satu menit atau lebih, jadi atur timeout HTTP client Anda minimal `120s`. Jika respons pembuatan berisi `status: "pending"`, `task_id`, atau `poll_url`, ikuti `poll_url` yang dikembalikan.
 
-URL gambar jarak jauh: ketika provider yang dirutekan memerlukan input multipart, TokenLab mengambil JSON `image_url`, `image_urls`, atau `images[].image_url` lalu meneruskan byte-nya sebagai part multipart `image`. URL harus publik melalui `http`/`https`, tanpa kredensial tertanam atau fragment, dan tidak boleh resolve ke localhost, rentang IP privat, atau IP reserved; setiap redirect divalidasi ulang. Payload yang diambil harus benar-benar berupa gambar PNG, JPEG, atau WebP. Batasnya `50MB` per gambar, total `200MB` untuk gambar yang diambil dari URL dalam satu request, timeout `10s`, dan maksimal `3` redirect.
+URL gambar jarak jauh: ketika input multipart diperlukan, TokenLab mengambil JSON `image_url`, `image_urls`, atau `images[].image_url` lalu mengirim byte-nya sebagai part multipart `image`. URL harus publik melalui `http`/`https`, tanpa kredensial tertanam atau fragment, dan tidak boleh resolve ke localhost, rentang IP privat, atau IP reserved; setiap redirect divalidasi ulang. Payload yang diambil harus benar-benar berupa gambar PNG, JPEG, atau WebP. Batasnya `50MB` per gambar, total `200MB` untuk gambar yang diambil dari URL dalam satu request, timeout `10s`, dan maksimal `3` redirect.
 
 <ParamField body="image" type="file">
   Gambar sumber multipart. Ulangi `image` untuk mengirim beberapa sumber GPT Image. File harus PNG, JPEG, atau WebP, maksimal 16 gambar sumber dan `50MB` per file. Model edit xAI Grok Imagine memakai field input yang sama, tetapi membatasi gambar sumber menjadi 3.
@@ -58,7 +58,7 @@ URL gambar jarak jauh: ketika provider yang dirutekan memerlukan input multipart
 <ParamField body="response_format" type="string" default="url">
   Format pengembalian gambar yang dihasilkan. Harus `url` atau `b64_json`; default-nya `url`.
 
-  Untuk rute `gpt-image-2` Azure Official atau Azure-compatible, TokenLab tidak meneruskan `response_format` ke upstream. Gateway selalu menerima data gambar upstream sebagai `b64_json`; untuk request `url`, setiap gambar diunggah ke CDN lalu `data[].url` dikembalikan. Jika storage CDN tidak tersedia atau upload gagal, request gagal alih-alih fallback ke Base64. Untuk `b64_json`, Base64 mentah dikembalikan.
+  Untuk `gpt-image-2` melalui Azure Official atau layanan yang kompatibel dengan Azure, TokenLab menerima hasil gambar sebagai `b64_json`. Untuk request `url`, TokenLab mengunggah setiap gambar ke CDN lalu mengembalikan `data[].url`. Jika CDN tidak tersedia atau upload gagal, request gagal dan tidak diubah menjadi respons Base64. Untuk `b64_json`, Base64 mentah dikembalikan.
 </ParamField>
 
 <ParamField body="async" type="boolean" default="false">
@@ -237,5 +237,5 @@ echo $data['data'][0]['url'];
 ## Catatan
 
 <Note>
-  Kegagalan mengambil gambar jarak jauh dikembalikan sebagai error input sebelum request dikirim ke upstream. URL tidak dapat dijangkau, timeout, respons 403/404, host privat/internal, kredensial atau fragment di URL, konten non-gambar, format tidak didukung, dan pelanggaran ukuran akan mengembalikan `400` atau `413` serta menunjukkan input `image_url` / `image_urls[n]`. Untuk aset privat atau yang dilindungi header, upload file multipart `image` langsung atau buat referensi `/v1/files`.
+  Kegagalan mengambil gambar jarak jauh dikembalikan sebagai error input sebelum generasi dimulai. URL tidak dapat dijangkau, timeout, respons 403/404, host privat/internal, kredensial atau fragment di URL, konten non-gambar, format tidak didukung, dan pelanggaran ukuran akan mengembalikan `400` atau `413` serta menunjukkan input `image_url` / `image_urls[n]`. Untuk aset privat atau yang dilindungi header, upload file multipart `image` langsung atau buat referensi `/v1/files`.
 </Note>
