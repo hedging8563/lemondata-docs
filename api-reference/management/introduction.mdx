@@ -28,7 +28,7 @@ Management tokens are different from inference API keys. Use `mt-...` for `/v1/m
 | `/v1/management/api-keys/{keyId}/usage` | GET | Retrieve paginated usage details for a specific key |
 | `/v1/management/api-keys/{keyId}/billing` | GET | Retrieve aggregated billing breakdowns for a specific key |
 
-## Usage Filter Contract
+## Usage Filters
 
 `GET /v1/management/api-keys/{keyId}/usage` supports the following query parameters:
 
@@ -36,7 +36,7 @@ Management tokens are different from inference API keys. Use `mt-...` for `/v1/m
 |-----------|------|------------------|-------|
 | `page` | integer | default `1`, min `1` | 1-based page number |
 | `limit` | integer | default `50`, min `1`, max `100` | Page size |
-| `logicalModel` | string | max length `100` | Requested logical model name |
+| `logicalModel` | string | max length `100` | Requested model name |
 | `modelVendor` | string | max length `100` | Public model vendor |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
 | `accessChannel` | enum | - | `platform` or `byok` |
@@ -45,7 +45,7 @@ Management tokens are different from inference API keys. Use `mt-...` for `/v1/m
 
 If both `startDate` and `endDate` are present, `startDate` must be earlier than or equal to `endDate`.
 
-## API Key Body Contract
+## API Key Request Body
 
 ### POST /v1/management/api-keys
 
@@ -54,7 +54,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` or omitted = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
-| `models` | string[] | default `[]` | Optional logical model allowlist |
+| `models` | string[] | default `[]` | Optional model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
 ### PATCH /v1/management/api-keys/{keyId}
@@ -65,25 +65,25 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 | `name` | string | length `1-50` | Updated display name |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` means unlimited, `0` means zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
-| `models` | string[] | - | Updated logical model allowlist |
+| `models` | string[] | - | Updated model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
 
 At least one PATCH field must be provided.
 
-## Monetary Contract
+## Monetary Fields
 
 - Management API monetary request and response fields are USD-only.
 - `limitCurrency` defaults to `USD`; sending `CNY` returns `400` with `currency_retired`.
 
 ## Reporting Semantics
 
-- `logicalModel` refers to the public logical model requested by the caller.
-- `modelVendor` refers to the public model vendor, not the hidden physical route.
+- `logicalModel` refers to the model requested by the caller.
+- `modelVendor` refers to the public model vendor, not provider-specific execution details.
 - `scene` is the public request scene derived from the endpoint or task type.
 - `accessChannel=platform` means the request was billed via TokenLab’s platform channel.
 - `accessChannel=byok` means the request used your own upstream provider key.
 
-Responses expose public billing and reporting fields only. Provider execution details are not part of the public management contract.
+Responses expose public billing and reporting fields only. Provider execution details are not included in management responses.
 - `/usage` line items can include `billing_transaction_id` once the underlying request has reached settled billing state. Use `request_id` + `billing_transaction_id` for request-level reconciliation.
 
 ## Billing Pagination Note

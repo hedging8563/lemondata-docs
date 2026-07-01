@@ -3,21 +3,21 @@ title: "Seedance 2.0 视频模型"
 description: "在 Seedance 2.0、Seedance 2.0 Fast 和 Seedance 2.0 Mini 之间选择视频生成模型。"
 ---
 
-Seedance 2.0 是一个视频模型家族，覆盖文生视频、图生视频、参考图生视频、视频编辑和视频续写等流程。请求里使用产品级逻辑模型 ID 作为 `model`，再用 `operation` 选择具体工作流。
+Seedance 2.0 是一个视频模型家族，覆盖文生视频、图生视频、参考图生视频、视频编辑和视频续写等流程。请求里使用 TokenLab 展示的模型 ID，例如 `seedance-2.0`，再用 `operation` 选择具体工作流。
 
 ## 模型选择
 
-| 模型 | 适合场景 | 公开分辨率 | 参考输入 |
+| 模型 | 适合场景 | 支持分辨率 | 参考输入 |
 |------|----------|------------|----------|
 | `seedance-2.0` | 最高质量和 4K 输出 | `480p`, `720p`, `1080p`, `4k` | `reference-to-video` 最多 9 张参考图，外加最多 3 段参考视频和 3 段参考音频 |
 | `seedance-2.0-fast` | 更快、更低成本的 480p/720p 输出 | `480p`, `720p` | `reference-to-video` 最多 9 张参考图，外加最多 3 段参考视频和 3 段参考音频 |
 | `seedance-2.0-mini` | 成本最低的 480p/720p 输出 | `480p`, `720p` | 支持 Seedance 2.0 操作家族；依赖精确参考数量前请读取当前模型详情 |
 
-`seedance-2.0-fast` 和 `seedance-2.0-mini` 对 `480p` / `720p` 之外的分辨率保持 fail-closed；不要向这两个模型发送 `1080p` 或 `4k`。
+`seedance-2.0-fast` 和 `seedance-2.0-mini` 只支持 `480p` / `720p`；向这两个模型发送 `1080p` 或 `4k` 会返回错误。
 
 ## 支持的操作
 
-Seedance 2.0 家族的公开契约支持：
+Seedance 2.0 家族支持：
 
 | 操作 | 常见输入 |
 |------|----------|
@@ -28,11 +28,19 @@ Seedance 2.0 家族的公开契约支持：
 | `video-to-video` | `prompt`, `video_url` 或兼容视频输入 |
 | `video-extension` | `task_id` 或模型特定续写输入 |
 
-纯音频或文本加音频的 Seedance 请求不属于公开契约。音频只应作为受支持 `reference-to-video` 流程里的参考输入使用。
+Seedance 不支持纯音频或文本加音频请求。音频只应作为受支持 `reference-to-video` 流程里的参考输入使用。
+
+## 素材组和素材 ID
+
+Seedance 2.0 素材按 TokenLab 素材组管理。虚拟人像素材使用 `library_type: "aigc_avatar"`，已认证真人素材使用 `library_type: "liveness_face"`。先通过[素材组端点](/zh/api-reference/video/create-material-asset-group)创建或查询素材组，再通过[创建素材](/zh/api-reference/video/create-material-asset)上传素材。
+
+完整上传请求体、状态字段和示例见[创建素材](/zh/api-reference/video/create-material-asset)接口文档。
+
+`group_id` 是这些端点返回的 TokenLab 素材组 ID。省略时，TokenLab 会使用当前组织在所选 `library_type` 下的默认素材组。素材状态变为 `ACTIVE` 后，把返回的 `id` 作为 `material_asset_id`，或放入 `material_asset_ids`，传给 `POST /v1/videos/generations`。素材 ID 会计入 Seedance 最多 9 个图片参考的限制。
 
 ## 4K Reference-To-Video
 
-需要 4K 输出时使用 `seedance-2.0`。基础模型在治理后的公开契约中支持 `4k`，包括 `reference-to-video`。
+需要 4K 输出时使用 `seedance-2.0`。基础模型支持 `4k`，也包括 `reference-to-video` 请求。
 
 ```bash
 curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
@@ -73,7 +81,7 @@ curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
 
 ## 价格与计费
 
-Seedance 2.0 价格按 token 计费，并根据输出分辨率以及请求是否包含视频输入区分。TokenLab 对这些模型的 USD 价格真值使用官方 CNY 价格按 `6.8` CNY/USD 折算。
+Seedance 2.0 价格按 token 计费，并根据输出分辨率以及请求是否包含视频输入区分。
 
 在产品 UI 中硬编码价格前，请使用 [Pricing API](/zh/api-reference/pricing/get-pricing) 或 [Models API](/zh/api-reference/models/list-models) 读取当前可计费价格。
 

@@ -770,7 +770,7 @@
           "Video"
         ],
         "summary": "Create Seedance material asset",
-        "description": "Preview Seedance 2.0 material-library endpoint. Creates a material asset in the configured MoMA LivenessFace asset group and stores a TokenLab ownership mapping. This endpoint manages material assets only; video generation requests do not yet accept these asset IDs.",
+        "description": "Creates a Seedance 2.0 material asset in TokenLab's managed material library. Use the returned id as material_asset_id, or include it in material_asset_ids, when calling /v1/videos/generations after the asset is ready.",
         "operationId": "createSeedanceMaterialAsset",
         "requestBody": {
           "required": true,
@@ -780,12 +780,13 @@
                 "$ref": "#/components/schemas/SeedanceMaterialAssetCreateRequest"
               },
               "examples": {
-                "moma_liveness_asset": {
-                  "summary": "Create a MoMA LivenessFace asset",
+                "moma_aigc_asset": {
+                  "summary": "Create a virtual-avatar material asset",
                   "value": {
                     "asset_url": "https://example.com/person-reference.jpg",
                     "asset_name": "reference-person-a",
                     "asset_type": "Image",
+                    "library_type": "aigc_avatar",
                     "channel": "moma"
                   }
                 }
@@ -820,11 +821,11 @@
               }
             }
           },
-          "503": {
-            "$ref": "#/components/responses/UpstreamError"
-          },
           "500": {
             "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
           }
         }
       },
@@ -862,9 +863,29 @@
             "schema": {
               "type": "string",
               "enum": [
-                "moma"
+                "moma",
+                "ak-link"
               ]
-            }
+            },
+            "description": "Filter by material library provider."
+          },
+          {
+            "name": "group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by TokenLab material asset group id."
+          },
+          {
+            "name": "material_group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alias of group_id."
           },
           {
             "name": "status",
@@ -879,6 +900,32 @@
                 "DELETED"
               ]
             }
+          },
+          {
+            "name": "library_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "aigc_avatar",
+                "liveness_face"
+              ]
+            },
+            "description": "Filter by material library class."
+          },
+          {
+            "name": "group_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AIGC",
+                "LivenessFace"
+              ]
+            },
+            "description": "Filter by material group type. Must match library_type when both are provided."
           }
         ],
         "responses": {
@@ -910,7 +957,7 @@
           "Video"
         ],
         "summary": "Get Seedance material asset",
-        "description": "Gets one owned Seedance material asset and refreshes its upstream MoMA status.",
+        "description": "Gets one Seedance material asset for the current organization and refreshes its current status.",
         "operationId": "getSeedanceMaterialAsset",
         "parameters": [
           {
@@ -939,20 +986,78 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "503": {
-            "$ref": "#/components/responses/UpstreamError"
-          },
           "500": {
             "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
           }
         }
+      },
+      "put": {
+        "tags": [
+          "Video"
+        ],
+        "operationId": "updateSeedanceMaterialAsset",
+        "summary": "Update Seedance material asset",
+        "description": "Updates a TokenLab-owned Seedance material asset for the current organization.",
+        "parameters": [
+          {
+            "name": "assetId",
+            "in": "path",
+            "required": true,
+            "description": "TokenLab material asset ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedanceMaterialAssetUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Material asset updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceMaterialAsset"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "delete": {
         "tags": [
           "Video"
         ],
         "summary": "Delete Seedance material asset",
-        "description": "Deletes the upstream MoMA material asset and marks the local TokenLab ownership mapping as deleted.",
+        "description": "Deletes the Seedance material asset and marks it as deleted for the current organization.",
         "operationId": "deleteSeedanceMaterialAsset",
         "parameters": [
           {
@@ -981,11 +1086,11 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "503": {
-            "$ref": "#/components/responses/UpstreamError"
-          },
           "500": {
             "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
           }
         }
       }
@@ -1043,7 +1148,7 @@
           "Tasks"
         ],
         "summary": "Cancel async task",
-        "description": "Cancels a queued asynchronous task when the provider and model support cancellation. Currently, this public contract supports queued Volcengine Seedance video tasks (`seedance-1.5-pro`, `seedance-2.0`, and `seedance-2.0-fast`). Tasks that are already processing, completed, failed, expired, or unsupported are not cancelled.",
+        "description": "Cancels a queued asynchronous task when the provider and model support cancellation. Cancellation currently supports queued Seedance video tasks (`seedance-1.5-pro`, `seedance-2.0`, and `seedance-2.0-fast`) when the provider selected for the task supports cancellation. Tasks that are already processing, completed, failed, expired, or unsupported are not cancelled.",
         "operationId": "cancelAsyncTask",
         "parameters": [
           {
@@ -1131,7 +1236,7 @@
           "Models"
         ],
         "summary": "List models",
-        "description": "Lists the currently available models. Default responses are trimmed for discovery. Non-chat models may include a lightweight `tokenlab.public_contract_summary` with only `public_operations` and `request_endpoint`; `agent_preferences` appears only when `recommended_for` is present. Deprecated `lemondata` is still returned as a compatibility alias during the migration.",
+        "description": "Lists the currently available models. Default responses are trimmed for discovery. Non-chat models may include lightweight request-format metadata; `agent_preferences` appears only when `recommended_for` is present. Deprecated `lemondata` is still returned as a compatibility alias during the migration.",
         "operationId": "listModels",
         "responses": {
           "200": {
@@ -1522,7 +1627,7 @@
           "Anthropic"
         ],
         "summary": "Delete message batch (Anthropic-compatible)",
-        "description": "Deletes a native Anthropic Message Batch when supported by the upstream provider.",
+        "description": "Deletes a native Anthropic Message Batch when the provider supports deletion.",
         "operationId": "deleteAnthropicMessageBatch",
         "parameters": [
           {
@@ -1631,7 +1736,7 @@
           "Anthropic"
         ],
         "summary": "Cancel message batch (Anthropic-compatible)",
-        "description": "Cancels a native Anthropic Message Batch when it is still cancellable upstream.",
+        "description": "Cancels a native Anthropic Message Batch when the provider still allows cancellation.",
         "operationId": "cancelAnthropicMessageBatch",
         "parameters": [
           {
@@ -1982,7 +2087,7 @@
           "Chat"
         ],
         "summary": "Retrieve response",
-        "description": "Retrieves a stored Responses API response by TokenLab response id. Ownership checks fail closed and return 404 when the response is missing or unavailable to the current API key.",
+        "description": "Retrieves a stored Responses API response by TokenLab response id. Ownership checks return 404 when the response is missing or unavailable to the current API key.",
         "operationId": "retrieveResponse",
         "parameters": [
           {
@@ -2015,7 +2120,7 @@
           "Chat"
         ],
         "summary": "Delete response",
-        "description": "Deletes a stored Responses API response by TokenLab response id. When the response is backed by an upstream provider record, TokenLab deletes that provider record before clearing local state.",
+        "description": "Deletes a stored Responses API response by TokenLab response id. When applicable, TokenLab clears the provider-side record before clearing local state.",
         "operationId": "deleteResponse",
         "parameters": [
           {
@@ -2539,7 +2644,7 @@
                   "models": {
                     "type": "array",
                     "default": [],
-                    "description": "Optional logical model allowlist. Empty array means no per-key model restriction beyond organization policy.",
+                    "description": "Optional model allowlist. Empty array means no per-key model restriction beyond organization policy.",
                     "items": {
                       "type": "string"
                     }
@@ -2647,7 +2752,7 @@
                   },
                   "models": {
                     "type": "array",
-                    "description": "Updated logical model allowlist.",
+                    "description": "Updated model allowlist.",
                     "items": {
                       "type": "string"
                     }
@@ -2699,7 +2804,7 @@
           "Management"
         ],
         "summary": "Get API key usage",
-        "description": "Returns paginated key-level usage details without exposing physical routing metadata.",
+        "description": "Returns paginated key-level usage details without exposing provider-specific execution details.",
         "operationId": "getManagementApiKeyUsage",
         "security": [
           {
@@ -2743,7 +2848,7 @@
               "type": "string",
               "maxLength": 100
             },
-            "description": "Filter by requested logical model name. Maximum length 100."
+            "description": "Filter by requested model name. Maximum length 100."
           },
           {
             "name": "modelVendor",
@@ -2783,7 +2888,7 @@
                 "byok"
               ]
             },
-            "description": "Filter by access channel: platform billing or your own upstream provider key (BYOK)."
+            "description": "Filter by access channel: platform billing or your own provider key (BYOK)."
           },
           {
             "name": "startDate",
@@ -2834,7 +2939,7 @@
           "Management"
         ],
         "summary": "Get API key billing",
-        "description": "Returns aggregated key-level billing breakdowns without exposing physical routing metadata.",
+        "description": "Returns aggregated key-level billing breakdowns without exposing provider-specific execution details.",
         "operationId": "getManagementApiKeyBilling",
         "security": [
           {
@@ -3006,7 +3111,7 @@
                   },
                   "model": {
                     "type": "string",
-                    "description": "Optional TokenLab extension for image file uploads. Defaults to gpt-image-2 and binds the returned file_id to the selected upstream image-edit channel."
+                    "description": "Optional TokenLab extension for image file uploads. Defaults to gpt-image-2 and binds the returned file_id to the selected image-edit configuration."
                   }
                 }
               }
@@ -3360,7 +3465,7 @@
           "Text"
         ],
         "summary": "Translate text",
-        "description": "Translates text into a target language using the current public translation contract.",
+        "description": "Translates text into a target language using the current translation request format.",
         "operationId": "createTranslation",
         "requestBody": {
           "required": true,
@@ -3656,7 +3761,7 @@
                         },
                         "file_id": {
                           "type": "string",
-                          "description": "A file id returned by TokenLab /v1/files and bound to the same upstream image-edit channel."
+                          "description": "A file id returned by TokenLab /v1/files and bound to the same image-edit configuration."
                         }
                       },
                       "additionalProperties": false
@@ -4028,7 +4133,7 @@
           "Worlds"
         ],
         "summary": "Prepare World Labs media asset upload",
-        "description": "Creates a World Labs media asset record and returns a signed upload URL. Use the returned media_asset_id from native world_prompt objects with source=media_asset. TokenLab stores the media asset ownership mapping and rejects cross-organization references.",
+        "description": "Creates a World Labs media asset record and returns a signed upload URL. Use the returned media_asset_id from native world_prompt objects with source=media_asset. Media assets can only be used by the organization that created them.",
         "operationId": "prepareWorldMediaAssetUpload",
         "requestBody": {
           "required": true,
@@ -4278,7 +4383,7 @@
                   },
                   "display_name": {
                     "type": "string",
-                    "description": "Optional upstream display name for the generated world, up to 64 characters.",
+                    "description": "Optional display name for the generated world, up to 64 characters.",
                     "maxLength": 64
                   },
                   "world_prompt": {
@@ -4356,7 +4461,7 @@
                       "type": "string",
                       "maxLength": 32
                     },
-                    "description": "Optional upstream tags. Provide up to 10 tags, each up to 32 characters.",
+                    "description": "Optional World Labs tags. Provide up to 10 tags, each up to 32 characters.",
                     "maxItems": 10
                   },
                   "permission": {
@@ -4835,7 +4940,7 @@
           "Worlds"
         ],
         "summary": "Delete World Labs world",
-        "description": "Deletes a World Labs world generated through TokenLab. This permanently deletes the upstream world and associated assets when World Labs accepts the deletion. TokenLab keeps task status records for billing reconciliation.",
+        "description": "Deletes a World Labs world generated through TokenLab. This permanently deletes the world and associated assets when World Labs accepts the deletion. TokenLab keeps task status records for usage history.",
         "operationId": "deleteWorld",
         "parameters": [
           {
@@ -4883,6 +4988,302 @@
           },
           "500": {
             "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/videos/assets/groups": {
+      "post": {
+        "tags": [
+          "Video"
+        ],
+        "summary": "Create Seedance material asset group",
+        "description": "Creates a TokenLab material asset group for the authenticated organization.",
+        "operationId": "createSeedanceMaterialAssetGroup",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedanceMaterialAssetGroupCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Material asset group created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceMaterialAssetGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "Material group mapping conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Video"
+        ],
+        "summary": "List Seedance material asset groups",
+        "description": "Lists TokenLab material asset groups owned by the authenticated organization.",
+        "operationId": "listSeedanceMaterialAssetGroups",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "moma",
+                "ak-link"
+              ]
+            },
+            "description": "Filter by material library provider."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "DELETED"
+              ]
+            }
+          },
+          {
+            "name": "library_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "aigc_avatar",
+                "liveness_face"
+              ]
+            },
+            "description": "Filter by TokenLab material library class."
+          },
+          {
+            "name": "group_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AIGC",
+                "LivenessFace"
+              ]
+            },
+            "description": "Filter by material group type. Must match library_type when both are provided."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Material asset groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceMaterialAssetGroupList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/videos/assets/groups/{groupId}": {
+      "get": {
+        "tags": [
+          "Video"
+        ],
+        "summary": "Get Seedance material asset group",
+        "description": "Gets one Seedance material asset group for the current organization and refreshes its current status.",
+        "operationId": "getSeedanceMaterialAssetGroup",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Material asset group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceMaterialAssetGroup"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Video"
+        ],
+        "summary": "Update Seedance material asset group",
+        "description": "Updates an owned TokenLab material asset group and its metadata.",
+        "operationId": "updateSeedanceMaterialAssetGroup",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedanceMaterialAssetGroupUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Material asset group updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceMaterialAssetGroup"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Video"
+        ],
+        "summary": "Delete Seedance material asset group",
+        "description": "Deletes an owned TokenLab material asset group. Assets in the group are marked deleted locally and can no longer be used for generation.",
+        "operationId": "deleteSeedanceMaterialAssetGroup",
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Material asset group deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceMaterialAssetDeleteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
           }
         }
       }
@@ -5621,7 +6022,7 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 100,
-            "description": "Alias for output_compression when supported by the upstream-compatible route"
+            "description": "Alias for output_compression when supported by the selected model"
           },
           "moderation": {
             "type": "string",
@@ -5635,7 +6036,7 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 3,
-            "description": "Number of partial images requested for streaming-compatible upstreams; upstream usage must include the additional image output tokens"
+            "description": "Number of partial images requested for streaming-compatible providers; usage may include additional image output tokens"
           },
           "user": {
             "type": "string",
@@ -5897,7 +6298,7 @@
           },
           "output_audio": {
             "type": "boolean",
-            "description": "Model-dependent audio output toggle. Veo 3 family defaults to true when omitted. Kling 3.0 Video accepts this selector for non-element-reference requests and maps it to the compatible upstream sound control; omitted Kling requests default to silent output. Do not combine output_audio=true with kling_elements. The camelCase alias outputAudio is accepted for compatibility."
+            "description": "Model-dependent audio output toggle. Veo 3 family defaults to true when omitted. Kling 3.0 Video accepts this selector for non-element-reference requests and maps it to the compatible sound control; omitted Kling requests default to silent output. Do not combine output_audio=true with kling_elements. The camelCase alias outputAudio is accepted for compatibility."
           },
           "fps": {
             "type": "integer",
@@ -5987,7 +6388,7 @@
           },
           "reference_images": {
             "type": "array",
-            "description": "Canonical public reference-image field for reference-to-video conditioning. Route-level support currently allows up to 9 URLs or compatible data URLs; model-specific public contracts can be lower. xAI grok-imagine-video accepts up to 7 image references with duration capped at 10 seconds, and grok-imagine-video-1.5-preview does not accept reference images.",
+            "description": "Canonical public reference-image field for reference-to-video conditioning. This endpoint currently allows up to 9 URLs or compatible data URLs; model-specific limits can be lower. xAI grok-imagine-video accepts up to 7 image references with duration capped at 10 seconds, and grok-imagine-video-1.5-preview does not accept reference images.",
             "minItems": 1,
             "maxItems": 9,
             "items": {
@@ -6037,7 +6438,7 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 60,
-            "description": "Alias of duration used by some upstream-compatible request shapes."
+            "description": "Alias of duration used by some compatible request shapes."
           },
           "size": {
             "type": "string",
@@ -6207,7 +6608,7 @@
             "enum": [
               "cancelled"
             ],
-            "description": "Cancellation marker for tasks cancelled through the public async task contract."
+            "description": "Cancellation marker for tasks cancelled through the public async task endpoint."
           },
           "billing_transaction_id": {
             "type": "string"
@@ -6258,13 +6659,13 @@
           "asset_url": {
             "type": "string",
             "format": "uri",
-            "description": "Publicly reachable material asset URL to submit to the configured MoMA material group."
+            "description": "Publicly reachable material asset URL to submit to the selected material group."
           },
           "asset_name": {
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
-            "description": "Optional display name stored upstream."
+            "description": "Optional display name stored with the material asset."
           },
           "asset_type": {
             "type": "string",
@@ -6278,10 +6679,11 @@
           "channel": {
             "type": "string",
             "enum": [
-              "moma"
+              "moma",
+              "ak-link"
             ],
             "default": "moma",
-            "description": "Material library provider. Only MoMA is enabled in this preview."
+            "description": "Material library selection for Seedance 2.0 material assets."
           },
           "library_type": {
             "type": "string",
@@ -6290,7 +6692,7 @@
               "liveness_face"
             ],
             "default": "aigc_avatar",
-            "description": "Material library class. aigc_avatar maps to MoMA AIGC virtual-avatar groups and is the default; liveness_face maps to H5-certified real-person groups."
+            "description": "Material library class. aigc_avatar maps to virtual-avatar groups and is the default; liveness_face maps to certified real-person groups."
           },
           "group_type": {
             "type": "string",
@@ -6298,17 +6700,21 @@
               "AIGC",
               "LivenessFace"
             ],
-            "description": "MoMA group type override. Must match library_type when both are provided."
+            "description": "Material group type override. Must match library_type when both are provided."
           },
           "group_id": {
             "type": "string",
-            "description": "Optional MoMA asset group override. AIGC uploads default to a TokenLab-managed organization group; LivenessFace uploads default to the configured certified test group."
+            "description": "Optional TokenLab material asset group id. When omitted, TokenLab uses or creates the organization default group for the selected library_type."
           },
           "metadata": {
             "type": "object",
             "nullable": true,
             "additionalProperties": true,
-            "description": "Optional client metadata stored with the TokenLab ownership mapping."
+            "description": "Optional client metadata stored with the material asset."
+          },
+          "material_group_id": {
+            "type": "string",
+            "description": "Alias of group_id."
           }
         },
         "additionalProperties": false
@@ -6345,11 +6751,11 @@
           },
           "upstream_asset_id": {
             "type": "string",
-            "description": "MoMA upstream asset ID."
+            "description": "Provider-specific asset ID for diagnostics. Use the TokenLab id as material_asset_id for generation."
           },
           "upstream_group_id": {
             "type": "string",
-            "description": "MoMA upstream asset group ID."
+            "description": "Provider-specific group ID for diagnostics. Use group_id for TokenLab material group operations."
           },
           "group_type": {
             "type": "string",
@@ -6389,7 +6795,7 @@
           },
           "ready": {
             "type": "boolean",
-            "description": "True when the asset is active upstream and not locally deleted."
+            "description": "True when the asset is active with the provider and not deleted."
           },
           "error_message": {
             "type": "string",
@@ -6402,7 +6808,7 @@
           },
           "created_at": {
             "type": "integer",
-            "description": "Unix timestamp when the TokenLab ownership mapping was created."
+            "description": "Unix timestamp when the material asset record was created."
           },
           "upstream_created_at": {
             "type": "string",
@@ -6413,6 +6819,11 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "group_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "TokenLab material asset group id that owns this asset."
           }
         },
         "additionalProperties": true
@@ -7469,7 +7880,7 @@
       },
       "ModelListLemondataExtension": {
         "type": "object",
-        "description": "TokenLab discovery fields for the list route. Detail-only metadata such as capability flags, pricing provenance, full public contracts, and empty recommendation snapshots are omitted.",
+        "description": "TokenLab discovery fields for the list route. Detail-only metadata such as capability flags, pricing provenance, full model details, and empty recommendation snapshots are omitted.",
         "properties": {
           "aliases": {
             "type": "array",
@@ -7595,7 +8006,7 @@
       },
       "ModelLemondataExtension": {
         "type": "object",
-        "description": "TokenLab extension fields for the detail route, including pricing, capabilities, recommendation metadata, and the full non-chat public contract.",
+        "description": "TokenLab extension fields for the detail route, including pricing, capabilities, recommendation metadata, and detailed non-chat request metadata.",
         "properties": {
           "aliases": {
             "type": "array",
@@ -8538,7 +8949,7 @@
       },
       "AnthropicMessageBatch": {
         "type": "object",
-        "description": "Anthropic-compatible message batch object relayed from the upstream provider.",
+        "description": "Anthropic-compatible message batch object relayed from the provider.",
         "required": [
           "id",
           "type"
@@ -8557,7 +8968,7 @@
           },
           "processing_status": {
             "type": "string",
-            "description": "Current upstream processing status for the batch",
+            "description": "Current processing status for the batch",
             "example": "in_progress"
           },
           "request_counts": {
@@ -8748,7 +9159,7 @@
       },
       "ModelListTokenLabExtension": {
         "type": "object",
-        "description": "TokenLab discovery fields for the list route. Detail-only metadata such as capability flags, pricing provenance, full public contracts, and empty recommendation snapshots are omitted.",
+        "description": "TokenLab discovery fields for the list route. Detail-only metadata such as capability flags, pricing provenance, full model details, and empty recommendation snapshots are omitted.",
         "properties": {
           "aliases": {
             "type": "array",
@@ -9023,7 +9434,7 @@
       },
       "ModelTokenLabExtension": {
         "type": "object",
-        "description": "TokenLab extension fields for the detail route, including pricing, capabilities, recommendation metadata, and the full non-chat public contract.",
+        "description": "TokenLab extension fields for the detail route, including pricing, capabilities, recommendation metadata, and detailed non-chat request metadata.",
         "properties": {
           "aliases": {
             "type": "array",
@@ -9299,6 +9710,193 @@
           "commercial",
           "badges"
         ]
+      },
+      "SeedanceMaterialAssetGroupCreateRequest": {
+        "type": "object",
+        "properties": {
+          "group_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Optional display name for the material group."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "moma",
+              "ak-link"
+            ],
+            "default": "moma",
+            "description": "Material library selection for Seedance 2.0 material groups."
+          },
+          "library_type": {
+            "type": "string",
+            "enum": [
+              "aigc_avatar",
+              "liveness_face"
+            ],
+            "default": "aigc_avatar",
+            "description": "Material library class. aigc_avatar is the default virtual-avatar material group; liveness_face is for certified real-person groups."
+          },
+          "group_type": {
+            "type": "string",
+            "enum": [
+              "AIGC",
+              "LivenessFace"
+            ],
+            "description": "Material group type override. Must match library_type when both are provided."
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        }
+      },
+      "SeedanceMaterialAssetGroupUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "group_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        }
+      },
+      "SeedanceMaterialAssetGroup": {
+        "type": "object",
+        "required": [
+          "id",
+          "object",
+          "channel",
+          "status",
+          "group_type"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "TokenLab material asset group ID."
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "seedance.material_asset_group"
+            ]
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "moma"
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "upstream_group_id": {
+            "type": "string",
+            "description": "Provider-specific group ID for diagnostics. Use id/group_id for TokenLab material group operations."
+          },
+          "group_type": {
+            "type": "string",
+            "enum": [
+              "AIGC",
+              "LivenessFace"
+            ]
+          },
+          "group_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "upstream_created_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "upstream_updated_at": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "SeedanceMaterialAssetGroupList": {
+        "type": "object",
+        "required": [
+          "groups"
+        ],
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeedanceMaterialAssetGroup"
+            }
+          },
+          "next_page_token": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "SeedanceMaterialAssetUpdateRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "asset_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Replacement publicly reachable material asset URL."
+          },
+          "asset_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Updated display name stored with the material asset."
+          },
+          "asset_type": {
+            "type": "string",
+            "enum": [
+              "Image",
+              "Video",
+              "Audio"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Updated client metadata stored with the material asset."
+          }
+        },
+        "additionalProperties": false
       }
     },
     "responses": {

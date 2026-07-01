@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-06-30
+Generated: 2026-07-01
 Source: https://docs.tokenlab.sh
 
 ---
@@ -737,7 +737,7 @@ Function tools can be converted between formats when the target route supports t
 - Anthropic server/native tools such as `web_search_*`, `web_fetch_*`, `code_execution_*`, `tool_search_*`, bash, computer-use, and text-editor tools require `/v1/messages`.
 - Gemini built-in tools such as `googleSearch`, `codeExecution`, `urlContext`, `computerUse`, and similar `tools` fields require `/v1beta`.
 
-If TokenLab cannot route a request with native tools to a native-capable upstream path, it returns an explicit unsupported-field error instead of dropping the tool or pretending it is a Chat Completions function. User-defined function tools remain the portable path.
+If TokenLab cannot route a request with native tools to a native-capable provider path, it returns an explicit unsupported-field error instead of dropping the tool or pretending it is a Chat Completions function. User-defined function tools remain the portable path.
 
 ## Choosing the Right Format
 
@@ -854,7 +854,7 @@ response = client.chat.completions.create(model="gemini-3.5-flash", ...)
 
 ### ✨ TokenLab API Integration Skill
 
-> Install the maintained TokenLab API integration skill and teach coding agents to discover models, read public contracts, and recover from API errors.
+> Install the maintained TokenLab API integration skill and teach coding agents to discover models, read model details, and recover from API errors.
 
 URL: https://docs.tokenlab.sh/integrations/coding-agent-skill
 
@@ -867,7 +867,7 @@ URL: https://docs.tokenlab.sh/integrations/coding-agent-skill
 - Generates minimal runnable examples for TokenLab chat, image, audio, video, translation, and other API families.
 - Uses `https://api.tokenlab.sh/v1` for OpenAI-compatible clients and explains when to switch to native Anthropic or Gemini routes.
 - Discovers models with `/v1/models`, `/llms.txt`, and `recommended_for` shortlists instead of guessing from stale lists.
-- Reads a model public contract before retrying non-chat requests, so unsupported fields are not silently dropped.
+- Reads a model details before retrying non-chat requests, so unsupported fields are not silently dropped.
 - Handles Agent-First error hints such as `did_you_mean`, `suggestions`, `retry_after`, and `recommended_request`.
 
 ## Install
@@ -957,7 +957,7 @@ export TOKENLAB_API_KEY="sk-your-api-key"
 python app.py
 ```
 
-## Model Discovery And Contracts
+## Model Discovery
 
 Prefer live discovery over stale bundled lists:
 
@@ -974,7 +974,7 @@ curl "https://api.tokenlab.sh/v1/models?recommended_for=image" -H "Authorization
 curl "https://api.tokenlab.sh/v1/models?recommended_for=video" -H "Authorization: Bearer sk-KEY"
 curl "https://api.tokenlab.sh/v1/models?recommended_for=translation" -H "Authorization: Bearer sk-KEY"
 
-# Read one model public contract before retrying non-chat requests
+# Read one model details before retrying non-chat requests
 curl "https://api.tokenlab.sh/v1/models/gpt-image-2" -H "Authorization: Bearer sk-KEY"
 
 # Pricing-only detail
@@ -999,7 +999,7 @@ Errors include fields that coding agents can parse without scraping docs:
 | Wrong model name | `did_you_mean`, `suggestions`, `hint` | Retry with the corrected model or one suggested alternative |
 | Insufficient balance | `balance_usd`, `estimated_cost_usd`, `suggestions` | Ask for approval or switch to an affordable model |
 | Rate limit or temporary unavailability | `retryable`, `retry_after`, `alternatives` | Wait, retry, or choose a listed alternative |
-| Non-chat contract mismatch | `supported_operations`, `supported_parameters`, `request_endpoint`, `request_shape_mode`, `recommended_request` | Rebuild the request from the public contract and fail closed on intent-changing fields |
+| Non-chat unsupported request | `supported_operations`, `supported_parameters`, `request_endpoint`, `request_shape_mode`, `recommended_request` | Rebuild the request from the model details and return a clear error on intent-changing fields |
 
 ## Supported API Families
 
@@ -1266,7 +1266,7 @@ except APIStatusError as e:
 |------|-------------|
 | `invalid_request_error` | Request parameters are invalid |
 | `context_length_exceeded` | Input too long for model |
-| `model_not_found` | Requested model is not available in the current public contract |
+| `model_not_found` | Requested model is not available in the current model details |
 
 ```json
 {
@@ -1282,7 +1282,7 @@ except APIStatusError as e:
 }
 ```
 
-Public routes do not distinguish typo, hidden, deferred, or non-public model states in the response body. If a model is not currently available through the public contract, TokenLab returns `model_not_found`.
+Public routes do not distinguish typo, hidden, deferred, or non-public model states in the response body. If a model is not currently available through the model details, TokenLab returns `model_not_found`.
 
 ### Rate Limit Errors (429)
 
@@ -1592,7 +1592,7 @@ TokenLab uses **pay-as-you-go pricing**. You only pay for what you use, with no 
 
 ## Pricing Models
 
-Live prices can change as providers, routes, and model contracts change. Treat the Dashboard, the Models page, `GET /v1/models/:model/pricing`, and [Pricing API](/api-reference/pricing/get-pricing) as the source of truth.
+Live prices can change as providers, routes, and model details change. Treat the Dashboard, the Models page, `GET /v1/models/:model/pricing`, and [Pricing API](/api-reference/pricing/get-pricing) to check current support.
 
 ### Token-Based Pricing
 
@@ -1608,7 +1608,7 @@ Most chat, reasoning, embedding, rerank, and some image models are priced by inp
 
 ### Request and Task Pricing
 
-Image, video, music, 3D, audio, and world-generation models may be priced per request, per image, per second/minute, per task, or by provider-specific usage. Check the selected model contract before production usage.
+Image, video, music, 3D, audio, and world-generation models may be priced per request, per image, per second/minute, per task, or by provider-specific usage. Check the selected model details before production usage.
 
 | Family | Examples |
 |---|---|
@@ -1836,7 +1836,7 @@ For reconciliation, join these identifiers in your logs:
 
 ## Cancellation
 
-`DELETE /v1/tasks/{id}` is intentionally narrow. It currently supports queued Volcengine Seedance video tasks such as `seedance-1.5-pro`, `seedance-2.0`, and `seedance-2.0-fast`.
+`DELETE /v1/tasks/{id}` is intentionally narrow. It currently supports queued Seedance video tasks such as `seedance-1.5-pro`, `seedance-2.0`, and `seedance-2.0-fast` when cancellation is available for the selected task.
 
 Unsupported tasks return `400 unsupported_task_cancel`. Tasks that are already running or terminal return `409 task_not_cancellable`. Build cancellation UI as "request cancellation" rather than a guaranteed stop button.
 
@@ -1874,7 +1874,7 @@ When contacting support, include `request_id`, `task_id`, `billing_transaction_i
 
 URL: https://docs.tokenlab.sh/guides/observability-troubleshooting
 
-Good TokenLab observability starts with public identifiers. Your logs should help you answer "what did the user request, what public task did TokenLab create, and how was it billed?" without exposing provider routing internals or sensitive user data.
+Good TokenLab observability starts with public identifiers. Your logs should help you answer "what did the user request, what public task did TokenLab create, and how was it billed?" without exposing sensitive provider details or sensitive user data.
 
 ## Public Identifiers To Capture
 
@@ -1887,7 +1887,7 @@ Good TokenLab observability starts with public identifiers. Your logs should hel
 | `X-Task-ID` | Async task response headers | Header-level task correlation |
 | Your own job/user ID | Your application | Joining TokenLab activity back to the user workflow |
 
-Do not store provider task IDs, upstream URLs, routing channel IDs, Redis keys, or private execution metadata as customer-facing truth.
+Do not store provider task IDs, provider URLs, provider identifiers, Redis keys, or sensitive execution metadata as customer-facing records.
 
 ## What To Log
 
@@ -1908,7 +1908,7 @@ Always redact `Authorization`, API keys, management tokens, signed URLs, private
 | `401` or `403` | API key, management token, organization access, key scope | [Authentication](/authentication) |
 | `402` | Balance, API key spend limit, model price availability | [Billing & Pricing](/guides/billing) |
 | `429` | Account tier, endpoint rate limit, retry behavior | [Rate Limits](/guides/rate-limits) |
-| `400 invalid_request_error` | Unsupported field, wrong endpoint, missing required field, or model contract mismatch | [Error Handling](/guides/error-handling) |
+| `400 invalid_request_error` | Unsupported field, wrong endpoint, missing required field, or model request mismatch | [Error Handling](/guides/error-handling) |
 | Async task cannot be found | Wrong API key, stale task ID, expired task, or non-public task ID | [Async Jobs & Polling](/guides/async-jobs-polling) |
 | Cost does not match UI | Settlement timing or comparing the wrong identifier | [Billing & Pricing](/guides/billing) |
 
@@ -1963,7 +1963,7 @@ Do not include API keys, management tokens, private media, full prompts, provide
 
 URL: https://docs.tokenlab.sh/guides/structured-outputs-tool-calling
 
-Structured outputs and tool calls are route-specific contracts. TokenLab forwards several public API formats, so the safest production pattern is to keep each provider-native tool shape on the route that owns it and validate model output in your own application.
+Structured outputs and tool calls are route-specific request formats. TokenLab forwards several public API formats, so the safest production pattern is to keep each provider-native tool shape on the route that owns it and validate model output in your own application.
 
 ## Choose The Route
 
@@ -1994,7 +1994,7 @@ For portable structured responses, start with Chat Completions JSON mode:
 }
 ```
 
-The stable shared validation for Chat Completions accepts `text` and `json_object`. `json_schema`, `strict`, and provider-specific schema enforcement may exist for some upstream routes or conversion paths, but they are not a blanket promise across every TokenLab route and model. Verify them against the selected model before relying on them.
+The stable shared validation for Chat Completions accepts `text` and `json_object`. `json_schema`, `strict`, and provider-specific schema enforcement may exist for some native formats or compatibility paths, but they are not a blanket promise across every TokenLab route and model. Verify them against the selected model before relying on them.
 
 Always parse and validate the returned JSON on your server. JSON mode improves the shape, but it does not replace application-level schema validation.
 
@@ -2142,7 +2142,7 @@ Keep Gemini built-in tools, File API references, cached contents, function decla
 ## Media Migration
 
 1. Query `GET /v1/models?recommended_for=image|video|music|3d`.
-2. Read `tokenlab.public_contract_summary` in list responses and the full `tokenlab.public_contract` where available.
+2. Read `GET /v1/models` in list responses and the full `GET /v1/models/{model}` where available.
 3. Send an explicit `model`, especially for image endpoints.
 4. Store `task_id`, `poll_url`, endpoint, model, and your own job ID for async jobs.
 5. Reconcile costs through usage records and `billing_transaction_id`, not provider task IDs.
@@ -2164,7 +2164,7 @@ Media workloads need their own rollout plan because latency, retries, and final 
 - Do not put every model behind one OpenAI Chat Completions path if your app needs native Anthropic, Gemini, or Responses behavior.
 - Do not assume old image defaults. Send `model` explicitly.
 - Do not retry async create requests without checking whether a task was already created.
-- Do not expose provider routing metadata in your logs or UI.
+- Do not expose provider-specific identifiers in your logs or UI.
 - Do not compare billing with provider task IDs. Use TokenLab usage records.
 
 ## API Reference
@@ -2505,14 +2505,14 @@ Always send `model`. Image endpoints intentionally do not rely on a historical i
 
 ## Pick A Model
 
-Start with model discovery, then inspect the selected model's TokenLab contract:
+Start with model discovery, then inspect the selected model's TokenLab model details:
 
 ```bash
 curl "https://api.tokenlab.sh/v1/models?recommended_for=image" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-For non-chat models, the list response may include `tokenlab.public_contract_summary`. Model detail pages may expose the fuller `tokenlab.public_contract`. Use those fields to confirm:
+For non-chat models, the list response may include `GET /v1/models`. Model detail pages may expose the fuller `GET /v1/models/{model}`. Use those fields to confirm:
 
 - The supported operation, such as `text-to-image`, `image-to-image`, or `image-edit`.
 - The request endpoint expected by the model.
@@ -2522,7 +2522,7 @@ For non-chat models, the list response may include `tokenlab.public_contract_sum
 ## Request Shape Rules
 
 - `gpt-image-2` style requests use OpenAI-like `size`, `quality`, and edit fields. Leave optional fields out when you want the model or TokenLab to use automatic defaults.
-- Gemini and Nano Banana image families usually use `aspect_ratio`; only send `resolution` when the model contract exposes it.
+- Gemini and Nano Banana image families usually use `aspect_ratio`; only send `resolution` when the model details expose it.
 - Nano Banana image-to-image belongs on `/v1/images/generations` with `operation: "image-to-image"` and reference image URLs.
 - `/v1/images/generations` does not accept top-level `images[]` or `file_id`; those are edit-flow shapes.
 - Remote image references must be public `http` or `https` URLs. Do not send private network URLs, embedded credentials, URL fragments, or signed URLs that may expire before processing starts.
@@ -2585,7 +2585,7 @@ Persist the returned image URL, task ID, model, and your own user/job ID. Do not
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | `400` with `param: "model"` | Missing explicit model | Query `/v1/models?recommended_for=image` and send `model` |
-| Unsupported field | Field is not in that model's public contract | Remove the field or choose a model/endpoint that documents it |
+| Unsupported field | Field is not documented for that model | Remove the field or choose a model/endpoint that documents it |
 | No `b64_json` on async result | Async image tasks return URL-oriented results | Use synchronous mode for base64 output |
 | Reference image rejected | Wrong endpoint or private/expired URL | Match the model's documented reference shape and use reachable URLs |
 
@@ -2609,7 +2609,7 @@ URL: https://docs.tokenlab.sh/guides/video-generation
 
 Video generation is asynchronous. `POST /v1/videos/generations` returns a public task identity and usually a `poll_url`; the final video appears on later status responses.
 
-## Public Contract
+## Supported Operations
 
 Use explicit `operation` in production. TokenLab can infer some operations from inputs, but explicit operation values make validation, support, and retries clearer.
 
@@ -2631,7 +2631,7 @@ curl "https://api.tokenlab.sh/v1/models?recommended_for=video" \\
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Use product-level logical model IDs in `model`, then choose operation variants with `operation` and the corresponding media inputs. Examples include `wan-2.7`, `happyhorse-1.0`, `viduq3`, `viduq3-mix`, `pixverse-v6`, `kling-3.0-video`, `veo3.1`, and `seedance-2.0`; do not expose upstream operation-coded IDs as public model names.
+Use the model IDs shown by TokenLab in `model`, then choose operation variants with `operation` and the corresponding media inputs. Examples include `wan-2.7`, `happyhorse-1.0`, `viduq3`, `viduq3-mix`, `pixverse-v6`, `kling-3.0-video`, `veo3.1`, and `seedance-2.0`; do not use provider-specific operation names as TokenLab model names.
 
 Read the selected model detail before relying on specialized fields such as `reference_images`, `kling_elements`, `output_audio`, `duration`, `resolution`, or `aspect_ratio`.
 
@@ -2657,7 +2657,7 @@ For production media input, prefer public `https` URLs over inline `data:` URLs.
 - Veo 3 family requests default to audio-on when `output_audio` is omitted. Set it explicitly when the model supports the toggle and your UX depends on sound.
 - `kling_elements` is for `kling-3.0-video` image-conditioned requests. Reference each element in `prompt` as `@name`; do not combine it with `output_audio=true`.
 - For the Seedance 2.0 family, read the [Seedance 2.0 video models guide](/guides/seedance-2-video) before using 4K output, Fast/Mini resolution caps, or multimodal reference inputs.
-- For `grok-imagine-video`, video-to-video uses a public `.mp4` `video_url`; model-specific limits such as `duration` and `resolution` must come from the model contract.
+- For `grok-imagine-video`, video-to-video uses a public `.mp4` `video_url`; model-specific limits such as `duration` and `resolution` must come from the model details.
 
 ## Polling Results
 
@@ -2668,7 +2668,7 @@ Completed video tasks may return `video_url`, `video`, or `videos` depending on 
 ## Common Pitfalls
 
 - Do not hard-code old video status paths; prefer `poll_url`.
-- Do not combine first-frame fields with dedicated reference-image flows unless the model contract allows it.
+- Do not combine first-frame fields with dedicated reference-image flows unless the model details allows it.
 - Do not assume `duration` describes input reference video length; it usually controls generated output length.
 - Do not retry create requests after a timeout without checking whether a task was already created.
 
@@ -2690,21 +2690,21 @@ Completed video tasks may return `video_url`, `video`, or `videos` depending on 
 
 URL: https://docs.tokenlab.sh/guides/seedance-2-video
 
-Seedance 2.0 is a video model family for text-to-video, image-to-video, reference-to-video, video editing, and video extension workflows. Use product-level model IDs in `model`, then choose the workflow with `operation`.
+Seedance 2.0 is a video model family for text-to-video, image-to-video, reference-to-video, video editing, and video extension workflows. Use the model IDs shown in TokenLab, such as `seedance-2.0`, then choose the workflow with `operation`.
 
 ## Model Choice
 
-| Model | Best for | Public resolutions | Reference inputs |
+| Model | Best for | Supported resolutions | Reference inputs |
 |-------|----------|--------------------|------------------|
 | `seedance-2.0` | Highest quality and 4K output | `480p`, `720p`, `1080p`, `4k` | Up to 9 reference images plus up to 3 reference videos and 3 reference audios for `reference-to-video` |
 | `seedance-2.0-fast` | Faster, lower-cost 480p/720p output | `480p`, `720p` | Up to 9 reference images plus up to 3 reference videos and 3 reference audios for `reference-to-video` |
 | `seedance-2.0-mini` | Lowest-cost 480p/720p output | `480p`, `720p` | Supports the Seedance 2.0 operation family; read the current model detail before relying on exact reference count limits |
 
-`seedance-2.0-fast` and `seedance-2.0-mini` are fail-closed to `480p` / `720p`; do not send `1080p` or `4k` to those models.
+`seedance-2.0-fast` and `seedance-2.0-mini` support only `480p` / `720p`; requests with `1080p` or `4k` return a clear error for those models.
 
 ## Supported Operations
 
-The public Seedance 2.0 family supports:
+The Seedance 2.0 family supports:
 
 | Operation | Typical inputs |
 |-----------|----------------|
@@ -2715,11 +2715,19 @@ The public Seedance 2.0 family supports:
 | `video-to-video` | `prompt`, `video_url` or compatible video input |
 | `video-extension` | `task_id` or model-specific continuation input |
 
-Pure audio-only and text-plus-audio-only Seedance requests are not part of the public contract. Use audio as a reference input only in supported `reference-to-video` flows.
+Pure audio-only and text-plus-audio-only Seedance requests are not supported. Use audio as a reference input only in supported `reference-to-video` flows.
+
+## Material Groups And Material IDs
+
+Seedance 2.0 material assets are organized in TokenLab material groups. Use `library_type: "aigc_avatar"` for virtual/avatar materials and `library_type: "liveness_face"` for certified real-person materials. Create or list groups with the [material asset group endpoints](/api-reference/video/create-material-asset-group), then upload assets with [Create Material Asset](/api-reference/video/create-material-asset).
+
+For the full upload request body, status fields, and examples, use the [Create Material Asset](/api-reference/video/create-material-asset) reference.
+
+The `group_id` field is the TokenLab material group ID returned by these endpoints. If you omit it, TokenLab uses the current organization's default group for the selected `library_type`. After an uploaded asset becomes `ACTIVE`, pass its returned `id` as `material_asset_id` or include it in `material_asset_ids` when calling `POST /v1/videos/generations`. Material assets count toward Seedance's 9 image-reference limit.
 
 ## 4K Reference-To-Video
 
-Use `seedance-2.0` when you need 4K output. The base model supports `4k` across the governed public contract, including `reference-to-video`.
+Use `seedance-2.0` when you need 4K output. The base model supports `4k`, including in `reference-to-video` requests.
 
 ```bash
 curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
@@ -2760,7 +2768,7 @@ curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
 
 ## Pricing And Billing
 
-Seedance 2.0 pricing is token-based and depends on output resolution and whether the request includes video input. TokenLab's USD price truth for these models is converted from official CNY pricing using `6.8` CNY per USD.
+Seedance 2.0 pricing is token-based and depends on output resolution and whether the request includes video input.
 
 Use the [Pricing API](/api-reference/pricing/get-pricing) or [Models API](/api-reference/models/list-models) for the current billable price before hard-coding product UI.
 
@@ -2795,7 +2803,7 @@ curl "https://api.tokenlab.sh/v1/models?recommended_for=music" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-The current public examples use `suno_music` for music generation and include `mv` with an official Suno model version such as `chirp-v4`. For lyric-only flows, send `action: "LYRICS"` with a model whose public contract documents lyric generation and omit `mv`. Treat model IDs as public TokenLab IDs, not as a guarantee that provider-specific fields are public contract fields.
+The current public examples use `suno_music` for music generation and include `mv` with an official Suno model version such as `chirp-v4`. For lyric-only flows, send `action: "LYRICS"` with a model whose model details documents lyric generation and omit `mv`. Treat model IDs as public TokenLab IDs, not as a guarantee that provider-specific fields are model details fields.
 
 ## Create A Music Task
 
@@ -2845,7 +2853,7 @@ Music tasks can reserve an estimated amount at create time and settle after the 
 | Task created but no player | Task is still pending or completed without `audio_url` | Keep polling until terminal, then handle missing output as a failed user job |
 | Duplicate songs after refresh | UI recreated the task instead of resuming | Persist and reuse `task_id` |
 | Lyric task returns no audio | `action: "LYRICS"` is text-only | Separate lyrics and music UI paths |
-| Unsupported parameter | Field is not in the model public contract | Remove provider-specific fields or choose a model that documents them |
+| Unsupported parameter | Field is not in the model details | Remove provider-specific fields or choose a model that documents them |
 
 ## API Reference
 
@@ -2885,7 +2893,7 @@ curl "https://api.tokenlab.sh/v1/models?recommended_for=3d" \
 
 Current Tripo examples include `tripo-h3.1` for high-quality text/image-to-3D workflows and `tripo-p1.0` for production-style 3D asset generation. Use the Models API to confirm the selected model supports your input type and output format.
 
-Do not assume every 3D model supports both input types or every output format. Check the selected model contract before sending `image`, `image_url`, `format`, `quality`, `style`, or `seed`.
+Do not assume every 3D model supports both input types or every output format. Check the selected model details before sending `image`, `image_url`, `format`, `quality`, `style`, or `seed`.
 
 ## Create A 3D Task
 
@@ -2936,7 +2944,7 @@ Completed tasks return `model_url` and may include `glb_url`, `fbx_url`, `obj_ur
 |---------|--------------|-----|
 | Create response has no asset URL | 3D generation is async | Poll until terminal status |
 | Requested format missing | Model did not return that format | Fall back to `model_url` or choose a model that supports the format |
-| Image-to-3D rejected | Selected model is text-only or image URL is unreachable | Check the model contract and validate the URL |
+| Image-to-3D rejected | Selected model is text-only or image URL is unreachable | Check the model details and validate the URL |
 | Duplicate assets | Retry path recreated the task after timeout | Store task identity before retrying |
 
 ## API Reference
@@ -3594,7 +3602,7 @@ This same `/v1/files` route can upload image reference files for `/v1/images/edi
 
 - Use `purpose=user_data` or `purpose=vision`.
 - Optionally include `model` to select the image-edit model; it defaults to `gpt-image-2`.
-- The returned `file_id` is bound to the selected upstream image-edit channel and can be reused in `images[].file_id`.
+- The returned `file_id` is bound to the selected image-edit configuration and can be reused in `images[].file_id`.
 
 ## Anthropic Files API Mode
 
@@ -3890,7 +3898,7 @@ Google Gemini image-family models do not share the same selector contract:
 - `nano-banana-2` supports `aspect_ratio` plus `resolution` (`1k`, `2k`, `4k`) for text-to-image generation only in the current TokenLab contract.
 - `gemini-2.5-flash-image`, `nano-banana`, and `nano-banana-edit` support `aspect_ratio` but do not expose public `resolution` selection.
 - For Nano Banana reference-image requests, use `nano-banana-edit` or `nano-banana-pro` on this endpoint (`/v1/images/generations`) with `operation: "image-to-image"` and `image_urls`. Do not send Nano Banana reference-image requests to `/v1/images/edits`.
-- For Nano Banana image-to-image requests, `nano-banana-pro` may include `resolution` (`1k`, `2k`, `4k`); `nano-banana-edit` must omit it. `nano-banana` and `nano-banana-2` are text-to-image models in the current public contract.
+- For Nano Banana image-to-image requests, `nano-banana-pro` may include `resolution` (`1k`, `2k`, `4k`); `nano-banana-edit` must omit it. `nano-banana` and `nano-banana-2` are text-to-image models in the current model details.
 - Reference images on this endpoint can be supplied as JSON `image_url` / `image_urls`, or as a multipart `image` file. `images[]` and `file_id` are not accepted on `/v1/images/generations`; create `/v1/files` references only for `/v1/images/edits` models that document `images[].file_id`.
 
 For Google image families, prefer `aspect_ratio` and only send `resolution` when the model explicitly supports it.
@@ -4351,7 +4359,7 @@ response = requests.post("https://api.tokenlab.sh/v1/videos/generations",
 
 ## Reference to Video
 
-Use `operation=reference-to-video` when the model supports dedicated reference conditioning. In TokenLab's public contract, image references use `reference_images`, while multimodal reference videos and audios use `video_urls` and `audio_urls`. For `seedance-2.0` and `seedance-2.0-fast`, TokenLab currently supports up to 9 reference images plus up to 3 reference videos and 3 reference audios. For model selection, 4K boundaries, and Mini notes, see the [Seedance 2.0 video models guide](/guides/seedance-2-video). `duration` controls generated output length only; it does not set a separate limit for reference video input duration. For `grok-imagine-video`, reference-to-video accepts up to 7 image references (`reference_images` or `image_urls`) and `duration` is capped at 10 seconds. Do not combine reference images with `image_url` / `image` first-frame inputs. `grok-imagine-video-1.5-preview` is image-to-video only.
+Use `operation=reference-to-video` when the model supports dedicated reference conditioning. In TokenLab requests, image references use `reference_images`, while multimodal reference videos and audios use `video_urls` and `audio_urls`. For `seedance-2.0` and `seedance-2.0-fast`, TokenLab currently supports up to 9 reference images plus up to 3 reference videos and 3 reference audios. For model selection, 4K boundaries, and Mini notes, see the [Seedance 2.0 video models guide](/guides/seedance-2-video). `duration` controls generated output length only; it does not set a separate limit for reference video input duration. For `grok-imagine-video`, reference-to-video accepts up to 7 image references (`reference_images` or `image_urls`) and `duration` is capped at 10 seconds. Do not combine reference images with `image_url` / `image` first-frame inputs. `grok-imagine-video-1.5-preview` is image-to-video only.
 
 ```python
 response = requests.post(
@@ -4416,7 +4424,7 @@ response = requests.post(
 
 ## Motion Control
 
-Use `operation=motion-control` when the model expects both a subject image and a motion reference video. TokenLab maps the public `image_url` + `video_url` request shape to the upstream motion-control contract.
+Use `operation=motion-control` when the model expects both a subject image and a motion reference video. TokenLab maps the public `image_url` + `video_url` request shape to the motion-control request format for that model.
 
 ```python
 response = requests.post(
@@ -4435,7 +4443,7 @@ response = requests.post(
 
 ## Model Discovery
 
-Public video inventory and supported operations change over time. Use the [Models API](/api-reference/models/list-models) as the source of truth before wiring a model-specific flow:
+Public video inventory and supported operations change over time. Use the [Models API](/api-reference/models/list-models) to check current support before wiring a model-specific flow:
 
 ```bash
 curl "https://api.tokenlab.sh/v1/models?recommended_for=video" \
@@ -4445,7 +4453,7 @@ curl "https://api.tokenlab.sh/v1/models/veo3.1" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Read `tokenlab.capabilities`, `tokenlab.supported_operations`, `tokenlab.public_contract_summary`, and `tokenlab.public_contract` from the model detail response. Operations such as `audio-to-video` and `video-extension` are model-specific; confirm current availability there instead of relying on static examples in this page.
+Read the model detail response before relying on model-specific operations or fields. Operations such as `audio-to-video` and `video-extension` are model-specific; confirm current availability there instead of relying on static examples in this page.
 
 ---
 
@@ -4714,7 +4722,7 @@ Use `DELETE /v1/tasks/{id}` to cancel an asynchronous task that has not started 
 
 ## Supported Tasks
 
-Cancellation is currently supported for queued Volcengine Seedance video tasks using `seedance-1.5-pro`, `seedance-2.0`, or `seedance-2.0-fast`. Tasks that are already `processing`/running cannot be cancelled. Completed, failed, expired, or unsupported tasks are kept queryable for status and billing reconciliation instead of deleting upstream records.
+Cancellation is currently supported for queued Seedance video tasks using `seedance-1.5-pro`, `seedance-2.0`, or `seedance-2.0-fast` when the provider selected for that task supports cancellation. Tasks that are already `processing`/running cannot be cancelled. Completed, failed, expired, or unsupported tasks remain queryable for status and billing reconciliation.
 
 ## Path Parameters
 
@@ -5017,7 +5025,7 @@ Authorization: Bearer mt-your-management-token
 | `/v1/management/api-keys/{keyId}/usage` | GET | Retrieve paginated usage details for a specific key |
 | `/v1/management/api-keys/{keyId}/billing` | GET | Retrieve aggregated billing breakdowns for a specific key |
 
-## Usage Filter Contract
+## Usage Filters
 
 `GET /v1/management/api-keys/{keyId}/usage` supports the following query parameters:
 
@@ -5025,7 +5033,7 @@ Authorization: Bearer mt-your-management-token
 |-----------|------|------------------|-------|
 | `page` | integer | default `1`, min `1` | 1-based page number |
 | `limit` | integer | default `50`, min `1`, max `100` | Page size |
-| `logicalModel` | string | max length `100` | Requested logical model name |
+| `logicalModel` | string | max length `100` | Requested model name |
 | `modelVendor` | string | max length `100` | Public model vendor |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
 | `accessChannel` | enum | - | `platform` or `byok` |
@@ -5034,7 +5042,7 @@ Authorization: Bearer mt-your-management-token
 
 If both `startDate` and `endDate` are present, `startDate` must be earlier than or equal to `endDate`.
 
-## API Key Body Contract
+## API Key Request Body
 
 ### POST /v1/management/api-keys
 
@@ -5043,7 +5051,7 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` or omitted = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
-| `models` | string[] | default `[]` | Optional logical model allowlist |
+| `models` | string[] | default `[]` | Optional model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
 ### PATCH /v1/management/api-keys/{keyId}
@@ -5054,25 +5062,25 @@ If both `startDate` and `endDate` are present, `startDate` must be earlier than 
 | `name` | string | length `1-50` | Updated display name |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` means unlimited, `0` means zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
-| `models` | string[] | - | Updated logical model allowlist |
+| `models` | string[] | - | Updated model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
 
 At least one PATCH field must be provided.
 
-## Monetary Contract
+## Monetary Fields
 
 - Management API monetary request and response fields are USD-only.
 - `limitCurrency` defaults to `USD`; sending `CNY` returns `400` with `currency_retired`.
 
 ## Reporting Semantics
 
-- `logicalModel` refers to the public logical model requested by the caller.
-- `modelVendor` refers to the public model vendor, not the hidden physical route.
+- `logicalModel` refers to the model requested by the caller.
+- `modelVendor` refers to the public model vendor, not provider-specific execution details.
 - `scene` is the public request scene derived from the endpoint or task type.
 - `accessChannel=platform` means the request was billed via TokenLab’s platform channel.
 - `accessChannel=byok` means the request used your own upstream provider key.
 
-Responses expose public billing and reporting fields only. Provider execution details are not part of the public management contract.
+Responses expose public billing and reporting fields only. Provider execution details are not included in management responses.
 - `/usage` line items can include `billing_transaction_id` once the underlying request has reached settled billing state. Use `request_id` + `billing_transaction_id` for request-level reconciliation.
 
 ## Billing Pagination Note
@@ -5104,14 +5112,14 @@ URL: https://docs.tokenlab.sh/api-reference/management/get-balance
 
 ## Overview
 
-This endpoint returns the current balance totals for the organization associated with the management token. It uses the same organization balance source of truth as billing and settlement.
+This endpoint returns the current balance totals for the organization associated with the management token. It uses the same organization balance current reference as billing and settlement.
 
 ## Notes
 
 - Monetary fields are USD-only. `CNY` inputs are retired and return `400 currency_retired`.
 
-- Monetary truth fields are returned in USD: `balance`, `total_recharge`, and `total_used`.
-- `preferred_currency` reflects the organization dashboard display preference; it does not change the USD truth fields.
+- Monetary fields are returned in USD: `balance`, `total_recharge`, and `total_used`.
+- `preferred_currency` reflects the organization dashboard display preference; it does not change the USD fields.
 
 ## Example
 
@@ -5170,7 +5178,7 @@ Creates a new `type=user` API key in the organization associated with the curren
 | `name` | string | required, default `Default Key`, length `1-50` | Display name, trimmed server-side |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` or omitted = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
-| `models` | string[] | default `[]` | Optional logical model allowlist |
+| `models` | string[] | default `[]` | Optional model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` means no expiry |
 
 ## Notes
@@ -5213,7 +5221,7 @@ At least one field must be provided.
 | `name` | string | length `1-50` | Updated display name |
 | `limitAmount` | number \| null | min `0`, input max `1000000` | `null` = unlimited, `0` = zero quota. Positive values are normalized to a stored cap that cannot exceed `100000` USD equivalent. |
 | `limitCurrency` | enum | default `USD` | USD only. Sending `CNY` returns `400 currency_retired`. |
-| `models` | string[] | - | Updated logical model allowlist |
+| `models` | string[] | - | Updated model allowlist |
 | `expiresAt` | string \| null | RFC3339 datetime | `null` clears the expiry |
 
 ## Notes
@@ -5243,7 +5251,7 @@ URL: https://docs.tokenlab.sh/api-reference/management/get-api-key-usage
 
 ## Overview
 
-This endpoint returns key-level usage details without exposing provider execution details.
+This endpoint returns key-level usage details without exposing provider-specific execution details.
 
 ## Query Parameters
 
@@ -5251,7 +5259,7 @@ This endpoint returns key-level usage details without exposing provider executio
 |-----------|------|------------------|-------|
 | `page` | integer | default `1`, min `1` | 1-based page number |
 | `limit` | integer | default `50`, min `1`, max `100` | Page size |
-| `logicalModel` | string | max length `100` | Requested logical model name |
+| `logicalModel` | string | max length `100` | Requested model name |
 | `modelVendor` | string | max length `100` | Public model vendor |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d` |
 | `accessChannel` | enum | - | `platform` or `byok` |
@@ -5351,7 +5359,7 @@ This page is intentionally narrower than a marketing matrix:
 | **Cursor** | Supported with limits | OpenAI-compatible | Works for BYOK standard chat/editor flows, not as a replacement for Cursor-managed features like Tab Completion |
 | **Claude Code CLI** | Strong native path | Anthropic | Native `/v1/messages` route with adapter coverage for thinking and `tool_choice` |
 | **Codex CLI** | Supported with model/path limits | OpenAI Responses | Treat `/v1/responses` as an advanced path for Codex-specific workflows; some Responses-only fields are not guaranteed across every model and routed path |
-| **Gemini CLI** | Best-effort / experimental | Gemini | Custom TokenLab base URL flow is not a stable upstream contract |
+| **Gemini CLI** | Best-effort / experimental | Gemini | Custom TokenLab base URL flow is not an official Gemini CLI integration |
 | **OpenCode** | Supported | OpenAI-compatible | Use an OpenAI-compatible provider by default; move to a Responses-based provider only when you explicitly need it |
 
 > Note: Other OpenAI-compatible editors and agent tools often work with the same base URL pattern; check the tool’s own custom-provider support before using it in production.
@@ -6043,7 +6051,7 @@ In Settings → Models:
     export GOOGLE_GEMINI_BASE_URL="https://api.tokenlab.sh"
     ```
 
-    Treat this as best-effort compatibility rather than a stable upstream contract.
+    Treat this as best-effort compatibility rather than an official Gemini CLI integration.
 
     [Full guide →](/integrations/gemini-cli)
 
@@ -6086,7 +6094,7 @@ If you just want to get started quickly, configuring `tokenlab` alone is enough.
 
 > Warning: Use the `/v1` suffix only for `openai-completions` and `openai-responses`.
 
-Native providers such as `anthropic-messages` and `google-generative-ai` should use `https://api.tokenlab.sh` without `/v1`, otherwise OpenClaw may construct the wrong upstream path.
+Native providers such as `anthropic-messages` and `google-generative-ai` should use `https://api.tokenlab.sh` without `/v1`, otherwise OpenClaw may construct the wrong provider path.
 
 ## Prerequisites
 
@@ -6742,7 +6750,7 @@ gemini --version
 
 ### Step 2: Set Environment Variables
 
-The following setup is the current compatibility path people use with proxy or gateway endpoints, but it is not a stable upstream contract:
+The following setup is the current compatibility path people use with proxy or gateway endpoints, but it is not an official Gemini CLI integration:
 
 **Temporary (current session):**
 

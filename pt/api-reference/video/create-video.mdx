@@ -31,7 +31,7 @@ Em integrações de produção, prefira URLs `https` públicas para imagens, ví
 </ParamField>
 
 <ParamField body="operation" type="string">
-  Operação de vídeo a ser executada. O contrato público suporta `text-to-video`, `image-to-video`, `reference-to-video`, `start-end-to-video`, `video-to-video`, `video-extension`, `audio-to-video` e `motion-control`. A TokenLab pode inferir a operação a partir das entradas, mas em produção o ideal é informá-la explicitamente.
+  Operação de vídeo a ser executada. O detalhes do modelo suporta `text-to-video`, `image-to-video`, `reference-to-video`, `start-end-to-video`, `video-to-video`, `video-extension`, `audio-to-video` e `motion-control`. A TokenLab pode inferir a operação a partir das entradas, mas em produção o ideal é informá-la explicitamente.
 </ParamField>
 
 <ParamField body="image_url" type="string">
@@ -44,6 +44,14 @@ Em integrações de produção, prefira URLs `https` públicas para imagens, ví
 
 <ParamField body="reference_images" type="array">
   Imagens de referência para fluxos com condicionamento dedicado. A quantidade suportada depende do modelo. Para `seedance-2.0` e `seedance-2.0-fast`, a TokenLab suporta atualmente até 9 imagens de referência, além de até 3 vídeos de referência e 3 áudios de referência. Para escolha de modelo, limites de 4K e notas sobre Mini, consulte o [guia de modelos de vídeo Seedance 2.0](/pt/guides/seedance-2-video). Recomendam-se URLs públicas `https`; modelos compatíveis também aceitam URLs `data:`. Para `grok-imagine-video`, reference-to-video aceita até 7 referências de imagem e `duration` é limitado a 10 segundos. `grok-imagine-video-1.5-preview` é apenas image-to-video e não aceita referências de imagem.
+</ParamField>
+
+<ParamField body="material_asset_id" type="string">
+  ID de material TokenLab Seedance retornado por [Criar material](/pt/api-reference/video/create-material-asset). Use com modelos Seedance 2.0 depois que o material estiver `ACTIVE`.
+</ParamField>
+
+<ParamField body="material_asset_ids" type="array">
+  Vários IDs de material TokenLab Seedance. Eles compartilham o mesmo limite de referências de imagem de `reference_images`; no Seedance 2.0, envie no máximo 9 referências de imagem no total.
 </ParamField>
 
 <ParamField body="reference_image_type" type="string">
@@ -259,7 +267,7 @@ response = requests.post("https://api.tokenlab.sh/v1/videos/generations",
 
 ## Referência para vídeo
 
-Use `operation=reference-to-video` quando o modelo suportar condicionamento dedicado por referência. No contrato público da TokenLab, referências de imagem usam `reference_images`, enquanto vídeos e áudios de referência multimodais usam `video_urls` e `audio_urls`. Para `seedance-2.0` e `seedance-2.0-fast`, a TokenLab suporta atualmente até 9 imagens de referência, além de até 3 vídeos de referência e 3 áudios de referência. Para escolha de modelo, limites de 4K e notas sobre Mini, consulte o [guia de modelos de vídeo Seedance 2.0](/pt/guides/seedance-2-video). `duration` controla apenas a duração do resultado gerado; ele não define um limite separado para a duração do vídeo de referência de entrada. Para `grok-imagine-video`, reference-to-video aceita até 7 referências de imagem (`reference_images` ou `image_urls`) e `duration` é limitado a 10 segundos. Não combine referências de imagem com entradas de primeiro frame `image_url` / `image`. `grok-imagine-video-1.5-preview` é apenas image-to-video.
+Use `operation=reference-to-video` quando o modelo suportar condicionamento dedicado por referência. No detalhes do modelo da TokenLab, referências de imagem usam `reference_images`, enquanto vídeos e áudios de referência multimodais usam `video_urls` e `audio_urls`. Para `seedance-2.0` e `seedance-2.0-fast`, a TokenLab suporta atualmente até 9 imagens de referência, além de até 3 vídeos de referência e 3 áudios de referência. Para escolha de modelo, limites de 4K e notas sobre Mini, consulte o [guia de modelos de vídeo Seedance 2.0](/pt/guides/seedance-2-video). `duration` controla apenas a duração do resultado gerado; ele não define um limite separado para a duração do vídeo de referência de entrada. Para `grok-imagine-video`, reference-to-video aceita até 7 referências de imagem (`reference_images` ou `image_urls`) e `duration` é limitado a 10 segundos. Não combine referências de imagem com entradas de primeiro frame `image_url` / `image`. `grok-imagine-video-1.5-preview` é apenas image-to-video.
 
 ```python
 response = requests.post(
@@ -324,7 +332,7 @@ response = requests.post(
 
 ## Controle de movimento
 
-Quando um modelo precisa tanto de uma imagem do sujeito quanto de um vídeo de referência de movimento, use `operation=motion-control`. A TokenLab normaliza a forma pública `image_url` + `video_url` para o contrato upstream correspondente.
+Quando um modelo precisa tanto de uma imagem do sujeito quanto de um vídeo de referência de movimento, use `operation=motion-control`. A TokenLab normaliza a forma pública `image_url` + `video_url` para o formato de solicitação esperado pelo modelo.
 
 ```python
 response = requests.post(
@@ -343,7 +351,7 @@ response = requests.post(
 
 ## Descoberta de modelos
 
-O inventário público de vídeo e as operações compatíveis mudam com o tempo. Use a [Models API](/pt/api-reference/models/list-models) como fonte da verdade antes de integrar um fluxo específico de modelo:
+O inventário público de vídeo e as operações compatíveis mudam com o tempo. Use a [Models API](/pt/api-reference/models/list-models) como referência atual antes de integrar um fluxo específico de modelo:
 
 ```bash
 curl "https://api.tokenlab.sh/v1/models?recommended_for=video" \
@@ -353,4 +361,4 @@ curl "https://api.tokenlab.sh/v1/models/veo3.1" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Leia `tokenlab.capabilities`, `tokenlab.supported_operations`, `tokenlab.public_contract_summary` e `tokenlab.public_contract` na resposta de detalhe do modelo. Operações como `audio-to-video` e `video-extension` são específicas de cada modelo; confirme a disponibilidade atual ali, em vez de depender de exemplos estáticos desta página.
+Leia `tokenlab.capabilities`, `tokenlab.supported_operations`, `GET /v1/models` e `GET /v1/models/{model}` na resposta de detalhe do modelo. Operações como `audio-to-video` e `video-extension` são específicas de cada modelo; confirme a disponibilidade atual ali, em vez de depender de exemplos estáticos desta página.
