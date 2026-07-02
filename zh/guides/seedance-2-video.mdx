@@ -1,89 +1,124 @@
 ---
 title: "Seedance 2.0 视频模型"
-description: "使用 Seedance 2.0 视频生成，以及虚拟人像素材组和真人素材组。"
+description: "使用 Seedance 2.0 视频生成、虚拟人像素材组和真人素材组。"
 ---
 
-Seedance 2.0 支持文生视频、图生视频、首尾帧、参考生视频、视频编辑和视频续写。常用模型包括 `seedance-2.0`、`seedance-2.0-fast` 和 `seedance-2.0-mini`，通过 `operation` 选择工作流。
+Seedance 2.0 支持文生视频、图生视频、首尾帧视频、参考生视频、视频编辑和视频延展。使用 `seedance-2.0`、`seedance-2.0-fast`、`seedance-2.0-mini` 等模型 ID，并通过 `operation` 选择工作流。
 
 ## 模型选择
 
 | 模型 | 适合场景 | 支持分辨率 |
 |------|----------|------------|
-| `seedance-2.0` | 最高质量和 4K 输出 | `480p`、`720p`、`1080p`、`4k` |
-| `seedance-2.0-fast` | 更快、更低成本 | `480p`、`720p` |
-| `seedance-2.0-mini` | 成本优先 | `480p`、`720p` |
+| `seedance-2.0` | 最高质量和 4K 输出 | `480p`, `720p`, `1080p`, `4k` |
+| `seedance-2.0-fast` | 更快、更低成本 | `480p`, `720p` |
+| `seedance-2.0-mini` | 最低成本 | `480p`, `720p` |
 
-`seedance-2.0-fast` 和 `seedance-2.0-mini` 不接受 `1080p` 或 `4k` 请求。音频只能作为受支持参考工作流的一部分使用，纯音频、文本加音频的 Seedance 请求不支持。
+`seedance-2.0-fast` 和 `seedance-2.0-mini` 会拒绝 `1080p` 和 `4k` 请求。音频只能用于支持的参考工作流；不支持纯音频或文本加音频的 Seedance 请求。
 
 ## 支持的操作
 
-| Operation | 常见输入 |
-|-----------|----------|
+| 操作 | 常见输入 |
+|------|----------|
 | `text-to-video` | `prompt` |
-| `image-to-video` | `prompt`、`image_url` 或兼容图片输入 |
-| `start-end-to-video` | `prompt`、`start_image`、`end_image` |
-| `reference-to-video` | `prompt`、`reference_images`，可选 `video_urls`、`audio_urls` |
-| `video-to-video` | `prompt`、`video_url` 或兼容视频输入 |
-| `video-extension` | `task_id` 或模型特定续写输入 |
+| `image-to-video` | `prompt`, `image_url` 或兼容图片输入 |
+| `start-end-to-video` | `prompt`, `start_image`, `end_image` |
+| `reference-to-video` | `prompt`, `reference_images`，可选 `video_urls` 和 `audio_urls` |
+| `video-to-video` | `prompt`, `video_url` 或兼容视频输入 |
+| `video-extension` | `task_id` 或模型指定的续写输入 |
 
 ## 素材概念
 
-Seedance 素材是组织内可复用的资产，创建后可在视频生成中引用。
+Seedance 素材是组织范围内可复用的参考资源，可在后续视频生成中引用。
 
-| 概念 | 说明 |
-|------|------|
-| 素材组 | TokenLab 管理的一组 Seedance 素材，对外主字段是 `library_type`。 |
-| 素材 | 一张图片、一个视频或一段音频。只有状态为 `ACTIVE` 后才能用于生成。 |
-| 虚拟人像素材组 | `library_type: "aigc_avatar"`，用于虚拟人、头像、产品、风格等不需要真人认证的素材。 |
-| 真人素材组 | `library_type: "liveness_face"`，由真人素材认证产生，一组绑定一个已认证真人。 |
+| 概念 | 公开字段 | 含义 |
+|------|----------|------|
+| 素材组 | `group_id` | 管理一组相关 Seedance 素材。上传或查询素材时使用。 |
+| 素材 | `id` | 一个已上传的图片、视频或音频。变为 `ACTIVE` 后，用作视频生成的 `material_asset_id`。 |
+| 虚拟人像素材组 | `library_type: "aigc_avatar"` | 用于虚拟人、头像、商品、风格等不需要真人认证的参考素材。 |
+| 真人素材组 | `library_type: "liveness_face"` | 由真人素材认证创建，一个组对应一个已认证真人。 |
 
-同一个组 ID 必须保持一致：真人素材认证会创建一个 TokenLab 素材组映射，后续真人素材上传必须使用绑定结果返回的 TokenLab `group_id`。TokenLab 会保存底层素材库映射，确保上传素材始终绑定到同一个已认证真人。
+请区分 `group_id` 和素材 `id`。`group_id` 用于组织上传；素材 `id` 用于视频生成。如果视频请求返回 `Seedance material asset not found or not accessible`，请确认传入的是素材 `id` 而不是 `group_id`，且素材属于同一组织、没有删除，并且状态为 `ACTIVE`。
 
 ## 真人素材认证
 
-真人素材认证主要给下游聚合客户使用。你们可以基于 TokenLab API 开发自己的 H5 页面和用户流程，TokenLab 只提供会话创建、回调代理和绑定接口。
+当你的产品需要在使用真人形象作为 Seedance 可复用参考前完成授权和人脸验证时，使用真人素材认证。
 
-1. 调用 [创建真人素材认证会话](/api-reference/video/create-real-person-verification-session)，传入你自己的 `callback_url`。
-2. 将用户引导到返回的 `h5_link`。`session_id`、`verification_token` 和 H5 链接有效期均为 120 秒。
-3. H5 流程完成后，TokenLab 会跳转到你的 `callback_url`，携带 `session_id`、`verification_token`、`verification_status`、`result_code`。
-4. 当 `verification_status` 为 `succeeded` 时，调用 [绑定真人素材认证结果](/api-reference/video/bind-real-person-verification-result)。
-5. 保存返回的 `group_id`，创建真人素材时必须传它。
-6. 调用 [查询真人素材认证历史](/api-reference/video/list-real-person-verification-history) 查看长期审计和客服排障记录。历史记录不会延长 120 秒绑定窗口。
+1. 调用 [创建真人素材认证会话](/zh/api-reference/video/create-real-person-verification-session)，传入你的 `callback_url`。
+2. 将用户跳转到返回的 `h5_link`。`session_id`、`verification_token` 和 H5 链接会在 120 秒后过期。
+3. H5 流程完成后，TokenLab 会跳转回你的 `callback_url`，并携带 `session_id`、`verification_token`、`verification_status` 和 `result_code`。
+4. 当 `verification_status` 为 `succeeded` 时，调用 [绑定真人素材认证结果](/zh/api-reference/video/bind-real-person-verification-result)。
+5. 保存返回的 `group_id`；创建 `liveness_face` 素材时传入它。
+6. 使用 [查询真人素材认证历史](/zh/api-reference/video/list-real-person-verification-history) 查看历史会话。历史记录长期保留，但不会延长 120 秒绑定窗口。
 
-[测试控制台](https://tokenlab.sh/dashboard/seedance-assets) 可用于人工联调、素材工作台查看、长期认证历史和接入排查。它不会出现在 Dashboard 左侧菜单里。
+可选：使用 [测试控制台](https://tokenlab.sh/dashboard/seedance-assets) 验证请求与回调流程、查看素材组和认证历史。正式接入应直接调用 API。
 
 ## 创建素材组
 
-[创建素材组](/api-reference/video/create-material-asset-group) 用于创建 `aigc_avatar` 虚拟人像素材组。新的真人素材组不能通过普通素材组 CRUD 直接创建，必须走真人素材认证流程，这样才能保留真人认证结果和渠道映射。
+使用 [创建素材组](/zh/api-reference/video/create-material-asset-group) 创建 `aigc_avatar` 素材组。新的真人素材组必须通过真人素材认证创建，这样已认证真人和素材组才能保持绑定。
 
-素材组创建后，可用 [查询素材组列表](/api-reference/video/list-material-asset-groups)、[查询素材组详情](/api-reference/video/get-material-asset-group)、[更新素材组](/api-reference/video/update-material-asset-group)、[删除素材组](/api-reference/video/delete-material-asset-group) 管理。
+已有素材组可以通过 [查询素材组列表](/zh/api-reference/video/list-material-asset-groups)、[查询素材组详情](/zh/api-reference/video/get-material-asset-group)、[更新素材组](/zh/api-reference/video/update-material-asset-group) 和 [删除素材组](/zh/api-reference/video/delete-material-asset-group) 管理。
 
-删除素材组会同时删除组内素材，且不可逆。如果上游授权状态不允许删除，TokenLab 会返回中立的素材库错误。
+删除素材组也会删除 TokenLab 中该组下的素材，且不可恢复。如果素材服务因当前授权状态不允许删除，TokenLab 会返回中立的素材库错误。
 
 ## 上传素材
 
-用 [创建素材](/api-reference/video/create-material-asset) 每次上传一个公网可访问 URL。
+使用 [创建素材](/zh/api-reference/video/create-material-asset) 每次上传一个公开 URL。
 
-`aigc_avatar` 可以不传 `group_id`，TokenLab 会使用或创建组织默认虚拟人像素材组。`liveness_face` 必须传 `group_id`，且这个组必须来自 [绑定真人素材认证结果](/api-reference/video/bind-real-person-verification-result)。
+`aigc_avatar` 可省略 `group_id`；TokenLab 会使用或创建组织默认虚拟人像素材组。`liveness_face` 必须传入 [绑定真人素材认证结果](/zh/api-reference/video/bind-real-person-verification-result) 返回的 `group_id`。
 
-| 类型 | 格式限制 |
+| 类型 | 支持输入 |
 |------|----------|
-| 图片 | `jpeg`、`png`、`webp`、`bmp`、`tiff`、`gif`、`heic`、`heif`；宽高比 `(0.4, 2.5)`；宽高 `(300, 6000)` px；单张小于 30 MB。 |
-| 视频 | `mp4`、`mov`；`480p`、`720p`、`1080p`；2-15 秒；宽高比 `[0.4, 2.5]`；宽高 `[300, 6000]` px；总像素 409600 到 2086876；单文件不超过 50 MB；24-60 FPS。 |
-| 音频 | `wav`、`mp3`；2-15 秒；单文件不超过 15 MB。 |
+| 图片 | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`；宽高比 `(0.4, 2.5)`；宽高 `(300, 6000)` px；小于 30 MB。 |
+| 视频 | `mp4`, `mov`；`480p`, `720p`, `1080p`；2-15 秒；宽高比 `[0.4, 2.5]`；宽高 `[300, 6000]` px；总像素 409600 到 2086876；最大 50 MB；24-60 FPS。 |
+| 音频 | `wav`, `mp3`；2-15 秒；最大 15 MB。 |
 
-素材入库是异步的。创建后轮询 [查询素材详情](/api-reference/video/get-material-asset)，直到 `status` 变为 `ACTIVE`。HTTP 200 只代表请求成功，不代表素材可用；一定要看业务状态。若状态为 `FAILED`，读取 `error_message`，修正素材后重新创建。
+素材入库是异步的。轮询 [查询素材详情](/zh/api-reference/video/get-material-asset)，直到 `status` 变为 `ACTIVE`。HTTP 成功只表示请求被接受；是否可用于生成必须看业务状态。如果状态为 `FAILED`，查看 `error_message`，修正素材后重新创建。
 
-列表和详情里返回的素材 URL 可能是临时检查地址，不建议当长期存储依赖；部分 URL 可能约 12 小时后过期。
+列表和详情里的素材 URL 可能是临时查看地址，不要当成长期存储地址依赖；有些 URL 约 12 小时后会过期。
 
-真人素材组一组绑定一个真实人像。上传时会做人脸一致性比对，多人脸或人脸不一致都可能失败。建议同时上传全身正面参考图和正面人脸特写图。
+真人素材组中，一个组对应一个真人。上传素材会做人脸一致性检查；多人脸或与已认证真人不一致可能失败。建议同时上传正面全身参考图和清晰的正脸特写图。
 
 ## 在视频生成中使用素材
 
-素材状态为 `ACTIVE` 后，把返回的 TokenLab 素材 `id` 作为 `material_asset_id`，或放入 `material_asset_ids`，传给 [创建视频](/api-reference/video/create-video)。素材会计入 Seedance 参考数量限制。
+素材变为 `ACTIVE` 后，把返回的 TokenLab 素材 `id` 作为 `material_asset_id`，或放入 `material_asset_ids`，用于调用 [创建视频](/zh/api-reference/video/create-video)。素材会计入 Seedance 参考素材限制。
 
-## 价格和异步结果
+## API 用例
 
-Seedance 2.0 价格取决于输出分辨率、输入类型和模型。产品里硬编码价格前，请读取 [Pricing API](/api-reference/pricing/get-pricing) 或 [Models API](/api-reference/models/list-models)。
+先创建虚拟人像素材组，上传图片，轮询到可用，再在视频生成中使用素材 ID。
 
-视频生成是异步任务。使用创建请求返回的 `poll_url`，或通过 [查询任务状态](/api-reference/tasks/get-task-status) 轮询结果。
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"seedance_group_abc123","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_def456 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+
+真人素材组需要先创建认证会话，并在认证成功后绑定结果。
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"zh"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+```
+
+
+## 定价和异步结果
+
+Seedance 2.0 价格取决于输出分辨率、输入类型和模型。请使用 [定价 API](/zh/api-reference/pricing/get-pricing) 或 [模型 API](/zh/api-reference/models/list-models) 获取最新信息，不要在产品界面里硬编码。
+
+视频生成是异步的。可以跟随创建请求返回的 `poll_url`，或用返回的任务 ID 调用 [查询任务状态](/zh/api-reference/tasks/get-task-status)。

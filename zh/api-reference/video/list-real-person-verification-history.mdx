@@ -1,23 +1,40 @@
 ---
 title: "查询真人素材认证历史"
 openapi: "GET /v1/videos/assets/visual-validation-sessions"
-description: "查询长期保存的 TokenLab 真人素材认证历史。"
+description: "列出当前组织的真人素材认证会话。"
 ---
 
-查询当前组织长期保存的真人素材认证历史。
+查询长期保留的认证会话历史，用于核对用户回调和素材组绑定结果。历史记录不能替代短时绑定流程；认证成功后仍应在 120 秒窗口内立即绑定。
 
-这个接口适合用于客户支持、审计记录和接入排障。它不能替代短时绑定流程：`session_id`、`verification_token` 和 H5 链接仍然会在 120 秒后过期；认证成功后应立即调用 [绑定认证结果](/api-reference/video/bind-real-person-verification-result)。
+响应只包含 TokenLab ID，不包含凭据数据。绑定成功后，`group_id` 是创建 `liveness_face` 素材时使用的 TokenLab 素材组 ID。
+## 用例请求
 
-返回内容是 TokenLab 中立口径，不包含内部凭据或底层素材库 ID。绑定成功后，`group_id` 是 TokenLab 素材组 ID，可用于创建 `liveness_face` 真人素材。
+```bash
+curl "https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions?page_size=20" \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
 
-状态说明：
+## 用例响应
 
-| 状态 | 含义 |
-|------|------|
-| `created` | TokenLab 已创建 H5 会话，但尚未收到回调。 |
-| `callback_succeeded` | TokenLab 已收到成功的 H5 回调，但尚未绑定结果。 |
-| `callback_failed` | TokenLab 已收到失败的 H5 回调。 |
-| `bound` | 认证结果已绑定为 TokenLab 真人素材组。 |
-| `expired` | 120 秒绑定窗口内未完成绑定。 |
-
-[测试控制台](https://tokenlab.sh/dashboard/seedance-assets) 会在同一页面展示长期认证历史、素材组和素材。
+```json
+{
+  "sessions": [
+    {
+      "object": "seedance.visual_validation_session_history",
+      "session_id": "svv_abc123",
+      "callback_url": "https://yourapp.example.com/seedance/callback",
+      "language": "zh",
+      "status": "bound",
+      "verification_status": "succeeded",
+      "result_code": "10000",
+      "group_id": "seedance_group_real_123",
+      "group_name": "Creator A",
+      "created_at": 1782998400000,
+      "expires_at": 1782998520000,
+      "callback_received_at": 1782998450000,
+      "bound_at": 1782998460000
+    }
+  ],
+  "next_page_token": null
+}
+```

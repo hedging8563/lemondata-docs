@@ -1,19 +1,43 @@
 ---
-title: "创建素材"
+title: "建立素材"
 openapi: "POST /v1/videos/assets"
-description: "上传一个 Seedance 素材到 TokenLab 素材组。"
+description: "將 Seedance 素材上傳到 TokenLab 素材組。"
 ---
 
-把一个公网可访问 URL 上传为 Seedance 素材。
+每次上传一个公开 URL。`aigc_avatar` 可省略 `group_id`；TokenLab 会使用或创建组织默认虚拟人像素材组。`liveness_face` 必须传入 [綁定真人素材認證結果](/zh-Hant/api-reference/video/bind-real-person-verification-result) 返回的 TokenLab `group_id`。
 
-`library_type: "aigc_avatar"` 可不传 `group_id`，TokenLab 会使用或创建组织默认虚拟人像素材组。`library_type: "liveness_face"` 必须传 `group_id`，且这个组必须来自 [绑定真人素材认证结果](/api-reference/video/bind-real-person-verification-result)。这样可以保证真人认证渠道和素材上传渠道一致。
-
-| 类型 | 格式限制 |
+| 类型 | 支持输入 |
 |------|----------|
-| 图片 | `jpeg`、`png`、`webp`、`bmp`、`tiff`、`gif`、`heic`、`heif`；宽高比 `(0.4, 2.5)`；宽高 `(300, 6000)` px；单张小于 30 MB。 |
-| 视频 | `mp4`、`mov`；`480p`、`720p`、`1080p`；2-15 秒；宽高比 `[0.4, 2.5]`；宽高 `[300, 6000]` px；总像素 409600 到 2086876；单文件不超过 50 MB；24-60 FPS。 |
-| 音频 | `wav`、`mp3`；2-15 秒；单文件不超过 15 MB。 |
+| 图片 | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`；宽高比 `(0.4, 2.5)`；宽高 `(300, 6000)` px；小于 30 MB。 |
+| 视频 | `mp4`, `mov`；`480p`, `720p`, `1080p`；2-15 秒；宽高比 `[0.4, 2.5]`；宽高 `[300, 6000]` px；总像素 409600 到 2086876；最大 50 MB；24-60 FPS。 |
+| 音频 | `wav`, `mp3`；2-15 秒；最大 15 MB。 |
 
-创建素材是异步处理。轮询 [查询素材详情](/api-reference/video/get-material-asset)，直到 `status` 为 `ACTIVE`。HTTP 200 或 201 只代表请求被接受，是否可用要看业务状态。
+素材入库是异步的。轮询 [查詢素材詳情](/zh-Hant/api-reference/video/get-material-asset) 直到 `status` 为 `ACTIVE`。真人素材组中，一个组对应一个已认证真人；多人脸或人脸不一致的素材可能失败。
+## 用例請求
 
-真人素材组一组绑定一个已认证真人。多人脸或人脸与认证人不一致时，素材可能入库失败。
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"seedance_group_virtual_123","asset_url":"https://example.com/reference.png","asset_type":"Image","asset_name":"Front view"}'
+```
+
+## 用例響應
+
+```json
+{
+  "id": "seedance_asset_123",
+  "object": "seedance.material_asset",
+  "group_id": "seedance_group_virtual_123",
+  "library_type": "aigc_avatar",
+  "asset_name": "Front view",
+  "asset_type": "Image",
+  "asset_url": "https://example.com/reference.png",
+  "cover_url": null,
+  "status": "PROCESSING",
+  "ready": false,
+  "error_message": null,
+  "metadata": null,
+  "created_at": 1782998400000
+}
+```

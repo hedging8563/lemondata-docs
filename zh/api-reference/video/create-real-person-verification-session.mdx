@@ -4,17 +4,28 @@ openapi: "POST /v1/videos/assets/visual-validation-sessions"
 description: "创建 TokenLab 真人素材认证 H5 会话。"
 ---
 
-为下游自建 H5 流程创建真人素材认证会话。
+创建一个 120 秒内有效的真人素材认证会话，并把用户引导到返回的 H5 链接。TokenLab 响应只包含中立字段：`session_id`、`verification_token`、`h5_link`、`callback_url`、`expires_in` 和 `language`。
 
-TokenLab 返回中立字段：`session_id`、`verification_token`、`h5_link`、`callback_url`、`expires_in`、`language`。不会返回上游凭证。会话、token 和 H5 链接有效期均为 120 秒。
+H5 流程完成后，TokenLab 会跳转到你的 `callback_url`，携带 `session_id`、`verification_token`、`verification_status` 和 `result_code`。当 `verification_status` 为 `succeeded` 时，调用 [绑定真人素材认证结果](/zh/api-reference/video/bind-real-person-verification-result)。测试控制台可用于验证请求和回调流程： [打开测试控制台](https://tokenlab.sh/dashboard/seedance-assets)。
+## 用例请求
 
-把用户引导到 `h5_link`。H5 流程结束后，TokenLab 会跳转到你传入的 `callback_url`，并携带：
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"zh"}'
+```
 
-| 参数 | 含义 |
-|------|------|
-| `session_id` | TokenLab 认证会话 ID。 |
-| `verification_token` | 绑定认证结果用的 TokenLab 不透明 token。 |
-| `verification_status` | `succeeded` 或 `failed`。 |
-| `result_code` | 标准化结果码，用于排查。 |
+## 用例响应
 
-当 `verification_status` 为 `succeeded` 时，调用 [绑定真人素材认证结果](/api-reference/video/bind-real-person-verification-result)。需要人工检查重定向和绑定流程时，可使用 [测试控制台](https://tokenlab.sh/dashboard/seedance-assets)。
+```json
+{
+  "object": "seedance.visual_validation_session",
+  "session_id": "svv_abc123",
+  "verification_token": "svvt_def456",
+  "h5_link": "https://verify.example.com/h5?lng=zh",
+  "callback_url": "https://yourapp.example.com/seedance/callback",
+  "expires_in": 120,
+  "language": "zh"
+}
+```

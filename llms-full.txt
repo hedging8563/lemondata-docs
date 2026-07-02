@@ -2794,43 +2794,43 @@ Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, refe
 
 ## Material Concepts
 
-Seedance materials are reusable, organization-scoped assets that can be referenced later during video generation.
+Seedance materials are reusable, organization-scoped references that can be selected later during video generation.
 
-| Concept | Meaning |
-|---------|---------|
-| Material group | A TokenLab group that owns related Seedance materials. The public field is `library_type`. |
-| Material asset | One uploaded image, video, or audio file. It becomes usable only after `status` is `ACTIVE`. |
-| Virtual-avatar material group | `library_type: "aigc_avatar"`. Use it for virtual people, avatars, products, styles, and other reusable references that do not require real-person verification. |
-| Real-person material group | `library_type: "liveness_face"`. It is produced by real-person material verification and represents one verified real person. |
+| Concept | Public field | What it means |
+|---------|--------------|---------------|
+| Material group | `group_id` | A TokenLab group that owns related Seedance materials. Use it when uploading or listing materials. |
+| Material asset | `id` | One uploaded image, video, or audio file. Use this value as `material_asset_id` after the asset becomes `ACTIVE`. |
+| Virtual-avatar material group | `library_type: "aigc_avatar"` | For virtual people, avatars, products, styles, and other reusable references that do not require real-person verification. |
+| Real-person material group | `library_type: "liveness_face"` | Created by real-person material verification. One group represents one verified real person. |
 
-The same group ID must be used consistently: a real-person verification session creates a TokenLab material group mapping, and subsequent real-person uploads must use the TokenLab `group_id` returned by that bind result. TokenLab stores the backing material-library mapping so uploads stay attached to the verified person.
+Keep `group_id` and material asset `id` separate. `group_id` is for organizing uploads; material asset `id` is for video generation. If a video request returns `Seedance material asset not found or not accessible`, confirm that you passed a material asset `id`, not a `group_id`, and that the asset belongs to the same organization, is not deleted, and has `status: "ACTIVE"`.
 
 ## Real-Person Material Verification
 
-Real-person material verification is designed for downstream aggregators that build their own verification page and user journey. TokenLab exposes the API primitives; your application controls the front end.
+Use real-person material verification when your product needs consent and face verification before a real person can be used as a reusable Seedance reference.
 
-1. Call [Create Real-Person Verification Session](/api-reference/video/create-real-person-verification-session) with your customer-facing `callback_url`.
+1. Call [Create Real-Person Verification Session](/api-reference/video/create-real-person-verification-session) with your `callback_url`.
 2. Send the user to the returned `h5_link`. The `session_id`, `verification_token`, and H5 link expire after 120 seconds.
 3. After the H5 flow completes, TokenLab redirects to your `callback_url` with `session_id`, `verification_token`, `verification_status`, and `result_code`.
 4. When `verification_status` is `succeeded`, call [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
-5. Store the returned `group_id`; pass it when creating real-person material assets.
-6. Use [List Real-Person Verification History](/api-reference/video/list-real-person-verification-history) for long-lived audit and support history. History does not extend the 120-second binding window.
+5. Store the returned `group_id`; pass it when creating `liveness_face` material assets.
+6. Use [List Real-Person Verification History](/api-reference/video/list-real-person-verification-history) to review previous sessions. History is long-lived, but it does not extend the 120-second binding window.
 
-[Test console](https://tokenlab.sh/dashboard/seedance-assets) is available for manual checks, material workspace review, long-lived verification history, and integration debugging. It is intentionally not listed in the Dashboard navigation.
+Optional: use the [test console](https://tokenlab.sh/dashboard/seedance-assets) to verify your request and callback flow, inspect material groups, and review verification history. Your production integration should call the APIs directly.
 
 ## Creating Material Groups
 
-Use [Create Material Asset Group](/api-reference/video/create-material-asset-group) for `aigc_avatar` groups. Real-person groups are not directly created with the group CRUD API; create them through the real-person verification flow so the verified person and verified-person material mapping are preserved.
+Use [Create Material Asset Group](/api-reference/video/create-material-asset-group) for `aigc_avatar` groups. New real-person groups are created through the verification flow so the verified person and the material group stay linked.
 
 Use [List Material Asset Groups](/api-reference/video/list-material-asset-groups), [Get Material Asset Group](/api-reference/video/get-material-asset-group), [Update Material Asset Group](/api-reference/video/update-material-asset-group), and [Delete Material Asset Group](/api-reference/video/delete-material-asset-group) to manage groups after they exist.
 
-Deleting a material group also deletes the material assets inside it and cannot be undone. If the underlying material library refuses deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error.
+Deleting a material group also deletes the TokenLab materials inside it and cannot be undone. If the backing material service refuses deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error.
 
 ## Uploading Materials
 
 Use [Create Material Asset](/api-reference/video/create-material-asset) to upload one public URL at a time.
 
-For `aigc_avatar`, you may omit `group_id`; TokenLab uses or creates the organization default virtual-avatar group. For `liveness_face`, `group_id` is required and must be the group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
+For `aigc_avatar`, `group_id` is optional; TokenLab uses or creates the organization default virtual-avatar group. For `liveness_face`, `group_id` is required and must be the group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
 
 | Type | Supported input |
 |------|-----------------|
@@ -2838,7 +2838,7 @@ For `aigc_avatar`, you may omit `group_id`; TokenLab uses or creates the organiz
 | Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
 | Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
 
-Material ingestion is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. A successful HTTP response does not mean the asset is ready; always read the business status. If the status is `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
+Material ingestion is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. A successful HTTP response only means the request was accepted; always read the business status. If the status is `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
 
 Material URLs in list and detail responses can be temporary. Treat them as inspection URLs and avoid depending on them for long-term storage; some URLs may expire after about 12 hours.
 
@@ -2847,6 +2847,39 @@ For real-person material groups, one group maps to one real person. Uploads are 
 ## Using Materials In Video Generation
 
 After an asset is `ACTIVE`, pass the returned TokenLab asset `id` as `material_asset_id`, or include it in `material_asset_ids`, when calling [Create Video](/api-reference/video/create-video). Material assets count toward Seedance reference limits.
+
+## API Examples
+
+Create a virtual-avatar group, upload an image, poll until it is active, then use the material asset ID in a video request.
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"seedance_group_abc123","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_def456 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+For a real-person material group, create a verification session first and bind the result before uploading materials.
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+```
 
 ## Pricing And Async Results
 
@@ -4648,74 +4681,157 @@ def wait_for_video(task_id, max_wait=600, interval=5):
 
 URL: https://docs.tokenlab.sh/api-reference/video/create-real-person-verification-session
 
-Creates a real-person material verification session for a downstream-owned H5 flow.
+Create a short-lived verification session and redirect your user to the returned H5 link. TokenLab returns only neutral fields: `session_id`, `verification_token`, `h5_link`, `callback_url`, `expires_in`, and `language`.
 
-TokenLab returns a neutral `session_id`, `verification_token`, `h5_link`, `callback_url`, `expires_in`, and `language`. The internal credential is never returned. The session, token, and H5 link expire after 120 seconds.
-
-Send your user to `h5_link`. When the H5 flow finishes, TokenLab redirects to your original `callback_url` with these query parameters:
+The session, token, and H5 link expire after 120 seconds. When the H5 flow completes, TokenLab redirects to your original `callback_url` with these query parameters:
 
 | Parameter | Meaning |
 |-----------|---------|
 | `session_id` | TokenLab verification session ID. |
-| `verification_token` | TokenLab opaque token used to bind the result. |
+| `verification_token` | Opaque token used to bind the result. |
 | `verification_status` | `succeeded` or `failed`. |
-| `result_code` | Result code forwarded for diagnostics. |
+| `result_code` | Result code for your application logic. |
 
-If `verification_status` is `succeeded`, call [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result). Use the [test console](https://tokenlab.sh/dashboard/seedance-assets) when you need to manually inspect the redirect and binding flow.
+If `verification_status` is `succeeded`, call [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result). The [test console](https://tokenlab.sh/dashboard/seedance-assets) can be used to verify callback handling before you wire the flow into your product.
+
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+```
+
+## Example Response
+
+```json
+{
+  "object": "seedance.visual_validation_session",
+  "session_id": "svv_abc123",
+  "verification_token": "svvt_def456",
+  "h5_link": "https://verify.example.com/h5?lng=en",
+  "callback_url": "https://yourapp.example.com/seedance/callback",
+  "expires_in": 120,
+  "language": "en"
+}
+```
 
 ---
 
 ### Bind Real-Person Verification Result
 
-> Binds a successful real-person verification result to a TokenLab material group.
+> Binds a successful real-person material verification result to a TokenLab material group.
 
 URL: https://docs.tokenlab.sh/api-reference/video/bind-real-person-verification-result
 
-Binds a successful real-person material verification result and creates the TokenLab real-person material group mapping for the authenticated organization.
+Bind the successful verification result and create the TokenLab real-person material group mapping. Use the `session_id` and `verification_token` from the verification session or from the TokenLab callback redirect.
 
-Pass the `session_id` and `verification_token` returned by [Create Real-Person Verification Session](/api-reference/video/create-real-person-verification-session) or by the TokenLab callback redirect. TokenLab verifies that the session belongs to the same organization, has not expired, and matches the stored verification record.
+TokenLab verifies that the session belongs to the same organization, has not expired, and is bound to the same material service used by the verification session. The response returns a TokenLab `group_id` only; use it when creating `liveness_face` material assets.
 
-The response returns `group_id` and `material_group`. TokenLab does not expose underlying material-library IDs. Store `group_id` and pass it when creating `liveness_face` material assets.
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+```
+
+## Example Response
+
+```json
+{
+  "object": "seedance.visual_validation_result",
+  "group_id": "seedance_group_real_123",
+  "material_group": {
+    "id": "seedance_group_real_123",
+    "library_type": "liveness_face",
+    "status": "ACTIVE",
+    "group_name": "Creator A"
+  }
+}
+```
 
 ---
 
 ### List Real-Person Verification History
 
-> Lists long-lived TokenLab real-person material verification history.
+> Lists real-person material verification sessions for the current organization.
 
 URL: https://docs.tokenlab.sh/api-reference/video/list-real-person-verification-history
 
-Lists long-lived real-person material verification history for the authenticated organization.
+List previous verification sessions for review, customer support, and reconciliation. This history is long-lived, but it does not replace the short-lived bind step: a successful verification should still be bound immediately within the 120-second window.
 
-Use this endpoint for customer support, audit trails, and integration debugging. It does not replace the short-lived binding flow: the `session_id`, `verification_token`, and H5 link still expire after 120 seconds, and a successful verification should be bound immediately with [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
+The response includes only TokenLab IDs and does not include credential data. After a bind succeeds, `group_id` is the TokenLab material group ID used for `liveness_face` uploads.
 
-The response is TokenLab-neutral. It never includes internal credentials or underlying material-library IDs. After a bind succeeds, `group_id` is the TokenLab material group ID that can be used when creating `liveness_face` material assets.
+## Example Request
 
-Status values:
+```bash
+curl "https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions?page_size=20" \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
 
-| Status | Meaning |
-|--------|---------|
-| `created` | TokenLab created the H5 session, but no callback has been recorded yet. |
-| `callback_succeeded` | TokenLab received a successful H5 callback, but the result has not been bound yet. |
-| `callback_failed` | TokenLab received a failed H5 callback. |
-| `bound` | The verification result has been bound to a TokenLab real-person material group. |
-| `expired` | The 120-second binding window passed before the session was bound. |
+## Example Response
 
-The [test console](https://tokenlab.sh/dashboard/seedance-assets) shows the same long-lived history alongside material groups and material assets.
+```json
+{
+  "sessions": [
+    {
+      "object": "seedance.visual_validation_session_history",
+      "session_id": "svv_abc123",
+      "callback_url": "https://yourapp.example.com/seedance/callback",
+      "language": "en",
+      "status": "bound",
+      "verification_status": "succeeded",
+      "result_code": "10000",
+      "group_id": "seedance_group_real_123",
+      "group_name": "Creator A",
+      "created_at": 1782998400000,
+      "expires_at": 1782998520000,
+      "callback_received_at": 1782998450000,
+      "bound_at": 1782998460000
+    }
+  ],
+  "next_page_token": null
+}
+```
 
 ---
 
 ### Create Material Asset Group
 
-> Creates a Seedance virtual-avatar material group for the current organization.
+> Creates a Seedance virtual-avatar material group.
 
 URL: https://docs.tokenlab.sh/api-reference/video/create-material-asset-group
 
-Creates a TokenLab Seedance material group for `library_type: "aigc_avatar"`.
+Create a `library_type: "aigc_avatar"` material group. Use this endpoint for virtual avatars, products, styles, and other reusable references that do not require real-person verification.
 
-Use this endpoint for virtual-avatar groups. New real-person groups are created by [real-person material verification](/api-reference/video/create-real-person-verification-session), not by direct group creation. Requests with `library_type: "liveness_face"` are rejected so verification and verified-person material mapping stay intact.
+New real-person material groups are created through [real-person material verification](/api-reference/video/create-real-person-verification-session) and cannot be created directly with this endpoint.
 
-Groups are scoped to the authenticated organization. Use the returned `id` as `group_id` when creating material assets.
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references","description":"Reusable product shots"}'
+```
+
+## Example Response
+
+```json
+{
+  "id": "seedance_group_virtual_123",
+  "object": "seedance.material_group",
+  "library_type": "aigc_avatar",
+  "group_name": "Product references",
+  "description": "Reusable product shots",
+  "status": "ACTIVE",
+  "metadata": null,
+  "created_at": 1782998400000
+}
+```
 
 ---
 
@@ -4725,9 +4841,34 @@ Groups are scoped to the authenticated organization. Use the returned `id` as `g
 
 URL: https://docs.tokenlab.sh/api-reference/video/list-material-asset-groups
 
-Lists material groups owned by the current organization. Filter by `library_type` to separate `aigc_avatar` virtual-avatar groups from `liveness_face` real-person groups.
+List material groups owned by the authenticated organization. Filter by `library_type` and `status` to separate virtual-avatar groups from real-person groups.
 
-Real-person groups returned here were created by the verification bind flow. Use their TokenLab `id` as `group_id` when uploading real-person material assets.
+Use a returned `group_id` when uploading materials. Do not pass a `group_id` as `material_asset_id` during video generation; generation requires a material asset `id`.
+
+## Example Request
+
+```bash
+curl "https://api.tokenlab.sh/v1/videos/assets/groups?library_type=aigc_avatar&page_size=20" \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+## Example Response
+
+```json
+{
+  "groups": [
+    {
+      "id": "seedance_group_virtual_123",
+      "object": "seedance.material_group",
+      "library_type": "aigc_avatar",
+      "group_name": "Product references",
+      "status": "ACTIVE",
+      "created_at": 1782998400000
+    }
+  ],
+  "next_page_token": null
+}
+```
 
 ---
 
@@ -4737,19 +4878,66 @@ Real-person groups returned here were created by the verification bind flow. Use
 
 URL: https://docs.tokenlab.sh/api-reference/video/get-material-asset-group
 
-Retrieves one organization-owned material group. The response includes `library_type`, display metadata, and group status.
+Retrieve one material group. The `library_type` tells you whether the group is a virtual-avatar group or a real-person group.
 
-For real-person groups, keep the returned TokenLab `id` as the stable public group identifier. TokenLab does not expose underlying material-library IDs in this response.
+Use this endpoint before uploading if you need to confirm that the group still exists and has `status: "ACTIVE"`.
+
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+## Example Response
+
+```json
+{
+  "id": "seedance_group_virtual_123",
+  "object": "seedance.material_group",
+  "library_type": "aigc_avatar",
+  "group_name": "Product references",
+  "description": "Reusable product shots",
+  "status": "ACTIVE",
+  "metadata": null,
+  "created_at": 1782998400000
+}
+```
 
 ---
 
 ### Update Material Asset Group
 
-> Updates the name, description, or metadata of a Seedance material group.
+> Updates a Seedance material group owned by the current organization.
 
 URL: https://docs.tokenlab.sh/api-reference/video/update-material-asset-group
 
-Updates display metadata for a material group owned by the current organization. This does not change the group's `library_type`, verification identity, or verified-person material mapping.
+Update the display name, description, or metadata for a material group. For managed real-person groups, the verified person mapping remains unchanged.
+
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 \
+  -X PUT \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"group_name":"Updated references","description":"Images approved for summer videos"}'
+```
+
+## Example Response
+
+```json
+{
+  "id": "seedance_group_virtual_123",
+  "object": "seedance.material_group",
+  "library_type": "aigc_avatar",
+  "group_name": "Updated references",
+  "description": "Images approved for summer videos",
+  "status": "ACTIVE",
+  "metadata": null,
+  "created_at": 1782998400000
+}
+```
 
 ---
 
@@ -4759,9 +4947,26 @@ Updates display metadata for a material group owned by the current organization.
 
 URL: https://docs.tokenlab.sh/api-reference/video/delete-material-asset-group
 
-Deletes an organization-owned material group. Deleting a group also deletes the material assets inside it and cannot be undone.
+Delete a material group and the TokenLab material assets inside it. This cannot be undone.
 
-If the underlying material library refuses deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error. Treat delete as a destructive operation and stop referencing assets in the deleted group immediately.
+If the backing material service refuses deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error. After deletion, the group and its assets can no longer be used in video generation.
+
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 \
+  -X DELETE \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+## Example Response
+
+```json
+{
+  "deleted": true,
+  "id": "seedance_group_virtual_123"
+}
+```
 
 ---
 
@@ -4771,9 +4976,9 @@ If the underlying material library refuses deletion because the current authoriz
 
 URL: https://docs.tokenlab.sh/api-reference/video/create-material-asset
 
-Uploads one public URL into a Seedance material group.
+Upload one public URL into a Seedance material group.
 
-For `library_type: "aigc_avatar"`, `group_id` is optional; TokenLab uses or creates the organization default virtual-avatar group. For `library_type: "liveness_face"`, `group_id` is required and must be the TokenLab group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result). This keeps the verification result and material-library mapping aligned.
+For `library_type: "aigc_avatar"`, `group_id` is optional; TokenLab uses or creates the organization default virtual-avatar group. For `library_type: "liveness_face"`, `group_id` is required and must be the TokenLab group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
 
 | Type | Supported input |
 |------|-----------------|
@@ -4781,9 +4986,36 @@ For `library_type: "aigc_avatar"`, `group_id` is optional; TokenLab uses or crea
 | Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
 | Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
 
-Creation is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` is `ACTIVE`. HTTP 200 or 201 only confirms that the request was accepted; the business status decides whether the asset can be used.
+Creation is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` is `ACTIVE`. For real-person groups, one group maps to one verified person; uploads with multiple faces or a face that does not match the verified person can fail.
 
-For real-person groups, one group maps to one verified person. Uploads with multiple faces or a face that does not match the verified person can fail.
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"seedance_group_virtual_123","asset_url":"https://example.com/reference.png","asset_type":"Image","asset_name":"Front view"}'
+```
+
+## Example Response
+
+```json
+{
+  "id": "seedance_asset_123",
+  "object": "seedance.material_asset",
+  "group_id": "seedance_group_virtual_123",
+  "library_type": "aigc_avatar",
+  "asset_name": "Front view",
+  "asset_type": "Image",
+  "asset_url": "https://example.com/reference.png",
+  "cover_url": null,
+  "status": "PROCESSING",
+  "ready": false,
+  "error_message": null,
+  "metadata": null,
+  "created_at": 1782998400000
+}
+```
 
 ---
 
@@ -4793,9 +5025,37 @@ For real-person groups, one group maps to one verified person. Uploads with mult
 
 URL: https://docs.tokenlab.sh/api-reference/video/list-material-assets
 
-Lists material assets owned by the authenticated organization. Filter by `library_type`, `group_id`, or `status` when you need to find assets for a specific generation workflow.
+List material assets owned by the authenticated organization. Filter by `library_type`, `group_id`, or `status` when you need to find assets for a specific generation workflow.
 
 Use only assets whose `status` is `ACTIVE`. Returned inspection URLs can be temporary; some may expire after about 12 hours.
+
+## Example Request
+
+```bash
+curl "https://api.tokenlab.sh/v1/videos/assets?library_type=aigc_avatar&group_id=seedance_group_virtual_123&page_size=20" \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+## Example Response
+
+```json
+{
+  "assets": [
+    {
+      "id": "seedance_asset_123",
+      "object": "seedance.material_asset",
+      "group_id": "seedance_group_virtual_123",
+      "library_type": "aigc_avatar",
+      "asset_name": "Front view",
+      "asset_type": "Image",
+      "status": "ACTIVE",
+      "ready": true,
+      "created_at": 1782998400000
+    }
+  ],
+  "next_page_token": null
+}
+```
 
 ---
 
@@ -4805,9 +5065,36 @@ Use only assets whose `status` is `ACTIVE`. Returned inspection URLs can be temp
 
 URL: https://docs.tokenlab.sh/api-reference/video/get-material-asset
 
-Retrieves one material asset and its ingestion status.
+Retrieve one material asset and inspect its processing status. The asset can be used for video generation only when `ready` is `true` and `status` is `ACTIVE`.
 
-Status values are `PROCESSING`, `ACTIVE`, `FAILED`, and `DELETED`. Use the asset in video generation only after `status` becomes `ACTIVE`. If `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
+If video generation returns `Seedance material asset not found or not accessible`, verify that you passed this material asset `id`, not the material `group_id`.
+
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+## Example Response
+
+```json
+{
+  "id": "seedance_asset_123",
+  "object": "seedance.material_asset",
+  "group_id": "seedance_group_virtual_123",
+  "library_type": "aigc_avatar",
+  "asset_name": "Front view",
+  "asset_type": "Image",
+  "asset_url": "https://example.com/reference.png",
+  "cover_url": null,
+  "status": "ACTIVE",
+  "ready": true,
+  "error_message": null,
+  "metadata": null,
+  "created_at": 1782998400000
+}
+```
 
 ---
 
@@ -4817,7 +5104,37 @@ Status values are `PROCESSING`, `ACTIVE`, `FAILED`, and `DELETED`. Use the asset
 
 URL: https://docs.tokenlab.sh/api-reference/video/update-material-asset
 
-Updates an organization-owned material asset. Display-only updates do not change the material group mapping. If an update changes media content, the asset may need processing again before it can be used.
+Update the material name or metadata. The source URL and asset type are fixed after creation; create a new asset when the source file changes.
+
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
+  -X PUT \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"asset_name":"Front view approved","metadata":{"approved_by":"creative-team"}}'
+```
+
+## Example Response
+
+```json
+{
+  "id": "seedance_asset_123",
+  "object": "seedance.material_asset",
+  "group_id": "seedance_group_virtual_123",
+  "library_type": "aigc_avatar",
+  "asset_name": "Front view approved",
+  "asset_type": "Image",
+  "asset_url": "https://example.com/reference.png",
+  "cover_url": null,
+  "status": "PROCESSING",
+  "ready": false,
+  "error_message": null,
+  "metadata": null,
+  "created_at": 1782998400000
+}
+```
 
 ---
 
@@ -4827,7 +5144,24 @@ Updates an organization-owned material asset. Display-only updates do not change
 
 URL: https://docs.tokenlab.sh/api-reference/video/delete-material-asset
 
-Deletes one organization-owned material asset. Deleted assets cannot be used in new video generation requests. Existing task history remains available for audit and usage records.
+Delete one material asset. This does not delete the containing material group. After deletion, the asset ID can no longer be used as `material_asset_id`.
+
+## Example Request
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
+  -X DELETE \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+## Example Response
+
+```json
+{
+  "deleted": true,
+  "id": "seedance_asset_123"
+}
+```
 
 ---
 
