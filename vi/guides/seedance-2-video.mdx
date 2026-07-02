@@ -1,94 +1,89 @@
 ---
-title: "Mô hình video Seedance 2.0"
-description: "Chọn giữa Seedance 2.0, Seedance 2.0 Fast và Seedance 2.0 Mini cho tạo video."
+title: "Seedance 2.0 Video Models"
+description: "Use Seedance 2.0 video generation with virtual-avatar and real-person material groups."
 ---
 
-Seedance 2.0 là một họ mô hình video cho text-to-video, image-to-video, reference-to-video, chỉnh sửa video và mở rộng video. Dùng ID mô hình logic cấp sản phẩm trong `model`, rồi chọn luồng bằng `operation`.
+Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, reference-to-video, video editing, and video extension. Use model IDs such as `seedance-2.0`, `seedance-2.0-fast`, and `seedance-2.0-mini`, then choose the workflow with `operation`.
 
-## Chọn mô hình
+## Model Choice
 
-| Mô hình | Phù hợp nhất cho | Độ phân giải công khai | Đầu vào tham chiếu |
-|---------|------------------|------------------------|--------------------|
-| `seedance-2.0` | Chất lượng cao nhất và đầu ra 4K | `480p`, `720p`, `1080p`, `4k` | Tối đa 9 ảnh tham chiếu cùng tối đa 3 video tham chiếu và 3 audio tham chiếu cho `reference-to-video` |
-| `seedance-2.0-fast` | Đầu ra 480p/720p nhanh hơn, chi phí thấp hơn | `480p`, `720p` | Tối đa 9 ảnh tham chiếu cùng tối đa 3 video tham chiếu và 3 audio tham chiếu cho `reference-to-video` |
-| `seedance-2.0-mini` | Đầu ra 480p/720p chi phí thấp nhất | `480p`, `720p` | Hỗ trợ họ thao tác Seedance 2.0; đọc chi tiết mô hình hiện tại trước khi phụ thuộc vào giới hạn số lượng tham chiếu chính xác |
+| Model | Best for | Supported resolutions |
+|-------|----------|-----------------------|
+| `seedance-2.0` | Highest quality and 4K output | `480p`, `720p`, `1080p`, `4k` |
+| `seedance-2.0-fast` | Faster, lower-cost output | `480p`, `720p` |
+| `seedance-2.0-mini` | Lowest-cost output | `480p`, `720p` |
 
-`seedance-2.0-fast` và `seedance-2.0-mini` chỉ hỗ trợ `480p` / `720p`; yêu cầu dùng `1080p` hoặc `4k` sẽ trả về lỗi cho các mô hình này.
+`seedance-2.0-fast` and `seedance-2.0-mini` reject `1080p` and `4k` requests. Audio can be used only in supported reference workflows; pure audio-only and text-plus-audio-only Seedance requests are not supported.
 
-## Thao tác được hỗ trợ
+## Supported Operations
 
-Họ Seedance 2.0 công khai hỗ trợ:
-
-| Thao tác | Đầu vào thường dùng |
-|----------|---------------------|
+| Operation | Typical inputs |
+|-----------|----------------|
 | `text-to-video` | `prompt` |
-| `image-to-video` | `prompt`, `image_url` hoặc đầu vào ảnh tương thích |
+| `image-to-video` | `prompt`, `image_url` or compatible image input |
 | `start-end-to-video` | `prompt`, `start_image`, `end_image` |
-| `reference-to-video` | `prompt`, `reference_images`, `video_urls` tùy chọn, `audio_urls` tùy chọn |
-| `video-to-video` | `prompt`, `video_url` hoặc đầu vào video tương thích |
-| `video-extension` | `task_id` hoặc đầu vào nối tiếp riêng của mô hình |
+| `reference-to-video` | `prompt`, `reference_images`, optional `video_urls`, optional `audio_urls` |
+| `video-to-video` | `prompt`, `video_url` or compatible video input |
+| `video-extension` | `task_id` or model-specific continuation input |
 
-Yêu cầu Seedance chỉ có audio, hoặc chỉ có text cộng audio, không thuộc chi tiết model. Chỉ dùng audio làm đầu vào tham chiếu trong các luồng `reference-to-video` được hỗ trợ.
+## Material Concepts
 
-## Nhóm Tư Liệu Và ID Tư Liệu
+Seedance materials are reusable, organization-scoped assets that can be referenced later during video generation.
 
-Tư liệu Seedance 2.0 được quản lý trong các nhóm tư liệu TokenLab. Dùng `library_type: "aigc_avatar"` cho nhân vật ảo/avatar và `library_type: "liveness_face"` cho tư liệu người thật đã xác thực. Tạo hoặc liệt kê nhóm bằng [endpoint nhóm tư liệu](/vi/api-reference/video/create-material-asset-group), rồi tải tư liệu bằng [Tạo tư liệu](/vi/api-reference/video/create-material-asset).
+| Concept | Meaning |
+|---------|---------|
+| Material group | A TokenLab group that owns related Seedance materials. The public field is `library_type`. |
+| Material asset | One uploaded image, video, or audio file. It becomes usable only after `status` is `ACTIVE`. |
+| Virtual-avatar material group | `library_type: "aigc_avatar"`. Use it for virtual people, avatars, products, styles, and other reusable references that do not require real-person verification. |
+| Real-person material group | `library_type: "liveness_face"`. It is produced by real-person material verification and represents one verified real person. |
 
-Với nhóm người thật `liveness_face`, trước tiên hãy tạo phiên xác thực bằng `POST /v1/videos/assets/visual-validation-sessions`, hướng người dùng qua liên kết H5 trả về, rồi liên kết callback thành công bằng `POST /v1/videos/assets/visual-validation-results`. Yêu cầu liên kết phải có cả `session_id` và `byted_token`; TokenLab kiểm tra session thuộc tổ chức đã xác thực trước khi tạo nhóm tư liệu cục bộ.
+The same group ID must be used consistently: a real-person verification session creates a TokenLab material group mapping, and subsequent real-person uploads must use the TokenLab `group_id` returned by that bind result. TokenLab stores the backing material-library mapping so uploads stay attached to the verified person.
 
-Để xem body yêu cầu tải lên đầy đủ, trường trạng thái và ví dụ, hãy dùng tài liệu tham chiếu [Tạo tư liệu](/vi/api-reference/video/create-material-asset).
+## Real-Person Material Verification
 
-`group_id` là ID nhóm tư liệu TokenLab do các endpoint này trả về. Nếu bỏ qua, TokenLab dùng nhóm mặc định của tổ chức hiện tại cho `library_type` đã chọn. Khi tư liệu chuyển sang `ACTIVE`, truyền `id` trả về dưới dạng `material_asset_id` hoặc trong `material_asset_ids` khi gọi `POST /v1/videos/generations`. ID tư liệu được tính vào giới hạn tối đa 9 tham chiếu ảnh của Seedance.
+Real-person material verification is designed for downstream aggregators that build their own verification page and user journey. TokenLab exposes the API primitives; your application controls the front end.
 
-## 4K Reference-To-Video
+1. Call [Create Real-Person Verification Session](/api-reference/video/create-real-person-verification-session) with your customer-facing `callback_url`.
+2. Send the user to the returned `h5_link`. The `session_id`, `verification_token`, and H5 link expire after 120 seconds.
+3. After the H5 flow completes, TokenLab redirects to your `callback_url` with `session_id`, `verification_token`, `verification_status`, and `result_code`.
+4. When `verification_status` is `succeeded`, call [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
+5. Store the returned `group_id`; pass it when creating real-person material assets.
+6. Use [List Real-Person Verification History](/api-reference/video/list-real-person-verification-history) for long-lived audit and support history. History does not extend the 120-second binding window.
 
-Dùng `seedance-2.0` khi cần đầu ra 4K. Mô hình base hỗ trợ `4k` trong chi tiết model đã quản trị, bao gồm `reference-to-video`.
+[Test console](https://tokenlab.sh/dashboard/seedance-assets) is available for manual checks, material workspace review, long-lived verification history, and integration debugging. It is intentionally not listed in the Dashboard navigation.
 
-```bash
-curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "seedance-2.0",
-    "operation": "reference-to-video",
-    "prompt": "Keep the same product identity and lighting while creating a slow cinematic rotation.",
-    "reference_images": [
-      "https://example.com/product-front.jpg",
-      "https://example.com/product-side.jpg"
-    ],
-    "video_urls": ["https://example.com/motion-reference.mp4"],
-    "duration": 6,
-    "resolution": "4k",
-    "aspect_ratio": "16:9"
-  }'
-```
+## Creating Material Groups
 
-## Yêu cầu Fast và Mini
+Use [Create Material Asset Group](/api-reference/video/create-material-asset-group) for `aigc_avatar` groups. Real-person groups are not directly created with the group CRUD API; create them through the real-person verification flow so the verified person and verified-person material mapping are preserved.
 
-Dùng `seedance-2.0-fast` khi độ trễ quan trọng, và `seedance-2.0-mini` khi tầng chi phí thấp nhất quan trọng hơn chất lượng tối đa.
+Use [List Material Asset Groups](/api-reference/video/list-material-asset-groups), [Get Material Asset Group](/api-reference/video/get-material-asset-group), [Update Material Asset Group](/api-reference/video/update-material-asset-group), and [Delete Material Asset Group](/api-reference/video/delete-material-asset-group) to manage groups after they exist.
 
-```bash
-curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "seedance-2.0-fast",
-    "operation": "text-to-video",
-    "prompt": "A clean product reveal on a white studio background, gentle camera push-in.",
-    "duration": 5,
-    "resolution": "720p",
-    "aspect_ratio": "16:9"
-  }'
-```
+Deleting a material group also deletes the material assets inside it and cannot be undone. If the underlying material library refuses deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error.
 
-## Giá và tính phí
+## Uploading Materials
 
-Giá Seedance 2.0 dựa trên token và phụ thuộc vào độ phân giải đầu ra cũng như việc yêu cầu có đầu vào video hay không.
+Use [Create Material Asset](/api-reference/video/create-material-asset) to upload one public URL at a time.
 
-Dùng [Pricing API](/vi/api-reference/pricing/get-pricing) hoặc [Models API](/vi/api-reference/models/list-models) để lấy giá tính phí hiện tại trước khi cố định giá trong UI sản phẩm.
+For `aigc_avatar`, you may omit `group_id`; TokenLab uses or creates the organization default virtual-avatar group. For `liveness_face`, `group_id` is required and must be the group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
 
-## Kết quả bất đồng bộ
+| Type | Supported input |
+|------|-----------------|
+| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
+| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
 
-Tạo video là bất đồng bộ. Trước tiên hãy theo `poll_url` trả về từ yêu cầu tạo, hoặc dùng `GET /v1/tasks/{id}` với ID tác vụ được trả về.
+Material ingestion is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. A successful HTTP response does not mean the asset is ready; always read the business status. If the status is `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
 
-Xem [Tạo video](/vi/api-reference/video/create-video), [Lấy trạng thái tác vụ](/vi/api-reference/tasks/get-task-status) và [Hủy tác vụ](/vi/api-reference/tasks/cancel-task) để biết chi tiết endpoint.
+Material URLs in list and detail responses can be temporary. Treat them as inspection URLs and avoid depending on them for long-term storage; some URLs may expire after about 12 hours.
+
+For real-person material groups, one group maps to one real person. Uploads are checked against the verified face. Assets with multiple faces or a face that does not match the verified person can fail. For best results, upload both a full-body front reference image and a front-facing close-up where the face is clear.
+
+## Using Materials In Video Generation
+
+After an asset is `ACTIVE`, pass the returned TokenLab asset `id` as `material_asset_id`, or include it in `material_asset_ids`, when calling [Create Video](/api-reference/video/create-video). Material assets count toward Seedance reference limits.
+
+## Pricing And Async Results
+
+Seedance 2.0 pricing depends on output resolution, input type, and model. Use the [Pricing API](/api-reference/pricing/get-pricing) or [Models API](/api-reference/models/list-models) before hard-coding product UI.
+
+Video generation is asynchronous. Follow the `poll_url` returned by create requests, or use [Get Task Status](/api-reference/tasks/get-task-status) with the returned task ID.

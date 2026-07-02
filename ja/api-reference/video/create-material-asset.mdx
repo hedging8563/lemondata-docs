@@ -1,18 +1,19 @@
 ---
-title: "素材を作成"
+title: "Create Material Asset"
 openapi: "POST /v1/videos/assets"
-description: "Seedance の素材を TokenLab 素材グループにアップロードします。"
+description: "Uploads a Seedance material asset into a TokenLab material group."
 ---
 
-Seedance の素材を TokenLab 素材グループにアップロードします。
+Uploads one public URL into a Seedance material group.
 
-公開アクセス可能な素材 URL を、選択した Seedance 2.0 素材ライブラリにアップロードします。素材は認証済み組織にスコープされます。
+For `library_type: "aigc_avatar"`, `group_id` is optional; TokenLab uses or creates the organization default virtual-avatar group. For `library_type: "liveness_face"`, `group_id` is required and must be the TokenLab group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result). This keeps the verification result and material-library mapping aligned.
 
-多くのリクエストでは `library_type` だけを指定し、`group_id` は省略できます。TokenLab はそのライブラリ種別に対して、組織のデフォルト素材グループを使用または作成します。特定の素材グループに入れる必要がある場合だけ `group_id` を指定してください。
+| Type | Supported input |
+|------|-----------------|
+| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
+| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
 
-- `aigc_avatar`: 仮想人物またはアバター素材。
-- `liveness_face`: 認証済み実人物素材。
+Creation is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` is `ACTIVE`. HTTP 200 or 201 only confirms that the request was accepted; the business status decides whether the asset can be used.
 
-作成後、[素材を取得](/ja/api-reference/video/get-material-asset) をポーリングし、`status` が `ACTIVE` になるまで待ちます。その後、返された `id` を `material_asset_id` として、または `material_asset_ids` に含めて、[動画を作成](/ja/api-reference/video/create-video) に渡します。
-
-素材が `FAILED` になった場合は、`error_message` を確認し、元素材を修正して新しい素材を作成してください。
+For real-person groups, one group maps to one verified person. Uploads with multiple faces or a face that does not match the verified person can fail.

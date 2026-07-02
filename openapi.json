@@ -770,7 +770,7 @@
           "Video"
         ],
         "summary": "Create Seedance material asset",
-        "description": "Creates a Seedance 2.0 material asset in TokenLab's managed material library. Use the returned id as material_asset_id, or include it in material_asset_ids, when calling /v1/videos/generations after the asset is ready.",
+        "description": "Uploads one Seedance material asset URL into a TokenLab material group. Real-person assets require the TokenLab group_id returned by the real-person verification bind flow.",
         "operationId": "createSeedanceMaterialAsset",
         "requestBody": {
           "required": true,
@@ -780,14 +780,23 @@
                 "$ref": "#/components/schemas/SeedanceMaterialAssetCreateRequest"
               },
               "examples": {
-                "moma_aigc_asset": {
+                "virtual_avatar_asset": {
                   "summary": "Create a virtual-avatar material asset",
                   "value": {
                     "asset_url": "https://example.com/person-reference.jpg",
                     "asset_name": "reference-person-a",
                     "asset_type": "Image",
-                    "library_type": "aigc_avatar",
-                    "channel": "moma"
+                    "library_type": "aigc_avatar"
+                  }
+                },
+                "real_person_asset": {
+                  "summary": "Create a real-person material asset",
+                  "value": {
+                    "asset_url": "https://example.com/verified-person-closeup.jpg",
+                    "asset_name": "verified-person-closeup",
+                    "asset_type": "Image",
+                    "library_type": "liveness_face",
+                    "group_id": "seedance_group_abc123"
                   }
                 }
               }
@@ -834,7 +843,7 @@
           "Video"
         ],
         "summary": "List Seedance material assets",
-        "description": "Lists Seedance material assets owned by the authenticated organization.",
+        "description": "Lists Seedance material assets owned by the authenticated organization. Use library_type, group_id, and status filters to find assets for a generation workflow.",
         "operationId": "listSeedanceMaterialAssets",
         "parameters": [
           {
@@ -857,19 +866,6 @@
             }
           },
           {
-            "name": "channel",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "moma",
-                "ak-link"
-              ]
-            },
-            "description": "Filter by material library provider."
-          },
-          {
             "name": "group_id",
             "in": "query",
             "required": false,
@@ -877,15 +873,6 @@
               "type": "string"
             },
             "description": "Filter by TokenLab material asset group id."
-          },
-          {
-            "name": "material_group_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Alias of group_id."
           },
           {
             "name": "status",
@@ -913,19 +900,6 @@
               ]
             },
             "description": "Filter by material library class."
-          },
-          {
-            "name": "group_type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "AIGC",
-                "LivenessFace"
-              ]
-            },
-            "description": "Filter by material group type. Must match library_type when both are provided."
           }
         ],
         "responses": {
@@ -956,8 +930,8 @@
         "tags": [
           "Video"
         ],
-        "summary": "Create Seedance real-person validation session",
-        "description": "Creates an ak-link H5 real-person validation session for Seedance 2.0 LivenessFace material groups. The returned session_id, BytedToken, and H5 link are valid for 120 seconds. TokenLab appends the session_id to the upstream callback URL for ownership binding.",
+        "summary": "Create Seedance real-person verification session",
+        "description": "Creates a TokenLab real-person material verification H5 session. The response contains only TokenLab-neutral fields; internal credentials are never returned. The session, verification token, and H5 link are valid for 120 seconds.",
         "operationId": "createSeedanceVisualValidationSession",
         "requestBody": {
           "required": true,
@@ -968,9 +942,9 @@
               },
               "examples": {
                 "default": {
-                  "summary": "Create a validation session",
+                  "summary": "Create a real-person verification session",
                   "value": {
-                    "callback_url": "https://example.com/dashboard/seedance-assets",
+                    "callback_url": "https://example.com/seedance/verification/callback",
                     "language": "zh"
                   }
                 }
@@ -980,11 +954,66 @@
         },
         "responses": {
           "201": {
-            "description": "Validation session created",
+            "description": "Real-person verification session created",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SeedanceVisualValidationSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Video"
+        ],
+        "summary": "List Seedance real-person verification history",
+        "description": "Lists long-lived TokenLab real-person material verification history for the authenticated organization. The response is TokenLab-neutral and does not include internal credentials or underlying material-library IDs.",
+        "operationId": "listSeedanceVisualValidationHistory",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "Maximum number of history records to return."
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Pagination token from a previous response."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Real-person verification history list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceVisualValidationHistoryList"
                 }
               }
             }
@@ -1009,8 +1038,8 @@
         "tags": [
           "Video"
         ],
-        "summary": "Bind Seedance real-person validation result",
-        "description": "Exchanges a successful ak-link BytedToken for a LivenessFace Asset Group ID and binds it as a TokenLab Seedance material asset group for the authenticated organization. The request must include the session_id returned by the create-session call.",
+        "summary": "Bind Seedance real-person verification result",
+        "description": "Binds a successful TokenLab real-person verification session to a TokenLab real-person material group. The request must include session_id and verification_token from the create-session response or TokenLab callback redirect.",
         "operationId": "bindSeedanceVisualValidationResult",
         "requestBody": {
           "required": true,
@@ -1024,7 +1053,7 @@
                   "summary": "Bind a verified real-person material group",
                   "value": {
                     "session_id": "svv_1234567890abcdef",
-                    "byted_token": "byted-token-from-callback",
+                    "verification_token": "svvt_1234567890abcdef",
                     "group_name": "Seedance real-person group"
                   }
                 }
@@ -1034,7 +1063,7 @@
         },
         "responses": {
           "200": {
-            "description": "Material group bound",
+            "description": "Real-person material group bound",
             "content": {
               "application/json": {
                 "schema": {
@@ -1074,7 +1103,7 @@
           "Video"
         ],
         "summary": "Get Seedance material asset",
-        "description": "Gets one Seedance material asset for the current organization and refreshes its current status.",
+        "description": "Retrieves one TokenLab Seedance material asset and its asynchronous ingestion status.",
         "operationId": "getSeedanceMaterialAsset",
         "parameters": [
           {
@@ -1117,7 +1146,7 @@
         ],
         "operationId": "updateSeedanceMaterialAsset",
         "summary": "Update Seedance material asset",
-        "description": "Updates a TokenLab-owned Seedance material asset for the current organization.",
+        "description": "Updates a Seedance material asset owned by the authenticated organization.",
         "parameters": [
           {
             "name": "assetId",
@@ -1174,7 +1203,7 @@
           "Video"
         ],
         "summary": "Delete Seedance material asset",
-        "description": "Deletes the Seedance material asset and marks it as deleted for the current organization.",
+        "description": "Deletes a Seedance material asset owned by the authenticated organization.",
         "operationId": "deleteSeedanceMaterialAsset",
         "parameters": [
           {
@@ -5116,7 +5145,7 @@
           "Video"
         ],
         "summary": "Create Seedance material asset group",
-        "description": "Creates a TokenLab material asset group for the authenticated organization.",
+        "description": "Creates a TokenLab Seedance virtual-avatar material group. Real-person material groups are created by the real-person verification bind flow.",
         "operationId": "createSeedanceMaterialAssetGroup",
         "requestBody": {
           "required": true,
@@ -5124,6 +5153,15 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SeedanceMaterialAssetGroupCreateRequest"
+              },
+              "examples": {
+                "virtual_avatar_group": {
+                  "summary": "Create a virtual-avatar material group",
+                  "value": {
+                    "group_name": "Product avatar references",
+                    "library_type": "aigc_avatar"
+                  }
+                }
               }
             }
           }
@@ -5168,7 +5206,7 @@
           "Video"
         ],
         "summary": "List Seedance material asset groups",
-        "description": "Lists TokenLab material asset groups owned by the authenticated organization.",
+        "description": "Lists Seedance material groups owned by the authenticated organization. Real-person groups are returned after a successful verification bind flow.",
         "operationId": "listSeedanceMaterialAssetGroups",
         "parameters": [
           {
@@ -5189,19 +5227,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "channel",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "moma",
-                "ak-link"
-              ]
-            },
-            "description": "Filter by material library provider."
           },
           {
             "name": "status",
@@ -5227,19 +5252,6 @@
               ]
             },
             "description": "Filter by TokenLab material library class."
-          },
-          {
-            "name": "group_type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "AIGC",
-                "LivenessFace"
-              ]
-            },
-            "description": "Filter by material group type. Must match library_type when both are provided."
           }
         ],
         "responses": {
@@ -5271,7 +5283,7 @@
           "Video"
         ],
         "summary": "Get Seedance material asset group",
-        "description": "Gets one Seedance material asset group for the current organization and refreshes its current status.",
+        "description": "Retrieves one TokenLab Seedance material group.",
         "operationId": "getSeedanceMaterialAssetGroup",
         "parameters": [
           {
@@ -5313,7 +5325,7 @@
           "Video"
         ],
         "summary": "Update Seedance material asset group",
-        "description": "Updates an owned TokenLab material asset group and its metadata.",
+        "description": "Updates display metadata for a TokenLab Seedance material group.",
         "operationId": "updateSeedanceMaterialAssetGroup",
         "parameters": [
           {
@@ -5368,7 +5380,7 @@
           "Video"
         ],
         "summary": "Delete Seedance material asset group",
-        "description": "Deletes an owned TokenLab material asset group. Assets in the group are marked deleted locally and can no longer be used for generation.",
+        "description": "Deletes a TokenLab Seedance material group and its material assets. The operation is irreversible when accepted.",
         "operationId": "deleteSeedanceMaterialAssetGroup",
         "parameters": [
           {
@@ -6773,11 +6785,12 @@
         "required": [
           "asset_url"
         ],
+        "additionalProperties": false,
         "properties": {
           "asset_url": {
             "type": "string",
             "format": "uri",
-            "description": "Publicly reachable material asset URL to submit to the selected material group."
+            "description": "Publicly reachable material asset URL to upload."
           },
           "asset_name": {
             "type": "string",
@@ -6794,15 +6807,6 @@
             ],
             "default": "Image"
           },
-          "channel": {
-            "type": "string",
-            "enum": [
-              "moma",
-              "ak-link"
-            ],
-            "default": "moma",
-            "description": "Material library selection for Seedance 2.0 material assets."
-          },
           "library_type": {
             "type": "string",
             "enum": [
@@ -6810,43 +6814,31 @@
               "liveness_face"
             ],
             "default": "aigc_avatar",
-            "description": "Material library class. aigc_avatar maps to virtual-avatar groups and is the default; liveness_face maps to certified real-person groups."
-          },
-          "group_type": {
-            "type": "string",
-            "enum": [
-              "AIGC",
-              "LivenessFace"
-            ],
-            "description": "Material group type override. Must match library_type when both are provided."
+            "description": "Material library class. aigc_avatar is for virtual-avatar materials. liveness_face is for verified real-person materials."
           },
           "group_id": {
             "type": "string",
-            "description": "Optional TokenLab material asset group id. When omitted, TokenLab uses or creates the organization default group for the selected library_type."
+            "description": "TokenLab material group ID. Required for liveness_face assets and optional for aigc_avatar assets."
           },
           "metadata": {
             "type": "object",
             "nullable": true,
             "additionalProperties": true,
             "description": "Optional client metadata stored with the material asset."
-          },
-          "material_group_id": {
-            "type": "string",
-            "description": "Alias of group_id."
           }
-        },
-        "additionalProperties": false
+        }
       },
       "SeedanceMaterialAsset": {
         "type": "object",
         "required": [
           "id",
           "object",
-          "channel",
           "status",
           "asset_type",
-          "ready"
+          "ready",
+          "library_type"
         ],
+        "additionalProperties": true,
         "properties": {
           "id": {
             "type": "string",
@@ -6858,21 +6850,16 @@
               "seedance.material_asset"
             ]
           },
-          "channel": {
+          "group_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "TokenLab material group ID that owns this asset."
+          },
+          "library_type": {
             "type": "string",
             "enum": [
-              "moma",
-              "ak-link"
-            ]
-          },
-          "provider": {
-            "type": "string"
-          },
-          "group_type": {
-            "type": "string",
-            "enum": [
-              "LivenessFace",
-              "AIGC"
+              "aigc_avatar",
+              "liveness_face"
             ]
           },
           "asset_name": {
@@ -6889,7 +6876,8 @@
           },
           "asset_url": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "Inspection URL for the material asset. It can be temporary."
           },
           "cover_url": {
             "type": "string",
@@ -6906,7 +6894,7 @@
           },
           "ready": {
             "type": "boolean",
-            "description": "True when the asset is active with the provider and not deleted."
+            "description": "True when the asset is active and not deleted."
           },
           "error_message": {
             "type": "string",
@@ -6920,14 +6908,8 @@
           "created_at": {
             "type": "integer",
             "description": "Unix timestamp when the material asset record was created."
-          },
-          "group_id": {
-            "type": "string",
-            "nullable": true,
-            "description": "TokenLab material asset group id that owns this asset."
           }
-        },
-        "additionalProperties": true
+        }
       },
       "SeedanceMaterialAssetList": {
         "type": "object",
@@ -9633,6 +9615,7 @@
       },
       "SeedanceMaterialAssetGroupCreateRequest": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "group_name": {
             "type": "string",
@@ -9645,15 +9628,6 @@
             "nullable": true,
             "maxLength": 500
           },
-          "channel": {
-            "type": "string",
-            "enum": [
-              "moma",
-              "ak-link"
-            ],
-            "default": "moma",
-            "description": "Material library selection for Seedance 2.0 material groups."
-          },
           "library_type": {
             "type": "string",
             "enum": [
@@ -9661,15 +9635,7 @@
               "liveness_face"
             ],
             "default": "aigc_avatar",
-            "description": "Material library class. aigc_avatar is the default virtual-avatar material group; liveness_face is for certified real-person groups."
-          },
-          "group_type": {
-            "type": "string",
-            "enum": [
-              "AIGC",
-              "LivenessFace"
-            ],
-            "description": "Material group type override. Must match library_type when both are provided."
+            "description": "Material library class. Direct creation supports aigc_avatar. Create liveness_face groups through real-person material verification."
           },
           "metadata": {
             "type": "object",
@@ -9703,14 +9669,13 @@
         "required": [
           "id",
           "object",
-          "channel",
           "status",
-          "group_type"
+          "library_type"
         ],
         "properties": {
           "id": {
             "type": "string",
-            "description": "TokenLab material asset group ID."
+            "description": "TokenLab material group ID."
           },
           "object": {
             "type": "string",
@@ -9718,21 +9683,11 @@
               "seedance.material_asset_group"
             ]
           },
-          "channel": {
+          "library_type": {
             "type": "string",
             "enum": [
-              "moma",
-              "ak-link"
-            ]
-          },
-          "provider": {
-            "type": "string"
-          },
-          "group_type": {
-            "type": "string",
-            "enum": [
-              "AIGC",
-              "LivenessFace"
+              "aigc_avatar",
+              "liveness_face"
             ]
           },
           "group_name": {
@@ -9980,19 +9935,12 @@
         "required": [
           "callback_url"
         ],
+        "additionalProperties": false,
         "properties": {
           "callback_url": {
             "type": "string",
             "format": "uri",
-            "description": "Public HTTPS URL that ak-link redirects to after the H5 verification flow. TokenLab appends tl_visual_validation_session_id to this URL; successful callbacks include bytedToken and resultCode=10000."
-          },
-          "channel": {
-            "type": "string",
-            "enum": [
-              "ak-link"
-            ],
-            "default": "ak-link",
-            "description": "Real-person validation is currently backed by ak-link."
+            "description": "Public HTTPS URL that TokenLab redirects to after the H5 verification flow. TokenLab appends session_id, verification_token, verification_status, and result_code."
           },
           "language": {
             "type": "string",
@@ -10003,12 +9951,6 @@
             ],
             "default": "zh",
             "description": "Language parameter appended to the returned H5 link."
-          },
-          "project_name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "description": "Optional ak-link project name. Defaults to the configured project."
           }
         }
       },
@@ -10016,13 +9958,12 @@
         "type": "object",
         "required": [
           "object",
-          "channel",
-          "provider",
           "session_id",
-          "byted_token",
+          "verification_token",
           "h5_link",
           "callback_url",
-          "expires_in"
+          "expires_in",
+          "language"
         ],
         "properties": {
           "object": {
@@ -10031,21 +9972,13 @@
               "seedance.visual_validation_session"
             ]
           },
-          "channel": {
+          "session_id": {
             "type": "string",
-            "enum": [
-              "ak-link"
-            ]
+            "description": "TokenLab real-person verification session ID."
           },
-          "provider": {
+          "verification_token": {
             "type": "string",
-            "enum": [
-              "ak-link"
-            ]
-          },
-          "byted_token": {
-            "type": "string",
-            "description": "Short-lived token used with Bind Seedance real-person validation result. Valid for 120 seconds and single-use upstream."
+            "description": "TokenLab opaque token used to bind the verified material group. Valid for 120 seconds."
           },
           "h5_link": {
             "type": "string",
@@ -10055,7 +9988,7 @@
           "callback_url": {
             "type": "string",
             "format": "uri",
-            "description": "Effective callback URL sent to ak-link, including the TokenLab session parameter."
+            "description": "Customer callback URL originally supplied in the request."
           },
           "language": {
             "type": "string",
@@ -10067,11 +10000,7 @@
           },
           "expires_in": {
             "type": "integer",
-            "description": "Validity window in seconds for both byted_token and h5_link."
-          },
-          "session_id": {
-            "type": "string",
-            "description": "TokenLab local visual-validation session ID. Pass this with byted_token to bind the verified material group."
+            "description": "Validity window in seconds for the session, verification token, and H5 link."
           }
         }
       },
@@ -10079,34 +10008,23 @@
         "type": "object",
         "required": [
           "session_id",
-          "byted_token"
+          "verification_token"
         ],
+        "additionalProperties": false,
         "properties": {
           "session_id": {
             "type": "string",
-            "description": "TokenLab local visual-validation session ID returned by Create Seedance real-person validation session or included in callback query parameter tl_visual_validation_session_id."
+            "description": "TokenLab real-person verification session ID."
           },
-          "byted_token": {
+          "verification_token": {
             "type": "string",
-            "description": "BytedToken returned by Create Seedance real-person validation session or by ak-link callback query parameter bytedToken. Must match the local session_id and authenticated organization."
-          },
-          "channel": {
-            "type": "string",
-            "enum": [
-              "ak-link"
-            ],
-            "default": "ak-link"
-          },
-          "project_name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
+            "description": "TokenLab opaque token from the create-session response or TokenLab callback redirect."
           },
           "group_name": {
             "type": "string",
             "minLength": 1,
             "maxLength": 128,
-            "description": "Optional TokenLab display name for the bound LivenessFace material group."
+            "description": "Optional TokenLab display name for the bound real-person material group."
           },
           "description": {
             "type": "string",
@@ -10124,10 +10042,7 @@
         "type": "object",
         "required": [
           "object",
-          "channel",
-          "provider",
           "group_id",
-          "upstream_group_id",
           "material_group"
         ],
         "properties": {
@@ -10137,30 +10052,134 @@
               "seedance.visual_validation_result"
             ]
           },
-          "channel": {
-            "type": "string",
-            "enum": [
-              "ak-link"
-            ]
-          },
-          "provider": {
-            "type": "string",
-            "enum": [
-              "ak-link"
-            ]
-          },
           "group_id": {
             "type": "string",
-            "description": "TokenLab material asset group ID to pass as group_id or material_group_id when creating material assets."
-          },
-          "upstream_group_id": {
-            "type": "string",
-            "description": "ak-link LivenessFace Asset Group ID returned by GetVisualValidateResult."
+            "description": "TokenLab material group ID to pass as group_id when creating real-person material assets."
           },
           "material_group": {
             "$ref": "#/components/schemas/SeedanceMaterialAssetGroup"
           }
         }
+      },
+      "SeedanceVisualValidationSessionHistory": {
+        "type": "object",
+        "required": [
+          "object",
+          "session_id",
+          "callback_url",
+          "language",
+          "status",
+          "created_at",
+          "expires_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "seedance.visual_validation_session_history"
+            ]
+          },
+          "session_id": {
+            "type": "string",
+            "description": "TokenLab real-person verification session ID."
+          },
+          "callback_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Customer callback URL originally supplied when the session was created."
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "zh",
+              "en",
+              "zh-Hant"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "created",
+              "callback_succeeded",
+              "callback_failed",
+              "bound",
+              "expired"
+            ],
+            "description": "TokenLab history status. A created or callback_succeeded session is reported as expired after the 120-second session window if it was not bound."
+          },
+          "result_code": {
+            "type": "string",
+            "nullable": true,
+            "description": "Neutral result code forwarded by TokenLab callback, when available."
+          },
+          "verification_status": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "succeeded",
+              "failed",
+              null
+            ],
+            "description": "Neutral callback status, when TokenLab has received the H5 callback."
+          },
+          "group_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "TokenLab material group ID after the verification result has been bound."
+          },
+          "group_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "TokenLab material group display name after binding, when available."
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true,
+            "description": "Neutral failure description, when available."
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix timestamp in milliseconds."
+          },
+          "expires_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix timestamp in milliseconds for the 120-second binding window."
+          },
+          "callback_received_at": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Unix timestamp in milliseconds when TokenLab received the callback."
+          },
+          "bound_at": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Unix timestamp in milliseconds when TokenLab bound the material group."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SeedanceVisualValidationHistoryList": {
+        "type": "object",
+        "required": [
+          "sessions"
+        ],
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeedanceVisualValidationSessionHistory"
+            }
+          },
+          "next_page_token": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
       }
     },
     "responses": {

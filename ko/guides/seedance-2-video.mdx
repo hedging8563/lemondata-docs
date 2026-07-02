@@ -1,94 +1,89 @@
 ---
-title: "Seedance 2.0 비디오 모델"
-description: "Seedance 2.0, Seedance 2.0 Fast, Seedance 2.0 Mini 중 비디오 생성 모델을 선택합니다."
+title: "Seedance 2.0 Video Models"
+description: "Use Seedance 2.0 video generation with virtual-avatar and real-person material groups."
 ---
 
-Seedance 2.0은 text-to-video, image-to-video, reference-to-video, 비디오 편집, 비디오 확장을 위한 비디오 모델 패밀리입니다. `model`에는 TokenLab에 표시되는 모델 ID를 사용하고, `operation`으로 워크플로를 선택하세요.
+Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, reference-to-video, video editing, and video extension. Use model IDs such as `seedance-2.0`, `seedance-2.0-fast`, and `seedance-2.0-mini`, then choose the workflow with `operation`.
 
-## 모델 선택
+## Model Choice
 
-| 모델 | 적합한 용도 | 공개 해상도 | 참조 입력 |
-|------|-------------|-------------|-----------|
-| `seedance-2.0` | 최고 품질 및 4K 출력 | `480p`, `720p`, `1080p`, `4k` | `reference-to-video`에서 최대 9개 참조 이미지, 최대 3개 참조 비디오, 3개 참조 오디오 |
-| `seedance-2.0-fast` | 더 빠르고 저렴한 480p/720p 출력 | `480p`, `720p` | `reference-to-video`에서 최대 9개 참조 이미지, 최대 3개 참조 비디오, 3개 참조 오디오 |
-| `seedance-2.0-mini` | 가장 낮은 비용의 480p/720p 출력 | `480p`, `720p` | Seedance 2.0 작업 패밀리를 지원합니다. 정확한 참조 개수 제한에 의존하기 전에 현재 모델 세부정보를 확인하세요 |
+| Model | Best for | Supported resolutions |
+|-------|----------|-----------------------|
+| `seedance-2.0` | Highest quality and 4K output | `480p`, `720p`, `1080p`, `4k` |
+| `seedance-2.0-fast` | Faster, lower-cost output | `480p`, `720p` |
+| `seedance-2.0-mini` | Lowest-cost output | `480p`, `720p` |
 
-`seedance-2.0-fast`와 `seedance-2.0-mini`는 `480p` / `720p`만 지원합니다. 이 모델들에 `1080p` 또는 `4k`를 지정하면 오류가 반환됩니다.
+`seedance-2.0-fast` and `seedance-2.0-mini` reject `1080p` and `4k` requests. Audio can be used only in supported reference workflows; pure audio-only and text-plus-audio-only Seedance requests are not supported.
 
-## 지원 작업
+## Supported Operations
 
-Seedance 2.0 패밀리의 모델 세부정보은 다음을 지원합니다.
-
-| 작업 | 일반 입력 |
-|------|-----------|
+| Operation | Typical inputs |
+|-----------|----------------|
 | `text-to-video` | `prompt` |
-| `image-to-video` | `prompt`, `image_url` 또는 호환 이미지 입력 |
+| `image-to-video` | `prompt`, `image_url` or compatible image input |
 | `start-end-to-video` | `prompt`, `start_image`, `end_image` |
-| `reference-to-video` | `prompt`, `reference_images`, 선택적 `video_urls`, 선택적 `audio_urls` |
-| `video-to-video` | `prompt`, `video_url` 또는 호환 비디오 입력 |
-| `video-extension` | `task_id` 또는 모델별 확장 입력 |
+| `reference-to-video` | `prompt`, `reference_images`, optional `video_urls`, optional `audio_urls` |
+| `video-to-video` | `prompt`, `video_url` or compatible video input |
+| `video-extension` | `task_id` or model-specific continuation input |
 
-오디오만 사용하거나 텍스트와 오디오만 사용하는 Seedance 요청은 모델 세부정보에 포함되지 않습니다. 오디오는 지원되는 `reference-to-video` 흐름의 참조 입력으로만 사용하세요.
+## Material Concepts
 
-## 소재 그룹과 소재 ID
+Seedance materials are reusable, organization-scoped assets that can be referenced later during video generation.
 
-Seedance 2.0 소재는 TokenLab 소재 그룹으로 관리됩니다. 가상 인물/아바타 소재는 `library_type: "aigc_avatar"`, 인증된 실제 인물 소재는 `library_type: "liveness_face"` 를 사용합니다. [소재 그룹 엔드포인트](/ko/api-reference/video/create-material-asset-group)로 그룹을 만들거나 조회한 뒤 [소재 만들기](/ko/api-reference/video/create-material-asset)로 업로드하세요.
+| Concept | Meaning |
+|---------|---------|
+| Material group | A TokenLab group that owns related Seedance materials. The public field is `library_type`. |
+| Material asset | One uploaded image, video, or audio file. It becomes usable only after `status` is `ACTIVE`. |
+| Virtual-avatar material group | `library_type: "aigc_avatar"`. Use it for virtual people, avatars, products, styles, and other reusable references that do not require real-person verification. |
+| Real-person material group | `library_type: "liveness_face"`. It is produced by real-person material verification and represents one verified real person. |
 
-실제 인물 `liveness_face` 그룹은 먼저 `POST /v1/videos/assets/visual-validation-sessions` 로 인증 세션을 만들고, 반환된 H5 링크에서 사용자가 인증을 완료하게 해야 합니다. 그런 다음 성공 콜백의 `byted_token` 으로 `POST /v1/videos/assets/visual-validation-results` 를 호출해 결과를 바인딩합니다. 바인딩 요청에는 `session_id` 와 `byted_token` 이 모두 필요하며, TokenLab 은 해당 session 이 인증된 조직에 속하는지 확인한 뒤 로컬 소재 그룹을 생성합니다.
+The same group ID must be used consistently: a real-person verification session creates a TokenLab material group mapping, and subsequent real-person uploads must use the TokenLab `group_id` returned by that bind result. TokenLab stores the backing material-library mapping so uploads stay attached to the verified person.
 
-전체 업로드 요청 본문, 상태 필드, 예시는 [소재 만들기](/ko/api-reference/video/create-material-asset) 레퍼런스를 확인하세요.
+## Real-Person Material Verification
 
-`group_id` 는 이 엔드포인트가 반환하는 TokenLab 소재 그룹 ID입니다. 생략하면 TokenLab은 선택한 `library_type` 에 대한 현재 조직의 기본 그룹을 사용합니다. 소재가 `ACTIVE` 상태가 되면 반환된 `id` 를 `material_asset_id` 로 전달하거나 `material_asset_ids` 에 포함해 `POST /v1/videos/generations` 를 호출하세요. 소재 ID는 Seedance의 최대 9개 이미지 참조 제한에 포함됩니다.
+Real-person material verification is designed for downstream aggregators that build their own verification page and user journey. TokenLab exposes the API primitives; your application controls the front end.
 
-## 4K Reference-To-Video
+1. Call [Create Real-Person Verification Session](/api-reference/video/create-real-person-verification-session) with your customer-facing `callback_url`.
+2. Send the user to the returned `h5_link`. The `session_id`, `verification_token`, and H5 link expire after 120 seconds.
+3. After the H5 flow completes, TokenLab redirects to your `callback_url` with `session_id`, `verification_token`, `verification_status`, and `result_code`.
+4. When `verification_status` is `succeeded`, call [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
+5. Store the returned `group_id`; pass it when creating real-person material assets.
+6. Use [List Real-Person Verification History](/api-reference/video/list-real-person-verification-history) for long-lived audit and support history. History does not extend the 120-second binding window.
 
-4K 출력이 필요하면 `seedance-2.0`을 사용하세요. 기본 모델은 관리된 모델 세부정보에서 `reference-to-video`를 포함해 `4k`를 지원합니다.
+[Test console](https://tokenlab.sh/dashboard/seedance-assets) is available for manual checks, material workspace review, long-lived verification history, and integration debugging. It is intentionally not listed in the Dashboard navigation.
 
-```bash
-curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "seedance-2.0",
-    "operation": "reference-to-video",
-    "prompt": "같은 제품 정체성과 조명을 유지하면서 느린 영화적 회전을 만듭니다.",
-    "reference_images": [
-      "https://example.com/product-front.jpg",
-      "https://example.com/product-side.jpg"
-    ],
-    "video_urls": ["https://example.com/motion-reference.mp4"],
-    "duration": 6,
-    "resolution": "4k",
-    "aspect_ratio": "16:9"
-  }'
-```
+## Creating Material Groups
 
-## Fast 및 Mini 요청
+Use [Create Material Asset Group](/api-reference/video/create-material-asset-group) for `aigc_avatar` groups. Real-person groups are not directly created with the group CRUD API; create them through the real-person verification flow so the verified person and verified-person material mapping are preserved.
 
-지연 시간이 중요하면 `seedance-2.0-fast`를 사용하고, 가장 낮은 비용이 더 중요하면 `seedance-2.0-mini`를 사용하세요.
+Use [List Material Asset Groups](/api-reference/video/list-material-asset-groups), [Get Material Asset Group](/api-reference/video/get-material-asset-group), [Update Material Asset Group](/api-reference/video/update-material-asset-group), and [Delete Material Asset Group](/api-reference/video/delete-material-asset-group) to manage groups after they exist.
 
-```bash
-curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "seedance-2.0-fast",
-    "operation": "text-to-video",
-    "prompt": "흰색 스튜디오 배경에서 깨끗한 제품 공개 장면, 부드러운 카메라 푸시인.",
-    "duration": 5,
-    "resolution": "720p",
-    "aspect_ratio": "16:9"
-  }'
-```
+Deleting a material group also deletes the material assets inside it and cannot be undone. If the underlying material library refuses deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error.
 
-## 가격 및 청구
+## Uploading Materials
 
-Seedance 2.0 가격은 token 기반이며 출력 해상도와 요청에 비디오 입력이 포함되는지에 따라 달라집니다.
+Use [Create Material Asset](/api-reference/video/create-material-asset) to upload one public URL at a time.
 
-제품 UI에 가격을 고정하기 전에 [Pricing API](/ko/api-reference/pricing/get-pricing) 또는 [Models API](/ko/api-reference/models/list-models)로 현재 청구 가격을 확인하세요.
+For `aigc_avatar`, you may omit `group_id`; TokenLab uses or creates the organization default virtual-avatar group. For `liveness_face`, `group_id` is required and must be the group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
 
-## 비동기 결과
+| Type | Supported input |
+|------|-----------------|
+| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
+| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
 
-비디오 생성은 비동기입니다. 생성 응답의 `poll_url`을 따르거나 반환된 작업 ID로 `GET /v1/tasks/{id}`를 호출하세요.
+Material ingestion is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. A successful HTTP response does not mean the asset is ready; always read the business status. If the status is `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
 
-엔드포인트 세부정보는 [비디오 생성](/ko/api-reference/video/create-video), [작업 상태 가져오기](/ko/api-reference/tasks/get-task-status), [작업 취소](/ko/api-reference/tasks/cancel-task)를 참조하세요.
+Material URLs in list and detail responses can be temporary. Treat them as inspection URLs and avoid depending on them for long-term storage; some URLs may expire after about 12 hours.
+
+For real-person material groups, one group maps to one real person. Uploads are checked against the verified face. Assets with multiple faces or a face that does not match the verified person can fail. For best results, upload both a full-body front reference image and a front-facing close-up where the face is clear.
+
+## Using Materials In Video Generation
+
+After an asset is `ACTIVE`, pass the returned TokenLab asset `id` as `material_asset_id`, or include it in `material_asset_ids`, when calling [Create Video](/api-reference/video/create-video). Material assets count toward Seedance reference limits.
+
+## Pricing And Async Results
+
+Seedance 2.0 pricing depends on output resolution, input type, and model. Use the [Pricing API](/api-reference/pricing/get-pricing) or [Models API](/api-reference/models/list-models) before hard-coding product UI.
+
+Video generation is asynchronous. Follow the `poll_url` returned by create requests, or use [Get Task Status](/api-reference/tasks/get-task-status) with the returned task ID.

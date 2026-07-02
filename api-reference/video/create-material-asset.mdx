@@ -4,15 +4,16 @@ openapi: "POST /v1/videos/assets"
 description: "Uploads a Seedance material asset into a TokenLab material group."
 ---
 
-Uploads a Seedance material asset into a TokenLab material group.
+Uploads one public URL into a Seedance material group.
 
-Upload a publicly reachable material URL into the selected Seedance 2.0 material library. The asset is scoped to the authenticated organization.
+For `library_type: "aigc_avatar"`, `group_id` is optional; TokenLab uses or creates the organization default virtual-avatar group. For `library_type: "liveness_face"`, `group_id` is required and must be the TokenLab group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result). This keeps the verification result and material-library mapping aligned.
 
-For most requests, set `library_type` and omit `group_id`; TokenLab will use or create the organization default group for that library type. Pass `group_id` only when you need to upload into a specific material group.
+| Type | Supported input |
+|------|-----------------|
+| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
+| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
 
-- `aigc_avatar`: virtual-person or avatar materials.
-- `liveness_face`: certified real-person materials.
+Creation is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` is `ACTIVE`. HTTP 200 or 201 only confirms that the request was accepted; the business status decides whether the asset can be used.
 
-After creation, poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` is `ACTIVE`. Then pass the returned `id` as `material_asset_id`, or include it in `material_asset_ids`, when calling [Create Video](/api-reference/video/create-video).
-
-If the asset becomes `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
+For real-person groups, one group maps to one verified person. Uploads with multiple faces or a face that does not match the verified person can fail.

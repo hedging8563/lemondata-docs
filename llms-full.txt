@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-07-01
+Generated: 2026-07-02
 Source: https://docs.tokenlab.sh
 
 ---
@@ -2765,25 +2765,23 @@ Completed video tasks may return `video_url`, `video`, or `videos` depending on 
 
 ### Seedance 2.0 Video Models
 
-> Choose between Seedance 2.0, Seedance 2.0 Fast, and Seedance 2.0 Mini for video generation.
+> Use Seedance 2.0 video generation with virtual-avatar and real-person material groups.
 
 URL: https://docs.tokenlab.sh/guides/seedance-2-video
 
-Seedance 2.0 is a video model family for text-to-video, image-to-video, reference-to-video, video editing, and video extension workflows. Use the model IDs shown in TokenLab, such as `seedance-2.0`, then choose the workflow with `operation`.
+Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, reference-to-video, video editing, and video extension. Use model IDs such as `seedance-2.0`, `seedance-2.0-fast`, and `seedance-2.0-mini`, then choose the workflow with `operation`.
 
 ## Model Choice
 
-| Model | Best for | Supported resolutions | Reference inputs |
-|-------|----------|--------------------|------------------|
-| `seedance-2.0` | Highest quality and 4K output | `480p`, `720p`, `1080p`, `4k` | Up to 9 reference images plus up to 3 reference videos and 3 reference audios for `reference-to-video` |
-| `seedance-2.0-fast` | Faster, lower-cost 480p/720p output | `480p`, `720p` | Up to 9 reference images plus up to 3 reference videos and 3 reference audios for `reference-to-video` |
-| `seedance-2.0-mini` | Lowest-cost 480p/720p output | `480p`, `720p` | Supports the Seedance 2.0 operation family; read the current model detail before relying on exact reference count limits |
+| Model | Best for | Supported resolutions |
+|-------|----------|-----------------------|
+| `seedance-2.0` | Highest quality and 4K output | `480p`, `720p`, `1080p`, `4k` |
+| `seedance-2.0-fast` | Faster, lower-cost output | `480p`, `720p` |
+| `seedance-2.0-mini` | Lowest-cost output | `480p`, `720p` |
 
-`seedance-2.0-fast` and `seedance-2.0-mini` support only `480p` / `720p`; requests with `1080p` or `4k` return a clear error for those models.
+`seedance-2.0-fast` and `seedance-2.0-mini` reject `1080p` and `4k` requests. Audio can be used only in supported reference workflows; pure audio-only and text-plus-audio-only Seedance requests are not supported.
 
 ## Supported Operations
-
-The Seedance 2.0 family supports:
 
 | Operation | Typical inputs |
 |-----------|----------------|
@@ -2794,68 +2792,67 @@ The Seedance 2.0 family supports:
 | `video-to-video` | `prompt`, `video_url` or compatible video input |
 | `video-extension` | `task_id` or model-specific continuation input |
 
-Pure audio-only and text-plus-audio-only Seedance requests are not supported. Use audio as a reference input only in supported `reference-to-video` flows.
+## Material Concepts
 
-## Material Groups And Material IDs
+Seedance materials are reusable, organization-scoped assets that can be referenced later during video generation.
 
-Seedance 2.0 material assets are organized in TokenLab material groups. Use `library_type: "aigc_avatar"` for virtual/avatar materials and `library_type: "liveness_face"` for certified real-person materials. Create or list groups with the [material asset group endpoints](/api-reference/video/create-material-asset-group), then upload assets with [Create Material Asset](/api-reference/video/create-material-asset).
+| Concept | Meaning |
+|---------|---------|
+| Material group | A TokenLab group that owns related Seedance materials. The public field is `library_type`. |
+| Material asset | One uploaded image, video, or audio file. It becomes usable only after `status` is `ACTIVE`. |
+| Virtual-avatar material group | `library_type: "aigc_avatar"`. Use it for virtual people, avatars, products, styles, and other reusable references that do not require real-person verification. |
+| Real-person material group | `library_type: "liveness_face"`. It is produced by real-person material verification and represents one verified real person. |
 
-For the full upload request body, status fields, and examples, use the [Create Material Asset](/api-reference/video/create-material-asset) reference.
+The same group ID must be used consistently: a real-person verification session creates a TokenLab material group mapping, and subsequent real-person uploads must use the TokenLab `group_id` returned by that bind result. TokenLab stores the backing material-library mapping so uploads stay attached to the verified person.
 
-The `group_id` field is the TokenLab material group ID returned by these endpoints. If you omit it, TokenLab uses the current organization's default group for the selected `library_type`. After an uploaded asset becomes `ACTIVE`, pass its returned `id` as `material_asset_id` or include it in `material_asset_ids` when calling `POST /v1/videos/generations`. Material assets count toward Seedance's 9 image-reference limit.
+## Real-Person Material Verification
 
-## 4K Reference-To-Video
+Real-person material verification is designed for downstream aggregators that build their own verification page and user journey. TokenLab exposes the API primitives; your application controls the front end.
 
-Use `seedance-2.0` when you need 4K output. The base model supports `4k`, including in `reference-to-video` requests.
+1. Call [Create Real-Person Verification Session](/api-reference/video/create-real-person-verification-session) with your customer-facing `callback_url`.
+2. Send the user to the returned `h5_link`. The `session_id`, `verification_token`, and H5 link expire after 120 seconds.
+3. After the H5 flow completes, TokenLab redirects to your `callback_url` with `session_id`, `verification_token`, `verification_status`, and `result_code`.
+4. When `verification_status` is `succeeded`, call [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
+5. Store the returned `group_id`; pass it when creating real-person material assets.
+6. Use [List Real-Person Verification History](/api-reference/video/list-real-person-verification-history) for long-lived audit and support history. History does not extend the 120-second binding window.
 
-```bash
-curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "seedance-2.0",
-    "operation": "reference-to-video",
-    "prompt": "Keep the same product identity and lighting while creating a slow cinematic rotation.",
-    "reference_images": [
-      "https://example.com/product-front.jpg",
-      "https://example.com/product-side.jpg"
-    ],
-    "video_urls": ["https://example.com/motion-reference.mp4"],
-    "duration": 6,
-    "resolution": "4k",
-    "aspect_ratio": "16:9"
-  }'
-```
+[Test console](https://tokenlab.sh/dashboard/seedance-assets) is available for manual checks, material workspace review, long-lived verification history, and integration debugging. It is intentionally not listed in the Dashboard navigation.
 
-## Fast And Mini Requests
+## Creating Material Groups
 
-Use `seedance-2.0-fast` when latency matters, and `seedance-2.0-mini` when the lowest cost tier is more important than maximum quality.
+Use [Create Material Asset Group](/api-reference/video/create-material-asset-group) for `aigc_avatar` groups. Real-person groups are not directly created with the group CRUD API; create them through the real-person verification flow so the verified person and verified-person material mapping are preserved.
 
-```bash
-curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "seedance-2.0-fast",
-    "operation": "text-to-video",
-    "prompt": "A clean product reveal on a white studio background, gentle camera push-in.",
-    "duration": 5,
-    "resolution": "720p",
-    "aspect_ratio": "16:9"
-  }'
-```
+Use [List Material Asset Groups](/api-reference/video/list-material-asset-groups), [Get Material Asset Group](/api-reference/video/get-material-asset-group), [Update Material Asset Group](/api-reference/video/update-material-asset-group), and [Delete Material Asset Group](/api-reference/video/delete-material-asset-group) to manage groups after they exist.
 
-## Pricing And Billing
+Deleting a material group also deletes the material assets inside it and cannot be undone. If the underlying material library refuses deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error.
 
-Seedance 2.0 pricing is token-based and depends on output resolution and whether the request includes video input.
+## Uploading Materials
 
-Use the [Pricing API](/api-reference/pricing/get-pricing) or [Models API](/api-reference/models/list-models) for the current billable price before hard-coding product UI.
+Use [Create Material Asset](/api-reference/video/create-material-asset) to upload one public URL at a time.
 
-## Async Results
+For `aigc_avatar`, you may omit `group_id`; TokenLab uses or creates the organization default virtual-avatar group. For `liveness_face`, `group_id` is required and must be the group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
 
-Video generation is asynchronous. Follow the `poll_url` returned by the create request, or use `GET /v1/tasks/{id}` with the returned task ID.
+| Type | Supported input |
+|------|-----------------|
+| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
+| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
 
-See [Create Video](/api-reference/video/create-video), [Get Task Status](/api-reference/tasks/get-task-status), and [Cancel Task](/api-reference/tasks/cancel-task) for endpoint details.
+Material ingestion is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. A successful HTTP response does not mean the asset is ready; always read the business status. If the status is `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
+
+Material URLs in list and detail responses can be temporary. Treat them as inspection URLs and avoid depending on them for long-term storage; some URLs may expire after about 12 hours.
+
+For real-person material groups, one group maps to one real person. Uploads are checked against the verified face. Assets with multiple faces or a face that does not match the verified person can fail. For best results, upload both a full-body front reference image and a front-facing close-up where the face is clear.
+
+## Using Materials In Video Generation
+
+After an asset is `ACTIVE`, pass the returned TokenLab asset `id` as `material_asset_id`, or include it in `material_asset_ids`, when calling [Create Video](/api-reference/video/create-video). Material assets count toward Seedance reference limits.
+
+## Pricing And Async Results
+
+Seedance 2.0 pricing depends on output resolution, input type, and model. Use the [Pricing API](/api-reference/pricing/get-pricing) or [Models API](/api-reference/models/list-models) before hard-coding product UI.
+
+Video generation is asynchronous. Follow the `poll_url` returned by create requests, or use [Get Task Status](/api-reference/tasks/get-task-status) with the returned task ID.
 
 ---
 
@@ -4645,62 +4642,126 @@ def wait_for_video(task_id, max_wait=600, interval=5):
 
 ---
 
+### Create Real-Person Verification Session
+
+> Creates a TokenLab real-person material verification H5 session.
+
+URL: https://docs.tokenlab.sh/api-reference/video/create-real-person-verification-session
+
+Creates a real-person material verification session for a downstream-owned H5 flow.
+
+TokenLab returns a neutral `session_id`, `verification_token`, `h5_link`, `callback_url`, `expires_in`, and `language`. The internal credential is never returned. The session, token, and H5 link expire after 120 seconds.
+
+Send your user to `h5_link`. When the H5 flow finishes, TokenLab redirects to your original `callback_url` with these query parameters:
+
+| Parameter | Meaning |
+|-----------|---------|
+| `session_id` | TokenLab verification session ID. |
+| `verification_token` | TokenLab opaque token used to bind the result. |
+| `verification_status` | `succeeded` or `failed`. |
+| `result_code` | Result code forwarded for diagnostics. |
+
+If `verification_status` is `succeeded`, call [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result). Use the [test console](https://tokenlab.sh/dashboard/seedance-assets) when you need to manually inspect the redirect and binding flow.
+
+---
+
+### Bind Real-Person Verification Result
+
+> Binds a successful real-person verification result to a TokenLab material group.
+
+URL: https://docs.tokenlab.sh/api-reference/video/bind-real-person-verification-result
+
+Binds a successful real-person material verification result and creates the TokenLab real-person material group mapping for the authenticated organization.
+
+Pass the `session_id` and `verification_token` returned by [Create Real-Person Verification Session](/api-reference/video/create-real-person-verification-session) or by the TokenLab callback redirect. TokenLab verifies that the session belongs to the same organization, has not expired, and matches the stored verification record.
+
+The response returns `group_id` and `material_group`. TokenLab does not expose underlying material-library IDs. Store `group_id` and pass it when creating `liveness_face` material assets.
+
+---
+
+### List Real-Person Verification History
+
+> Lists long-lived TokenLab real-person material verification history.
+
+URL: https://docs.tokenlab.sh/api-reference/video/list-real-person-verification-history
+
+Lists long-lived real-person material verification history for the authenticated organization.
+
+Use this endpoint for customer support, audit trails, and integration debugging. It does not replace the short-lived binding flow: the `session_id`, `verification_token`, and H5 link still expire after 120 seconds, and a successful verification should be bound immediately with [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result).
+
+The response is TokenLab-neutral. It never includes internal credentials or underlying material-library IDs. After a bind succeeds, `group_id` is the TokenLab material group ID that can be used when creating `liveness_face` material assets.
+
+Status values:
+
+| Status | Meaning |
+|--------|---------|
+| `created` | TokenLab created the H5 session, but no callback has been recorded yet. |
+| `callback_succeeded` | TokenLab received a successful H5 callback, but the result has not been bound yet. |
+| `callback_failed` | TokenLab received a failed H5 callback. |
+| `bound` | The verification result has been bound to a TokenLab real-person material group. |
+| `expired` | The 120-second binding window passed before the session was bound. |
+
+The [test console](https://tokenlab.sh/dashboard/seedance-assets) shows the same long-lived history alongside material groups and material assets.
+
+---
+
 ### Create Material Asset Group
 
-> Creates a TokenLab Seedance material asset group for the current organization.
+> Creates a Seedance virtual-avatar material group for the current organization.
 
 URL: https://docs.tokenlab.sh/api-reference/video/create-material-asset-group
 
-Creates a TokenLab Seedance material asset group for the current organization.
+Creates a TokenLab Seedance material group for `library_type: "aigc_avatar"`.
 
-Use a material group when you want to organize reusable Seedance 2.0 assets by library type. Groups are scoped to the authenticated organization and cannot be used across accounts.
+Use this endpoint for virtual-avatar groups. New real-person groups are created by [real-person material verification](/api-reference/video/create-real-person-verification-session), not by direct group creation. Requests with `library_type: "liveness_face"` are rejected so verification and verified-person material mapping stay intact.
 
-Most integrations can skip this call and omit `group_id` when creating an asset. TokenLab will use or create the organization default group for the selected `library_type`.
-
-- `aigc_avatar`: virtual-person or avatar materials.
-- `liveness_face`: certified real-person materials.
-
-Use the returned `id` as `group_id` or `material_group_id` when calling [Create Material Asset](/api-reference/video/create-material-asset).
+Groups are scoped to the authenticated organization. Use the returned `id` as `group_id` when creating material assets.
 
 ---
 
 ### List Material Asset Groups
 
-> Lists TokenLab Seedance material asset groups owned by the current organization.
+> Lists Seedance material groups owned by the current organization.
 
 URL: https://docs.tokenlab.sh/api-reference/video/list-material-asset-groups
 
-Lists TokenLab Seedance material asset groups owned by the current organization.
+Lists material groups owned by the current organization. Filter by `library_type` to separate `aigc_avatar` virtual-avatar groups from `liveness_face` real-person groups.
+
+Real-person groups returned here were created by the verification bind flow. Use their TokenLab `id` as `group_id` when uploading real-person material assets.
 
 ---
 
 ### Get Material Asset Group
 
-> Retrieves one TokenLab Seedance material asset group by group ID.
+> Retrieves one Seedance material group by TokenLab group ID.
 
 URL: https://docs.tokenlab.sh/api-reference/video/get-material-asset-group
 
-Retrieves one TokenLab Seedance material asset group by group ID.
+Retrieves one organization-owned material group. The response includes `library_type`, display metadata, and group status.
+
+For real-person groups, keep the returned TokenLab `id` as the stable public group identifier. TokenLab does not expose underlying material-library IDs in this response.
 
 ---
 
 ### Update Material Asset Group
 
-> Updates the name, description, or metadata of a TokenLab Seedance material asset group.
+> Updates the name, description, or metadata of a Seedance material group.
 
 URL: https://docs.tokenlab.sh/api-reference/video/update-material-asset-group
 
-Updates the name, description, or metadata of a TokenLab Seedance material asset group.
+Updates display metadata for a material group owned by the current organization. This does not change the group's `library_type`, verification identity, or verified-person material mapping.
 
 ---
 
 ### Delete Material Asset Group
 
-> Deletes a TokenLab Seedance material asset group owned by the current organization.
+> Deletes a Seedance material group owned by the current organization.
 
 URL: https://docs.tokenlab.sh/api-reference/video/delete-material-asset-group
 
-Deletes a TokenLab Seedance material asset group owned by the current organization.
+Deletes an organization-owned material group. Deleting a group also deletes the material assets inside it and cannot be undone.
+
+If the underlying material library refuses deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error. Treat delete as a destructive operation and stop referencing assets in the deleted group immediately.
 
 ---
 
@@ -4710,18 +4771,19 @@ Deletes a TokenLab Seedance material asset group owned by the current organizati
 
 URL: https://docs.tokenlab.sh/api-reference/video/create-material-asset
 
-Uploads a Seedance material asset into a TokenLab material group.
+Uploads one public URL into a Seedance material group.
 
-Upload a publicly reachable material URL into the selected Seedance 2.0 material library. The asset is scoped to the authenticated organization.
+For `library_type: "aigc_avatar"`, `group_id` is optional; TokenLab uses or creates the organization default virtual-avatar group. For `library_type: "liveness_face"`, `group_id` is required and must be the TokenLab group returned by [Bind Real-Person Verification Result](/api-reference/video/bind-real-person-verification-result). This keeps the verification result and material-library mapping aligned.
 
-For most requests, set `library_type` and omit `group_id`; TokenLab will use or create the organization default group for that library type. Pass `group_id` only when you need to upload into a specific material group.
+| Type | Supported input |
+|------|-----------------|
+| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
+| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
 
-- `aigc_avatar`: virtual-person or avatar materials.
-- `liveness_face`: certified real-person materials.
+Creation is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` is `ACTIVE`. HTTP 200 or 201 only confirms that the request was accepted; the business status decides whether the asset can be used.
 
-After creation, poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` is `ACTIVE`. Then pass the returned `id` as `material_asset_id`, or include it in `material_asset_ids`, when calling [Create Video](/api-reference/video/create-video).
-
-If the asset becomes `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
+For real-person groups, one group maps to one verified person. Uploads with multiple faces or a face that does not match the verified person can fail.
 
 ---
 
@@ -4731,7 +4793,9 @@ If the asset becomes `FAILED`, inspect `error_message`, fix the source material,
 
 URL: https://docs.tokenlab.sh/api-reference/video/list-material-assets
 
-Lists Seedance material assets owned by the current organization.
+Lists material assets owned by the authenticated organization. Filter by `library_type`, `group_id`, or `status` when you need to find assets for a specific generation workflow.
+
+Use only assets whose `status` is `ACTIVE`. Returned inspection URLs can be temporary; some may expire after about 12 hours.
 
 ---
 
@@ -4741,7 +4805,9 @@ Lists Seedance material assets owned by the current organization.
 
 URL: https://docs.tokenlab.sh/api-reference/video/get-material-asset
 
-Retrieves one Seedance material asset by TokenLab material asset ID.
+Retrieves one material asset and its ingestion status.
+
+Status values are `PROCESSING`, `ACTIVE`, `FAILED`, and `DELETED`. Use the asset in video generation only after `status` becomes `ACTIVE`. If `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
 
 ---
 
@@ -4751,7 +4817,7 @@ Retrieves one Seedance material asset by TokenLab material asset ID.
 
 URL: https://docs.tokenlab.sh/api-reference/video/update-material-asset
 
-Updates a Seedance material asset owned by the current organization.
+Updates an organization-owned material asset. Display-only updates do not change the material group mapping. If an update changes media content, the asset may need processing again before it can be used.
 
 ---
 
@@ -4761,7 +4827,7 @@ Updates a Seedance material asset owned by the current organization.
 
 URL: https://docs.tokenlab.sh/api-reference/video/delete-material-asset
 
-Deletes a Seedance material asset owned by the current organization.
+Deletes one organization-owned material asset. Deleted assets cannot be used in new video generation requests. Existing task history remains available for audit and usage records.
 
 ---
 
