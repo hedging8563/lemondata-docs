@@ -951,6 +951,122 @@
         }
       }
     },
+    "/v1/videos/assets/visual-validation-sessions": {
+      "post": {
+        "tags": [
+          "Video"
+        ],
+        "summary": "Create Seedance real-person validation session",
+        "description": "Creates an ak-link H5 real-person validation session for Seedance 2.0 LivenessFace material groups. The returned BytedToken and H5 link are valid for 120 seconds.",
+        "operationId": "createSeedanceVisualValidationSession",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedanceVisualValidationSessionCreateRequest"
+              },
+              "examples": {
+                "default": {
+                  "summary": "Create a validation session",
+                  "value": {
+                    "callback_url": "https://example.com/dashboard/seedance-assets",
+                    "language": "zh"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Validation session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceVisualValidationSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
+          }
+        }
+      }
+    },
+    "/v1/videos/assets/visual-validation-results": {
+      "post": {
+        "tags": [
+          "Video"
+        ],
+        "summary": "Bind Seedance real-person validation result",
+        "description": "Exchanges a successful ak-link BytedToken for a LivenessFace Asset Group ID and binds it as a TokenLab Seedance material asset group for the authenticated organization.",
+        "operationId": "bindSeedanceVisualValidationResult",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedanceVisualValidationResultBindRequest"
+              },
+              "examples": {
+                "default": {
+                  "summary": "Bind a verified real-person material group",
+                  "value": {
+                    "byted_token": "byted-token-from-callback",
+                    "group_name": "Seedance real-person group"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Material group bound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedanceVisualValidationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "Material group mapping conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/UpstreamError"
+          }
+        }
+      }
+    },
     "/v1/videos/assets/{assetId}": {
       "get": {
         "tags": [
@@ -9857,6 +9973,182 @@
             "additionalProperties": true
           }
         ]
+      },
+      "SeedanceVisualValidationSessionCreateRequest": {
+        "type": "object",
+        "required": [
+          "callback_url"
+        ],
+        "properties": {
+          "callback_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Public URL that ak-link redirects to after the H5 verification flow. Successful callbacks include bytedToken and resultCode=10000."
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "ak-link"
+            ],
+            "default": "ak-link",
+            "description": "Real-person validation is currently backed by ak-link."
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "zh",
+              "en",
+              "zh-Hant"
+            ],
+            "default": "zh",
+            "description": "Language parameter appended to the returned H5 link."
+          },
+          "project_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Optional ak-link project name. Defaults to the configured project."
+          }
+        }
+      },
+      "SeedanceVisualValidationSession": {
+        "type": "object",
+        "required": [
+          "object",
+          "channel",
+          "provider",
+          "byted_token",
+          "h5_link",
+          "callback_url",
+          "expires_in"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "seedance.visual_validation_session"
+            ]
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "ak-link"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "ak-link"
+            ]
+          },
+          "byted_token": {
+            "type": "string",
+            "description": "Short-lived token used with Bind Seedance real-person validation result. Valid for 120 seconds and single-use upstream."
+          },
+          "h5_link": {
+            "type": "string",
+            "format": "uri",
+            "description": "Short-lived H5 verification link for the end user. Valid for 120 seconds."
+          },
+          "callback_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "zh",
+              "en",
+              "zh-Hant"
+            ]
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Validity window in seconds for both byted_token and h5_link."
+          }
+        }
+      },
+      "SeedanceVisualValidationResultBindRequest": {
+        "type": "object",
+        "required": [
+          "byted_token"
+        ],
+        "properties": {
+          "byted_token": {
+            "type": "string",
+            "description": "BytedToken returned by Create Seedance real-person validation session or by ak-link callback query parameter bytedToken."
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "ak-link"
+            ],
+            "default": "ak-link"
+          },
+          "project_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "group_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Optional TokenLab display name for the bound LivenessFace material group."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        }
+      },
+      "SeedanceVisualValidationResult": {
+        "type": "object",
+        "required": [
+          "object",
+          "channel",
+          "provider",
+          "group_id",
+          "upstream_group_id",
+          "material_group"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": [
+              "seedance.visual_validation_result"
+            ]
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "ak-link"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "ak-link"
+            ]
+          },
+          "group_id": {
+            "type": "string",
+            "description": "TokenLab material asset group ID to pass as group_id or material_group_id when creating material assets."
+          },
+          "upstream_group_id": {
+            "type": "string",
+            "description": "ak-link LivenessFace Asset Group ID returned by GetVisualValidateResult."
+          },
+          "material_group": {
+            "$ref": "#/components/schemas/SeedanceMaterialAssetGroup"
+          }
+        }
       }
     },
     "responses": {
