@@ -16,7 +16,7 @@ Si una respuesta de creación devuelve `poll_url`, llama exactamente a esa URL. 
 
 ### Comportamiento de modelos y medios
 
-La salida de audio depende del modelo. En TokenLab, la familia Veo 3 activa audio por defecto cuando se omite `output_audio`. Si un modelo admite control de audio, actívalo o desactívalo explícitamente con `output_audio`. El alias camelCase `outputAudio` también se acepta por compatibilidad.
+Audio output is model-dependent. In TokenLab, Veo 3 and Seedance requests default to audio-on when `output_audio` is omitted. When a model supports audio control, use `output_audio` to explicitly toggle it. The aliases `outputAudio` and `generate_audio` are accepted for compatibility and must match `output_audio` when more than one is provided.
 
 Para integraciones en producción, es mejor usar URLs `https` públicas para imágenes, videos y audio. Los modelos compatibles siguen aceptando URLs `data:`, pero los payloads base64 grandes son más difíciles de reintentar, inspeccionar y depurar.
 
@@ -79,7 +79,7 @@ Para integraciones en producción, es mejor usar URLs `https` públicas para im�
 </ParamField>
 
 <ParamField body="task_id" type="string">
-  Identificador de tarea del proveedor para algunos flujos de continuación, extensión o derivación.
+  Task identifier used by some continuation, extension, or derivative flows.
 </ParamField>
 
 <ParamField body="extend_at" type="integer">
@@ -91,19 +91,51 @@ Para integraciones en producción, es mejor usar URLs `https` públicas para im�
 </ParamField>
 
 <ParamField body="duration" type="integer">
-  Duración del video de salida generado en segundos. Los valores admitidos dependen del modelo. Este campo solo controla la duración del resultado y no la duración del video de referencia de entrada.
+  Generated output video duration in seconds. For Seedance 1.5/2.0 models, omitting this field uses `5`; sending `-1` lets the model choose within its supported duration range, and billing is estimated conservatively until the task finishes.
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  Relación de aspecto, por ejemplo `16:9`, `9:16` o `1:1`.
+  Canonical aspect ratio, for example `adaptive`, `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, or `21:9`. Seedance defaults to `adaptive` when omitted.
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  Resolución de salida, por ejemplo `720p`, `1080p` o `4k`. La compatibilidad depende del modelo.
+  Model-dependent output resolution. Seedance defaults to `720p`; `seedance-2.0` supports `480p`, `720p`, `1080p`, and `4k`, while `seedance-2.0-fast` and `seedance-2.0-mini` are limited to `480p` and `720p`.
 </ParamField>
 
 <ParamField body="output_audio" type="boolean">
-  Selector de salida de audio dependiente del modelo. En TokenLab, las solicitudes de la familia Veo 3 usan `true` por defecto cuando se omite este campo. `kling-3.0-video` acepta este selector para solicitudes sin referencias de elementos y lo asigna al control de sonido compatible de ese modelo; las solicitudes Kling omitidas son silenciosas por defecto. No combines `output_audio=true` con `kling_elements`. Otros modelos de video usan sus valores predeterminados documentados. También se acepta el alias camelCase `outputAudio` por compatibilidad.
+  Canonical model-dependent audio output toggle. Veo 3 and Seedance default to `true` when omitted. `kling-3.0-video` accepts this selector for non-element-reference requests and defaults to silent output when omitted. Do not combine `output_audio=true` with `kling_elements`.
+</ParamField>
+
+<ParamField body="ratio" type="string">
+  Compatibility alias for `aspect_ratio`. If both `ratio` and `aspect_ratio` are sent, they must be identical.
+</ParamField>
+
+<ParamField body="generate_audio" type="boolean">
+  Compatibility alias for `output_audio`. If `generate_audio`, `output_audio`, and `outputAudio` appear together, all values must match.
+</ParamField>
+
+<ParamField body="execution_expires_after" type="integer">
+  Optional execution expiry in seconds for compatible video models. Seedance defaults to `172800` seconds when omitted.
+</ParamField>
+
+<ParamField body="priority" type="integer">
+  Optional task priority from `0` to `9` for compatible video models. Do not combine `priority` with `service_tier=flex`.
+</ParamField>
+
+<ParamField body="safety_identifier" type="string">
+  Optional end-user safety identifier for compatible video models. If omitted for Seedance, TokenLab uses `user` when provided.
+</ParamField>
+
+<ParamField body="service_tier" type="string">
+  `default` is accepted as a compatibility no-op for Seedance 2.0 models. `flex` is only allowed when the selected model supports it.
+</ParamField>
+
+<ParamField body="frames" type="integer">
+  Optional frame count for compatible video models. Seedance 2.0 models and Seedance 1.5 Pro do not support this field.
+</ParamField>
+
+<ParamField body="camera_fixed" type="boolean">
+  Optional fixed-camera selector for compatible video models. Seedance 2.0 models do not support this field.
 </ParamField>
 
 <ParamField body="fps" type="integer">
@@ -115,7 +147,7 @@ Para integraciones en producción, es mejor usar URLs `https` públicas para im�
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  Semilla aleatoria para resultados reproducibles.
+  Random seed for reproducible generation. Seedance uses `-1` for a random seed when omitted.
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
@@ -135,11 +167,11 @@ Para integraciones en producción, es mejor usar URLs `https` públicas para im�
 </ParamField>
 
 <ParamField body="size" type="string">
-  Nivel de tamaño específico del modelo para algunos modelos de video compatibles con OpenAI.
+  Model-specific size tier for compatible video models.
 </ParamField>
 
 <ParamField body="watermark" type="boolean">
-  Interruptor de marca de agua para los modelos que lo exponen públicamente.
+  Optional watermark toggle for models that expose it. Seedance defaults to `false` when omitted.
 </ParamField>
 
 <ParamField body="effect_type" type="string">
@@ -147,20 +179,44 @@ Para integraciones en producción, es mejor usar URLs `https` públicas para im�
 </ParamField>
 
 <ParamField body="user" type="string">
-  Identificador único del usuario final.
+  A unique identifier for the end-user. For Seedance, TokenLab also uses this value as `safety_identifier` when that field is omitted.
 </ParamField>
 
 ## Notas de compatibilidad
 
 - Los campos públicos canónicos están en snake_case: `reference_images`, `reference_image_type` y `output_audio`.
-- Por compatibilidad, TokenLab también acepta los alias camelCase `referenceImages`, `referenceImageType` y `outputAudio`.
-- Si omites `operation`, TokenLab la infiere a partir de las entradas. Aun así, en producción se recomienda enviarla explícitamente.
+- Canonical public fields remain snake_case: `aspect_ratio`, `output_audio`, and `reference_images`.
+- For compatibility, TokenLab also accepts `ratio`, `generate_audio`, `outputAudio`, `referenceImages`, and `referenceImageType`.
+- If canonical and alias fields are both sent, their values must match; conflicting aliases are rejected before the task is created.
 
 ## Buenas prácticas para entradas de medios
 
 - Para `image_url`, `reference_images`, `video_url` y `audio_url`, es preferible usar URLs `https` públicas.
 - Siempre que sea posible, evita mezclar base64 inline y URLs remotas en la misma solicitud.
 - Asegúrate de que las URLs multimedia remotas sigan siendo válidas durante los reintentos y la creación asíncrona de tareas.
+
+## Seedance Parameters
+
+For Seedance 1.5/2.0 models, the unified endpoint follows TokenLab field names while accepting the official aliases `ratio` and `generate_audio`. Omitted Seedance selectors use these defaults: `duration=5`, `resolution=720p`, `aspect_ratio=adaptive`, `output_audio=true`, `watermark=false`, `return_last_frame=false`, `execution_expires_after=172800`, `priority=0`, and `seed=-1`.
+
+`duration=-1` lets Seedance choose the output duration within the model-supported range. TokenLab estimates cost conservatively before the task finishes, then settles from the completed task usage when available. `service_tier=default` is accepted for Seedance 2.0 as a compatibility no-op; `service_tier=flex`, `frames`, and `camera_fixed` are rejected where the selected model does not support them.
+
+### Seedance Example
+
+```bash cURL
+curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "seedance-2.0",
+    "prompt": "A sleek product reveal with cinematic camera movement",
+    "operation": "text-to-video",
+    "duration": -1,
+    "aspect_ratio": "adaptive",
+    "resolution": "720p",
+    "output_audio": true
+  }'
+```
 
 ## Respuesta
 

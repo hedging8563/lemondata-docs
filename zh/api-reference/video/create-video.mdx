@@ -18,7 +18,7 @@ description: "创建一个视频生成任务"
 
 ### 模型与媒体行为
 
-音频输出是否开启取决于具体模型。在 TokenLab 中，Veo 3 家族在省略 `output_audio` 时默认按开启音频处理；当模型支持音频控制时，可通过 `output_audio` 显式切换。为了兼容历史请求，也接受 camelCase 别名 `outputAudio`。
+音频输出是否开启取决于具体模型。在 TokenLab 中，Veo 3 和 Seedance 请求在省略 `output_audio` 时默认按开启音频处理。模型支持音频控制时，可用 `output_audio` 显式切换；兼容别名 `outputAudio` 和 `generate_audio` 也可以使用，但多个字段同时出现时值必须一致。
 
 生产集成中，建议优先使用公网可访问的 `https` URL 作为图片、视频和音频输入。兼容模型仍支持内联 `data:` URL，但大体积 base64 在重试、观测和排障时通常更不友好。
 
@@ -81,7 +81,7 @@ description: "创建一个视频生成任务"
 </ParamField>
 
 <ParamField body="task_id" type="string">
-  某些续写、扩展或衍生流程使用的 Provider 侧任务 ID。
+  某些续写、扩展或衍生流程使用的任务标识符。
 </ParamField>
 
 <ParamField body="extend_at" type="integer">
@@ -93,19 +93,51 @@ description: "创建一个视频生成任务"
 </ParamField>
 
 <ParamField body="duration" type="integer">
-  生成输出视频的时长（秒），取决于模型。该字段只控制输出时长，不表示参考视频输入时长限制。
+  生成输出视频的时长（秒）。Seedance 1.5/2.0 模型省略时默认 `5` 秒；传 `-1` 表示让模型在支持范围内自动选择时长，任务完成前会按保守方式预估费用。
 </ParamField>
 
 <ParamField body="aspect_ratio" type="string">
-  宽高比，例如 `16:9`、`9:16`、`1:1`。
+  规范宽高比，例如 `adaptive`、`16:9`、`9:16`、`1:1`、`4:3`、`3:4` 或 `21:9`。Seedance 省略时默认 `adaptive`。
 </ParamField>
 
 <ParamField body="resolution" type="string">
-  输出分辨率，例如 `720p`、`1080p`、`4k`，具体取决于模型。
+  模型相关的输出分辨率。Seedance 省略时默认 `720p`；`seedance-2.0` 支持 `480p`、`720p`、`1080p` 和 `4k`，`seedance-2.0-fast` / `seedance-2.0-mini` 仅支持 `480p` 和 `720p`。
 </ParamField>
 
 <ParamField body="output_audio" type="boolean">
-  模型相关的音频输出开关。在 TokenLab 中，Veo 3 家族在省略该字段时默认按 `true` 处理；`kling-3.0-video` 仅在非元素引用请求中接受该 selector，并会使用该模型兼容的 sound 控制；Kling 请求省略时默认无声。不要将 `output_audio=true` 与 `kling_elements` 组合使用。其他视频模型按各自文档说明的默认行为执行。为了兼容历史请求，也接受 camelCase 别名 `outputAudio`。
+  规范的音频输出开关。Veo 3 和 Seedance 省略时默认 `true`。`kling-3.0-video` 仅在非元素引用请求中接受该字段，省略时默认无声。不要将 `output_audio=true` 与 `kling_elements` 组合使用。
+</ParamField>
+
+<ParamField body="ratio" type="string">
+  `aspect_ratio` 的兼容别名。若同时传 `ratio` 和 `aspect_ratio`，两者必须完全一致。
+</ParamField>
+
+<ParamField body="generate_audio" type="boolean">
+  `output_audio` 的兼容别名。`generate_audio`、`output_audio`、`outputAudio` 同时出现时，所有值必须一致。
+</ParamField>
+
+<ParamField body="execution_expires_after" type="integer">
+  兼容视频模型的执行过期时间（秒）。Seedance 省略时默认 `172800` 秒。
+</ParamField>
+
+<ParamField body="priority" type="integer">
+  兼容视频模型的任务优先级，范围 `0` 到 `9`。不要把 `priority` 与 `service_tier=flex` 组合使用。
+</ParamField>
+
+<ParamField body="safety_identifier" type="string">
+  兼容视频模型的终端用户安全标识。Seedance 未传该字段时，TokenLab 会使用 `user` 的值。
+</ParamField>
+
+<ParamField body="service_tier" type="string">
+  `default` 对 Seedance 2.0 会按兼容 no-op 处理。只有所选模型明确支持时才可使用 `flex`。
+</ParamField>
+
+<ParamField body="frames" type="integer">
+  兼容视频模型的可选帧数。Seedance 2.0 模型和 Seedance 1.5 Pro 不支持该字段。
+</ParamField>
+
+<ParamField body="camera_fixed" type="boolean">
+  兼容视频模型的固定相机开关。Seedance 2.0 模型不支持该字段。
 </ParamField>
 
 <ParamField body="fps" type="integer">
@@ -117,7 +149,7 @@ description: "创建一个视频生成任务"
 </ParamField>
 
 <ParamField body="seed" type="integer">
-  用于可复现生成的随机种子。
+  用于可复现生成的随机种子。Seedance 省略时使用 `-1` 表示随机种子。
 </ParamField>
 
 <ParamField body="cfg_scale" type="number">
@@ -137,11 +169,11 @@ description: "创建一个视频生成任务"
 </ParamField>
 
 <ParamField body="size" type="string">
-  某些 OpenAI 兼容视频模型使用的尺寸档位参数。
+  兼容视频模型使用的模型相关尺寸档位参数。
 </ParamField>
 
 <ParamField body="watermark" type="boolean">
-  某些模型暴露的水印开关。
+  某些模型暴露的水印开关。Seedance 省略时默认 `false`。
 </ParamField>
 
 <ParamField body="effect_type" type="string">
@@ -149,20 +181,44 @@ description: "创建一个视频生成任务"
 </ParamField>
 
 <ParamField body="user" type="string">
-  终端用户的唯一标识符。
+  终端用户的唯一标识符。对 Seedance，如果未传 `safety_identifier`，TokenLab 会使用该值。
 </ParamField>
 
 ## 兼容说明
 
-- 请求中的规范字段为 snake_case：`reference_images`、`reference_image_type`、`output_audio`。
-- 为兼容已有调用，TokenLab 也接受 camelCase 别名 `referenceImages`、`referenceImageType` 和 `outputAudio`。
-- 如果省略 `operation`，TokenLab 会根据输入自动推断操作；但生产环境仍建议显式传入。
+- 规范公开字段继续使用 snake_case：`aspect_ratio`、`output_audio`、`reference_images` 和 `reference_image_type`。
+- 为了兼容已有调用，TokenLab 也接受 `ratio`、`generate_audio`、`outputAudio`、`referenceImages` 和 `referenceImageType`。
+- 如果规范字段和别名字段同时出现，值必须一致；冲突会在创建任务前被拒绝。
+- 如果省略 `operation`，TokenLab 会根据输入自动推断操作；生产环境仍建议显式传入。
 
 ## 输入最佳实践
 
 - 对于 `image_url`、`reference_images`、`video_url` 和 `audio_url`，建议优先使用公网可访问的 `https` URL。
 - 可以避免在同一请求中混用内联 base64 和远程 URL；统一一种表示方式更容易排障和重试。
 - 请确保远程媒体 URL 的有效期足够覆盖重试窗口和异步任务创建过程。
+
+## Seedance 参数
+
+对于 Seedance 1.5/2.0 模型，统一接口以 TokenLab 字段为主，同时接受官方常见别名 `ratio` 和 `generate_audio`。省略 Seedance 参数时会使用这些默认值：`duration=5`、`resolution=720p`、`aspect_ratio=adaptive`、`output_audio=true`、`watermark=false`、`return_last_frame=false`、`execution_expires_after=172800`、`priority=0`、`seed=-1`。
+
+`duration=-1` 表示让 Seedance 在模型支持范围内自动选择输出时长。TokenLab 会在任务完成前按保守方式预估费用，并在可获得完成任务 usage 时按实际结果结算。`service_tier=default` 对 Seedance 2.0 作为兼容 no-op 接受；`service_tier=flex`、`frames`、`camera_fixed` 会在所选模型不支持时被拒绝。
+
+### Seedance 示例
+
+```bash cURL
+curl -X POST "https://api.tokenlab.sh/v1/videos/generations" \
+  -H "Authorization: Bearer sk-your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "seedance-2.0",
+    "prompt": "A sleek product reveal with cinematic camera movement",
+    "operation": "text-to-video",
+    "duration": -1,
+    "aspect_ratio": "adaptive",
+    "resolution": "720p",
+    "output_audio": true
+  }'
+```
 
 ## 响应
 
