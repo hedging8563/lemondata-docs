@@ -1,90 +1,90 @@
 ---
-title: "Seedance 2.0 Video Models"
-description: "Use Seedance 2.0 video generation with virtual-avatar and real-person material groups."
+title: "Modelos de Vídeo Seedance 2.0"
+description: "Use a geração de vídeo Seedance 2.0 com grupos de materiais de avatares virtuais e pessoas reais."
 ---
 
-Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, reference-to-video, video editing, and video extension. Use model IDs such as `seedance-2.0`, `seedance-2.0-fast`, and `seedance-2.0-mini`, then choose the workflow with `operation`.
+O Seedance 2.0 oferece suporte a text-to-video, image-to-video, start/end-frame video, reference-to-video, edição de vídeo e extensão de vídeo. Use IDs de modelo como `seedance-2.0`, `seedance-2.0-fast` e `seedance-2.0-mini`, e escolha o fluxo de trabalho com `operation`.
 
-## Model Choice
+## Escolha do Modelo
 
-| Model | Best for | Supported resolutions |
+| Modelo | Ideal para | Resoluções suportadas |
 |-------|----------|-----------------------|
-| `seedance-2.0` | Highest quality and 4K output | `480p`, `720p`, `1080p`, `4k` |
-| `seedance-2.0-fast` | Faster, lower-cost output | `480p`, `720p` |
-| `seedance-2.0-mini` | Lowest-cost output | `480p`, `720p` |
+| `seedance-2.0` | Qualidade máxima e saída 4K | `480p`, `720p`, `1080p`, `4k` |
+| `seedance-2.0-fast` | Saída mais rápida e de menor custo | `480p`, `720p` |
+| `seedance-2.0-mini` | Saída de menor custo | `480p`, `720p` |
 
-`seedance-2.0-fast` and `seedance-2.0-mini` reject `1080p` and `4k` requests. Audio can be used only in supported reference workflows; pure audio-only and text-plus-audio-only Seedance requests are not supported.
+`seedance-2.0-fast` e `seedance-2.0-mini` rejeitam solicitações `1080p` e `4k`. O áudio pode ser usado apenas em fluxos de trabalho de referência suportados; solicitações Seedance puramente de áudio ou apenas texto-mais-áudio não são suportadas.
 
-## Supported Operations
+## Operações Suportadas
 
-| Operation | Typical inputs |
+| Operação | Entradas típicas |
 |-----------|----------------|
 | `text-to-video` | `prompt` |
-| `image-to-video` | `prompt`, `image_url` or compatible image input |
+| `image-to-video` | `prompt`, `image_url` ou entrada de imagem compatível |
 | `start-end-to-video` | `prompt`, `start_image`, `end_image` |
-| `reference-to-video` | `prompt`, `reference_images`, optional `video_urls`, optional `audio_urls` |
-| `video-to-video` | `prompt`, `video_url` or compatible video input |
-| `video-extension` | `task_id` or model-specific continuation input |
+| `reference-to-video` | `prompt`, `reference_images`, `video_urls` opcionais, `audio_urls` opcionais |
+| `video-to-video` | `prompt`, `video_url` ou entrada de vídeo compatível |
+| `video-extension` | `task_id` ou entrada de continuação específica do modelo |
 
-## Material Concepts
+## Conceitos de Materiais
 
-Seedance materials are reusable, organization-scoped references that can be selected later during video generation.
+Os materiais Seedance são referências reutilizáveis com escopo de organização que podem ser selecionadas posteriormente durante a geração de vídeo.
 
-| Concept | Public field | What it means |
+| Conceito | Campo público | O que significa |
 |---------|--------------|---------------|
-| Material group | `group_id` | A TokenLab group that owns related Seedance materials. Use it when uploading or listing materials. |
-| Material asset | `id` | One uploaded image, video, or audio file. Use this value as `material_asset_id` after the asset becomes `ACTIVE`. |
-| Virtual-avatar material group | `library_type: "aigc_avatar"` | For virtual people, avatars, products, styles, and other reusable references that do not require real-person verification. |
-| Real-person material group | `library_type: "liveness_face"` | Created by real-person material verification. One group represents one verified real person. |
+| Grupo de materiais | `group_id` | Um grupo TokenLab que possui materiais Seedance relacionados. Use-o ao fazer upload ou listar materiais. |
+| Ativo de material | `id` | Um arquivo de imagem, vídeo ou áudio enviado. Use este valor como `material_asset_id` após o ativo se tornar `ACTIVE`. |
+| Grupo de materiais de avatar virtual | `library_type: "aigc_avatar"` | Para pessoas virtuais, avatares, produtos, estilos e outras referências reutilizáveis que não exigem verificação de pessoa real. |
+| Grupo de materiais de pessoa real | `library_type: "liveness_face"` | Criado por verificação de material de pessoa real. Um grupo representa uma pessoa real verificada. |
 
-Keep `group_id` and material asset `id` separate. `group_id` is for organizing uploads; material asset `id` is for video generation. If a video request returns `Seedance material asset not found or not accessible`, confirm that you passed a material asset `id`, not a `group_id`, and that the asset belongs to the same organization, is not deleted, and has `status: "ACTIVE"`.
+Mantenha `group_id` e o `id` do ativo de material separados. O `group_id` serve para organizar uploads; o `id` do ativo de material serve para a geração de vídeo. Se uma solicitação de vídeo retornar `Seedance material asset not found or not accessible`, confirme se você passou um `id` de ativo de material, não um `group_id`, e que o ativo pertence à mesma organização, não foi excluído e possui `status: "ACTIVE"`.
 
-## Real-Person Material Verification
+## Verificação de Material de Pessoa Real
 
-Use real-person material verification when your product needs consent and face verification before a real person can be used as a reusable Seedance reference.
+Use a verificação de material de pessoa real quando seu produto precisar de consentimento e verificação facial antes que uma pessoa real possa ser usada como uma referência Seedance reutilizável.
 
-1. Call [Create Real-Person Verification Session](/pt/api-reference/video/create-real-person-verification-session) with your `callback_url`.
-2. Send the user to the returned `h5_link`. The `session_id`, `verification_token`, and H5 link expire after 120 seconds.
-3. After the H5 flow completes, TokenLab redirects to your `callback_url` with `session_id`, `verification_token`, `verification_status`, and `result_code`.
-4. When `verification_status` is `succeeded`, call [Bind Real-Person Verification Result](/pt/api-reference/video/bind-real-person-verification-result).
-5. Store the returned `group_id`; pass it when creating `liveness_face` material assets.
-6. Use [List Real-Person Verification History](/pt/api-reference/video/list-real-person-verification-history) to review previous sessions. History is long-lived, but it does not extend the 120-second binding window.
+1. Chame [Create Real-Person Verification Session](/pt/api-reference/video/create-real-person-verification-session) com sua `callback_url`.
+2. Envie o usuário para o `h5_link` retornado. O `session_id`, `verification_token` e o link H5 expiram após 120 segundos.
+3. Após a conclusão do fluxo H5, o TokenLab redireciona para sua `callback_url` com `session_id`, `verification_token`, `verification_status` e `result_code`.
+4. Quando `verification_status` for `succeeded`, chame [Bind Real-Person Verification Result](/pt/api-reference/video/bind-real-person-verification-result).
+5. Armazene o `group_id` retornado; passe-o ao criar ativos de material `liveness_face`.
+6. Use [List Real-Person Verification History](/pt/api-reference/video/list-real-person-verification-history) para revisar sessões anteriores. O histórico é de longa duração, mas não estende a janela de vinculação de 120 segundos.
 
-Optional: use the [test console](https://tokenlab.sh/dashboard/seedance-assets) to verify your request and callback flow, inspect material groups, and review verification history. Your production integration should call the APIs directly.
+Opcional: use o [console de teste](https://tokenlab.sh/dashboard/seedance-assets) para verificar seu fluxo de solicitação e callback, inspecionar grupos de materiais e revisar o histórico de verificação. Sua integração de produção deve chamar as APIs diretamente.
 
-## Creating Material Groups
+## Criando Grupos de Materiais
 
-Use [Create Material Asset Group](/pt/api-reference/video/create-material-asset-group) for `aigc_avatar` groups. New real-person groups are created through the verification flow so the verified person and the material group stay linked.
+Use [Create Material Asset Group](/pt/api-reference/video/create-material-asset-group) para grupos `aigc_avatar`. Novos grupos de pessoas reais são criados através do fluxo de verificação para que a pessoa verificada e o grupo de materiais permaneçam vinculados.
 
-Use [List Material Asset Groups](/pt/api-reference/video/list-material-asset-groups), [Get Material Asset Group](/pt/api-reference/video/get-material-asset-group), [Update Material Asset Group](/pt/api-reference/video/update-material-asset-group), and [Delete Material Asset Group](/pt/api-reference/video/delete-material-asset-group) to manage groups after they exist.
+Use [List Material Asset Groups](/pt/api-reference/video/list-material-asset-groups), [Get Material Asset Group](/pt/api-reference/video/get-material-asset-group), [Update Material Asset Group](/pt/api-reference/video/update-material-asset-group) e [Delete Material Asset Group](/pt/api-reference/video/delete-material-asset-group) para gerenciar grupos após sua criação.
 
-Deleting a material group also deletes the TokenLab materials inside it and cannot be undone. If the TokenLab material library cannot complete the deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error.
+A exclusão de um grupo de materiais também exclui os materiais TokenLab dentro dele e não pode ser desfeita. Se a biblioteca de materiais TokenLab não puder concluir a exclusão porque o estado de autorização atual não permite, o TokenLab retornará um erro neutro de biblioteca de materiais.
 
-## Uploading Materials
+## Fazendo Upload de Materiais
 
-Use [Create Material Asset](/pt/api-reference/video/create-material-asset) to import one publicly reachable source URL at a time.
+Use [Create Material Asset](/pt/api-reference/video/create-material-asset) para importar uma URL de origem publicamente acessível por vez.
 
-For `aigc_avatar`, `group_id` is optional; TokenLab uses or creates the organization default virtual-avatar group. For `liveness_face`, `group_id` is required and must be the group returned by [Bind Real-Person Verification Result](/pt/api-reference/video/bind-real-person-verification-result).
+Para `aigc_avatar`, `group_id` é opcional; o TokenLab usa ou cria o grupo de avatar virtual padrão da organização. Para `liveness_face`, `group_id` é obrigatório e deve ser o grupo retornado por [Bind Real-Person Verification Result](/pt/api-reference/video/bind-real-person-verification-result).
 
-| Type | Supported input |
+| Tipo | Entrada suportada |
 |------|-----------------|
-| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
-| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
-| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
+| Imagem | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; proporção `(0.4, 2.5)`; largura e altura `(300, 6000)` px; abaixo de 30 MB. |
+| Vídeo | `mp4`, `mov`; `480p`, `720p` ou `1080p`; 2-15 segundos; proporção `[0.4, 2.5]`; largura e altura `[300, 6000]` px; total de pixels entre 409600 e 2086876; até 50 MB; 24-60 FPS. |
+| Áudio | `wav`, `mp3`; 2-15 segundos; até 15 MB. |
 
-Material ingestion is asynchronous. Poll [Get Material Asset](/pt/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. A successful HTTP response only means the request was accepted; always read the business status. If the status is `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
+A ingestão de material é assíncrona. Faça polling em [Get Material Asset](/pt/api-reference/video/get-material-asset) até que o `status` se torne `ACTIVE`. Uma resposta HTTP bem-sucedida significa apenas que a solicitação foi aceita; sempre leia o status de negócio. Se o status for `FAILED`, inspecione `error_message`, corrija o material de origem e crie um novo ativo.
 
-The `asset_url` field describes the upload source or temporary inspection information. Use the returned TokenLab material asset `id` for generation; do not treat `asset_url` as a long-term material address.
+O campo `asset_url` descreve a origem do upload ou informações temporárias de inspeção. Use o `id` do ativo de material TokenLab retornado para a geração; não trate `asset_url` como um endereço de material de longo prazo.
 
-For real-person material groups, one group maps to one real person. Uploads are checked against the verified face. Assets with multiple faces or a face that does not match the verified person can fail. For best results, upload both a full-body front reference image and a front-facing close-up where the face is clear.
+Para grupos de materiais de pessoas reais, um grupo mapeia para uma pessoa real. Os uploads são verificados em relação ao rosto verificado. Ativos com vários rostos ou um rosto que não corresponda à pessoa verificada podem falhar. Para obter melhores resultados, envie uma imagem de referência de corpo inteiro de frente e um close-up frontal onde o rosto esteja claro.
 
-## Using Materials In Video Generation
+## Usando Materiais na Geração de Vídeo
 
-After an asset is `ACTIVE`, pass the returned TokenLab asset `id` as `material_asset_id`, or include it in `material_asset_ids`, when calling [Create Video](/pt/api-reference/video/create-video). Material assets count toward Seedance reference limits.
+Após um ativo estar `ACTIVE`, passe o `id` do ativo TokenLab retornado como `material_asset_id`, ou inclua-o em `material_asset_ids`, ao chamar [Create Video](/pt/api-reference/video/create-video). Os ativos de material contam para os limites de referência do Seedance.
 
-## API Examples
+## Exemplos de API
 
-Create a virtual-avatar group, upload an image, poll until it is active, then use the material asset ID in a video request.
+Crie um grupo de avatar virtual, faça upload de uma imagem, faça polling até que esteja ativo e, em seguida, use o ID do ativo de material em uma solicitação de vídeo.
 
 ```bash
 curl https://api.tokenlab.sh/v1/videos/assets/groups \
@@ -101,8 +101,7 @@ curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_def456 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-
-For a real-person material group, create a verification session first and bind the result before uploading materials.
+Para um grupo de materiais de pessoa real, crie primeiro uma sessão de verificação e vincule o resultado antes de fazer upload dos materiais.
 
 ```bash
 curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
@@ -116,9 +115,8 @@ curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
   -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
 ```
 
+## Preços e Resultados Assíncronos
 
-## Pricing And Async Results
+O preço do Seedance 2.0 depende da resolução de saída, tipo de entrada e modelo. Use a [Pricing API](/pt/api-reference/pricing/get-pricing) ou a [Models API](/pt/api-reference/models/list-models) antes de codificar a interface do produto.
 
-Seedance 2.0 pricing depends on output resolution, input type, and model. Use the [Pricing API](/pt/api-reference/pricing/get-pricing) or [Models API](/pt/api-reference/models/list-models) before hard-coding product UI.
-
-Video generation is asynchronous. Follow the `poll_url` returned by create requests, or use [Get Task Status](/pt/api-reference/tasks/get-task-status) with the returned task ID.
+A geração de vídeo é assíncrona. Siga a `poll_url` retornada pelas solicitações de criação ou use [Get Task Status](/pt/api-reference/tasks/get-task-status) com o ID da tarefa retornado.
