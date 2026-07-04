@@ -1,0 +1,84 @@
+---
+title: "代理结算倍率"
+description: "用于读取代理结算倍率的私有 Management API 接口。"
+---
+
+## 概览
+
+`GET /v1/management/reseller/settlement-multipliers` 返回公开模型 ID 的 partner 专属结算倍率。
+
+这是代理私有接口，需要管理令牌具备：
+
+```text
+reseller_settlement:read
+```
+
+接口不会返回模型官方价、平台价、复杂计费详情、上游成本、平台利润或总利润。
+
+## Query 参数
+
+| 参数 | 类型 | 默认值 / 限制 | 说明 |
+|------|------|---------------|------|
+| `page` | integer | 默认 `1`，最小 `1` | 1-based 页码 |
+| `limit` | integer | 默认 `50`，最小 `1`，最大 `100` | 每页条数 |
+| `model` | string | 最大长度 `100` | 可选的公开模型 ID |
+
+## 响应字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `object` | string | 固定为 `list` |
+| `organization_id` | string | 管理令牌所属组织 |
+| `data[].object` | string | `management_reseller_settlement_multiplier` |
+| `data[].model` | string | 公开模型 ID |
+| `data[].currency` | string | `USD` |
+| `data[].settlement_multiplier` | string \| null | 相对于模型厂商官方价的结算倍率 |
+| `data[].discount_source` | string | 组织或模型折扣来源 |
+| `data[].status` | enum | `available`、`missing_price_basis` 或 `inconsistent_price_basis` |
+| `pagination` | object | page、limit、total 和 totalPages |
+
+## 状态语义
+
+| 状态 | 含义 |
+|------|------|
+| `available` | 结算倍率可以安全使用。 |
+| `missing_price_basis` | 该模型缺少可用的官方价格倍率基准。修复价格前不要在代理模型目录中上架。 |
+| `inconsistent_price_basis` | 结构化价格无法推导出单一一致倍率。修复价格前不要在代理模型目录中上架。 |
+
+## 示例
+
+<RequestExample>
+```bash cURL
+curl "https://api.tokenlab.sh/v1/management/reseller/settlement-multipliers?limit=50" \
+  -H "Authorization: Bearer mt-your-management-token"
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 OK
+{
+  "object": "list",
+  "organization_id": "org_abc123",
+  "data": [
+    {
+      "object": "management_reseller_settlement_multiplier",
+      "model": "gpt-5.2",
+      "currency": "USD",
+      "settlement_multiplier": "0.700000",
+      "discount_source": "organization",
+      "status": "available"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 1,
+    "totalPages": 1
+  }
+}
+```
+</ResponseExample>
+
+## 安全边界
+
+该接口故意不进入公开 OpenAPI。只应在可信的代理后端任务或控制台服务中调用，不要在浏览器里携带管理令牌调用。
