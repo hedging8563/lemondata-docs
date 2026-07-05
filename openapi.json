@@ -3554,6 +3554,43 @@
             "$ref": "#/components/responses/BadRequest"
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Delete file",
+        "description": "Deletes a batch file or a bound image/reference file. When the request includes anthropic-beta: files-api-2025-04-14, the route uses Anthropic Files API mode for the bound workspace.",
+        "operationId": "deleteFile",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "File ID returned by the Files API."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDeletedObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
       }
     },
     "/v1/files/{file_id}/content": {
@@ -4046,11 +4083,6 @@
                       "low"
                     ]
                   },
-                  "partial_images": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 3
-                  },
                   "user": {
                     "type": "string"
                   },
@@ -4197,11 +4229,6 @@
                       "auto",
                       "low"
                     ]
-                  },
-                  "partial_images": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 3
                   },
                   "user": {
                     "type": "string"
@@ -6441,12 +6468,6 @@
             ],
             "description": "Moderation strictness for compatible image models such as gpt-image-2"
           },
-          "partial_images": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 3,
-            "description": "Number of partial images requested for streaming-compatible providers; usage may include additional image output tokens"
-          },
           "user": {
             "type": "string",
             "description": "End-user identifier"
@@ -8558,8 +8579,7 @@
           "bytes",
           "created_at",
           "filename",
-          "purpose",
-          "status"
+          "purpose"
         ],
         "properties": {
           "id": {
@@ -8588,12 +8608,16 @@
             "type": "string",
             "enum": [
               "batch",
-              "batch_output"
-            ]
+              "batch_output",
+              "user_data",
+              "vision"
+            ],
+            "description": "File purpose. batch and batch_output are used by Batches; user_data and vision are used by file-backed image/reference requests."
           },
           "status": {
             "type": "string",
-            "example": "processed"
+            "example": "processed",
+            "description": "Batch file processing status. Image/reference file objects may omit this field."
           },
           "expires_at": {
             "type": [
@@ -8602,7 +8626,8 @@
             ],
             "example": 1741425600
           }
-        }
+        },
+        "description": "File metadata. Batch files include status; image/reference files may omit status depending on the upstream file provider."
       },
       "FileListResponse": {
         "type": "object",
@@ -10576,6 +10601,31 @@
           }
         },
         "additionalProperties": false
+      },
+      "FileDeletedObject": {
+        "type": "object",
+        "required": [
+          "id",
+          "object",
+          "deleted"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "file-abc123"
+          },
+          "object": {
+            "type": "string",
+            "enum": [
+              "file"
+            ]
+          },
+          "deleted": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "additionalProperties": true
       }
     },
     "responses": {
