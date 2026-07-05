@@ -8,6 +8,12 @@ description: "WebSocket ile gerçek zamanlı ses ve çok modlu oturumlara bağla
 
 Bu endpoint gerçek zamanlı konuşma tanıma, konuşma sentezi, konuşma çevirisi veya çok modlu realtime modeller için kullanılır. Normal `GET` istekleri metadata döndürür; WebSocket upgrade istekleri yönlendirilen upstream oturumuna proxy edilir.
 
+## Desteklenen yüzey
+
+Bu endpoint TokenLab'in gerçek zamanlı WebSocket proxy'sidir. Aynı path üzerinde normal `GET /v1/realtime` metadata kontrolünü ve WebSocket upgrade isteklerini destekler. `POST /v1/realtime/client_secrets`, `POST /v1/realtime/translations/client_secrets`, Realtime Calls (`accept`, `hangup`, `refer`, `reject`) veya legacy beta REST session / transcription-session oluşturma gibi OpenAI Realtime REST yardımcı endpoint'lerini sunmaz.
+
+Tarayıcı veya mobil uygulamalarda uzun ömürlü API anahtarlarını sunucunuzda tutun. Bu endpoint kısa ömürlü Realtime client secret üretmez.
+
 <Note>Agent’lar socket açmadan önce `/v1/models` ile realtime destekli modeli bulmalıdır.</Note>
 
 ## Bağlantı
@@ -29,7 +35,10 @@ const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realti
 });
 
 socket.on('open', () => {
-  socket.send(JSON.stringify({ type: 'session.start' }));
+  socket.send(JSON.stringify({
+    type: 'session.update',
+    session: { modalities: ['text', 'audio'] }
+  }));
 });
 
 socket.on('message', (data) => {
@@ -71,4 +80,4 @@ Oturum tamamlandığında client socket’i kapatın. Upstream önce kapatırsa 
 ## Önemli alanlar
 
 <ResponseField name="type" type="string">API tarafından dönen event veya message type.</ResponseField>
-<ResponseField name="session.id" type="string">Sonraki çağrılar ve support için kullanılan identifier.</ResponseField>
+<ResponseField name="session.id" type="string">Gerçek zamanlı sağlayıcının döndürdüğü kimliktir; destek loglarında kullanın, REST session URL olarak değil.</ResponseField>

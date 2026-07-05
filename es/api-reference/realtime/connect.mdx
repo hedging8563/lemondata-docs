@@ -8,6 +8,12 @@ description: "Conecta sesiones de voz y multimodales en tiempo real por WebSocke
 
 Este endpoint sirve para reconocimiento de voz, síntesis de voz, traducción de voz o modelos multimodales en tiempo real. Un `GET` normal devuelve metadatos; el upgrade WebSocket se proxifica a la sesión upstream enrutada.
 
+## Superficie admitida
+
+Este endpoint es el proxy WebSocket en tiempo real de TokenLab. Admite una comprobación de metadatos con `GET /v1/realtime` y upgrades WebSocket en la misma ruta. No expone endpoints auxiliares REST de OpenAI Realtime como `POST /v1/realtime/client_secrets`, `POST /v1/realtime/translations/client_secrets`, Realtime Calls (`accept`, `hangup`, `refer`, `reject`) ni creación de legacy beta REST session / transcription-session.
+
+En apps web o móviles, mantén las claves API de larga duración en tu servidor. Este endpoint no emite Realtime client secrets de corta duración.
+
 <Note>Los agentes deben descubrir modelos con soporte realtime en `/v1/models` antes de abrir el socket.</Note>
 
 ## Conexión
@@ -29,7 +35,10 @@ const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realti
 });
 
 socket.on('open', () => {
-  socket.send(JSON.stringify({ type: 'session.start' }));
+  socket.send(JSON.stringify({
+    type: 'session.update',
+    session: { modalities: ['text', 'audio'] }
+  }));
 });
 
 socket.on('message', (data) => {
@@ -71,4 +80,4 @@ Cierra el socket del cliente cuando termine la sesión. Si el upstream cierra pr
 ## Campos importantes
 
 <ResponseField name="type" type="string">Tipo de evento o mensaje devuelto por la API.</ResponseField>
-<ResponseField name="session.id" type="string">Identificador para llamadas posteriores y soporte.</ResponseField>
+<ResponseField name="session.id" type="string">Identificador emitido por el proveedor realtime; inclúyelo en logs de soporte, no como URL de sesión REST.</ResponseField>

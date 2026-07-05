@@ -8,6 +8,12 @@ description: "Kết nối phiên giọng nói và đa phương thức thời gia
 
 Endpoint này dùng cho nhận dạng giọng nói, tổng hợp giọng nói, dịch giọng nói hoặc mô hình đa phương thức thời gian thực. Yêu cầu `GET` thường trả về metadata; yêu cầu upgrade WebSocket sẽ được proxy tới phiên upstream đã định tuyến.
 
+## Phạm vi hỗ trợ
+
+Endpoint này là proxy WebSocket thời gian thực của TokenLab. Nó hỗ trợ kiểm tra metadata bằng `GET /v1/realtime` và upgrade WebSocket trên cùng đường dẫn. Nó không cung cấp các REST helper endpoint của OpenAI Realtime như `POST /v1/realtime/client_secrets`, `POST /v1/realtime/translations/client_secrets`, Realtime Calls (`accept`, `hangup`, `refer`, `reject`) hoặc tạo legacy beta REST session / transcription-session.
+
+Với ứng dụng trình duyệt hoặc di động, hãy giữ API key dài hạn trên server của bạn. Endpoint này không phát hành Realtime client secret ngắn hạn.
+
 <Note>Agent nên dùng `/v1/models` để tìm mô hình hỗ trợ realtime trước khi mở socket.</Note>
 
 ## Kết nối
@@ -29,7 +35,10 @@ const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realti
 });
 
 socket.on('open', () => {
-  socket.send(JSON.stringify({ type: 'session.start' }));
+  socket.send(JSON.stringify({
+    type: 'session.update',
+    session: { modalities: ['text', 'audio'] }
+  }));
 });
 
 socket.on('message', (data) => {
@@ -71,4 +80,4 @@ Phiên realtime dùng cùng số dư API key. TokenLab trừ trước một ư�
 ## Trường quan trọng
 
 <ResponseField name="type" type="string">Loại event hoặc message do API trả về.</ResponseField>
-<ResponseField name="session.id" type="string">Định danh dùng cho lần gọi tiếp theo và hỗ trợ.</ResponseField>
+<ResponseField name="session.id" type="string">Mã định danh do provider realtime trả về; dùng trong log hỗ trợ, không phải REST session URL.</ResponseField>

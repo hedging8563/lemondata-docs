@@ -8,6 +8,12 @@ description: "الاتصال بجلسات صوتية ومتعددة الوسائ
 
 يستخدم هذا المسار لجلسات التعرف على الكلام، توليد الكلام، ترجمة الكلام، أو النماذج متعددة الوسائط الفورية. طلب `GET` العادي يعيد معلومات المسار؛ أما ترقية WebSocket فتُمرر إلى جلسة المزود المختارة.
 
+## النطاق المدعوم
+
+هذا المسار هو وكيل WebSocket الفوري في TokenLab. يدعم فحص metadata عبر `GET /v1/realtime` وترقية WebSocket على المسار نفسه. لا يوفّر مسارات REST المساعدة في OpenAI Realtime مثل `POST /v1/realtime/client_secrets` أو `POST /v1/realtime/translations/client_secrets` أو Realtime Calls (`accept`, `hangup`, `refer`, `reject`) أو إنشاء legacy beta REST session / transcription-session.
+
+في تطبيقات المتصفح أو الجوال، احتفظ بمفاتيح API طويلة العمر على الخادم. هذا المسار لا يصدر Realtime client secrets قصيرة العمر.
+
 <Note>على الوكلاء اكتشاف النماذج التي تدعم realtime عبر `/v1/models` قبل فتح socket.</Note>
 
 ## الاتصال
@@ -29,7 +35,10 @@ const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realti
 });
 
 socket.on('open', () => {
-  socket.send(JSON.stringify({ type: 'session.start' }));
+  socket.send(JSON.stringify({
+    type: 'session.update',
+    session: { modalities: ['text', 'audio'] }
+  }));
 });
 
 socket.on('message', (data) => {
@@ -71,4 +80,4 @@ curl "https://api.tokenlab.sh/v1/realtime" \
 ## حقول مهمة
 
 <ResponseField name="type" type="string">نوع الحدث أو الرسالة الذي تعيده API.</ResponseField>
-<ResponseField name="session.id" type="string">معرّف لاستخدامه في الطلبات اللاحقة والدعم.</ResponseField>
+<ResponseField name="session.id" type="string">معرّف يصدره مزود الوقت الفعلي؛ ضمّنه في سجلات الدعم، وليس كعنوان URL لجلسة REST.</ResponseField>

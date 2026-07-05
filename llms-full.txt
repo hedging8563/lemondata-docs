@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-07-03
+Generated: 2026-07-05
 Source: https://docs.tokenlab.sh
 
 ---
@@ -37,9 +37,9 @@ The public catalog changes over time. Use `/v1/models`, `recommended_for`, or th
 | Vision & Multimodal | Image understanding and multimodal chat | `gpt-4o`, `claude-sonnet-4-6`, `gemini-3.5-flash` |
 | Image Generation & Editing | Text-to-image and image editing | `gpt-image-2`, `flux-pro`, `qwen-image-plus` |
 | Video Generation | Text-to-video, image-to-video, reference video, and motion control | `veo3.1`, `wan-2.7`, `kling-3.0-video`, `happyhorse-1.0` |
-| Audio & Realtime | TTS, transcription, translation, and realtime sessions | `gpt-4o-mini-tts`, `whisper-1`, `gpt-realtime` |
+| Audio & Realtime WebSocket | TTS, transcription, audio translation, and realtime WebSocket sessions | `gpt-4o-mini-tts`, `whisper-1`, `gpt-realtime` |
 | Embeddings & Rerank | Text vectorization and reranking | `text-embedding-3-small`, `qwen3-vl-rerank` |
-| Translation | Text and speech translation workflows | `doubao-seed-translation`, `gpt-realtime-translate` |
+| Translation | Text translation and WebSocket speech translation workflows | `doubao-seed-translation`, `gpt-realtime-translate` |
 | Music & 3D | Music and 3D asset generation | `suno-music`, `tripo-h3.1` |
 | Worlds | World generation, status polling, and media asset workflows | Use `/v1/worlds/generations` and the Models API for current availability |
 
@@ -2616,7 +2616,7 @@ Audio workloads split into two shapes. Use the audio endpoints for file-like req
 | Text to speech | `POST /v1/audio/speech` | You need an audio file from text. |
 | Transcription | `POST /v1/audio/transcriptions` | You need text from an audio file. |
 | Audio translation | `POST /v1/audio/translations` | You need translated text from an audio file. |
-| Realtime session | `GET /v1/realtime` | You need bidirectional streaming audio or realtime multimodal events. |
+| Realtime WebSocket | `WS /v1/realtime?model={model}` | You need bidirectional streaming audio or realtime multimodal events over WebSocket. Plain `GET /v1/realtime` only returns metadata. |
 
 ## Discover Models
 
@@ -2649,6 +2649,8 @@ curl -X POST "https://api.tokenlab.sh/v1/audio/speech" \
 ## Realtime Sessions
 
 Open a WebSocket with the model in the query string and the API key in the Authorization header. Keep the event format documented for the selected realtime model, and close the socket when the session is complete.
+
+This guide covers the WebSocket proxy only. TokenLab does not currently provide OpenAI Realtime REST client secret, translation client secret, Calls, or legacy beta session management endpoints.
 
 ```javascript
 import WebSocket from 'ws';
@@ -2688,6 +2690,8 @@ URL: https://docs.tokenlab.sh/guides/video-generation
 
 Video generation is asynchronous. `POST /v1/videos/generations` returns a public task identity and usually a `poll_url`; the final video appears on later status responses.
 
+For Seedance 2.0, image URLs and supported inline data URLs are automatically prepared as reusable TokenLab materials before generation; if preparation takes longer than 60 seconds, retry after the returned `auto_material_asset_ids` become `ACTIVE`.
+
 ## Supported Operations
 
 Use explicit `operation` in production. TokenLab can infer some operations from inputs, but explicit operation values make validation, support, and retries clearer.
@@ -2710,7 +2714,7 @@ curl "https://api.tokenlab.sh/v1/models?recommended_for=video" \\
   -H "Authorization: Bearer sk-your-api-key"
 ```
 
-Use the model IDs shown by TokenLab in `model`, then choose operation variants with `operation` and the corresponding media inputs. Examples include `wan-2.7`, `happyhorse-1.0`, `viduq3`, `viduq3-mix`, `pixverse-v6`, `kling-3.0-video`, `veo3.1`, and `seedance-2.0`; do not use provider-specific operation names as TokenLab model names.
+Use the model IDs shown by TokenLab in `model`, then choose feature variants with `operation` and the corresponding media inputs. Examples include `wan-2.7`, `happyhorse-1.0`, `viduq3`, `viduq3-mix`, `pixverse-v6`, `kling-3.0-video`, `veo3.1`, and `seedance-2.0`; do not use operation-specific suffixes as TokenLab model names.
 
 Read the selected model detail before relying on specialized fields such as `reference_images`, `kling_elements`, `output_audio`, `duration`, `resolution`, or `aspect_ratio`.
 
@@ -2729,7 +2733,7 @@ curl https://api.tokenlab.sh/v1/videos/generations \\
   }'
 ```
 
-For production media input, prefer public `https` URLs over inline `data:` URLs. If you use signed URLs, keep them valid through task creation and provider-side fetch retries.
+For production media input, prefer public `https` URLs over inline `data:` URLs. If you use temporary URLs, keep them valid until TokenLab finishes creating the task.
 
 ## Inputs And Model-Specific Fields
 
@@ -2742,7 +2746,7 @@ For production media input, prefer public `https` URLs over inline `data:` URLs.
 
 Use the returned `poll_url` first. If you need a fixed endpoint, use `GET /v1/tasks/{id}` with the same `id` / `task_id` from the create response.
 
-Completed video tasks may return `video_url`, `video`, or `videos` depending on the provider and output count. Treat `billing_transaction_id` as a billing identifier, not as a task identifier.
+Completed video tasks may return `video_url`, `video`, or `videos` depending on the model and output count. Treat `billing_transaction_id` as a billing identifier, not as a task identifier.
 
 ## Common Pitfalls
 
@@ -2804,6 +2808,12 @@ Seedance materials are reusable, organization-scoped references that can be sele
 | Real-person material group | `library_type: "liveness_face"` | Created by real-person material verification. One group represents one verified real person. |
 
 Keep `group_id` and material asset `id` separate. `group_id` is for organizing uploads; material asset `id` is for video generation. If a video request returns `Seedance material asset not found or not accessible`, confirm that you passed a material asset `id`, not a `group_id`, and that the asset belongs to the same organization, is not deleted, and has `status: "ACTIVE"`.
+
+## Automatic Image Materials
+
+For Seedance 2.0 generation requests, you may send image URLs or supported inline data URLs directly in `image`, `image_url`, `image_urls`, `reference_images`, `start_image`, or `end_image`. TokenLab automatically imports those images into the organization default virtual-avatar material group and keeps their role as first frame, last frame, or reference image.
+
+If the material assets become `ACTIVE` within 60 seconds, generation continues in the same request. If not, the API returns `409 seedance_material_preparing` with `auto_material_asset_ids`; list or get those assets until they are `ACTIVE`, then retry with `material_asset_id` or `material_asset_ids`. Existing virtual-avatar and real-person material IDs are used as-is and are not imported again.
 
 ## Real-Person Material Verification
 
@@ -3198,7 +3208,7 @@ Get your API key from the [Dashboard](https://tokenlab.sh/dashboard).
 |----------|--------|-------------|
 | `/v1/realtime?model={model}` | WS | Realtime WebSocket sessions |
 
-> Info: Use `/v1/realtime` for WebSocket upgrade requests. A plain `GET /v1/realtime` returns endpoint metadata for clients that cannot inspect WebSocket routes directly.
+> Info: Use `/v1/realtime` for WebSocket upgrade requests. A plain `GET /v1/realtime` returns endpoint metadata for clients that cannot inspect WebSocket routes directly. It is not the OpenAI Realtime REST surface; client secret, translation client secret, Calls, and legacy beta session endpoints are not currently exposed.
 
 ### Video
 
@@ -3344,6 +3354,10 @@ URL: https://docs.tokenlab.sh/api-reference/models/list-models
 
 > Note: `GET /v1/models` is optimized for discovery. Detail-only metadata such as `capability_flags`, `pricing_provenance`, and the full `request_format_details` live on `GET /v1/models/{model}`.
 
+## Model Deletion
+
+`DELETE /v1/models/{model}` is not supported. TokenLab models are a shared public catalog, not user-owned fine-tuned model resources.
+
 ## Query Parameters
 
 > Note: When `recommended_for` is present, `/v1/models` sorts non-chat models by the latest cached 24-hour success-rate snapshot. Models with `status = "insufficient_samples"` remain visible but sort after scored models.
@@ -3412,6 +3426,10 @@ anthropic_models = [m for m in models.data if m.owned_by == "anthropic"]
 URL: https://docs.tokenlab.sh/api-reference/models/get-model
 
 ## Path Parameters
+
+## Model Deletion
+
+`DELETE /v1/models/{model}` is not supported. TokenLab models are a shared public catalog, not user-owned fine-tuned model resources.
 
 ## Response
 
@@ -3739,6 +3757,14 @@ URL: https://docs.tokenlab.sh/api-reference/files/upload-file
 
 This endpoint is part of TokenLab's OpenAI-compatible Batch API. Batch jobs use uploaded JSONL files, run asynchronously, and can return output/error files later.
 
+## Supported File Modes
+
+TokenLab treats `/v1/files` as three explicit modes:
+
+- Batch files: use `purpose=batch` for `/v1/batches`.
+- Image/reference files: use `purpose=user_data` or `purpose=vision` for file-backed image requests.
+- Anthropic Files API mode: add `anthropic-beta: files-api-2025-04-14` for Anthropic-native file storage.
+
 ## Notes
 
 - Batch input files must use `purpose=batch`.
@@ -3793,6 +3819,8 @@ This endpoint primarily serves TokenLab's OpenAI-compatible Batch API, including
 
 When the request opts into Anthropic Files compatibility mode, the same route can also list Anthropic-style files available to the bound workspace.
 
+Without Anthropic headers, the list can include both batch files and TokenLab image/reference files. Use `purpose=batch`, `purpose=batch_output`, `purpose=user_data`, or `purpose=vision` to narrow the list.
+
 ## Notes
 
 - Batch input files must use `purpose=batch`.
@@ -3831,6 +3859,8 @@ This endpoint primarily serves TokenLab's OpenAI-compatible Batch API file objec
 
 When the request opts into Anthropic Files compatibility mode, the same route can also return Anthropic-style file metadata for the bound workspace.
 
+Without Anthropic headers, this route can return either a batch file object or a TokenLab image/reference file object.
+
 ## Notes
 
 - Batch input files must use `purpose=batch`.
@@ -3868,6 +3898,8 @@ This endpoint primarily serves TokenLab's OpenAI-compatible Batch API file conte
 
 When the request opts into Anthropic Files compatibility mode, the same route can proxy the original stored file content for the bound workspace.
 
+Without Anthropic headers, this route downloads batch file content or proxies content for a bound image/reference file when the provider supports file content retrieval.
+
 ## Notes
 
 - Batch input files must use `purpose=batch`.
@@ -3893,6 +3925,34 @@ Use the interactive OpenAPI panel above for the exact schema.
 
 ---
 
+### Delete File
+
+> Deletes a batch file, image/reference file binding, or Anthropic-mode file.
+
+URL: https://docs.tokenlab.sh/api-reference/files/delete-file
+
+## Overview
+
+Deletes a file created through `/v1/files`. Without Anthropic headers, the route deletes TokenLab batch files or bound image/reference file bindings. With `anthropic-beta: files-api-2025-04-14`, it uses Anthropic Files API mode for the bound workspace.
+
+## Notes
+
+- Batch file deletion removes the stored batch file record and prevents future batch jobs from using that file ID.
+- Image/reference file deletion asks the selected provider to delete the file, then removes the TokenLab file binding after the provider accepts the deletion.
+- Anthropic Files API mode requires the same Anthropic-native headers used for upload and retrieval.
+
+## Example
+
+## Request / Response
+
+Use the interactive OpenAPI panel above for the exact schema.
+
+## Response example
+
+## Important fields
+
+---
+
 ### Create Batch
 
 > Creates an OpenAI-compatible batch job from an uploaded input file.
@@ -3909,6 +3969,7 @@ This endpoint is part of TokenLab's OpenAI-compatible Batch API. Batch jobs use 
 - `completion_window` is currently `24h`.
 - Output ordering is not guaranteed; always match by `custom_id`.
 - Streaming is not supported inside batch items.
+- Supported batch item endpoints are currently `/v1/chat/completions` and `/v1/embeddings`; `/v1/responses` batch jobs are rejected until a native Responses batch executor is available.
 
 ## Example
 
@@ -4282,6 +4343,8 @@ URL: https://docs.tokenlab.sh/api-reference/audio/create-speech
 
 **Synchronous request timeout:** This non-chat endpoint waits for the routed model to finish. Large inputs, long audio, or large batches can exceed common 30s client defaults, so set your HTTP client timeout to at least `120s`.
 
+Supported optional fields vary by model family. TokenLab validates this field matrix before routing: OpenAI TTS accepts `voice`, `instructions`, `response_format`, `stream_format`, and `speed`; MiniMax speech accepts `voice`, `voice_id`, `response_format`, `stream_format`, and `speed`; Gemini TTS accepts `prompt`, `language_code`, `voice`, `response_format`, `stream_format`, `speed`, and `temperature`.
+
 ## Response
 
 Returns the audio file in the requested format.
@@ -4381,6 +4444,12 @@ URL: https://docs.tokenlab.sh/api-reference/realtime/connect
 
 Use this endpoint for realtime sessions such as streaming speech recognition, speech synthesis, speech translation, or realtime multimodal models. Non-WebSocket `GET` requests return endpoint metadata; WebSocket upgrade requests proxy the realtime upstream session.
 
+## Supported surface
+
+This endpoint is TokenLab's realtime WebSocket proxy. It supports a plain `GET /v1/realtime` metadata check and WebSocket upgrades on the same path. It does not expose OpenAI Realtime REST helper endpoints such as `POST /v1/realtime/client_secrets`, `POST /v1/realtime/translations/client_secrets`, Realtime Calls (`accept`, `hangup`, `refer`, `reject`), or legacy beta REST session / transcription-session creation.
+
+For browser or mobile apps, keep long-lived API keys on your server. This endpoint does not issue short-lived Realtime client secrets.
+
 > Note: For agents, discover realtime-capable models with `/v1/models` and choose a model whose supported endpoints include realtime before opening the socket.
 
 ## Connection
@@ -4468,6 +4537,8 @@ Audio output is model-dependent. In TokenLab, Veo 3 and Seedance requests defaul
 For production integrations, prefer publicly reachable `https` URLs for images, videos, and audio. Inline `data:` URLs remain supported for compatible models, but large base64 payloads are harder to retry, inspect, and debug.
 
 ## Request Body
+
+> Info: For Seedance 2.0 models, TokenLab automatically prepares image fields (`image`, `image_url`, `image_urls`, `reference_images`, `start_image`, `end_image`) as reusable virtual-avatar materials before generation. If preparation is not complete within 60 seconds, the API returns `409 seedance_material_preparing` with `auto_material_asset_ids`; retry after those material assets become `ACTIVE`.
 
 ## Compatibility Notes
 

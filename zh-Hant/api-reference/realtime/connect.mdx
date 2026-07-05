@@ -8,6 +8,12 @@ description: "透過 WebSocket 連線即時語音與多模態會話"
 
 此端點用於即時語音辨識、語音合成、語音翻譯或即時多模態模型等會話。一般 `GET` 請求會回傳端點資訊；WebSocket 升級請求會代理到路由後的即時上游會話。
 
+## 支援範圍
+
+此端點是 TokenLab 的即時 WebSocket 代理。它支援一般 `GET /v1/realtime` 端點資訊檢查，也支援在同一路徑發起 WebSocket 升級。它不提供 OpenAI Realtime 的 REST 輔助端點，例如 `POST /v1/realtime/client_secrets`、`POST /v1/realtime/translations/client_secrets`、Realtime Calls（`accept`、`hangup`、`refer`、`reject`），也不提供 legacy beta REST session / transcription-session 建立。
+
+瀏覽器或行動端應把長期 API Key 保留在服務端。此端點不會簽發短期 Realtime client secret。
+
 <Note>Agent 應先透過 `/v1/models` 找到支援 realtime 的模型，再開啟 socket。</Note>
 
 ## 連線
@@ -29,7 +35,10 @@ const socket = new WebSocket('wss://api.tokenlab.sh/v1/realtime?model=gpt-realti
 });
 
 socket.on('open', () => {
-  socket.send(JSON.stringify({ type: 'session.start' }));
+  socket.send(JSON.stringify({
+    type: 'session.update',
+    session: { modalities: ['text', 'audio'] }
+  }));
 });
 
 socket.on('message', (data) => {
@@ -71,4 +80,4 @@ TokenLab 會在用戶端與路由後的即時提供方之間轉發 WebSocket 訊
 ## 重要欄位
 
 <ResponseField name="type" type="string">API 返回的事件或訊息類型。</ResponseField>
-<ResponseField name="session.id" type="string">用於後續呼叫和支援排障的識別符。</ResponseField>
+<ResponseField name="session.id" type="string">即時提供方回傳的標識符；可用於日誌和支援排障，不是 REST session URL。</ResponseField>
