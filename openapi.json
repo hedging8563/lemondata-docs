@@ -2997,7 +2997,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ManagementApiKey"
+                  "$ref": "#/components/schemas/ManagementCreatedApiKey"
                 }
               }
             }
@@ -3199,7 +3199,8 @@
                 "rerank",
                 "translation",
                 "music",
-                "3d"
+                "3d",
+                "realtime"
               ]
             },
             "description": "Filter by public request scene."
@@ -3285,23 +3286,39 @@
             "name": "model",
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 100
             },
-            "description": "Filter by requested model name."
+            "description": "Filter by requested model name. Maximum length 100."
           },
           {
             "name": "modelVendor",
             "in": "query",
             "schema": {
-              "type": "string"
-            }
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Filter by public model vendor. Maximum length 100."
           },
           {
             "name": "scene",
             "in": "query",
             "schema": {
-              "type": "string"
-            }
+              "type": "string",
+              "enum": [
+                "chat",
+                "image",
+                "audio",
+                "video",
+                "embedding",
+                "rerank",
+                "translation",
+                "music",
+                "3d",
+                "realtime"
+              ]
+            },
+            "description": "Filter by public request scene."
           },
           {
             "name": "accessChannel",
@@ -3312,7 +3329,8 @@
                 "platform",
                 "byok"
               ]
-            }
+            },
+            "description": "Filter by access channel: platform billing or your own provider key (BYOK)."
           },
           {
             "name": "startDate",
@@ -8304,8 +8322,11 @@
           "object",
           "organization_id",
           "balance",
+          "balance_decimal",
           "total_recharge",
-          "total_used"
+          "total_recharge_decimal",
+          "total_used",
+          "total_used_decimal"
         ],
         "properties": {
           "object": {
@@ -8320,15 +8341,27 @@
           },
           "balance": {
             "type": "number",
-            "description": "Current organization balance in USD."
+            "description": "Current organization balance in USD as a JSON number for display."
           },
           "total_recharge": {
             "type": "number",
-            "description": "Total successful organization recharge amount in USD."
+            "description": "Total successful organization recharge amount in USD as a JSON number for display."
           },
           "total_used": {
             "type": "number",
-            "description": "Total organization usage spend in USD."
+            "description": "Total organization usage spend in USD as a JSON number for display."
+          },
+          "balance_decimal": {
+            "type": "string",
+            "description": "Exact current organization balance in USD as a decimal string for reconciliation."
+          },
+          "total_recharge_decimal": {
+            "type": "string",
+            "description": "Exact total successful organization recharge amount in USD as a decimal string for reconciliation."
+          },
+          "total_used_decimal": {
+            "type": "string",
+            "description": "Exact total organization usage spend in USD as a decimal string for reconciliation."
           }
         }
       },
@@ -8339,8 +8372,13 @@
           "name",
           "key_prefix",
           "status",
+          "limit_amount",
+          "limit_amount_decimal",
           "used_amount",
+          "used_amount_decimal",
           "models",
+          "expires_at",
+          "last_used_at",
           "created_at"
         ],
         "properties": {
@@ -8358,20 +8396,20 @@
             "enum": [
               "active",
               "inactive",
-              "suspended",
               "revoked"
-            ]
+            ],
+            "description": "Lifecycle status for the user API key: active, inactive, or revoked."
           },
           "limit_amount": {
             "type": [
               "number",
               "null"
             ],
-            "description": "API key spending cap in USD. null means unlimited."
+            "description": "API key spending cap in USD as a JSON number for display. null means unlimited."
           },
           "used_amount": {
             "type": "number",
-            "description": "Accumulated API key usage in USD."
+            "description": "Accumulated API key usage in USD as a JSON number for display."
           },
           "models": {
             "type": "array",
@@ -8400,6 +8438,17 @@
           "key": {
             "type": "string",
             "description": "Returned only on creation"
+          },
+          "limit_amount_decimal": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact API key spending cap in USD as a decimal string. null means unlimited."
+          },
+          "used_amount_decimal": {
+            "type": "string",
+            "description": "Exact accumulated API key usage in USD as a decimal string for reconciliation."
           }
         }
       },
@@ -8407,7 +8456,8 @@
         "type": "object",
         "required": [
           "object",
-          "data"
+          "data",
+          "pagination"
         ],
         "properties": {
           "object": {
@@ -8421,18 +8471,54 @@
             "items": {
               "$ref": "#/components/schemas/ManagementApiKey"
             }
+          },
+          "pagination": {
+            "type": "object",
+            "required": [
+              "page",
+              "limit",
+              "total",
+              "totalPages"
+            ],
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "totalPages": {
+                "type": "integer"
+              }
+            }
           }
         }
       },
       "ManagementUsageItem": {
         "type": "object",
         "required": [
+          "request_id",
+          "billing_transaction_id",
           "model",
+          "logical_model",
+          "model_vendor",
           "scene",
           "access_channel",
           "usage_unit",
           "usage_quantity",
+          "usage_quantity_decimal",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "cache_write_tokens_5m",
+          "cache_write_tokens_1h",
           "cost",
+          "cost_decimal",
           "created_at"
         ],
         "properties": {
@@ -8456,7 +8542,10 @@
             ]
           },
           "scene": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "access_channel": {
             "type": "string",
@@ -8488,7 +8577,7 @@
           },
           "cost": {
             "type": "number",
-            "description": "Request cost in USD."
+            "description": "Request cost in USD as a JSON number for display."
           },
           "created_at": {
             "type": "string",
@@ -8496,6 +8585,23 @@
           },
           "model": {
             "type": "string"
+          },
+          "logical_model": {
+            "type": "string"
+          },
+          "usage_quantity_decimal": {
+            "type": "string",
+            "description": "Exact usage quantity as a decimal string for non-token units."
+          },
+          "cache_write_tokens_5m": {
+            "type": "integer"
+          },
+          "cache_write_tokens_1h": {
+            "type": "integer"
+          },
+          "cost_decimal": {
+            "type": "string",
+            "description": "Exact request cost in USD as a decimal string for reconciliation."
           }
         }
       },
@@ -8504,6 +8610,10 @@
         "required": [
           "total_requests",
           "total_cost",
+          "total_cost_decimal",
+          "total_prompt_tokens",
+          "total_completion_tokens",
+          "total_tokens",
           "usage_unit_breakdown"
         ],
         "properties": {
@@ -8512,7 +8622,7 @@
           },
           "total_cost": {
             "type": "number",
-            "description": "Aggregated total cost in USD."
+            "description": "Aggregated total cost in USD as a JSON number for display."
           },
           "total_prompt_tokens": {
             "type": "integer"
@@ -8540,6 +8650,10 @@
                 }
               }
             }
+          },
+          "total_cost_decimal": {
+            "type": "string",
+            "description": "Exact aggregated total cost in USD as a decimal string for reconciliation."
           }
         }
       },
@@ -8558,7 +8672,8 @@
             "type": "integer"
           },
           "cost": {
-            "type": "number"
+            "type": "number",
+            "description": "Cost in USD as a JSON number for display."
           }
         }
       },
@@ -8567,17 +8682,26 @@
         "required": [
           "scene",
           "requests",
-          "cost"
+          "cost",
+          "cost_decimal"
         ],
         "properties": {
           "scene": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "requests": {
             "type": "integer"
           },
           "cost": {
-            "type": "number"
+            "type": "number",
+            "description": "Cost in USD as a JSON number for display."
+          },
+          "cost_decimal": {
+            "type": "string",
+            "description": "Exact cost in USD as a decimal string for reconciliation."
           }
         }
       },
@@ -8600,7 +8724,8 @@
             "type": "integer"
           },
           "cost": {
-            "type": "number"
+            "type": "number",
+            "description": "Cost in USD as a JSON number for display."
           }
         }
       },
@@ -8608,7 +8733,8 @@
         "type": "object",
         "required": [
           "date",
-          "cost"
+          "cost",
+          "cost_decimal"
         ],
         "properties": {
           "date": {
@@ -8616,7 +8742,12 @@
             "format": "date-time"
           },
           "cost": {
-            "type": "number"
+            "type": "number",
+            "description": "Cost in USD as a JSON number for display."
+          },
+          "cost_decimal": {
+            "type": "string",
+            "description": "Exact cost in USD as a decimal string for reconciliation."
           }
         }
       },
@@ -8648,6 +8779,12 @@
             }
           },
           "by_model": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManagementModelBreakdown"
+            }
+          },
+          "by_logical_model": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ManagementModelBreakdown"
@@ -10608,10 +10745,13 @@
         "type": "object",
         "required": [
           "model",
+          "logical_model",
           "model_vendor",
           "requests",
           "cost",
-          "usage_quantity"
+          "cost_decimal",
+          "usage_quantity",
+          "usage_quantity_decimal"
         ],
         "properties": {
           "model_vendor": {
@@ -10624,12 +10764,23 @@
             "type": "integer"
           },
           "cost": {
-            "type": "number"
+            "type": "number",
+            "description": "Cost in USD as a JSON number for display."
           },
           "usage_quantity": {
             "type": "number"
           },
           "model": {
+            "type": "string"
+          },
+          "logical_model": {
+            "type": "string"
+          },
+          "cost_decimal": {
+            "type": "string",
+            "description": "Exact cost in USD as a decimal string for reconciliation."
+          },
+          "usage_quantity_decimal": {
             "type": "string"
           }
         }
@@ -11060,6 +11211,25 @@
           }
         },
         "additionalProperties": true
+      },
+      "ManagementCreatedApiKey": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ManagementApiKey"
+          },
+          {
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Full secret API key value returned only on creation. Store it immediately."
+              }
+            }
+          }
+        ]
       }
     },
     "responses": {
