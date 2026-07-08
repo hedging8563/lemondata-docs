@@ -28,9 +28,28 @@ Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, refe
 
 ## Volc-Compatible Seedance Endpoint
 
-If your integration already sends Volc-style Seedance requests, you can use the compatibility endpoint instead of reshaping the body for `/v1/videos/generations`. Send your TokenLab API key as `Authorization: Bearer ...`, use `POST /api/v3/contents/generations/tasks` for REST-style creation, or use `/api/v3?Action=CreateContentsGenerationsTasks` for Action-style requests. The response returns a `cgt-...` task ID and status responses use `queued`, `running`, `succeeded`, `failed`, `cancelled`, or `expired`.
+Use this endpoint when your existing system already builds Seedance requests with Volc-style `content[]`, REST task paths, or Action names, and you want to change the base URL and authentication without rewriting the request shape. For new cross-model video integrations, prefer TokenLab's unified [`/v1/videos/generations`](/api-reference/video/create-video) API.
 
-This compatibility endpoint accepts `content[]` items such as `text`, `image_url`, `video_url`, `audio_url`, and `draft_task`. Image roles such as `first_frame`, `last_frame`, and `reference_image` are preserved. `callback_url` is not supported yet; poll the task endpoint instead.
+### Migration Flow
+
+1. Authenticate with `Authorization: Bearer <TOKENLAB_API_KEY>`. Volc AK/SK signatures are not accepted in this version.
+2. Create with REST `POST /api/v3/contents/generations/tasks`, or with Action `POST /api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01`.
+3. Store the returned `cgt-...` task ID and poll the task endpoint until `status` is `succeeded`, `failed`, `cancelled`, or `expired`.
+4. `callback_url` is rejected for now, so do not rely on completion callbacks for this endpoint.
+
+### Request Body Notes
+
+- `content[]` accepts `text`, `image_url`, `video_url`, `audio_url`, and `draft_task` items.
+- For `image_url`, omit `role` or use `first_frame` for image-to-video; use `last_frame` together with a first frame; use `reference_image` for reference-to-video.
+- Image URLs are prepared as reusable TokenLab materials when the selected Seedance model needs material references. If preparation takes longer than 60 seconds, the create request returns a retryable material-preparing error.
+- Common generation fields include `model`, `ratio`, `duration`, `resolution`, `generate_audio`, `watermark`, `return_last_frame`, `seed`, `priority`, `execution_expires_after`, and `safety_identifier`.
+
+### Reference Pages
+
+- [Create Task (Volc Compatible)](/api-reference/video/create-volc-compatible-seedance-task)
+- [Get Task (Volc Compatible)](/api-reference/video/get-volc-compatible-seedance-task)
+- [List Tasks (Volc Compatible)](/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Cancel Task (Volc Compatible)](/api-reference/video/delete-volc-compatible-seedance-task)
 
 ## Material Concepts
 

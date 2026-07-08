@@ -131,7 +131,25 @@ Seedance 2.0 的定价取决于输出分辨率、输入类型和模型。在硬�
 
 ## 火山风格 Seedance 兼容入口
 
-如果你的系统已经按火山风格发送 Seedance 请求，可以使用兼容入口，而不必把请求体改成 `/v1/videos/generations` 的统一格式。请使用 TokenLab API Key 作为 `Authorization: Bearer ...`，REST 创建使用 `POST /api/v3/contents/generations/tasks`，Action 风格请求使用 `/api/v3?Action=CreateContentsGenerationsTasks`。创建响应返回 `cgt-...` 任务 ID；状态响应使用 `queued`、`running`、`succeeded`、`failed`、`cancelled` 或 `expired`。
+如果你的系统已经按火山风格组织 Seedance 请求，例如使用 `content[]`、REST 任务路径或 Action 名称，可以使用兼容入口，只替换域名和鉴权方式，不必先把请求体改成 `/v1/videos/generations` 的统一格式。新的跨模型视频接入仍建议优先使用 TokenLab 统一的 [`/v1/videos/generations`](/zh/api-reference/video/create-video)。
 
-该入口接受 `content[]` 中的 `text`、`image_url`、`video_url`、`audio_url` 和 `draft_task`。`first_frame`、`last_frame`、`reference_image` 等图片角色会被保留。`callback_url` 暂不支持；请轮询任务接口。
+### 接入流程
 
+1. 使用 `Authorization: Bearer <TOKENLAB_API_KEY>` 鉴权。当前版本不接受火山 AK/SK 签名。
+2. REST 创建使用 `POST /api/v3/contents/generations/tasks`；Action 创建使用 `POST /api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01`。
+3. 创建响应返回 `cgt-...` 任务 ID。用查询任务接口轮询，直到 `status` 变为 `succeeded`、`failed`、`cancelled` 或 `expired`。
+4. `callback_url` 当前会被明确拒绝，请不要把它当作可用回调；本入口使用轮询拿结果。
+
+### 请求体要点
+
+- `content[]` 支持 `text`、`image_url`、`video_url`、`audio_url` 和 `draft_task`。
+- `image_url` 不传 `role` 或传 `first_frame` 时表示首帧；`last_frame` 必须和首帧一起使用；`reference_image` 表示参考图。
+- 图片 URL 在需要素材引用的 Seedance 模型里会自动准备为 TokenLab 可复用素材。若 60 秒内仍未准备完成，创建请求会返回可重试的素材准备中错误。
+- 常用生成字段包括 `model`、`ratio`、`duration`、`resolution`、`generate_audio`、`watermark`、`return_last_frame`、`seed`、`priority`、`execution_expires_after` 和 `safety_identifier`。
+
+### 参考页面
+
+- [创建任务（火山兼容）](/zh/api-reference/video/create-volc-compatible-seedance-task)
+- [查询任务（火山兼容）](/zh/api-reference/video/get-volc-compatible-seedance-task)
+- [任务列表（火山兼容）](/zh/api-reference/video/list-volc-compatible-seedance-tasks)
+- [取消任务（火山兼容）](/zh/api-reference/video/delete-volc-compatible-seedance-task)

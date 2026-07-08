@@ -1,22 +1,53 @@
 ---
-title: "Get Seedance Task (Volc Compatible)"
+title: "Get Task (Volc Compatible)"
 openapi: "GET /api/v3/contents/generations/tasks/{id}"
-description: "Read a Volc-style Seedance task response by compatibility task ID."
+description: "Get a Seedance compatibility task by its cgt task ID."
 ---
 
 ## Overview
 
-These endpoints are for teams that already use the Volc-style Seedance task shape. Authentication uses your TokenLab Bearer API key. The returned task ID starts with `cgt-`; poll the status endpoint until `status` becomes `succeeded`, `failed`, `cancelled`, or `expired`.
+Use the `cgt-...` ID returned by create. Poll every few seconds while the task is `queued` or `running`. Stop when the task is `succeeded`, `failed`, `cancelled`, or `expired`.
 
 See also [Seedance 2.0 Video Models](/guides/seedance-2-video) and [Video Generation](/guides/video-generation).
 
-## Response Shape
+## Status Values
 
-The task response uses `queued`, `running`, `succeeded`, `failed`, `cancelled`, or `expired`. Successful tasks return `content.video_url`; `content.last_frame_url`, echoed request parameters such as `return_last_frame` and `watermark`, `usage`, and `progress` appear when available. `error` is `null` when there is no failure.
+- `queued`: accepted and waiting to run.
+- `running`: generation is in progress.
+- `succeeded`: result is ready and `content.video_url` is present.
+- `failed`: generation failed; inspect `error.code` and `error.message`.
+- `cancelled`: the task was cancelled before completion.
+- `expired`: the task expired before completion.
+
+## Response Fields
+
+- `id`: compatibility task ID, starting with `cgt-`.
+- `model`: model identifier echoed for compatibility.
+- `status`: one of the status values above.
+- `progress`: returned only when a real progress value is available.
+- `content.video_url`: final video URL on success.
+- `content.last_frame_url`: present only when requested and available.
+- `usage`: token usage when available.
+- `created_at` and `updated_at`: task timestamps.
 
 ## Example
 
 ```bash
 curl https://api.tokenlab.sh/api/v3/contents/generations/tasks/cgt-0123456789abcdef0123456789abcdef \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+```json
+{
+  "id": "cgt-0123456789abcdef0123456789abcdef",
+  "model": "doubao-seedance-2-0-260128",
+  "status": "succeeded",
+  "content": {
+    "video_url": "https://example.com/result.mp4"
+  },
+  "usage": {
+    "completion_tokens": 123456
+  },
+  "error": null
+}
 ```
