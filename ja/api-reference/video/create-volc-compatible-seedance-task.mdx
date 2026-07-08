@@ -1,0 +1,49 @@
+---
+title: "Seedance タスクを作成（Volc 互換）"
+openapi: "POST /api/v3/contents/generations/tasks"
+description: "Volc 形式の REST body または Action リクエストで Seedance 2.0 タスクを作成します。"
+---
+
+## 概要
+
+これらのエンドポイントは、Volc 形式の Seedance タスク構造をすでに利用しているチーム向けです。認証には TokenLab Bearer API Key を使います。返されるタスク ID は `cgt-` で始まります。`status` が `succeeded`、`failed`、`cancelled`、`expired` のいずれかになるまでポーリングしてください。
+
+Action ディスパッチャーとして `CreateContentsGenerationsTasks`、`GetContentsGenerationsTask`、`ListContentsGenerationsTasks`、`DeleteContentsGenerationsTasks` も呼び出せます。`Action` と `Version` は大文字小文字を区別しません。`Version` は省略可能で、指定する場合は `2024-01-01` である必要があります。
+
+このバージョンでは `callback_url` は受け付けません。完了イベントを見落とさないよう、タスクステータスをポーリングしてください。
+
+関連項目 [Seedance 2.0 動画モデル](/ja/guides/seedance-2-video) および [動画生成](/ja/guides/video-generation).
+
+## コンテンツ規則
+
+- プロンプト文には `type=text` を使います。
+- `role` なしの `type=image_url` は最初のフレームとして扱われます。明示的に `role=first_frame` を指定することもできます。
+- `role=last_frame` は最初のフレームと一緒にのみ使用できます。
+- 参照メディアには `role=reference_image`、`reference_video`、`reference_audio` を使います。
+- 1 つのリクエストで首尾フレーム入力と参照メディアを混在させないでください。
+
+## パラメータ補足
+
+- `ratio` は `16:9`、`4:3`、`1:1`、`3:4`、`9:16`、`21:9`、`adaptive` を受け付けます。
+- `generate_audio` の既定値は `true` です。無音動画が必要な場合は `false` を指定します。
+- `service_tier=default` は受け付けます。Seedance 2.0 互換タスクでは `service_tier=flex`、`frames`、`camera_fixed=true` は拒否されます。
+- 選択したモデルが対応している場合、`tools` には `{ "type": "web_search" }` のようなオブジェクトを渡せます。不正な tool 項目は無視せず拒否します。
+
+## 例
+
+```bash
+curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "doubao-seedance-2-0-260128",
+    "content": [
+      {"type": "text", "text": "A cinematic forest at sunset"},
+      {"type": "image_url", "role": "reference_image", "image_url": {"url": "https://example.com/ref.png"}}
+    ],
+    "ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p",
+    "generate_audio": true
+  }'
+```

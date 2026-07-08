@@ -1,0 +1,49 @@
+---
+title: "إنشاء مهمة Seedance (متوافق مع Volc)"
+openapi: "POST /api/v3/contents/generations/tasks"
+description: "أنشئ مهمة Seedance 2.0 باستخدام جسم REST بأسلوب Volc أو طلب Action."
+---
+
+## نظرة عامة
+
+هذه الواجهات مخصصة للفرق التي تستخدم بالفعل شكل مهام Seedance بأسلوب Volc. يتم التوثيق باستخدام TokenLab Bearer API key. يبدأ معرف المهمة المرجع بـ `cgt-`؛ قم بالاستعلام عن الحالة حتى تصبح `status` إحدى `succeeded` أو `failed` أو `cancelled` أو `expired`.
+
+يمكنك أيضا استدعاء موزع Action باستخدام `CreateContentsGenerationsTasks` أو `GetContentsGenerationsTask` أو `ListContentsGenerationsTasks` أو `DeleteContentsGenerationsTasks`. لا يميز `Action` و `Version` بين الأحرف الكبيرة والصغيرة. يمكن حذف `Version`؛ وإذا أرسل فيجب أن يكون `2024-01-01`.
+
+لا يتم قبول `callback_url` في هذا الإصدار. استعلم عن حالة المهمة حتى لا تفوت أحداث الاكتمال.
+
+انظر أيضا [نماذج فيديو Seedance 2.0](/ar/guides/seedance-2-video) و [توليد الفيديو](/ar/guides/video-generation).
+
+## قواعد المحتوى
+
+- استخدم `type=text` لنص الطلب.
+- يعامل `type=image_url` بدون `role` كإطار أول، أو يمكنك تعيين `role=first_frame`.
+- استخدم `role=last_frame` فقط مع إطار أول.
+- استخدم `role=reference_image` أو `reference_video` أو `reference_audio` للوسائط المرجعية.
+- لا تخلط مدخلات الإطار الأول/الأخير مع الوسائط المرجعية في طلب واحد.
+
+## ملاحظات المعلمات
+
+- يقبل `ratio` القيم `16:9` و `4:3` و `1:1` و `3:4` و `9:16` و `21:9` أو `adaptive`.
+- القيمة الافتراضية لـ `generate_audio` هي `true`؛ اضبطها على `false` لفيديو صامت.
+- يتم قبول `service_tier=default`. ترفض مهام Seedance 2.0 المتوافقة `service_tier=flex` و `frames` و `camera_fixed=true`.
+- عندما يدعم النموذج المختار ذلك، يمكن أن يحتوي `tools` على كائنات مثل `{ "type": "web_search" }`. يتم رفض عناصر tool غير الصحيحة بدلا من تجاهلها.
+
+## مثال
+
+```bash
+curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "doubao-seedance-2-0-260128",
+    "content": [
+      {"type": "text", "text": "A cinematic forest at sunset"},
+      {"type": "image_url", "role": "reference_image", "image_url": {"url": "https://example.com/ref.png"}}
+    ],
+    "ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p",
+    "generate_audio": true
+  }'
+```

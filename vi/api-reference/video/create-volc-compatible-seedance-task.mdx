@@ -1,0 +1,49 @@
+---
+title: "Tạo tác vụ Seedance (tương thích Volc)"
+openapi: "POST /api/v3/contents/generations/tasks"
+description: "Tạo tác vụ Seedance 2.0 bằng body REST kiểu Volc hoặc yêu cầu Action."
+---
+
+## Tổng quan
+
+Các endpoint này dành cho nhóm đã dùng cấu trúc tác vụ Seedance kiểu Volc. Xác thực bằng TokenLab Bearer API key. ID tác vụ trả về bắt đầu bằng `cgt-`; hãy polling trạng thái cho đến khi `status` là `succeeded`, `failed`, `cancelled` hoặc `expired`.
+
+Bạn cũng có thể gọi dispatcher Action với `CreateContentsGenerationsTasks`, `GetContentsGenerationsTask`, `ListContentsGenerationsTasks` hoặc `DeleteContentsGenerationsTasks`. `Action` và `Version` không phân biệt hoa thường. Có thể bỏ qua `Version`; nếu truyền thì phải là `2024-01-01`.
+
+Phiên bản này không nhận `callback_url`. Hãy polling trạng thái tác vụ để không bỏ lỡ sự kiện hoàn tất.
+
+Xem thêm [Mô hình video Seedance 2.0](/vi/guides/seedance-2-video) và [Tạo video](/vi/guides/video-generation).
+
+## Quy tắc nội dung
+
+- Dùng `type=text` cho văn bản prompt.
+- `type=image_url` không có `role` được xử lý như khung đầu; bạn cũng có thể đặt `role=first_frame`.
+- Chỉ dùng `role=last_frame` cùng với khung đầu.
+- Dùng `role=reference_image`, `reference_video` hoặc `reference_audio` cho media tham chiếu.
+- Không trộn đầu vào khung đầu/cuối với media tham chiếu trong cùng một yêu cầu.
+
+## Ghi chú tham số
+
+- `ratio` chấp nhận `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9` hoặc `adaptive`.
+- `generate_audio` mặc định là `true`; đặt `false` để tạo video không âm thanh.
+- `service_tier=default` được chấp nhận. Tác vụ tương thích Seedance 2.0 từ chối `service_tier=flex`, `frames` và `camera_fixed=true`.
+- Khi mô hình đã chọn hỗ trợ, `tools` có thể chứa các object như `{ "type": "web_search" }`. Mục tool sai định dạng sẽ bị từ chối thay vì bị bỏ qua.
+
+## Ví dụ
+
+```bash
+curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "doubao-seedance-2-0-260128",
+    "content": [
+      {"type": "text", "text": "A cinematic forest at sunset"},
+      {"type": "image_url", "role": "reference_image", "image_url": {"url": "https://example.com/ref.png"}}
+    ],
+    "ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p",
+    "generate_audio": true
+  }'
+```

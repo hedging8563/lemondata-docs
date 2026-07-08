@@ -1,0 +1,49 @@
+---
+title: "Seedance Görevi Oluştur (Volc Uyumlu)"
+openapi: "POST /api/v3/contents/generations/tasks"
+description: "Volc tarzı REST gövdesi veya Action isteğiyle Seedance 2.0 görevi oluşturur."
+---
+
+## Genel bakış
+
+Bu endpoint’ler, Volc tarzı Seedance görev şeklini zaten kullanan ekipler içindir. Kimlik doğrulama TokenLab Bearer API key ile yapılır. Dönen görev ID’si `cgt-` ile başlar; `status` `succeeded`, `failed`, `cancelled` veya `expired` olana kadar durumu sorgulayın.
+
+Action dispatcher’ı `CreateContentsGenerationsTasks`, `GetContentsGenerationsTask`, `ListContentsGenerationsTasks` veya `DeleteContentsGenerationsTasks` ile de çağırabilirsiniz. `Action` ve `Version` büyük/küçük harfe duyarlı değildir. `Version` atlanabilir; gönderilirse `2024-01-01` olmalıdır.
+
+Bu sürümde `callback_url` kabul edilmez. Tamamlanma olaylarını kaçırmamak için görev durumunu sorgulayın.
+
+Ayrıca bkz. [Seedance 2.0 Video Modelleri](/tr/guides/seedance-2-video) ve [Video Oluşturma](/tr/guides/video-generation).
+
+## İçerik kuralları
+
+- Prompt metni için `type=text` kullanın.
+- `role` olmayan `type=image_url` ilk kare olarak işlenir; isterseniz `role=first_frame` da belirtebilirsiniz.
+- `role=last_frame` yalnızca ilk kareyle birlikte kullanılabilir.
+- Referans medya için `role=reference_image`, `reference_video` veya `reference_audio` kullanın.
+- Aynı istekte ilk/son kare girdileriyle referans medyayı karıştırmayın.
+
+## Parametre notları
+
+- `ratio` `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9` veya `adaptive` kabul eder.
+- `generate_audio` varsayılan olarak `true` değerindedir; sessiz video için `false` gönderin.
+- `service_tier=default` kabul edilir. Seedance 2.0 uyumlu görevleri `service_tier=flex`, `frames` ve `camera_fixed=true` değerlerini reddeder.
+- Seçilen model destekliyorsa `tools`, `{ "type": "web_search" }` gibi nesneler içerebilir. Hatalı tool öğeleri yok sayılmak yerine reddedilir.
+
+## Örnek
+
+```bash
+curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "doubao-seedance-2-0-260128",
+    "content": [
+      {"type": "text", "text": "A cinematic forest at sunset"},
+      {"type": "image_url", "role": "reference_image", "image_url": {"url": "https://example.com/ref.png"}}
+    ],
+    "ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p",
+    "generate_audio": true
+  }'
+```
