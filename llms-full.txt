@@ -6362,6 +6362,7 @@ This page is intentionally narrower than a marketing matrix:
 | **Codex CLI** | Supported with model/path limits | OpenAI Responses | Treat `/v1/responses` as an advanced path for Codex-specific workflows; some Responses-only fields are not guaranteed across every model and routed path |
 | **Gemini CLI** | Best-effort / experimental | Gemini | Custom TokenLab base URL flow is not an official Gemini CLI integration |
 | **OpenCode** | Supported | OpenAI-compatible | Use an OpenAI-compatible provider by default; move to a Responses-based provider only when you explicitly need it |
+| **OpenHands** | Supported | OpenAI-compatible | Use the LiteLLM/OpenAI-compatible path with `openai/` and TokenLab's `/v1` base URL |
 
 > Note: Other OpenAI-compatible editors and agent tools often work with the same base URL pattern; check the tool’s own custom-provider support before using it in production.
 
@@ -6383,13 +6384,21 @@ This page is intentionally narrower than a marketing matrix:
 | **LangChain** | Python/JS | Supported standard surfaces | `ChatOpenAI` and `OpenAIEmbeddings` are the intended scope; vendor-native extras are out of scope |
 | **LlamaIndex** | Python | Supported via `OpenAILike` | Use `OpenAILike`, not the built-in OpenAI classes, for third-party gateways such as TokenLab |
 | **OpenAI Agents SDK** | Python | Supported chat-completions path | Use `AsyncOpenAI(base_url="https://api.tokenlab.sh/v1")` with `OpenAIChatCompletionsModel`; native Responses behavior depends on the selected model and route |
+| **AutoGen** | Python | Supported custom endpoint path | Use `OpenAIChatCompletionClient` with `base_url: https://api.tokenlab.sh/v1` |
+| **Semantic Kernel** | .NET | Supported custom endpoint path | Use the OpenAI chat completion connector custom endpoint and point it at `https://api.tokenlab.sh/v1` |
+| **CrewAI** | Python | Supported custom endpoint path | Set `OPENAI_API_BASE` or `LLM(base_url=...)` to TokenLab's `/v1` endpoint |
+| **Pydantic AI** | Python | Supported OpenAI-compatible provider path | Use `OpenAIChatModel` with `OpenAIProvider(base_url="https://api.tokenlab.sh/v1")` |
+| **DSPy** | Python | Supported custom endpoint path | Use `dspy.LM("openai/", api_base="https://api.tokenlab.sh/v1")` |
 | **Langflow** | Python / Web | Supported with scope limits | Use the OpenAI component's **OpenAI API Base** field with TokenLab's `/v1` endpoint |
 | **Dify** | - | Supported with scope limits | OpenAI provider and chat-completions-oriented flows are the intended path; not a fit for Codex-specific Responses or WebSocket behavior |
 | **Flowise** | Web / Node | Supported with scope limits | Use the TokenLab chat node when available, or a ChatOpenAI-compatible node pointed at `https://api.tokenlab.sh/v1` |
+| **Mem0** | Python | Supported custom endpoint path | Keep the OpenAI provider and set `openai_base_url` to TokenLab's `/v1` endpoint |
 | **Agno** | Python | Supported path | Use the TokenLab model wrapper when available, or the OpenAI-compatible base URL path |
 | **Promptfoo** | CLI / Node | Supported path | Use OpenAI chat or Responses providers with `apiBaseUrl: https://api.tokenlab.sh/v1` |
 | **Portkey Gateway** | Gateway | Supported path | Use TokenLab as an upstream provider for OpenAI-compatible chat and Responses traffic |
 | **Helicone** | Gateway / Observability | Supported observability path | Route OpenAI-compatible requests through Helicone Gateway with `Helicone-Target-Url: https://api.tokenlab.sh` |
+| **Phoenix** | Observability | Supported tracing path | Auto-instrument the OpenAI SDK client configured with TokenLab's `/v1` base URL |
+| **Opik** | Observability | Supported tracing path | Wrap an OpenAI SDK client configured with TokenLab's `/v1` base URL |
 | **LangBot** | Bot Platform | Supported chat path | Use the TokenLab requester when available, or configure an OpenAI-compatible requester with TokenLab's `/v1` endpoint |
 | **Open WebUI** | Web Chat | Supported chat-app path | Add TokenLab as an OpenAI-compatible API connection and refresh the model list |
 | **Chatbox / DeepChat / Jan / LibreChat / Cherry Studio** | Desktop / Web | Supported chat-app path | Use each app's OpenAI-compatible custom provider flow; these apps are usually chat-completions oriented |
@@ -8116,6 +8125,56 @@ Always review AI-generated code before applying changes to your project.
 
 ---
 
+### OpenHands
+
+> Configure TokenLab models for OpenHands CLI and headless workflows
+
+URL: https://docs.tokenlab.sh/integrations/openhands
+
+## Overview
+
+OpenHands can use TokenLab through its LiteLLM/OpenAI-compatible model configuration, especially for CLI and headless workflows where you provide the model, API key, and base URL.
+
+> Note: **Type**: Coding Agent
+
+**Primary Path**: OpenAI-compatible model configuration
+
+**Support Confidence**: Supported custom endpoint path
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## Model Settings
+
+Use:
+
+```text
+Model: openai/claude-sonnet-5
+API key: sk-your-tokenlab-key
+Base URL: https://api.tokenlab.sh/v1
+```
+
+The `openai/` prefix tells the LiteLLM-backed path to use an OpenAI-compatible provider configuration.
+
+## Headless Setup
+
+If you are preparing local defaults for CLI or headless usage, run the OpenHands setup flow and enter:
+
+```bash
+make setup-config
+```
+
+When prompted for model details, use the TokenLab model ID with the `openai/` prefix and TokenLab's `/v1` base URL.
+
+## Model Suggestions
+
+Use `claude-sonnet-5` or `gpt-5.4` for coding-agent planning, `gpt-5.4-mini` for faster routine loops, and `deepseek-v4-pro` when you want a strong alternative reasoning model.
+
+---
+
 
 ## Native SDKs
 
@@ -9014,6 +9073,21 @@ response = llm.complete("Explain TokenLab in one sentence.")
 print(response.text)
 ```
 
+## Minimal OpenAILike LLM
+
+```python
+from llama_index.llms.openai_like import OpenAILike
+
+llm = OpenAILike(
+    model="claude-sonnet-5",
+    api_base="https://api.tokenlab.sh/v1",
+    api_key="sk-your-tokenlab-key",
+    context_window=200000,
+    is_chat_model=True,
+    is_function_calling_model=True,
+)
+```
+
 ## Chat
 
 ```python
@@ -9157,6 +9231,321 @@ asyncio.run(main())
 ## Scope
 
 This path uses Chat Completions compatibility. TokenLab's native Responses endpoint is available at `https://api.tokenlab.sh/v1/responses`, but SDK features that depend on OpenAI-specific Responses semantics should be verified with the exact model and workflow before production use.
+
+---
+
+### AutoGen
+
+> Use TokenLab models with Microsoft AutoGen through OpenAI-compatible clients
+
+URL: https://docs.tokenlab.sh/integrations/autogen
+
+## Overview
+
+AutoGen can use TokenLab through `OpenAIChatCompletionClient`, the same OpenAI-compatible client path it uses for other custom Chat Completions endpoints.
+
+> Note: **Type**: Agent Framework
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported custom endpoint path
+
+## Installation
+
+```bash
+pip install -U autogen-agentchat "autogen-ext[openai]" pyyaml
+```
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## YAML Model Config
+
+Use TokenLab's `/v1` endpoint as `base_url`:
+
+```yaml
+provider: autogen_ext.models.openai.OpenAIChatCompletionClient
+config:
+  model: claude-sonnet-5
+  base_url: https://api.tokenlab.sh/v1
+  api_key: ${TOKENLAB_API_KEY}
+  model_info:
+    function_calling: true
+    json_output: true
+    vision: false
+    family: claude
+```
+
+## Python Client
+
+```python
+import os
+
+from autogen_agentchat.agents import AssistantAgent
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+
+model_client = OpenAIChatCompletionClient(
+    model="claude-sonnet-5",
+    base_url="https://api.tokenlab.sh/v1",
+    api_key=os.environ["TOKENLAB_API_KEY"],
+    model_info={
+        "function_calling": True,
+        "json_output": True,
+        "vision": False,
+        "family": "claude",
+    },
+)
+
+agent = AssistantAgent("assistant", model_client=model_client)
+```
+
+## Endpoint Notes
+
+AutoGen's OpenAI extension expects the OpenAI-compatible request shape. For provider-native features such as Anthropic Messages or Gemini `generateContent`, use TokenLab's native endpoints from a client that supports those protocols directly.
+
+---
+
+### Semantic Kernel
+
+> Connect Microsoft Semantic Kernel to TokenLab with a custom OpenAI-compatible endpoint
+
+URL: https://docs.tokenlab.sh/integrations/semantic-kernel
+
+## Overview
+
+Semantic Kernel can call TokenLab through its OpenAI custom endpoint chat completion service.
+
+> Note: **Type**: SDK / Agent Framework
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported custom endpoint path
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## .NET Kernel Builder
+
+Semantic Kernel's custom endpoint should point to the root OpenAI-compatible `/v1` endpoint, not `/v1/chat/completions`.
+
+```csharp
+using Microsoft.SemanticKernel;
+
+#pragma warning disable SKEXP0010
+
+var builder = Kernel.CreateBuilder();
+
+builder.AddOpenAIChatCompletion(
+    modelId: "gpt-5.4-mini",
+    endpoint: new Uri("https://api.tokenlab.sh/v1"),
+    apiKey: Environment.GetEnvironmentVariable("TOKENLAB_API_KEY"));
+
+var kernel = builder.Build();
+```
+
+## Basic Prompt
+
+```csharp
+var result = await kernel.InvokePromptAsync(
+    "Give me a concise checklist for evaluating an LLM gateway.");
+
+Console.WriteLine(result);
+```
+
+## Endpoint Notes
+
+Use:
+
+```text
+https://api.tokenlab.sh/v1
+```
+
+Do not use:
+
+```text
+https://api.tokenlab.sh/v1/chat/completions
+```
+
+Semantic Kernel appends the chat completions path internally for this connector.
+
+---
+
+### CrewAI
+
+> Use TokenLab models in CrewAI agents through OpenAI-compatible LLM settings
+
+URL: https://docs.tokenlab.sh/integrations/crewai
+
+## Overview
+
+CrewAI supports OpenAI-compatible LLMs by setting the model, API key, and base URL on environment variables or on the `LLM` class.
+
+> Note: **Type**: Agent Framework
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported custom endpoint path
+
+## Environment Variables
+
+```python
+import os
+
+os.environ["OPENAI_API_KEY"] = "sk-your-tokenlab-key"
+os.environ["OPENAI_API_BASE"] = "https://api.tokenlab.sh/v1"
+os.environ["OPENAI_MODEL_NAME"] = "claude-sonnet-5"
+```
+
+## LLM Class
+
+```python
+from crewai import Agent, LLM
+
+llm = LLM(
+    model="claude-sonnet-5",
+    base_url="https://api.tokenlab.sh/v1",
+    api_key="sk-your-tokenlab-key",
+)
+
+agent = Agent(
+    role="Research analyst",
+    goal="Summarize technical tradeoffs clearly",
+    backstory="You produce concise implementation notes.",
+    llm=llm,
+)
+```
+
+## Model Suggestions
+
+Use `gpt-5.4-mini` for routine crews, `claude-sonnet-5` or `gpt-5.4` for planning-heavy agents, and `deepseek-v4-flash` for faster low-cost iterations.
+
+## Endpoint Notes
+
+CrewAI's OpenAI-compatible path is best for Chat Completions style agent calls. Use TokenLab native endpoints directly only when the tool or SDK you choose can speak those native protocols.
+
+---
+
+### Pydantic AI
+
+> Use TokenLab with Pydantic AI through OpenAI-compatible models
+
+URL: https://docs.tokenlab.sh/integrations/pydantic-ai
+
+## Overview
+
+Pydantic AI can use TokenLab with `OpenAIChatModel` and `OpenAIProvider(base_url=...)`.
+
+> Note: **Type**: Agent Framework
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported OpenAI-compatible provider path
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## Basic Agent
+
+```python
+import os
+
+from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
+
+model = OpenAIChatModel(
+    "claude-sonnet-5",
+    provider=OpenAIProvider(
+        base_url="https://api.tokenlab.sh/v1",
+        api_key=os.environ["TOKENLAB_API_KEY"],
+    ),
+)
+
+agent = Agent(model)
+result = agent.run_sync("Explain one benefit of OpenAI-compatible gateways.")
+print(result.output)
+```
+
+## Tools
+
+```python
+from pydantic_ai import Agent, RunContext
+
+agent = Agent(model)
+
+@agent.tool
+def lookup_status(ctx: RunContext[None], service: str) -> str:
+    return f"{service} is online"
+
+result = agent.run_sync("Check the TokenLab status.")
+print(result.output)
+```
+
+## Endpoint Notes
+
+This path targets Pydantic AI's OpenAI Chat Completions model class. For Responses-native or provider-native protocol behavior, choose a client path that exposes that protocol directly.
+
+---
+
+### DSPy
+
+> Configure TokenLab as an OpenAI-compatible language model in DSPy
+
+URL: https://docs.tokenlab.sh/integrations/dspy
+
+## Overview
+
+DSPy can call TokenLab by using the `openai/` provider prefix with TokenLab's OpenAI-compatible `/v1` endpoint.
+
+> Note: **Type**: Programming Framework
+
+**Primary Path**: OpenAI-compatible language model calls
+
+**Support Confidence**: Supported custom endpoint path
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## Configure DSPy
+
+```python
+import os
+
+import dspy
+
+lm = dspy.LM(
+    "openai/claude-sonnet-5",
+    api_key=os.environ["TOKENLAB_API_KEY"],
+    api_base="https://api.tokenlab.sh/v1",
+)
+
+dspy.configure(lm=lm)
+```
+
+## Use a Module
+
+```python
+qa = dspy.ChainOfThought("question -> answer")
+
+response = qa(question="What should I monitor in an LLM gateway?")
+print(response.answer)
+```
+
+## Model Suggestions
+
+Use `gpt-5.4-mini` for quick experiments, `claude-sonnet-5` for stronger reasoning traces, and `deepseek-v4-flash` for fast iteration loops.
 
 ---
 
@@ -9381,6 +9770,68 @@ If the TokenLab node is not available yet, use an OpenAI-compatible chat model n
 - `claude-sonnet-5` for stronger writing and reasoning
 - `gemini-3.5-flash` for fast multimodal-friendly workflows
 - `deepseek-v4-flash` for fast code or reasoning iterations
+
+---
+
+### Mem0
+
+> Use TokenLab as an OpenAI-compatible LLM provider in Mem0 OSS
+
+URL: https://docs.tokenlab.sh/integrations/mem0
+
+## Overview
+
+Mem0 OSS can use TokenLab through its OpenAI-compatible LLM configuration by keeping `provider: "openai"` and setting `openai_base_url`.
+
+> Note: **Type**: Memory Framework
+
+**Primary Path**: OpenAI-compatible LLM configuration
+
+**Support Confidence**: Supported custom endpoint path
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## Python Configuration
+
+```python
+import os
+
+from mem0 import Memory
+
+config = {
+    "llm": {
+        "provider": "openai",
+        "config": {
+            "model": "claude-sonnet-5",
+            "api_key": os.environ["TOKENLAB_API_KEY"],
+            "openai_base_url": "https://api.tokenlab.sh/v1",
+            "temperature": 0.1,
+        },
+    },
+    "vector_store": {
+        "provider": "qdrant",
+        "config": {"host": "localhost", "port": 6333},
+    },
+}
+
+memory = Memory.from_config(config)
+```
+
+## Basic Usage
+
+```python
+memory.add("The user prefers concise engineering summaries.", user_id="demo")
+results = memory.search("How should I answer?", user_id="demo")
+print(results)
+```
+
+## Endpoint Notes
+
+This configuration covers Mem0's OpenAI-compatible LLM path. Configure embedders separately according to the vector store and embedding model you use.
 
 ---
 
@@ -9666,6 +10117,135 @@ If TokenLab is not listed yet, use the OpenAI-compatible requester:
 - `claude-sonnet-5` for longer writing and reasoning
 - `deepseek-v4-flash` for fast coding and reasoning loops
 - `gemini-3.5-flash` for fast general workflows
+
+---
+
+### Phoenix
+
+> Trace TokenLab OpenAI-compatible requests with Arize Phoenix
+
+URL: https://docs.tokenlab.sh/integrations/phoenix
+
+## Overview
+
+Phoenix can trace TokenLab requests by auto-instrumenting the OpenAI Python client configured with TokenLab's OpenAI-compatible base URL.
+
+> Note: **Type**: Observability
+
+**Primary Path**: OpenAI SDK instrumentation
+
+**Support Confidence**: Supported OpenAI-compatible tracing path
+
+## Installation
+
+```bash
+pip install arize-phoenix openinference-instrumentation-openai openai
+```
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## Register Phoenix
+
+```python
+from phoenix.otel import register
+
+tracer_provider = register(
+    project_name="tokenlab-app",
+    auto_instrument=True,
+)
+```
+
+## Call TokenLab
+
+```python
+import os
+
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ["TOKENLAB_API_KEY"],
+    base_url="https://api.tokenlab.sh/v1",
+)
+
+response = client.chat.completions.create(
+    model="claude-sonnet-5",
+    messages=[{"role": "user", "content": "Write a short haiku."}],
+)
+
+print(response.choices[0].message.content)
+```
+
+## Endpoint Notes
+
+Phoenix traces the OpenAI SDK call path. Use this page for Chat Completions style TokenLab calls. Other TokenLab native endpoints can still be traced if your application instrumentation captures the client you use for those requests.
+
+---
+
+### Opik
+
+> Trace TokenLab OpenAI-compatible requests with Opik
+
+URL: https://docs.tokenlab.sh/integrations/opik
+
+## Overview
+
+Opik can log TokenLab calls by wrapping an OpenAI client that points to TokenLab's OpenAI-compatible endpoint.
+
+> Note: **Type**: Observability
+
+**Primary Path**: OpenAI SDK tracing wrapper
+
+**Support Confidence**: Supported OpenAI-compatible tracing path
+
+## Installation
+
+```bash
+pip install opik openai
+```
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+export OPIK_PROJECT_NAME="tokenlab-integration-demo"
+```
+
+## Wrap the OpenAI Client
+
+```python
+import os
+
+from openai import OpenAI
+from opik.integrations.openai import track_openai
+
+client = OpenAI(
+    api_key=os.environ["TOKENLAB_API_KEY"],
+    base_url="https://api.tokenlab.sh/v1",
+)
+
+openai_client = track_openai(client)
+```
+
+## Log a Chat Completion
+
+```python
+completion = openai_client.chat.completions.create(
+    model="claude-sonnet-5",
+    messages=[
+        {"role": "user", "content": "Summarize why LLM observability matters."}
+    ],
+)
+
+print(completion.choices[0].message.content)
+```
+
+## Endpoint Notes
+
+This setup traces the OpenAI-compatible SDK path. If you use TokenLab native endpoints outside the OpenAI SDK, instrument that client or workflow separately.
 
 ---
 
