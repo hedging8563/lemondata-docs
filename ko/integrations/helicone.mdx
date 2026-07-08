@@ -1,0 +1,69 @@
+---
+title: "Helicone"
+description: "Helicone Gateway를 통해 TokenLab 요청 관찰하기"
+---
+
+## 개요
+
+Helicone은 TokenLab의 OpenAI 호환 요청을 Helicone Gateway를 통해 라우팅하고 TokenLab을 대상으로 지정함으로써 해당 요청을 프록시하고 관찰할 수 있습니다.
+
+<Note>
+**유형**: 관찰 가능성(Observability) 게이트웨이
+
+**기본 경로**: Helicone Gateway를 통한 OpenAI 호환 채팅 완성(chat completions)
+
+**지원 신뢰도**: 지원되는 관찰 가능성 경로
+</Note>
+
+## 환경 설정
+
+```bash
+export HELICONE_API_KEY="your-helicone-key"
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## cURL
+
+```bash
+curl --request POST \
+  --url https://gateway.helicone.ai/v1/chat/completions \
+  --header "Authorization: Bearer $TOKENLAB_API_KEY" \
+  --header "Helicone-Auth: Bearer $HELICONE_API_KEY" \
+  --header "Helicone-Target-Url: https://api.tokenlab.sh" \
+  --header "Helicone-Target-Provider: TokenLab" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "model": "gpt-5.4-mini",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hello from TokenLab through Helicone."
+      }
+    ]
+  }'
+```
+
+## OpenAI SDK
+
+```typescript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.TOKENLAB_API_KEY,
+  baseURL: "https://gateway.helicone.ai/v1",
+  defaultHeaders: {
+    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
+    "Helicone-Target-Url": "https://api.tokenlab.sh",
+    "Helicone-Target-Provider": "TokenLab",
+  },
+});
+
+const response = await client.chat.completions.create({
+  model: "claude-sonnet-5",
+  messages: [{ role: "user", content: "Write one concise product summary." }],
+});
+```
+
+## 범위
+
+이 설정은 OpenAI 호환 `/v1` 트래픽을 위한 것입니다. TokenLab은 네이티브 Responses, Anthropic Messages 및 Gemini 호환 엔드포인트도 노출합니다. 관찰 가능성 프록시가 해당 형식을 명시적으로 지원하지 않는 한, 이러한 네이티브 형식에는 직접 TokenLab 경로를 사용하십시오.

@@ -1,28 +1,28 @@
 ---
-title: "Compatibilidade de IDE e SDK"
-description: "Orientações de compatibilidade baseadas em evidências para ferramentas de codificação AI, SDKs e frameworks"
+title: "Compatibilidade de IDE & SDK"
+description: "Diretrizes de compatibilidade baseadas em evidências para ferramentas de codificação, SDKs e frameworks de IA"
 ---
 
 ## Visão Geral
 
-TokenLab expõe múltiplos formatos de API para que ferramentas comuns de codificação, SDKs e frameworks possam se integrar com código auxiliar mínimo.
+O TokenLab expõe múltiplos formatos de API para que ferramentas de codificação, SDKs e frameworks comuns possam se integrar com o mínimo de código de adaptação.
 
 Esta página é intencionalmente mais restrita do que uma matriz de marketing:
 
-- **Suportado** significa que documentamos um caminho de configuração concreto e que a TokenLab expõe o formato de protocolo que esse caminho espera.
-- **Caminho nativo forte** significa que o repositório também possui adaptador direto ou evidência de formato de requisição para essa família de protocolos.
-- **Melhor esforço** significa que a integração pode funcionar, mas o cliente upstream não trata esse fluxo de gateway customizado como um contrato estável.
+- **Suportado** significa que documentamos um caminho de configuração concreto e o TokenLab expõe o formato de protocolo que esse caminho espera.
+- **Strong native path** significa que o repositório também possui evidências diretas de adaptador ou formato de requisição para essa família de protocolos.
+- **Best-effort** significa que a integração pode funcionar, mas o cliente upstream não trata este fluxo de gateway personalizado como um contrato estável.
 
 <Note>
-  Campos não suportados não são tratados de forma uniforme. Nas rotas de compatibilidade, alguns campos são ignorados ou normalizados. Em `/v1/responses`, campos não suportados podem retornar erros explícitos `400` ou `503` quando essa rota não pode garantir o comportamento solicitado.
+  Campos não suportados não são tratados de forma uniforme. Em rotas de compatibilidade, alguns campos são ignorados ou normalizados. Em `/v1/responses`, campos não suportados podem retornar erros explícitos `400` ou `503` quando essa rota não pode garantir o comportamento solicitado.
 </Note>
 
 ## Formatos de API Suportados
 
-| Rota | Formato | Caso de Uso |
-|------|---------|-------------|
+| Endpoint | Formato | Caso de Uso |
+|----------|--------|----------|
 | `/v1/chat/completions` | OpenAI Chat | Compatibilidade universal |
-| `/v1/responses` | OpenAI Responses | Conversas com estado |
+| `/v1/responses` | OpenAI Responses | Conversas com estado (stateful) |
 | `/v1/messages` | Anthropic Messages | Recursos nativos do Claude |
 | `/v1beta/models/:model:generateContent` | Google Gemini | Recursos nativos do Gemini |
 
@@ -30,16 +30,16 @@ Esta página é intencionalmente mais restrita do que uma matriz de marketing:
 
 ### Caminhos de Ferramentas Documentados
 
-| Ferramenta | Nível de Suporte | Formato | Observações |
-|-----------|------------------|---------|-------------|
-| **Cursor** | Suportado com limites | Compatível com OpenAI | Funciona para fluxos padrão BYOK de chat/editores, não substitui recursos gerenciados pelo Cursor como Tab Completion |
-| **Claude Code CLI** | Caminho nativo forte | Anthropic | Rota nativa `/v1/messages` com cobertura de adaptador para thinking e `tool_choice` |
-| **Codex CLI** | Suportado com limites de modelo/rota | OpenAI Responses | Considere `/v1/responses` como um caminho avançado para fluxos específicos do Codex; alguns campos exclusivos de Responses não são garantidos em todos os modelos e rotas |
-| **Gemini CLI** | Melhor esforço / experimental | Gemini | O fluxo com URL base personalizada da TokenLab não é um contrato estável a montante |
-| **OpenCode** | Suportado | Compatível com OpenAI | Use um provedor compatível com OpenAI por padrão; mude para um provedor baseado em Responses somente quando precisar explicitamente |
+| Ferramenta | Nível de Suporte | Formato | Notas |
+|------|---------------|--------|-------|
+| **Cursor** | Suportado com limites | Compatível com OpenAI | Funciona para fluxos padrão de chat/editor BYOK, não como substituto para recursos gerenciados pelo Cursor, como o Tab Completion |
+| **Claude Code CLI** | Strong native path | Anthropic | Rota nativa `/v1/messages` com cobertura de adaptador para *thinking* e `tool_choice` |
+| **Codex CLI** | Suportado com limites de modelo/caminho | OpenAI Responses | Trate `/v1/responses` como um caminho avançado para fluxos de trabalho específicos do Codex; alguns campos exclusivos de Responses não são garantidos em todos os modelos e caminhos roteados |
+| **Gemini CLI** | Best-effort / experimental | Gemini | O fluxo de URL base personalizado do TokenLab não é uma integração oficial da Gemini CLI |
+| **OpenCode** | Suportado | Compatível com OpenAI | Use um provedor compatível com OpenAI por padrão; mude para um provedor baseado em Responses apenas quando precisar explicitamente |
 
 <Note>
-  Outros editores e ferramentas de agentes compatíveis com OpenAI geralmente funcionam com o mesmo padrão de base URL; verifique o suporte a provedores personalizados antes de usar em produção.
+  Outros editores e ferramentas de agente compatíveis com OpenAI geralmente funcionam com o mesmo padrão de URL base; verifique o suporte a provedores personalizados da própria ferramenta antes de usá-la em produção.
 </Note>
 
 ### Exemplos de Configuração
@@ -50,7 +50,7 @@ Esta página é intencionalmente mais restrita do que uma matriz de marketing:
     Base URL: https://api.tokenlab.sh/v1
     API Key: sk-your-tokenlab-key
     ```
-    O Cursor usa internamente o formato de ferramentas no estilo Anthropic. A TokenLab suporta ambos:
+    O Cursor usa internamente o formato de ferramenta estilo Anthropic. O TokenLab suporta ambos:
     - Formato OpenAI: `{ type: "function", function: { name, parameters } }`
     - Formato Anthropic: `{ name, input_schema }` (sem o campo type)
   </Tab>
@@ -79,29 +79,39 @@ Esta página é intencionalmente mais restrita do que uma matriz de marketing:
 
 ### Caminhos de SDK & Framework Documentados
 
-| SDK / Framework | Linguagem | Nível de Suporte | Observações |
-|-----------------|-----------|------------------|-------------|
-| **OpenAI SDK** | Python/JS/Go | Caminho central suportado | Chat Completions e Embeddings são o caminho padrão documentado; alguns campos exclusivos de Responses não são garantidos em todos os modelos e rotas |
-| **Anthropic SDK** | Python/JS | Caminho nativo forte | Rota Messages nativa com evidência direta para tools, thinking e cache de prompts |
-| **Vercel AI SDK** | TypeScript | Padrão de integração recomendado | Prefira `@ai-sdk/openai-compatible`; use `@ai-sdk/openai` somente quando desejar explicitamente comportamento nativo de Responses |
-| **LangChain** | Python/JS | Superfícies padrão suportadas | `ChatOpenAI` e `OpenAIEmbeddings` são o escopo pretendido; extras nativos do fornecedor estão fora do escopo |
-| **LlamaIndex** | Python | Suportado via `OpenAILike` | Use `OpenAILike`, não as classes OpenAI embutidas, para gateways de terceiros como TokenLab |
-| **Dify** | - | Suportado com limites de escopo | O provedor OpenAI e fluxos orientados a chat-completions são o caminho pretendido; não é adequado para Responses específicos do Codex ou comportamento via WebSocket |
+| SDK / Framework | Linguagem | Nível de Suporte | Notas |
+|-----------------|----------|---------------|-------|
+| **OpenAI SDK** | Python/JS/Go | Caminho principal suportado | Caminho de compatibilidade para Chat Completions e Embeddings `/v1`; use rotas de provedor nativas para comportamentos específicos do provedor e não presuma que campos exclusivos de Responses funcionem em todos os modelos |
+| **Anthropic SDK** | Python/JS | Strong native path | Rota Messages nativa com evidências diretas para ferramentas, *thinking* e cache de prompt |
+| **Vercel AI SDK** | TypeScript | Padrão de integração recomendado | Prefira `@ai-sdk/openai-compatible`; use `@ai-sdk/openai` apenas quando desejar explicitamente o comportamento nativo de Responses |
+| **LangChain** | Python/JS | Superfícies padrão suportadas | `ChatOpenAI` e `OpenAIEmbeddings` são o escopo pretendido; extras nativos de fornecedores estão fora do escopo |
+| **LlamaIndex** | Python | Suportado via `OpenAILike` | Use `OpenAILike`, não as classes nativas da OpenAI, para gateways de terceiros como o TokenLab |
+| **OpenAI Agents SDK** | Python | Caminho de chat-completions suportado | Use `AsyncOpenAI(base_url="https://api.tokenlab.sh/v1")` com `OpenAIChatCompletionsModel`; o comportamento nativo de Responses depende do modelo e da rota selecionados |
+| **Langflow** | Python / Web | Suportado com limites de escopo | Use o campo **OpenAI API Base** do componente OpenAI com o endpoint `/v1` do TokenLab |
+| **Dify** | - | Suportado com limites de escopo | O provedor OpenAI e fluxos orientados a chat-completions são o caminho pretendido; não é adequado para Responses específicos do Codex ou comportamento de WebSocket |
+| **Flowise** | Web / Node | Suportado com limites de escopo | Use o nó de chat do TokenLab quando disponível, ou um nó compatível com ChatOpenAI apontado para `https://api.tokenlab.sh/v1` |
+| **Agno** | Python | Caminho suportado | Use o wrapper de modelo do TokenLab quando disponível, ou o caminho de URL base compatível com OpenAI |
+| **Promptfoo** | CLI / Node | Caminho suportado | Use provedores de chat ou Responses da OpenAI com `apiBaseUrl: https://api.tokenlab.sh/v1` |
+| **Portkey Gateway** | Gateway | Caminho suportado | Use o TokenLab como um provedor upstream para tráfego de chat e Responses compatível com OpenAI |
+| **Helicone** | Gateway / Observabilidade | Caminho de observabilidade suportado | Roteie requisições compatíveis com OpenAI através do Helicone Gateway com `Helicone-Target-Url: https://api.tokenlab.sh` |
+| **LangBot** | Plataforma de Bot | Caminho de chat suportado | Use o requisitante do TokenLab quando disponível, ou configure um requisitante compatível com OpenAI com o endpoint `/v1` do TokenLab |
+| **Open WebUI** | Web Chat | Caminho de chat-app suportado | Adicione o TokenLab como uma conexão de API compatível com OpenAI e atualize a lista de modelos |
+| **Chatbox / DeepChat / Jan / LibreChat / Cherry Studio** | Desktop / Web | Caminho de chat-app suportado | Use o fluxo de provedor personalizado compatível com OpenAI de cada aplicativo; esses aplicativos geralmente são orientados a chat-completions |
 
 ## Parâmetros de Chat Completions
 
-### Parâmetros Básicos
+### Parâmetros Principais
 
 | Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
+|-----------|------|-------------|
 | `model` | string | Identificador do modelo (obrigatório) |
 | `messages` | array | Mensagens da conversa (obrigatório) |
-| `max_tokens` | integer | Máximo de tokens de saída |
+| `max_tokens` | integer | Tokens máximos de saída |
 | `temperature` | number | Temperatura de amostragem (0-2) |
-| `top_p` | number | Amostragem nucleus (0-1) |
+| `top_p` | number | Amostragem de núcleo (0-1) |
 | `stream` | boolean | Habilitar streaming |
 
-### Chamada de Ferramenta
+### Chamada de Ferramentas (Tool Calling)
 
 ```json
 {
@@ -126,35 +136,35 @@ Esta página é intencionalmente mais restrita do que uma matriz de marketing:
 }
 ```
 
-### Opções de Escolha de Ferramenta
+### Opções de Escolha de Ferramenta (Tool Choice)
 
 | Formato | Exemplo | Descrição |
-|--------|---------|----------|
+|--------|---------|-------------|
 | String | `"auto"`, `"none"`, `"required"` | Seleção simples |
-| OpenAI Object | `{ "type": "function", "function": { "name": "fn" } }` | Forçar função específica |
-| Anthropic Object | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Formato nativo Anthropic |
+| Objeto OpenAI | `{ "type": "function", "function": { "name": "fn" } }` | Forçar função específica |
+| Objeto Anthropic | `{ "type": "tool", "name": "fn", "disable_parallel_tool_use": true }` | Formato nativo Anthropic |
 
 ### Parâmetros Avançados
 
 | Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
+|-----------|------|-------------|
 | `stream_options` | object | Apenas Chat Completions: `{ include_usage: true }` para contagem de tokens |
 | `reasoning_effort` | string | `"low"`, `"medium"`, `"high"` para modelos GPT-5 com raciocínio habilitado |
 | `service_tier` | string | `"auto"` ou `"default"` |
 | `seed` | integer | Saídas determinísticas |
-| `logprobs` | boolean | Retorna probabilidades logarítmicas |
+| `logprobs` | boolean | Retornar probabilidades de log |
 | `top_logprobs` | integer | Número de top logprobs (0-20) |
-| `logit_bias` | object | Mapa de viés por token (-100 a 100) |
-| `frequency_penalty` | number | Penalidade por repetição (-2 a 2) |
-| `presence_penalty` | number | Penalidade por tópico (-2 a 2) |
+| `logit_bias` | object | Mapa de viés de token (-100 a 100) |
+| `frequency_penalty` | number | Penalidade de repetição (-2 a 2) |
+| `presence_penalty` | number | Penalidade de tópico (-2 a 2) |
 | `stop` | string/array | Sequências de parada |
-| `n` | integer | Número de completions (1-128) |
-| `user` | string | Identificador do usuário para rastreamento |
+| `n` | integer | Número de conclusões (1-128) |
+| `user` | string | Identificador de usuário para rastreamento |
 
-### Recursos Avançados do OpenAI
+### Recursos Avançados da OpenAI
 
 | Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
+|-----------|------|-------------|
 | `modalities` | array | `["text", "audio"]` para multimodal |
 | `audio` | object | Configuração de saída de áudio (voz, formato) |
 | `prediction` | object | Saída prevista para conclusão mais rápida |
@@ -182,17 +192,17 @@ Esta página é intencionalmente mais restrita do que uma matriz de marketing:
 
 ## Parâmetros de Anthropic Messages
 
-### Parâmetros Básicos
+### Parâmetros Principais
 
 | Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
+|-----------|------|-------------|
 | `model` | string | Identificador do modelo |
 | `messages` | array | Mensagens da conversa |
 | `max_tokens` | integer | Saída máxima (até 128000) |
 | `system` | string/array | Prompt do sistema |
 | `stream` | boolean | Habilitar streaming |
 
-### Chamada de Ferramenta
+### Chamada de Ferramentas (Tool Calling)
 
 ```json
 {
@@ -215,7 +225,7 @@ Esta página é intencionalmente mais restrita do que uma matriz de marketing:
 }
 ```
 
-### Pensamento Estendido
+### Raciocínio Estendido (Extended Thinking)
 
 ```json
 {
@@ -227,22 +237,22 @@ Esta página é intencionalmente mais restrita do que uma matriz de marketing:
 }
 ```
 
-## Parâmetros da API Responses
+## Parâmetros da API de Responses
 
-### Parâmetros Básicos
+### Parâmetros Principais
 
 | Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
+|-----------|------|-------------|
 | `model` | string | Identificador do modelo |
 | `input` | string/array | Conteúdo de entrada |
 | `instructions` | string | Instruções do sistema |
-| `max_output_tokens` | integer | Máximo de tokens de saída |
-| `previous_response_id` | string | Continuar a conversa |
+| `max_output_tokens` | integer | Tokens máximos de saída |
+| `previous_response_id` | string | Continuar conversa |
 
 ### Parâmetros Avançados
 
 | Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
+|-----------|------|-------------|
 | `truncation_strategy` | string | `"auto"` ou `"disabled"` |
 | `include` | array | `["reasoning.encrypted_content"]` |
 | `reasoning_effort` | string | Para modelos de raciocínio |
@@ -250,22 +260,22 @@ Esta página é intencionalmente mais restrita do que uma matriz de marketing:
 
 ### Formato de Ferramenta
 
-Suporta ambos os formatos de ferramenta OpenAI e Anthropic:
+Suporta formatos de ferramenta da OpenAI e da Anthropic:
 
 ```json
-// OpenAI format
+// Formato OpenAI
 { "type": "function", "name": "fn", "parameters": {...} }
 
-// Anthropic format (Cursor compatibility)
+// Formato Anthropic (compatibilidade com Cursor)
 { "name": "fn", "input_schema": {...} }
 ```
 
 ## Parâmetros da API Gemini
 
-### Parâmetros Básicos
+### Parâmetros Principais
 
 | Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
+|-----------|------|-------------|
 | `contents` | array | Conteúdo da conversa |
 | `systemInstruction` | object | Prompt do sistema |
 | `generationConfig` | object | Configurações de geração |
@@ -307,14 +317,14 @@ Suporta ambos os formatos de ferramenta OpenAI e Anthropic:
 ### Parâmetros Adicionais
 
 | Parâmetro | Tipo | Descrição |
-|-----------|------|-----------|
+|-----------|------|-------------|
 | `cachedContent` | string | Referência de conteúdo em cache |
 | `responseMimeType` | string | `"text/plain"` ou `"application/json"` |
-| `responseSchema` | object | JSON schema para saída estruturada |
+| `responseSchema` | object | Esquema JSON para saída estruturada |
 
 ## Streaming
 
-Endpoints de geração que expõem `stream: true`, incluindo Chat Completions e Responses, usam streaming via Server-Sent Events (SSE):
+Endpoints de geração que expõem `stream: true`, incluindo Chat Completions e Responses, usam Server-Sent Events (SSE):
 
 ```bash
 # Chat Completions
@@ -322,13 +332,13 @@ curl https://api.tokenlab.sh/v1/chat/completions \
   -H "Authorization: Bearer sk-xxx" \
   -d '{"model": "gpt-4o", "messages": [...], "stream": true}'
 
-# Chat Completions usage tracking
+# Rastreamento de uso em Chat Completions
 -d '{"...", "stream_options": {"include_usage": true}}'
 ```
 
 ## Tratamento de Erros
 
-A TokenLab retorna respostas de erro compatíveis com OpenAI:
+O TokenLab retorna respostas de erro compatíveis com a OpenAI:
 
 ```json
 {
@@ -340,20 +350,20 @@ A TokenLab retorna respostas de erro compatíveis com OpenAI:
 }
 ```
 
-Veja [Guia de Tratamento de Erros](/guides/error-handling) para detalhes.
+Veja o [Guia de Tratamento de Erros](/guides/error-handling) para detalhes.
 
 ## Melhores Práticas
 
 <AccordionGroup>
   <Accordion title="Use passthrough para parâmetros desconhecidos">
-    Parâmetros desconhecidos só são encaminhados quando a rota pública e o modelo selecionados oferecem suporte.
+    Parâmetros desconhecidos são encaminhados apenas quando a rota pública e o modelo selecionados os suportam.
   </Accordion>
 
-  <Accordion title="Use stream_options.include_usage apenas em Chat Completions">
-    Em streaming de Chat Completions, habilite `stream_options.include_usage` para contagens de tokens precisas. Responses tem seu próprio contrato de streaming e não expõe esta opção exclusiva de Chat.
+  <Accordion title="Use stream_options.include_usage apenas para Chat Completions">
+    Para streaming de Chat Completions, habilite `stream_options.include_usage` para contagens precisas de tokens. Responses possui seu próprio contrato de streaming e não expõe essa opção exclusiva de Chat.
   </Accordion>
 
-  <Accordion title="Use o formato apropriado de tool_choice">
-    Combine com o formato esperado pelo seu SDK. A TokenLab aceita ambos os formatos OpenAI e Anthropic.
+  <Accordion title="Use o formato de tool_choice apropriado">
+    Combine com o formato esperado pelo seu SDK. O TokenLab aceita formatos da OpenAI e da Anthropic.
   </Accordion>
 </AccordionGroup>

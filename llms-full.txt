@@ -2692,6 +2692,10 @@ Video generation is asynchronous. `POST /v1/videos/generations` returns a public
 
 When the selected Seedance model can use the TokenLab material library, image URLs and supported inline data URLs are prepared as reusable TokenLab materials before generation. If preparation takes longer than 60 seconds, retry after the returned `auto_material_asset_ids` become `ACTIVE`. If the selected model cannot use the material library, ordinary image inputs continue on the regular image path.
 
+## OpenAI-Style And Volc-Compatible Video APIs
+
+Use `/v1/videos/generations` for TokenLab's unified video API across models. If you are migrating an existing Seedance 2.0 integration that already uses Volc-style `content[]` or Action requests, use the Seedance compatibility endpoints under `/api/v3`. Both styles use TokenLab Bearer API keys and async polling, but their request and response shapes are different.
+
 ## Supported Operations
 
 Use explicit `operation` in production. TokenLab can infer some operations from inputs, but explicit operation values make validation, support, and retries clearer.
@@ -2795,6 +2799,31 @@ Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, refe
 | `reference-to-video` | `prompt`, `reference_images`, optional `video_urls`, optional `audio_urls` |
 | `video-to-video` | `prompt`, `video_url` or compatible video input |
 | `video-extension` | `task_id` or model-specific continuation input |
+
+## Volc-Compatible Seedance Endpoint
+
+Use this endpoint when your existing system already builds Seedance requests with Volc-style `content[]`, REST task paths, or Action names, and you want to change the base URL and authentication without rewriting the request shape. For new cross-model video integrations, prefer TokenLab's unified [`/v1/videos/generations`](/api-reference/video/create-video) API.
+
+### Migration Flow
+
+1. Authenticate with `Authorization: Bearer `. Volc AK/SK signatures are not accepted in this version.
+2. Create with REST `POST /api/v3/contents/generations/tasks`, or with Action `POST /api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01`.
+3. Store the returned `cgt-...` task ID and poll the task endpoint until `status` is `succeeded`, `failed`, `cancelled`, or `expired`.
+4. `callback_url` is rejected for now, so do not rely on completion callbacks for this endpoint.
+
+### Request Body Notes
+
+- `content[]` accepts `text`, `image_url`, `video_url`, `audio_url`, and `draft_task` items.
+- For `image_url`, omit `role` or use `first_frame` for image-to-video; use `last_frame` together with a first frame; use `reference_image` for reference-to-video.
+- Image URLs are prepared as reusable TokenLab materials when the selected Seedance model needs material references. If preparation takes longer than 60 seconds, the create request returns a retryable material-preparing error.
+- Common generation fields include `model`, `ratio`, `duration`, `resolution`, `generate_audio`, `watermark`, `return_last_frame`, `seed`, `priority`, `execution_expires_after`, and `safety_identifier`.
+
+### Reference Pages
+
+- [Create Task (Volc Compatible)](/api-reference/video/create-volc-compatible-seedance-task)
+- [Get Task (Volc Compatible)](/api-reference/video/get-volc-compatible-seedance-task)
+- [List Tasks (Volc Compatible)](/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Cancel Task (Volc Compatible)](/api-reference/video/delete-volc-compatible-seedance-task)
 
 ## Material Concepts
 
@@ -4725,6 +4754,222 @@ Read the model detail response before relying on model-specific operations or fi
 
 ---
 
+### Create Task (Volc Compatible)
+
+> Create a Seedance 2.0 task with a Volc-style REST body or Action request.
+
+URL: https://docs.tokenlab.sh/api-reference/video/create-volc-compatible-seedance-task
+
+## Overview
+
+These endpoints are for teams that already use the Volc-style Seedance task shape. They preserve the task-oriented request and response structure while using TokenLab authentication, billing, model availability, and task polling.
+
+See also [Seedance 2.0 Video Models](/guides/seedance-2-video) and [Video Generation](/guides/video-generation).
+
+## Authentication And Endpoints
+
+- Use `Authorization: Bearer `.
+- Volc AK/SK signing is not accepted in this version. Requests with only AK/SK signing return a Volc-style authentication error.
+- `Version` may be omitted. If provided, it must be `2024-01-01`.
+
+| Mode | Request |
+|------|---------|
+| REST create | `POST /api/v3/contents/generations/tasks` |
+| Action create | `POST /api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` |
+
+## Content Rules
+
+- `type: "text"` is the prompt text.
+- `type: "image_url"` without `role`, or with `role: "first_frame"`, is treated as the first frame.
+- `role: "last_frame"` must be paired with a first frame.
+- `role: "reference_image"`, `reference_video`, and `reference_audio` are used as references.
+- Do not mix first/last frame inputs with reference media in one request.
+
+## Parameter Notes
+
+- `ratio` accepts `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive`.
+- `duration` is the video length in seconds, including model-supported automatic duration values.
+- `resolution` accepts `480p`, `720p`, `1080p`, or `4k` when supported by the selected Seedance model.
+- `generate_audio` defaults to `true`; set it to `false` for a silent video.
+- `watermark`, `return_last_frame`, `seed`, `priority`, `execution_expires_after`, and `safety_identifier` are accepted when valid for the selected model.
+- `callback_url` is not supported yet. Poll task status instead.
+
+## Image Preparation
+
+When `content[]` contains image URLs, TokenLab prepares them as reusable materials when required by the selected Seedance model. If preparation is not complete within 60 seconds, the create request returns a retryable material-preparing error instead of submitting an incomplete video task.
+
+## Create Response
+
+```json
+{
+  "id": "cgt-0123456789abcdef0123456789abcdef"
+}
+```
+
+The create response contains only the compatibility task ID. Store it and poll the task endpoint.
+
+## Example
+
+### REST Create
+
+```bash
+curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "doubao-seedance-2-0-260128",
+    "content": [
+      {"type": "text", "text": "A cinematic forest at sunset"},
+      {"type": "image_url", "role": "reference_image", "image_url": {"url": "https://example.com/ref.png"}}
+    ],
+    "ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p",
+    "generate_audio": true
+  }'
+```
+
+### Action Create
+
+```bash
+curl "https://api.tokenlab.sh/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01" \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "doubao-seedance-2-0-260128",
+    "content": [{"type": "text", "text": "A clean product reveal video"}],
+    "ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p"
+  }'
+```
+
+## Next Step
+
+Use the returned `cgt-...` ID with [Get Task (Volc Compatible)](/api-reference/video/get-volc-compatible-seedance-task) until the task reaches a terminal status.
+
+---
+
+### Get Task (Volc Compatible)
+
+> Get a Seedance compatibility task by its cgt task ID.
+
+URL: https://docs.tokenlab.sh/api-reference/video/get-volc-compatible-seedance-task
+
+## Overview
+
+Use the `cgt-...` ID returned by create. Poll every few seconds while the task is `queued` or `running`. Stop when the task is `succeeded`, `failed`, `cancelled`, or `expired`.
+
+See also [Seedance 2.0 Video Models](/guides/seedance-2-video) and [Video Generation](/guides/video-generation).
+
+## Status Values
+
+- `queued`: accepted and waiting to run.
+- `running`: generation is in progress.
+- `succeeded`: result is ready and `content.video_url` is present.
+- `failed`: generation failed; inspect `error.code` and `error.message`.
+- `cancelled`: the task was cancelled before completion.
+- `expired`: the task expired before completion.
+
+## Response Fields
+
+- `id`: compatibility task ID, starting with `cgt-`.
+- `model`: model identifier echoed for compatibility.
+- `status`: one of the status values above.
+- `progress`: returned only when a real progress value is available.
+- `content.video_url`: final video URL on success.
+- `content.last_frame_url`: present only when requested and available.
+- `usage`: token usage when available.
+- `created_at` and `updated_at`: task timestamps.
+
+## Example
+
+```bash
+curl https://api.tokenlab.sh/api/v3/contents/generations/tasks/cgt-0123456789abcdef0123456789abcdef \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+```json
+{
+  "id": "cgt-0123456789abcdef0123456789abcdef",
+  "model": "doubao-seedance-2-0-260128",
+  "status": "succeeded",
+  "content": {
+    "video_url": "https://example.com/result.mp4"
+  },
+  "usage": {
+    "completion_tokens": 123456
+  },
+  "error": null
+}
+```
+
+---
+
+### List Tasks (Volc Compatible)
+
+> List recent Seedance compatibility tasks for the current organization.
+
+URL: https://docs.tokenlab.sh/api-reference/video/list-volc-compatible-seedance-tasks
+
+## Overview
+
+The list endpoint returns recent compatibility tasks for the authenticated organization. Use it for consoles, retries, and customer support views; use the get endpoint when you already know the task ID.
+
+See also [Seedance 2.0 Video Models](/guides/seedance-2-video) and [Video Generation](/guides/video-generation).
+
+## Listing And Filters
+
+- `page_num`: defaults to `1`.
+- `page_size`: defaults to `20`, maximum `500`.
+- `filter.status`: `queued`, `running`, `succeeded`, `failed`, `cancelled`, or `expired`.
+- `filter.task_ids`: comma-separated task IDs.
+- `filter.model`: model identifier.
+- `filter.service_tier`: service tier value such as `default`.
+
+The response contains `items` and `total`. Each item uses the same task shape as the get-task endpoint.
+
+## Example
+
+```bash
+curl "https://api.tokenlab.sh/api/v3/contents/generations/tasks?page_num=1&page_size=20&filter.status=succeeded" \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+```bash
+curl "https://api.tokenlab.sh/api/v3/contents/generations/tasks?filter.task_ids=cgt-0123456789abcdef0123456789abcdef" \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+---
+
+### Cancel Task (Volc Compatible)
+
+> Cancel a queued or cancellable Seedance compatibility task.
+
+URL: https://docs.tokenlab.sh/api-reference/video/delete-volc-compatible-seedance-task
+
+## Overview
+
+Cancellation is best-effort and only succeeds while the task is still cancellable. A successful DELETE returns HTTP 200 with an empty body. Query the task afterward if you need to confirm the final state.
+
+See also [Seedance 2.0 Video Models](/guides/seedance-2-video) and [Video Generation](/guides/video-generation).
+
+## Cancellation Semantics
+
+- The request can succeed while the task is queued or still cancellable.
+- If the task has already completed, failed, expired, or is no longer cancellable, the endpoint returns an error; query the task to confirm its current state.
+- A cancelled task does not return a video result.
+
+## Example
+
+```bash
+curl -X DELETE https://api.tokenlab.sh/api/v3/contents/generations/tasks/cgt-0123456789abcdef0123456789abcdef \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+---
+
 ### Get Video Status
 
 > Retrieves the status and result of a video generation task
@@ -6137,7 +6382,17 @@ This page is intentionally narrower than a marketing matrix:
 | **Vercel AI SDK** | TypeScript | Recommended integration pattern | Prefer `@ai-sdk/openai-compatible`; use `@ai-sdk/openai` only when you explicitly want Responses-native behavior |
 | **LangChain** | Python/JS | Supported standard surfaces | `ChatOpenAI` and `OpenAIEmbeddings` are the intended scope; vendor-native extras are out of scope |
 | **LlamaIndex** | Python | Supported via `OpenAILike` | Use `OpenAILike`, not the built-in OpenAI classes, for third-party gateways such as TokenLab |
+| **OpenAI Agents SDK** | Python | Supported chat-completions path | Use `AsyncOpenAI(base_url="https://api.tokenlab.sh/v1")` with `OpenAIChatCompletionsModel`; native Responses behavior depends on the selected model and route |
+| **Langflow** | Python / Web | Supported with scope limits | Use the OpenAI component's **OpenAI API Base** field with TokenLab's `/v1` endpoint |
 | **Dify** | - | Supported with scope limits | OpenAI provider and chat-completions-oriented flows are the intended path; not a fit for Codex-specific Responses or WebSocket behavior |
+| **Flowise** | Web / Node | Supported with scope limits | Use the TokenLab chat node when available, or a ChatOpenAI-compatible node pointed at `https://api.tokenlab.sh/v1` |
+| **Agno** | Python | Supported path | Use the TokenLab model wrapper when available, or the OpenAI-compatible base URL path |
+| **Promptfoo** | CLI / Node | Supported path | Use OpenAI chat or Responses providers with `apiBaseUrl: https://api.tokenlab.sh/v1` |
+| **Portkey Gateway** | Gateway | Supported path | Use TokenLab as an upstream provider for OpenAI-compatible chat and Responses traffic |
+| **Helicone** | Gateway / Observability | Supported observability path | Route OpenAI-compatible requests through Helicone Gateway with `Helicone-Target-Url: https://api.tokenlab.sh` |
+| **LangBot** | Bot Platform | Supported chat path | Use the TokenLab requester when available, or configure an OpenAI-compatible requester with TokenLab's `/v1` endpoint |
+| **Open WebUI** | Web Chat | Supported chat-app path | Add TokenLab as an OpenAI-compatible API connection and refresh the model list |
+| **Chatbox / DeepChat / Jan / LibreChat / Cherry Studio** | Desktop / Web | Supported chat-app path | Use each app's OpenAI-compatible custom provider flow; these apps are usually chat-completions oriented |
 
 ## Chat Completions Parameters
 
@@ -8842,6 +9097,113 @@ Use chat/reasoning models for synthesis and `text-embedding-3-small` or `text-em
 
 ---
 
+### OpenAI Agents SDK
+
+> Use TokenLab models with the OpenAI Agents SDK
+
+URL: https://docs.tokenlab.sh/integrations/openai-agents-sdk
+
+## Overview
+
+The OpenAI Agents SDK can use TokenLab through an OpenAI-compatible client and `OpenAIChatCompletionsModel`.
+
+> Note: **Type**: Python Agent SDK
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported chat-completions path
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+export TOKENLAB_BASE_URL="https://api.tokenlab.sh/v1"
+export TOKENLAB_MODEL="gpt-5.4-mini"
+```
+
+## Example
+
+```python
+import asyncio
+import os
+
+from openai import AsyncOpenAI
+
+from agents import Agent, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
+
+client = AsyncOpenAI(
+    base_url=os.getenv("TOKENLAB_BASE_URL", "https://api.tokenlab.sh/v1"),
+    api_key=os.environ["TOKENLAB_API_KEY"],
+)
+
+set_tracing_disabled(disabled=True)
+
+async def main():
+    agent = Agent(
+        name="Assistant",
+        instructions="You are concise and practical.",
+        model=OpenAIChatCompletionsModel(
+            model=os.getenv("TOKENLAB_MODEL", "gpt-5.4-mini"),
+            openai_client=client,
+        ),
+    )
+
+    result = await Runner.run(agent, "Explain custom model providers in one paragraph.")
+    print(result.final_output)
+
+asyncio.run(main())
+```
+
+## Scope
+
+This path uses Chat Completions compatibility. TokenLab's native Responses endpoint is available at `https://api.tokenlab.sh/v1/responses`, but SDK features that depend on OpenAI-specific Responses semantics should be verified with the exact model and workflow before production use.
+
+---
+
+### Langflow
+
+> Use TokenLab models from Langflow
+
+URL: https://docs.tokenlab.sh/integrations/langflow
+
+## Overview
+
+Langflow's **OpenAI** component includes an **OpenAI API Base** field. Point that field at TokenLab's OpenAI-compatible `/v1` endpoint and use TokenLab model IDs.
+
+> Note: **Type**: Low-code AI Workflow Builder
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported with scope limits
+
+## OpenAI Component
+
+1. Add an **OpenAI** language model component.
+2. Set **OpenAI API Key** to your TokenLab key.
+3. Expand advanced settings.
+4. Set **OpenAI API Base** to `https://api.tokenlab.sh/v1`.
+5. Set **Model Name** to a TokenLab model ID.
+6. Connect the model output to your agent, chain, or workflow.
+
+## Values
+
+| Field | Value |
+|-------|-------|
+| OpenAI API Base | `https://api.tokenlab.sh/v1` |
+| OpenAI API Key | `sk-your-tokenlab-key` |
+| Model Name | `gpt-5.4-mini` |
+
+## Recommended Models
+
+- `gpt-5.4-mini` for most workflow tests
+- `claude-sonnet-5` for stronger writing and reasoning
+- `gemini-3.5-flash` for fast multimodal-friendly workflows
+- `deepseek-v4-flash` for fast coding and reasoning iterations
+
+Use Langflow's LiteLLM Proxy component if your deployment already centralizes provider routing through a LiteLLM proxy.
+
+---
+
 ### Dify
 
 > Integrate TokenLab with Dify using the OpenAI provider and a custom base URL
@@ -8907,13 +9269,12 @@ Use these values:
 
 Add the models you want to use, for example:
     - `gpt-5.4`
-    - `gpt-5-mini`
-    - `gpt-4o`
-    - `claude-sonnet-4-6`
-    - `claude-opus-4-6`
+    - `gpt-5.4-mini`
+    - `claude-sonnet-5`
+    - `claude-opus-4-8`
     - `gemini-3.5-flash`
-    - `gemini-2.5-pro`
-    - `deepseek-r1`
+    - `gemini-3.1-flash-lite`
+    - `deepseek-v4-flash`
 
 ### Step 3: Test Connection
 
@@ -8933,9 +9294,9 @@ Then set it as the default embedding model in the relevant knowledge base or app
 
 | Use Case | Suggested Models |
 |----------|------------------|
-| Default chat | `gpt-5.4`, `gpt-5-mini`, `gpt-4o` |
-| Deep reasoning | `gpt-5.4`, `claude-opus-4-6`, `deepseek-r1` |
-| Fast/cheap | `gpt-5-mini`, `gemini-3.5-flash` |
+| Default chat | `gpt-5.4-mini`, `gpt-5.4`, `claude-sonnet-5` |
+| Deep reasoning | `gpt-5.5`, `gpt-5.4`, `claude-opus-4-8`, `deepseek-v4-pro` |
+| Fast/cheap | `gpt-5.4-mini`, `gemini-3.5-flash`, `deepseek-v4-flash` |
 | Embeddings | `text-embedding-3-small`, `text-embedding-3-large` |
 
 ## Best Practices
@@ -8947,7 +9308,7 @@ In newer Dify versions, the built-in OpenAI provider with a custom base URL is u
 
 #### Use cheaper models for iteration
 
-Use `gpt-5-mini` or `gemini-3.5-flash` while iterating, then switch heavier workflows to stronger models only where needed.
+Use `gpt-5.4-mini`, `gemini-3.5-flash`, or `deepseek-v4-flash` while iterating, then switch heavier workflows to stronger models only where needed.
 
 
 #### Remember Dify is usually chat-completions oriented
@@ -8975,6 +9336,336 @@ Most Dify flows use OpenAI-compatible chat behavior. If you need Codex-specific 
 - Verify the model name exactly
     - Re-add the model entry if the provider UI cached an older value
     - Check current model availability in TokenLab docs or dashboard
+
+---
+
+### Flowise
+
+> Use TokenLab chat models in Flowise workflows
+
+URL: https://docs.tokenlab.sh/integrations/flowise
+
+## Overview
+
+Flowise can call TokenLab through a TokenLab chat node when available, or through an OpenAI-compatible chat model node pointed at TokenLab.
+
+> Note: **Type**: Workflow Builder
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported with scope limits
+
+## TokenLab Node
+
+If your Flowise build includes a **TokenLab** chat model node:
+
+1. Add **Chat Models** -> **TokenLab**
+2. Create a TokenLab API credential
+3. Set **Model Name** to `gpt-5.4-mini`
+4. Connect it to your chain, agent, or workflow
+5. Run a test prompt.
+
+## OpenAI-Compatible Fallback
+
+If the TokenLab node is not available yet, use an OpenAI-compatible chat model node with:
+
+| Field | Value |
+|-------|-------|
+| Base URL | `https://api.tokenlab.sh/v1` |
+| API Key | `sk-your-tokenlab-key` |
+| Model | `gpt-5.4-mini` |
+
+## Recommended Models
+
+- `gpt-5.4-mini` for most workflow tests
+- `claude-sonnet-5` for stronger writing and reasoning
+- `gemini-3.5-flash` for fast multimodal-friendly workflows
+- `deepseek-v4-flash` for fast code or reasoning iterations
+
+---
+
+### Agno
+
+> Use TokenLab models in Agno agents
+
+URL: https://docs.tokenlab.sh/integrations/agno
+
+## Overview
+
+Agno can use TokenLab as an OpenAI-compatible model provider for agents and workflows.
+
+> Note: **Type**: Agent Framework
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported path
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## TokenLab Model Wrapper
+
+If your Agno version includes the TokenLab model wrapper:
+
+```python
+from agno.agent import Agent
+from agno.models.tokenlab import TokenLab
+
+agent = Agent(model=TokenLab(id="gpt-5.4-mini"))
+agent.print_response("Give me a concise project risk checklist.")
+```
+
+Some Agno builds also support model strings:
+
+```python
+agent = Agent(model="tokenlab:gpt-5.4-mini")
+```
+
+## OpenAI-Compatible Fallback
+
+If your version does not include TokenLab yet, use Agno's OpenAI-compatible model path with:
+
+- Base URL: `https://api.tokenlab.sh/v1`
+- API key: `TOKENLAB_API_KEY`
+- Model: `gpt-5.4-mini`
+
+## Model Suggestions
+
+Use `gpt-5.4-mini` for default agents, `gpt-5.4` or `claude-sonnet-5` for deeper reasoning, and `deepseek-v4-flash` for faster loops.
+
+---
+
+### Promptfoo
+
+> Run Promptfoo evals against TokenLab models
+
+URL: https://docs.tokenlab.sh/integrations/promptfoo
+
+## Overview
+
+Promptfoo can evaluate TokenLab through its OpenAI-compatible chat and Responses providers.
+
+> Note: **Type**: Evaluation Framework
+
+**Primary Paths**: OpenAI-compatible chat completions and Responses
+
+**Support Confidence**: Supported path
+
+## Environment
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## Example Config
+
+```yaml
+description: TokenLab provider example
+
+prompts:
+  - 'Answer in one concise paragraph: {{question}}'
+
+providers:
+  - id: openai:chat:gpt-5.4-mini
+    label: tokenlab-chat-gpt-5.4-mini
+    config:
+      apiBaseUrl: https://api.tokenlab.sh/v1
+      apiKey: '{{env.TOKENLAB_API_KEY}}'
+  - id: openai:responses:gpt-5.5
+    label: tokenlab-responses-gpt-5.5
+    config:
+      apiBaseUrl: https://api.tokenlab.sh/v1
+      apiKey: '{{env.TOKENLAB_API_KEY}}'
+
+tests:
+  - vars:
+      question: What are two practical ways to evaluate an LLM gateway?
+    assert:
+      - type: contains-any
+        value:
+          - latency
+          - reliability
+          - cost
+          - quality
+```
+
+## Run
+
+```bash
+promptfoo eval
+```
+
+Use chat providers for broad compatibility. Use Responses providers when the eval specifically depends on Responses behavior.
+
+---
+
+### Portkey Gateway
+
+> Use TokenLab as an upstream provider in Portkey Gateway
+
+URL: https://docs.tokenlab.sh/integrations/portkey
+
+## Overview
+
+Portkey Gateway can route requests to TokenLab as an upstream provider. The safest default is OpenAI-compatible chat completions; use Responses when your Portkey version exposes that path for TokenLab.
+
+> Note: **Type**: AI Gateway
+
+**Primary Paths**: OpenAI-compatible chat completions and Responses
+
+**Support Confidence**: Supported path
+
+## Provider Values
+
+| Field | Value |
+|-------|-------|
+| Provider | `tokenlab` |
+| Base URL | `https://api.tokenlab.sh/v1` |
+| API key | `sk-your-tokenlab-key` |
+| Default model | `gpt-5.4-mini` |
+
+## Chat Completions
+
+Use TokenLab for OpenAI-compatible chat requests:
+
+```bash
+curl https://your-portkey-gateway.example/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "x-portkey-provider: tokenlab" \
+  -H "Authorization: Bearer sk-your-tokenlab-key" \
+  -d '{
+    "model": "gpt-5.4-mini",
+    "messages": [{"role": "user", "content": "Say hello from TokenLab."}]
+  }'
+```
+
+## Responses
+
+If your Portkey build routes TokenLab Responses, use `gpt-5.5`, `gpt-5.4`, or `gpt-5.4-mini` with `/v1/responses`.
+
+## Native Endpoint Note
+
+TokenLab also exposes Anthropic Messages and Gemini-compatible endpoints directly. Whether those can be used through Portkey depends on the Portkey provider and endpoint support in your deployed version.
+
+---
+
+### Helicone
+
+> Observe TokenLab requests through Helicone Gateway
+
+URL: https://docs.tokenlab.sh/integrations/helicone
+
+## Overview
+
+Helicone can proxy and observe TokenLab's OpenAI-compatible requests by routing them through Helicone Gateway and targeting TokenLab.
+
+> Note: **Type**: Observability Gateway
+
+**Primary Path**: OpenAI-compatible chat completions through Helicone Gateway
+
+**Support Confidence**: Supported observability path
+
+## Environment
+
+```bash
+export HELICONE_API_KEY="your-helicone-key"
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## cURL
+
+```bash
+curl --request POST \
+  --url https://gateway.helicone.ai/v1/chat/completions \
+  --header "Authorization: Bearer $TOKENLAB_API_KEY" \
+  --header "Helicone-Auth: Bearer $HELICONE_API_KEY" \
+  --header "Helicone-Target-Url: https://api.tokenlab.sh" \
+  --header "Helicone-Target-Provider: TokenLab" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "model": "gpt-5.4-mini",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hello from TokenLab through Helicone."
+      }
+    ]
+  }'
+```
+
+## OpenAI SDK
+
+```typescript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.TOKENLAB_API_KEY,
+  baseURL: "https://gateway.helicone.ai/v1",
+  defaultHeaders: {
+    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
+    "Helicone-Target-Url": "https://api.tokenlab.sh",
+    "Helicone-Target-Provider": "TokenLab",
+  },
+});
+
+const response = await client.chat.completions.create({
+  model: "claude-sonnet-5",
+  messages: [{ role: "user", content: "Write one concise product summary." }],
+});
+```
+
+## Scope
+
+This setup is for OpenAI-compatible `/v1` traffic. TokenLab also exposes native Responses, Anthropic Messages, and Gemini-compatible endpoints; use direct TokenLab routes for those native formats unless your observability proxy explicitly supports them.
+
+---
+
+### LangBot
+
+> Connect LangBot bot workflows to TokenLab models
+
+URL: https://docs.tokenlab.sh/integrations/langbot
+
+## Overview
+
+LangBot can call TokenLab through an OpenAI-compatible LLM requester.
+
+> Note: **Type**: Bot Platform
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported with scope limits
+
+## TokenLab Requester
+
+If your LangBot build includes a **TokenLab** requester:
+
+1. Open LangBot's model provider settings.
+2. Add a provider with requester **TokenLab**.
+3. Set the API key to your TokenLab key.
+4. Select or create a model such as `gpt-5.4-mini`.
+5. Attach the model to the pipeline or bot that should use it.
+
+## OpenAI-Compatible Fallback
+
+If TokenLab is not listed yet, use the OpenAI-compatible requester:
+
+| Field | Value |
+|-------|-------|
+| Requester | OpenAI Chat Completions |
+| Base URL | `https://api.tokenlab.sh/v1` |
+| API Key | `sk-your-tokenlab-key` |
+| Model | `gpt-5.4-mini` |
+
+## Recommended Models
+
+- `gpt-5.4-mini` for most bot interactions
+- `claude-sonnet-5` for longer writing and reasoning
+- `deepseek-v4-flash` for fast coding and reasoning loops
+- `gemini-3.5-flash` for fast general workflows
 
 ---
 
@@ -9013,6 +9704,8 @@ In practice that means:
 | LobeChat | Web, Desktop, Self-hosted | Strong custom-provider support |
 | Cherry Studio | Windows, macOS, Linux | Good OpenAI-compatible provider flow |
 | Chatbox | Windows, macOS, Linux | Simple OpenAI-compatible setup |
+| DeepChat | Windows, macOS, Linux | Desktop client with OpenAI-compatible provider settings |
+| Jan | Desktop, Self-hosted | Local-first app with remote OpenAI-compatible providers |
 | TypingMind | Web, Desktop | Uses a custom endpoint style |
 | NextChat | Web, Self-hosted | Lightweight ChatGPT-style client with base-URL overrides |
 | ChatWise | Windows, macOS | Standard custom provider pattern |
@@ -9040,14 +9733,18 @@ If an app asks for a **full endpoint URL** instead of a base URL, use:
 
 
 
+
+
+
+
 ## Safer Model Defaults
 
 | Category | Suggested Models |
 |----------|------------------|
-| General default | `gpt-5.4`, `gpt-5-mini`, `gpt-4o` |
-| Anthropic | `claude-sonnet-4-6`, `claude-opus-4-6` |
-| Google | `gemini-3.5-flash`, `gemini-2.5-pro` |
-| DeepSeek | `deepseek-r1`, `deepseek-v3-2` |
+| General default | `gpt-5.4-mini`, `gpt-5.4`, `gpt-5.5` |
+| Anthropic | `claude-sonnet-5`, `claude-opus-4-8`, `claude-fable-5` |
+| Google | `gemini-3.5-flash`, `gemini-3.1-flash-lite` |
+| DeepSeek | `deepseek-v4-flash`, `deepseek-v4-pro` |
 
 ## Tips
 
@@ -9058,7 +9755,7 @@ Most apps are easier to configure and less fragile when you provide `https://api
 
 #### Use smaller models first
 
-Start with `gpt-5-mini` or `gpt-4o` for everyday chat, then move heavier reasoning tasks to `gpt-5.4` or `claude-opus-4-6`.
+Start with `gpt-5.4-mini` or `deepseek-v4-flash` for everyday chat, then move heavier reasoning tasks to `gpt-5.4` or `claude-opus-4-8`.
 
 
 #### Keep coding tools separate
@@ -9084,7 +9781,272 @@ General chat apps and coding agents often need different endpoint behavior. Keep
 #### Model Not Available
 
 - Verify the model name exactly
-    - Try a widely supported default like `gpt-5-mini`, `gpt-4o`, or `claude-sonnet-4-6`
+    - Try a widely supported default like `gpt-5.4-mini`, `deepseek-v4-flash`, or `claude-sonnet-5`
     - Check current availability in TokenLab docs or dashboard
+
+---
+
+### Open WebUI
+
+> Use TokenLab as an OpenAI-compatible API connection in Open WebUI
+
+URL: https://docs.tokenlab.sh/integrations/open-webui
+
+## Overview
+
+Open WebUI supports custom OpenAI-compatible API connections. Add TokenLab as a remote OpenAI-compatible endpoint and refresh the model list.
+
+> Note: **Type**: Web Chat App
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported chat-app path
+
+## Admin Connection
+
+1. Open **Admin Panel** -> **Settings** -> **Connections**.
+2. In the OpenAI API connection area, add a connection.
+3. Set the base URL to `https://api.tokenlab.sh/v1`.
+4. Set the API key to your TokenLab key.
+5. Save the connection and refresh models.
+
+## Values
+
+| Field | Value |
+|-------|-------|
+| API Base URL | `https://api.tokenlab.sh/v1` |
+| API Key | `sk-your-tokenlab-key` |
+| Example model | `gpt-5.4-mini` |
+
+## Recommended Models
+
+- `gpt-5.4-mini` for general chat
+- `claude-sonnet-5` for writing and reasoning
+- `deepseek-v4-pro` for code-heavy chat
+- `gemini-3.5-flash` for fast multimodal-friendly workflows
+
+If model discovery is disabled or cached in your deployment, add the model IDs manually in Open WebUI's model settings.
+
+---
+
+### Chatbox
+
+> Use TokenLab in Chatbox through the OpenAI-compatible provider flow
+
+URL: https://docs.tokenlab.sh/integrations/chatbox
+
+## Overview
+
+Chatbox can use TokenLab through its OpenAI-compatible API settings.
+
+> Note: **Type**: Chat App
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported path
+
+## Configure Chatbox
+
+1. Open **Settings** -> **AI Model**
+2. Choose **OpenAI API Compatible**
+3. Enter:
+   - **API Host**: `https://api.tokenlab.sh/v1`
+   - **API Key**: `sk-your-tokenlab-key`
+   - **Model**: `gpt-5.4-mini`
+4. Save and send a short test message.
+
+## Recommended Models
+
+| Use Case | Model |
+|----------|-------|
+| Everyday chat | `gpt-5.4-mini` |
+| Stronger reasoning | `gpt-5.4` or `gpt-5.5` |
+| Claude-style output | `claude-sonnet-5` |
+| Fast fallback | `deepseek-v4-flash` |
+
+## Notes
+
+If your Chatbox build already lists TokenLab as a built-in provider, select it directly. If not, the OpenAI-compatible provider path above is the safest fallback.
+
+---
+
+### DeepChat
+
+> Connect DeepChat to TokenLab with an OpenAI-compatible base URL
+
+URL: https://docs.tokenlab.sh/integrations/deepchat
+
+## Overview
+
+DeepChat works with TokenLab through a standard OpenAI-compatible provider configuration.
+
+> Note: **Type**: Chat App
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported path
+
+## Configure DeepChat
+
+1. Open **Settings** -> **Model Provider**
+2. Add or edit an OpenAI-compatible provider
+3. Enter:
+   - **Provider name**: TokenLab
+   - **Base URL**: `https://api.tokenlab.sh/v1`
+   - **API Key**: `sk-your-tokenlab-key`
+4. Add a model such as `gpt-5.4-mini`
+5. Save and test a chat.
+
+## Model Choices
+
+Start with `gpt-5.4-mini` for a low-friction default. Use `claude-sonnet-5`, `gpt-5.4`, or `deepseek-v4-pro` when the conversation needs stronger reasoning.
+
+## Troubleshooting
+
+- Use the base URL, not the full `/chat/completions` path, unless DeepChat explicitly asks for a full endpoint URL.
+- Remove trailing spaces from the API key.
+- If a model is not listed, add the exact TokenLab model id manually.
+
+---
+
+### Jan
+
+> Use TokenLab models in Jan through a remote OpenAI-compatible provider
+
+URL: https://docs.tokenlab.sh/integrations/jan
+
+## Overview
+
+Jan can connect to TokenLab as a remote OpenAI-compatible provider.
+
+> Note: **Type**: Chat App
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported path
+
+## Configure Jan
+
+1. Open **Settings** -> **Providers**
+2. Add a remote OpenAI-compatible provider
+3. Enter:
+   - **Name**: TokenLab
+   - **Base URL**: `https://api.tokenlab.sh/v1`
+   - **API Key**: `sk-your-tokenlab-key`
+4. Add or select `gpt-5.4-mini`
+5. Save and start a new thread.
+
+## Model Discovery
+
+TokenLab exposes model discovery at:
+
+```text
+https://api.tokenlab.sh/v1/models
+```
+
+If your Jan build supports remote model discovery for TokenLab, refresh the model list. Otherwise, add model ids manually.
+
+## Recommended Models
+
+- `gpt-5.4-mini`
+- `gpt-5.4`
+- `claude-sonnet-5`
+- `gemini-3.5-flash`
+- `deepseek-v4-flash`
+
+---
+
+### LibreChat
+
+> Configure LibreChat to use TokenLab as a custom OpenAI-compatible endpoint
+
+URL: https://docs.tokenlab.sh/integrations/librechat
+
+## Overview
+
+LibreChat works well with TokenLab through a custom OpenAI-compatible endpoint.
+
+> Note: **Type**: Chat App
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Support Confidence**: Supported path
+
+## Environment
+
+```bash
+TOKENLAB_API_KEY=sk-your-tokenlab-key
+```
+
+## Example Endpoint
+
+Add TokenLab to your LibreChat endpoint configuration:
+
+```yaml
+customEndpoints:
+  - name: 'TokenLab'
+    apiKey: '${TOKENLAB_API_KEY}'
+    baseURL: 'https://api.tokenlab.sh/v1'
+    models:
+      default:
+        - 'gpt-5.5'
+        - 'gpt-5.4'
+        - 'gpt-5.4-mini'
+        - 'claude-opus-4-8'
+        - 'claude-sonnet-5'
+        - 'gemini-3.5-flash'
+        - 'deepseek-v4-pro'
+        - 'deepseek-v4-flash'
+      fetch: true
+    titleConvo: true
+    titleModel: 'gpt-5.4-mini'
+    modelDisplayLabel: 'TokenLab'
+```
+
+## Notes
+
+LibreChat uses the OpenAI-compatible chat path for this setup. TokenLab also exposes native Responses, Anthropic Messages, and Gemini-compatible endpoints for clients that support those request shapes.
+
+---
+
+### Cherry Studio
+
+> Connect Cherry Studio to TokenLab with OpenAI-compatible and native endpoint options
+
+URL: https://docs.tokenlab.sh/integrations/cherry-studio
+
+## Overview
+
+Cherry Studio can use TokenLab through a custom OpenAI-compatible provider. If your Cherry Studio version includes TokenLab in the provider registry, select TokenLab directly.
+
+> Note: **Type**: Chat App
+
+**Primary Path**: OpenAI-compatible chat completions
+
+**Native Paths**: Responses, Anthropic Messages, Gemini-compatible endpoints when exposed by the client
+
+## Configure as a Custom Provider
+
+1. Open **Settings** -> **Model Provider**
+2. Add an OpenAI-compatible provider
+3. Enter:
+   - **Name**: TokenLab
+   - **API Base URL**: `https://api.tokenlab.sh/v1`
+   - **API Key**: `sk-your-tokenlab-key`
+4. Add a model such as `gpt-5.4-mini`
+5. Save and test the provider.
+
+## Provider Registry Path
+
+When TokenLab appears as a built-in provider in Cherry Studio, prefer that option. It can carry endpoint metadata for:
+
+- OpenAI-compatible chat completions
+- OpenAI Responses
+- Anthropic Messages
+- Gemini generateContent
+
+## Good Starter Models
+
+Use `gpt-5.4-mini` for the default model, then add `claude-sonnet-5`, `gemini-3.5-flash`, and `deepseek-v4-flash` for broader coverage.
 
 ---

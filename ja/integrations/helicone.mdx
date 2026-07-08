@@ -1,0 +1,69 @@
+---
+title: "Helicone"
+description: "Helicone Gateway を介して TokenLab のリクエストを監視する"
+---
+
+## 概要
+
+Helicone は、TokenLab の OpenAI 互換リクエストを Helicone Gateway 経由でルーティングし、TokenLab をターゲットにすることで、リクエストのプロキシおよび監視を行うことができます。
+
+<Note>
+**タイプ**: 可観測性ゲートウェイ (Observability Gateway)
+
+**主要なパス**: Helicone Gateway を介した OpenAI 互換のチャット補完
+
+**サポートの信頼性**: サポートされている可観測性パス
+</Note>
+
+## 環境変数
+
+```bash
+export HELICONE_API_KEY="your-helicone-key"
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## cURL
+
+```bash
+curl --request POST \
+  --url https://gateway.helicone.ai/v1/chat/completions \
+  --header "Authorization: Bearer $TOKENLAB_API_KEY" \
+  --header "Helicone-Auth: Bearer $HELICONE_API_KEY" \
+  --header "Helicone-Target-Url: https://api.tokenlab.sh" \
+  --header "Helicone-Target-Provider: TokenLab" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "model": "gpt-5.4-mini",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hello from TokenLab through Helicone."
+      }
+    ]
+  }'
+```
+
+## OpenAI SDK
+
+```typescript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.TOKENLAB_API_KEY,
+  baseURL: "https://gateway.helicone.ai/v1",
+  defaultHeaders: {
+    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
+    "Helicone-Target-Url": "https://api.tokenlab.sh",
+    "Helicone-Target-Provider": "TokenLab",
+  },
+});
+
+const response = await client.chat.completions.create({
+  model: "claude-sonnet-5",
+  messages: [{ role: "user", content: "Write one concise product summary." }],
+});
+```
+
+## スコープ
+
+この設定は OpenAI 互換の `/v1` トラフィックを対象としています。TokenLab はネイティブの Responses、Anthropic Messages、および Gemini 互換のエンドポイントも公開しています。可観測性プロキシが明示的にサポートしていない限り、これらのネイティブ形式には直接 TokenLab のルートを使用してください。

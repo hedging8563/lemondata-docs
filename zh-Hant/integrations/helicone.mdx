@@ -1,0 +1,69 @@
+---
+title: "Helicone"
+description: "透過 Helicone Gateway 觀察 TokenLab 請求"
+---
+
+## 概覽
+
+Helicone 可以透過將 TokenLab 的 OpenAI 相容請求路由至 Helicone Gateway 並指向 TokenLab，來代理並觀察這些請求。
+
+<Note>
+**類型**: 可觀測性閘道 (Observability Gateway)
+
+**主要路徑**: 透過 Helicone Gateway 進行 OpenAI 相容的聊天補全 (chat completions)
+
+**支援信心**: 支援的可觀測性路徑
+</Note>
+
+## 環境變數
+
+```bash
+export HELICONE_API_KEY="your-helicone-key"
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## cURL
+
+```bash
+curl --request POST \
+  --url https://gateway.helicone.ai/v1/chat/completions \
+  --header "Authorization: Bearer $TOKENLAB_API_KEY" \
+  --header "Helicone-Auth: Bearer $HELICONE_API_KEY" \
+  --header "Helicone-Target-Url: https://api.tokenlab.sh" \
+  --header "Helicone-Target-Provider: TokenLab" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "model": "gpt-5.4-mini",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hello from TokenLab through Helicone."
+      }
+    ]
+  }'
+```
+
+## OpenAI SDK
+
+```typescript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.TOKENLAB_API_KEY,
+  baseURL: "https://gateway.helicone.ai/v1",
+  defaultHeaders: {
+    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
+    "Helicone-Target-Url": "https://api.tokenlab.sh",
+    "Helicone-Target-Provider": "TokenLab",
+  },
+});
+
+const response = await client.chat.completions.create({
+  model: "claude-sonnet-5",
+  messages: [{ role: "user", content: "Write one concise product summary." }],
+});
+```
+
+## 範圍
+
+此設定適用於 OpenAI 相容的 `/v1` 流量。TokenLab 同時也公開了原生 Responses、Anthropic Messages 以及 Gemini 相容的端點；除非您的可觀測性代理明確支援這些格式，否則請針對這些原生格式使用直接的 TokenLab 路由。
