@@ -1,0 +1,55 @@
+---
+title: "Guardrails"
+description: "Valide las salidas de los modelos de TokenLab con Guardrails"
+---
+
+## Descripción general
+
+Guardrails puede envolver cualquier objeto invocable compatible con su interfaz de API de LLM. Para TokenLab, configure el SDK de OpenAI con la URL base de TokenLab y pase el objeto invocable de chat completions a su guard.
+
+<Note>
+**Tipo**: Marco de validación y salida estructurada
+
+**Ruta principal**: Chat Completions compatible con OpenAI
+
+**Nivel de soporte**: Ruta compatible con OpenAI soportada
+</Note>
+
+## Entorno
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## Ejemplo
+
+```python
+import os
+
+from guardrails import Guard
+from openai import OpenAI
+from pydantic import BaseModel, Field
+
+
+class Pet(BaseModel):
+    pet_type: str = Field(description="Species of pet")
+    name: str = Field(description="A unique pet name")
+
+
+guard = Guard.for_pydantic(output_class=Pet)
+
+client = OpenAI(
+    api_key=os.environ["TOKENLAB_API_KEY"],
+    base_url="https://api.tokenlab.sh/v1",
+)
+
+raw_output, validated_output, *rest = guard(
+    llm_api=client.chat.completions.create,
+    model="claude-sonnet-5",
+    messages=[{"role": "user", "content": "What kind of pet should I get?"}],
+)
+```
+
+## Notas sobre el endpoint
+
+Guardrails se centra en la validación en torno a la llamada al LLM. Utilice la ruta compatible con OpenAI para flujos de chat-completions, o pase un objeto invocable personalizado si su aplicación necesita un endpoint nativo de TokenLab.

@@ -1,0 +1,55 @@
+---
+title: "Guardrails"
+description: "Guardrails를 사용하여 TokenLab 모델 출력 검증하기"
+---
+
+## 개요
+
+Guardrails는 LLM API 인터페이스와 호환되는 모든 호출 가능(callable) 객체를 래핑할 수 있습니다. TokenLab의 경우, TokenLab의 기본 URL로 OpenAI SDK를 구성하고 채팅 완성(chat completions) 호출 가능 객체를 가드(guard)에 전달하십시오.
+
+<Note>
+**유형**: 검증 및 구조화된 출력 프레임워크
+
+**기본 경로**: OpenAI 호환 채팅 완성(Chat Completions)
+
+**지원 신뢰도**: 지원되는 OpenAI 호환 경로
+</Note>
+
+## 환경 설정
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## 예제
+
+```python
+import os
+
+from guardrails import Guard
+from openai import OpenAI
+from pydantic import BaseModel, Field
+
+
+class Pet(BaseModel):
+    pet_type: str = Field(description="Species of pet")
+    name: str = Field(description="A unique pet name")
+
+
+guard = Guard.for_pydantic(output_class=Pet)
+
+client = OpenAI(
+    api_key=os.environ["TOKENLAB_API_KEY"],
+    base_url="https://api.tokenlab.sh/v1",
+)
+
+raw_output, validated_output, *rest = guard(
+    llm_api=client.chat.completions.create,
+    model="claude-sonnet-5",
+    messages=[{"role": "user", "content": "What kind of pet should I get?"}],
+)
+```
+
+## 엔드포인트 참고 사항
+
+Guardrails는 LLM 호출 전후의 검증에 중점을 둡니다. 채팅 완성 흐름에는 OpenAI 호환 경로를 사용하거나, 애플리케이션에서 네이티브 TokenLab 엔드포인트가 필요한 경우 사용자 지정 호출 가능 객체를 전달하십시오.

@@ -1,0 +1,55 @@
+---
+title: "Guardrails"
+description: "Xác thực đầu ra của mô hình TokenLab với Guardrails"
+---
+
+## Tổng quan
+
+Guardrails có thể bao bọc bất kỳ callable nào tương thích với giao diện LLM API của nó. Đối với TokenLab, hãy cấu hình OpenAI SDK với base URL của TokenLab và truyền callable chat completions vào guard của bạn.
+
+<Note>
+**Loại**: Khung xác thực và đầu ra có cấu trúc
+
+**Đường dẫn chính**: OpenAI-compatible Chat Completions
+
+**Độ tin cậy hỗ trợ**: Hỗ trợ đường dẫn tương thích với OpenAI
+</Note>
+
+## Môi trường
+
+```bash
+export TOKENLAB_API_KEY="sk-your-tokenlab-key"
+```
+
+## Ví dụ
+
+```python
+import os
+
+from guardrails import Guard
+from openai import OpenAI
+from pydantic import BaseModel, Field
+
+
+class Pet(BaseModel):
+    pet_type: str = Field(description="Species of pet")
+    name: str = Field(description="A unique pet name")
+
+
+guard = Guard.for_pydantic(output_class=Pet)
+
+client = OpenAI(
+    api_key=os.environ["TOKENLAB_API_KEY"],
+    base_url="https://api.tokenlab.sh/v1",
+)
+
+raw_output, validated_output, *rest = guard(
+    llm_api=client.chat.completions.create,
+    model="claude-sonnet-5",
+    messages=[{"role": "user", "content": "What kind of pet should I get?"}],
+)
+```
+
+## Ghi chú về Endpoint
+
+Guardrails tập trung vào việc xác thực xung quanh lệnh gọi LLM. Hãy sử dụng đường dẫn tương thích với OpenAI cho các luồng chat-completions, hoặc truyền một callable tùy chỉnh nếu ứng dụng của bạn cần một endpoint TokenLab gốc.
