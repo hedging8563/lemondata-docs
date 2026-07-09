@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-07-08
+Generated: 2026-07-09
 Source: https://docs.tokenlab.sh
 
 ---
@@ -2091,6 +2091,28 @@ TokenLab is multi-format: you can keep OpenAI-compatible clients, Anthropic-nati
 | Media generation | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Discover models with `recommended_for` and expect async polling where documented |
 | Management and billing | `https://api.tokenlab.sh/v1` | `/management/...` | Use management tokens for server-side usage and billing reconciliation |
 
+## Quick Migration Recipes
+
+### OpenAI to TokenLab
+
+Change only the SDK `base_url` / `baseURL` to `https://api.tokenlab.sh/v1`, keep your existing OpenAI API key environment variable name if that is easier for rollout, and replace model IDs after checking `GET /v1/models`.
+
+### OpenRouter to TokenLab
+
+Use `https://api.tokenlab.sh/v1` where your app previously used OpenRouter's OpenAI-compatible base URL. Remove provider-prefixed model IDs and use TokenLab public model IDs from `/v1/models`; when a workload needs Claude Messages or Gemini `generateContent`, move it to the native TokenLab endpoint instead of forcing it through OpenAI-compatible chat.
+
+### LiteLLM to TokenLab
+
+Use LiteLLM's `custom_openai/` route with `api_base: https://api.tokenlab.sh/v1`. Keep LiteLLM aliases separate from real TokenLab model IDs so you can change routing policy without changing application prompts.
+
+### Claude Messages via TokenLab
+
+Point Anthropic SDK clients at `https://api.tokenlab.sh` and call `messages.create`. Do not append `/v1` to the SDK base URL; the SDK owns the `/v1/messages` path.
+
+### Gemini Native via TokenLab
+
+Keep Gemini payloads on `https://api.tokenlab.sh/v1beta/models/{model}:generateContent`. Gemini-native `contents`, `parts`, files, cached contents, function declarations, and built-in tools should stay on this route when your app depends on Gemini behavior.
+
 ## OpenAI-Compatible Migration
 
 ```python
@@ -2936,7 +2958,7 @@ Video generation is asynchronous. Follow the `poll_url` returned by create reque
 
 URL: https://docs.tokenlab.sh/guides/music-generation
 
-Music generation is asynchronous. `POST /v1/music/generations` creates a public TokenLab task and returns `id` / `task_id`, `status`, and usually `poll_url`. Your application should store that task identity, show progress, and poll until a terminal status.
+Music generation is asynchronous. `POST /v1/music/generations` creates a public TokenLab task and returns `id` / `task_id`, `status`, and usually `poll_url`. Your application should store that task identity, show task state, and poll until a terminal status.
 
 ## Choose The Workflow
 
@@ -2981,6 +3003,40 @@ Use `poll_url` first. If your client needs a fixed route, call `GET /v1/tasks/{i
 curl "https://api.tokenlab.sh/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer sk-your-api-key"
 ```
+
+### Response Shape
+
+The create response is a task record, not the final audio:
+
+```json
+{
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "pending",
+  "created": 1706000000,
+  "model": "suno_music"
+}
+```
+
+A completed polling response can include the final media fields:
+
+```json
+{
+  "id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task_id": "ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "poll_url": "/v1/tasks/ldtask_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "completed",
+  "audio_url": "https://cdn.example.com/music/abc123.mp3",
+  "video_url": "https://cdn.example.com/music/abc123.mp4",
+  "stream_audio_url": "https://cdn.example.com/music/abc123-stream.mp3",
+  "image_url": "https://cdn.example.com/music/cover.jpg",
+  "title": "Morning Static",
+  "lyrics": "[Verse 1]\n..."
+}
+```
+
+Final media fields are absent until `status` is `completed`. Failed tasks return `status: "failed"` with `error`.
 
 Expected public statuses are `pending`, `processing`, `completed`, and `failed`. A completed music task can include `audio_url`, `video_url`, `title`, `lyrics`, and normalized metadata. Store final URLs in your own database so the user can reopen the result without restarting generation.
 
@@ -3031,7 +3087,7 @@ World tasks can start from text, images, multiple images, or video depending on 
 
 ## Create And Poll
 
-Create responses include a public task ID and usually a poll_url. Store that ID before showing progress, then follow poll_url or GET /v1/tasks/{id} until the task reaches completed or failed.
+Create responses include a public task ID and usually a poll_url. Store that ID before showing task state, then follow poll_url or GET /v1/tasks/{id} until the task reaches completed or failed.
 
 ```bash
 curl -X POST "https://api.tokenlab.sh/v1/worlds/generations" \
@@ -4321,7 +4377,7 @@ URL: https://docs.tokenlab.sh/api-reference/images/get-image-status
 
 You can also poll public image task IDs such as `ldtask_...` at `/v1/images/{id}`. This compatibility alias uses the same authorization, ownership checks, billing headers, terminal snapshots, and response shape as `/v1/images/generations/{id}`.
 
-If the task no longer exists or can no longer be resolved through the public async-task contract, TokenLab returns `async_task_not_found` with the message `Task not found or no longer available.`
+If the task no longer exists or is no longer available in the public task record, TokenLab returns `async_task_not_found` with the message `Task not found or no longer available.`
 
 ## Response
 
@@ -4530,7 +4586,7 @@ Poll this endpoint to check the status of your music generation task.
 
 > Info: If the create response included `poll_url`, prefer calling that exact URL for polling. `/v1/tasks/{id}` is the canonical fixed status endpoint for music jobs, and `id` / `task_id` should be treated as the same async task identity.
 
-If the task no longer exists or can no longer be resolved through the public async-task contract, TokenLab returns `async_task_not_found` with the message `Task not found or no longer available.`
+If the task no longer exists or is no longer available in the public task record, TokenLab returns `async_task_not_found` with the message `Task not found or no longer available.`
 
 ## Path Parameters
 
@@ -4980,7 +5036,7 @@ URL: https://docs.tokenlab.sh/api-reference/video/get-video-status
 
 > Info: If a create response returns `poll_url`, call that exact URL. When it points to `/v1/tasks/{id}`, treat that as the canonical fixed status endpoint.
 
-If the task no longer exists or can no longer be resolved through the public async-task contract, TokenLab returns `async_task_not_found` with the message `Task not found or no longer available.`
+If the task no longer exists or is no longer available in the public task record, TokenLab returns `async_task_not_found` with the message `Task not found or no longer available.`
 
 ## Response
 
@@ -5648,7 +5704,7 @@ Poll this endpoint to check the status of your 3D model generation task.
 
 > Info: If the create response included `poll_url`, prefer calling that exact URL for polling. `/v1/tasks/{id}` is the canonical fixed status endpoint for 3D jobs, and `id` / `task_id` should be treated as the same async task identity.
 
-If the task no longer exists or can no longer be resolved through the public async-task contract, TokenLab returns `async_task_not_found` with the message `Task not found or no longer available.`
+If the task no longer exists or is no longer available in the public task record, TokenLab returns `async_task_not_found` with the message `Task not found or no longer available.`
 
 ## Path Parameters
 
@@ -5677,7 +5733,7 @@ If a create response includes `poll_url`, call that exact path. Some image model
 
 ## Error Behavior
 
-If the task no longer exists, has expired, or cannot be resolved through the public async-task contract, TokenLab returns:
+If the task no longer exists, has expired, or is no longer available in the public task record, TokenLab returns:
 
 ```json
 {
@@ -7286,6 +7342,149 @@ Once OpenClaw is connected, these guides help you use TokenLab more effectively:
 
 ---
 
+### TokenLab MCP Server
+
+> Connect MCP clients to TokenLab
+
+URL: https://docs.tokenlab.sh/integrations/tokenlab-mcp-server
+
+The [TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) gives MCP-compatible agents a read-only way to discover TokenLab models before they write code or choose an API route.
+
+Use it when an agent needs to compare available models, inspect supported request formats, check pricing, or understand which native endpoint family to use for a task.
+
+> Note: The public catalog tools do not require a TokenLab API key. The server does not proxy paid inference requests.
+
+## What It Provides
+
+- Live model discovery from `https://api.tokenlab.sh/v1/models`.
+- Model detail lookup from `/v1/models/{model}`.
+- Pricing lookup from `/v1/models/{model}/pricing`.
+- Agent-readable API overview from `https://api.tokenlab.sh/llms.txt`.
+- Endpoint-family guidance for OpenAI-compatible chat, Responses, Anthropic Messages, Gemini, media, audio, embeddings, rerank, and translation.
+
+## Install From GitHub
+
+Clone the public repository and install dependencies:
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+Start the server over stdio:
+
+```bash
+npm start
+```
+
+The optional `TOKENLAB_API_BASE` environment variable defaults to `https://api.tokenlab.sh`.
+
+## Claude Desktop Configuration
+
+Add the server to your MCP client configuration. Replace the path with your local clone path:
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+Restart the MCP client after saving the configuration.
+
+## Cursor, Windsurf, And Other MCP Clients
+
+Use the same command and args in any client that supports stdio MCP servers:
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+If your client stores named servers, use `tokenlab-model-catalog` as the server name.
+
+## Tools
+
+| Tool | Purpose |
+|---|---|
+| `list_models` | List public TokenLab models. Optionally filter with `recommended_for` such as `image`, `video`, `embedding`, `rerank`, or `translation`. |
+| `get_model` | Fetch one model's public details and supported request format. |
+| `get_model_pricing` | Fetch one model's public pricing details. |
+| `get_api_overview` | Fetch TokenLab's `llms.txt` overview for agent-readable endpoint guidance. |
+
+## Recommended Agent Workflow
+
+1. Call `list_models` when the user has not named a model.
+2. Use `recommended_for` for non-chat tasks, such as image, video, music, 3D, TTS, STT, embeddings, rerank, or translation.
+3. Call `get_model` before building a non-chat request, retrying a failed request, or switching endpoint families.
+4. Call `get_model_pricing` when model cost affects the user's choice.
+5. Use `get_api_overview` when the agent needs a compact map of TokenLab API families.
+
+## Native Endpoint Guidance
+
+TokenLab supports OpenAI-compatible routes and native endpoint families. The MCP server helps an agent choose the right route before it writes code:
+
+| Family | Common route |
+|---|---|
+| OpenAI-compatible chat | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Gemini native | `/v1beta/models/{model}:generateContent` |
+| Images | `/v1/images/generations`, `/v1/images/edits` |
+| Video | `/v1/videos/generations` |
+| Music | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| Audio | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| Embeddings and rerank | `/v1/embeddings`, `/v1/rerank` |
+| Text translation | `/v1/translations` |
+
+## Use It With TokenLab Skills
+
+The MCP server is useful at runtime, while the [TokenLab skills repository](https://github.com/hedging8563/tokenlab-skills) teaches coding agents how to generate and repair integration code.
+
+Use both when available:
+
+- MCP server: discover current models, pricing, and endpoint details.
+- `tokenlab-api-integration` skill: generate runnable API examples and handle structured TokenLab errors.
+- `tokenlab-model-picker` skill: choose strong models for the user's task.
+- `tokenlab-native-endpoints` skill: decide when to use Responses, Anthropic Messages, Gemini, media, audio, embedding, rerank, or translation routes.
+
+## Troubleshooting
+
+#### The client cannot start the server
+
+Check that the `args` path points to your local `src/index.js` file and that `npm install` completed in the cloned repository.
+
+
+#### The model list is empty
+
+Verify that the machine can reach `https://api.tokenlab.sh/v1/models`. If you override `TOKENLAB_API_BASE`, make sure it does not include a trailing slash.
+
+
+#### The agent still chooses stale model IDs
+
+Ask the agent to call `list_models` or `get_model` before hardcoding a model name. Pairing the MCP server with `tokenlab-model-picker` gives better results.
+
+
+#### Can this server call paid TokenLab inference APIs?
+
+No. It is intentionally read-only for public catalog, contract, pricing, and overview data. Use the TokenLab API directly for inference.
+
+## Resources
+
+---
+
 ### Cursor
 
 > Use TokenLab with Cursor AI code editor
@@ -8686,6 +8885,28 @@ For TokenLab, the most stable default in Vercel AI SDK is the **OpenAI-compatibl
 If you specifically need **Responses-native** behavior, you can switch to the OpenAI provider and keep the same TokenLab base URL.
 
 Treat this page as a recommended integration pattern, not as a guarantee that every helper in Vercel AI SDK is supported by TokenLab.
+
+## TokenLab Provider Package
+
+TokenLab also maintains a lightweight provider wrapper for Vercel AI SDK:
+
+```bash
+npm install ai github:hedging8563/tokenlab-ai-sdk-provider
+```
+
+```typescript
+import { generateText } from 'ai';
+import { tokenlab } from '@tokenlab/ai-sdk-provider';
+
+const { text } = await generateText({
+  model: tokenlab.chatModel('gpt-5.4'),
+  prompt: 'Explain TokenLab in one sentence.',
+});
+
+console.log(text);
+```
+
+> Note: The package is prepared for `@tokenlab/ai-sdk-provider`. Until the npm package is published, install it from the GitHub repository.
 
 ## Recommended Default: OpenAI-Compatible Provider
 
