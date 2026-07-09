@@ -1,0 +1,155 @@
+---
+title: "TokenLab MCP Server"
+description: "MCP 클라이언트를 TokenLab의 공개 모델 카탈로그, 모델 세부 정보, 가격 책정 및 네이티브 엔드포인트 가이드와 연결합니다."
+---
+
+[TokenLab MCP 서버](https://github.com/hedging8563/tokenlab-mcp-server)는 MCP 호환 에이전트가 코드를 작성하거나 API 경로를 선택하기 전에 TokenLab 모델을 검색할 수 있는 읽기 전용 방법을 제공합니다.
+
+에이전트가 사용 가능한 모델을 비교하거나, 지원되는 요청 형식을 검사하거나, 가격을 확인하거나, 특정 작업에 사용할 네이티브 엔드포인트 제품군을 파악해야 할 때 사용하세요.
+
+<Note>
+공개 카탈로그 도구는 TokenLab API 키를 필요로 하지 않습니다. 이 서버는 유료 추론 요청을 프록시하지 않습니다.
+</Note>
+
+## 제공 기능
+
+- `https://api.tokenlab.sh/v1/models`를 통한 실시간 모델 검색.
+- `/v1/models/{model}`을 통한 모델 세부 정보 조회.
+- `/v1/models/{model}/pricing`을 통한 가격 정보 조회.
+- `https://api.tokenlab.sh/llms.txt`를 통한 에이전트 가독형 API 개요 제공.
+- OpenAI 호환 채팅, Responses, Anthropic Messages, Gemini, 미디어, 오디오, 임베딩, 리랭크(rerank) 및 번역을 위한 엔드포인트 제품군 가이드.
+
+## GitHub에서 설치
+
+공개 저장소를 복제하고 의존성을 설치합니다:
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+stdio를 통해 서버를 시작합니다:
+
+```bash
+npm start
+```
+
+선택 사항인 `TOKENLAB_API_BASE` 환경 변수의 기본값은 `https://api.tokenlab.sh`입니다.
+
+## Claude Desktop 설정
+
+MCP 클라이언트 설정에 서버를 추가합니다. 경로를 로컬 복제 경로로 변경하세요:
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+설정을 저장한 후 MCP 클라이언트를 재시작하세요.
+
+## Cursor, Windsurf 및 기타 MCP 클라이언트
+
+stdio MCP 서버를 지원하는 모든 클라이언트에서 동일한 명령과 인수를 사용하세요:
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+클라이언트가 명명된 서버를 저장하는 경우, 서버 이름으로 `tokenlab-model-catalog`를 사용하세요.
+
+## 도구
+
+| 도구 | 목적 |
+|---|---|
+| `list_models` | 공개 TokenLab 모델을 나열합니다. `image`, `video`, `embedding`, `rerank` 또는 `translation`과 같은 `recommended_for`를 사용하여 선택적으로 필터링할 수 있습니다. |
+| `get_model` | 특정 모델의 공개 세부 정보와 지원되는 요청 형식을 가져옵니다. |
+| `get_model_pricing` | 특정 모델의 공개 가격 정보를 가져옵니다. |
+| `get_api_overview` | 에이전트가 읽을 수 있는 엔드포인트 가이드를 위해 TokenLab의 `llms.txt` 개요를 가져옵니다. |
+
+## 권장 에이전트 워크플로우
+
+1. 사용자가 모델 이름을 지정하지 않은 경우 `list_models`를 호출합니다.
+2. 이미지, 비디오, 음악, 3D, TTS, STT, 임베딩, 리랭크 또는 번역과 같은 비채팅 작업에는 `recommended_for`를 사용합니다.
+3. 비채팅 요청을 생성하거나, 실패한 요청을 재시도하거나, 엔드포인트 제품군을 전환하기 전에 `get_model`을 호출합니다.
+4. 모델 비용이 사용자의 선택에 영향을 미치는 경우 `get_model_pricing`을 호출합니다.
+5. 에이전트가 TokenLab API 제품군에 대한 간략한 지도가 필요할 때 `get_api_overview`를 사용합니다.
+
+## 네이티브 엔드포인트 가이드
+
+TokenLab은 OpenAI 호환 경로와 네이티브 엔드포인트 제품군을 지원합니다. MCP 서버는 에이전트가 코드를 작성하기 전에 올바른 경로를 선택하도록 돕습니다:
+
+| 제품군 | 일반적인 경로 |
+|---|---|
+| OpenAI 호환 채팅 | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Gemini 네이티브 | `/v1beta/models/{model}:generateContent` |
+| 이미지 | `/v1/images/generations`, `/v1/images/edits` |
+| 비디오 | `/v1/videos/generations` |
+| 음악 | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| 오디오 | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| 임베딩 및 리랭크 | `/v1/embeddings`, `/v1/rerank` |
+| 텍스트 번역 | `/v1/translations` |
+
+## TokenLab Skills와 함께 사용하기
+
+MCP 서버는 런타임에 유용하며, [TokenLab skills 저장소](https://github.com/hedging8563/tokenlab-skills)는 코딩 에이전트에게 통합 코드를 생성하고 수정하는 방법을 교육합니다.
+
+사용 가능한 경우 둘 다 사용하세요:
+
+- MCP 서버: 현재 모델, 가격 및 엔드포인트 세부 정보를 검색합니다.
+- `tokenlab-api-integration` 스킬: 실행 가능한 API 예제를 생성하고 구조화된 TokenLab 오류를 처리합니다.
+- `tokenlab-model-picker` 스킬: 사용자의 작업에 적합한 강력한 모델을 선택합니다.
+- `tokenlab-native-endpoints` 스킬: Responses, Anthropic Messages, Gemini, 미디어, 오디오, 임베딩, 리랭크 또는 번역 경로를 사용할 시기를 결정합니다.
+
+## 문제 해결
+
+<AccordionGroup>
+  <Accordion title="클라이언트가 서버를 시작할 수 없습니다">
+    `args` 경로가 로컬 `src/index.js` 파일을 가리키고 있는지, 복제된 저장소에서 `npm install`이 완료되었는지 확인하세요.
+  </Accordion>
+
+  <Accordion title="모델 목록이 비어 있습니다">
+    기계에서 `https://api.tokenlab.sh/v1/models`에 접근할 수 있는지 확인하세요. `TOKENLAB_API_BASE`를 재정의하는 경우, 끝에 슬래시(/)가 포함되지 않았는지 확인하세요.
+  </Accordion>
+
+  <Accordion title="에이전트가 여전히 오래된 모델 ID를 선택합니다">
+    모델 이름을 하드코딩하기 전에 에이전트에게 `list_models` 또는 `get_model`을 호출하도록 요청하세요. MCP 서버를 `tokenlab-model-picker`와 함께 사용하면 더 나은 결과를 얻을 수 있습니다.
+  </Accordion>
+
+  <Accordion title="이 서버로 유료 TokenLab 추론 API를 호출할 수 있나요?">
+    아니요. 이 서버는 공개 카탈로그, 계약, 가격 및 개요 데이터를 위한 읽기 전용 서버입니다. 추론을 위해서는 TokenLab API를 직접 사용하세요.
+  </Accordion>
+</AccordionGroup>
+
+## 리소스
+
+<CardGroup cols={2}>
+  <Card title="GitHub 저장소" icon="github" href="https://github.com/hedging8563/tokenlab-mcp-server">
+    소스 코드 및 로컬 설정 지침
+  </Card>
+  <Card title="TokenLab Skills" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
+    TokenLab 통합을 위해 유지 관리되는 에이전트 스킬
+  </Card>
+  <Card title="모델 카탈로그 API" icon="list" href="https://api.tokenlab.sh/v1/models">
+    공개 모델 검색 엔드포인트
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
+    에이전트 가독형 TokenLab API 개요
+  </Card>
+</CardGroup>

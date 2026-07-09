@@ -1,0 +1,155 @@
+---
+title: "Serveur MCP TokenLab"
+description: "Connectez les clients MCP au catalogue public de modèles, aux détails des modèles, à la tarification et aux conseils sur les endpoints natifs de TokenLab."
+---
+
+Le [serveur MCP TokenLab](https://github.com/hedging8563/tokenlab-mcp-server) offre aux agents compatibles MCP un moyen en lecture seule de découvrir les modèles TokenLab avant d'écrire du code ou de choisir une route API.
+
+Utilisez-le lorsqu'un agent doit comparer les modèles disponibles, inspecter les formats de requête pris en charge, vérifier la tarification ou comprendre quelle famille d'endpoints natifs utiliser pour une tâche donnée.
+
+<Note>
+Les outils du catalogue public ne nécessitent pas de clé API TokenLab. Le serveur ne sert pas de proxy pour les requêtes d'inférence payantes.
+</Note>
+
+## Ce qu'il propose
+
+- Découverte de modèles en temps réel depuis `https://api.tokenlab.sh/v1/models`.
+- Consultation des détails d'un modèle depuis `/v1/models/{model}`.
+- Consultation de la tarification depuis `/v1/models/{model}/pricing`.
+- Aperçu de l'API lisible par les agents depuis `https://api.tokenlab.sh/llms.txt`.
+- Conseils sur les familles d'endpoints pour le chat compatible OpenAI, Responses, Anthropic Messages, Gemini, les médias, l'audio, les embeddings, le rerank et la traduction.
+
+## Installation depuis GitHub
+
+Clonez le dépôt public et installez les dépendances :
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+Démarrez le serveur via stdio :
+
+```bash
+npm start
+```
+
+La variable d'environnement optionnelle `TOKENLAB_API_BASE` a pour valeur par défaut `https://api.tokenlab.sh`.
+
+## Configuration de Claude Desktop
+
+Ajoutez le serveur à la configuration de votre client MCP. Remplacez le chemin par le chemin de votre clone local :
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+Redémarrez le client MCP après avoir enregistré la configuration.
+
+## Cursor, Windsurf et autres clients MCP
+
+Utilisez la même commande et les mêmes arguments dans tout client prenant en charge les serveurs MCP via stdio :
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+Si votre client stocke des serveurs nommés, utilisez `tokenlab-model-catalog` comme nom de serveur.
+
+## Outils
+
+| Outil | Objectif |
+|---|---|
+| `list_models` | Lister les modèles publics TokenLab. Filtrer optionnellement avec `recommended_for` tel que `image`, `video`, `embedding`, `rerank` ou `translation`. |
+| `get_model` | Récupérer les détails publics et le format de requête pris en charge pour un modèle. |
+| `get_model_pricing` | Récupérer les détails de tarification publique d'un modèle. |
+| `get_api_overview` | Récupérer l'aperçu `llms.txt` de TokenLab pour des conseils sur les endpoints lisibles par les agents. |
+
+## Flux de travail recommandé pour l'agent
+
+1. Appelez `list_models` lorsque l'utilisateur n'a pas nommé de modèle.
+2. Utilisez `recommended_for` pour les tâches autres que le chat, telles que l'image, la vidéo, la musique, la 3D, TTS, STT, les embeddings, le rerank ou la traduction.
+3. Appelez `get_model` avant de construire une requête autre que le chat, de réessayer une requête échouée ou de changer de famille d'endpoints.
+4. Appelez `get_model_pricing` lorsque le coût du modèle influence le choix de l'utilisateur.
+5. Utilisez `get_api_overview` lorsque l'agent a besoin d'une carte compacte des familles d'API TokenLab.
+
+## Conseils sur les endpoints natifs
+
+TokenLab prend en charge les routes compatibles OpenAI et les familles d'endpoints natifs. Le serveur MCP aide un agent à choisir la bonne route avant d'écrire du code :
+
+| Famille | Route courante |
+|---|---|
+| Chat compatible OpenAI | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Gemini natif | `/v1beta/models/{model}:generateContent` |
+| Images | `/v1/images/generations`, `/v1/images/edits` |
+| Vidéo | `/v1/videos/generations` |
+| Musique | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| Audio | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| Embeddings et rerank | `/v1/embeddings`, `/v1/rerank` |
+| Traduction de texte | `/v1/translations` |
+
+## Utilisation avec les compétences TokenLab
+
+Le serveur MCP est utile au moment de l'exécution, tandis que le [dépôt de compétences TokenLab](https://github.com/hedging8563/tokenlab-skills) apprend aux agents de codage comment générer et réparer le code d'intégration.
+
+Utilisez les deux lorsqu'ils sont disponibles :
+
+- Serveur MCP : découvrir les modèles actuels, la tarification et les détails des endpoints.
+- Compétence `tokenlab-api-integration` : générer des exemples d'API exécutables et gérer les erreurs structurées de TokenLab.
+- Compétence `tokenlab-model-picker` : choisir des modèles performants pour la tâche de l'utilisateur.
+- Compétence `tokenlab-native-endpoints` : décider quand utiliser les routes Responses, Anthropic Messages, Gemini, médias, audio, embedding, rerank ou traduction.
+
+## Dépannage
+
+<AccordionGroup>
+  <Accordion title="Le client ne parvient pas à démarrer le serveur">
+    Vérifiez que le chemin dans `args` pointe vers votre fichier local `src/index.js` et que `npm install` a bien été effectué dans le dépôt cloné.
+  </Accordion>
+
+  <Accordion title="La liste des modèles est vide">
+    Vérifiez que la machine peut atteindre `https://api.tokenlab.sh/v1/models`. Si vous remplacez `TOKENLAB_API_BASE`, assurez-vous qu'il ne contient pas de barre oblique finale.
+  </Accordion>
+
+  <Accordion title="L'agent choisit toujours des ID de modèles obsolètes">
+    Demandez à l'agent d'appeler `list_models` ou `get_model` avant de coder en dur un nom de modèle. Associer le serveur MCP avec `tokenlab-model-picker` donne de meilleurs résultats.
+  </Accordion>
+
+  <Accordion title="Ce serveur peut-il appeler les API d'inférence payantes de TokenLab ?">
+    Non. Il est intentionnellement en lecture seule pour les données du catalogue public, les contrats, la tarification et les aperçus. Utilisez directement l'API TokenLab pour l'inférence.
+  </Accordion>
+</AccordionGroup>
+
+## Ressources
+
+<CardGroup cols={2}>
+  <Card title="Dépôt GitHub" icon="github" href="https://github.com/hedging8563/tokenlab-mcp-server">
+    Code source et instructions de configuration locale
+  </Card>
+  <Card title="Compétences TokenLab" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
+    Compétences d'agent maintenues pour les intégrations TokenLab
+  </Card>
+  <Card title="API du catalogue de modèles" icon="list" href="https://api.tokenlab.sh/v1/models">
+    Endpoint de découverte des modèles publics
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
+    Aperçu de l'API TokenLab lisible par les agents
+  </Card>
+</CardGroup>

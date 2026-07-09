@@ -1,0 +1,155 @@
+---
+title: "خادم TokenLab MCP"
+description: "ربط عملاء MCP بكتالوج النماذج العام الخاص بـ TokenLab، وتفاصيل النماذج، والأسعار، وتوجيهات نقاط النهاية (endpoints) الأصلية."
+---
+
+يمنح [خادم TokenLab MCP](https://github.com/hedging8563/tokenlab-mcp-server) الوكلاء المتوافقين مع MCP طريقة للقراءة فقط لاكتشاف نماذج TokenLab قبل كتابة التعليمات البرمجية أو اختيار مسار API.
+
+استخدمه عندما يحتاج الوكيل إلى مقارنة النماذج المتاحة، أو فحص تنسيقات الطلبات المدعومة، أو التحقق من الأسعار، أو فهم عائلة نقاط النهاية الأصلية التي يجب استخدامها لمهمة ما.
+
+<Note>
+لا تتطلب أدوات الكتالوج العام مفتاح API خاص بـ TokenLab. الخادم لا يقوم بعمل وكيل (proxy) لطلبات الاستدلال المدفوعة.
+</Note>
+
+## ما الذي يوفره
+
+- اكتشاف مباشر للنماذج من `https://api.tokenlab.sh/v1/models`.
+- البحث عن تفاصيل النموذج من `/v1/models/{model}`.
+- البحث عن الأسعار من `/v1/models/{model}/pricing`.
+- نظرة عامة على API قابلة للقراءة من قبل الوكيل من `https://api.tokenlab.sh/llms.txt`.
+- توجيهات حول عائلات نقاط النهاية للمحادثات المتوافقة مع OpenAI، وResponses، وAnthropic Messages، وGemini، والوسائط، والصوت، والتضمينات (embeddings)، وإعادة التصنيف (rerank)، والترجمة.
+
+## التثبيت من GitHub
+
+قم باستنساخ المستودع العام وتثبيت التبعيات:
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+ابدأ تشغيل الخادم عبر stdio:
+
+```bash
+npm start
+```
+
+متغير البيئة الاختياري `TOKENLAB_API_BASE` يكون افتراضياً `https://api.tokenlab.sh`.
+
+## إعداد Claude Desktop
+
+أضف الخادم إلى إعدادات عميل MCP الخاص بك. استبدل المسار بمسار الاستنساخ المحلي الخاص بك:
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+أعد تشغيل عميل MCP بعد حفظ الإعدادات.
+
+## Cursor وWindsurf وعملاء MCP الآخرون
+
+استخدم نفس الأمر والوسائط في أي عميل يدعم خوادم stdio MCP:
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+إذا كان عميلك يخزن خوادم مسماة، استخدم `tokenlab-model-catalog` كاسم للخادم.
+
+## الأدوات
+
+| الأداة | الغرض |
+|---|---|
+| `list_models` | سرد نماذج TokenLab العامة. يمكن التصفية اختيارياً باستخدام `recommended_for` مثل `image` أو `video` أو `embedding` أو `rerank` أو `translation`. |
+| `get_model` | جلب التفاصيل العامة لنموذج واحد وتنسيق الطلب المدعوم. |
+| `get_model_pricing` | جلب تفاصيل الأسعار العامة لنموذج واحد. |
+| `get_api_overview` | جلب نظرة عامة `llms.txt` الخاصة بـ TokenLab للحصول على توجيهات نقاط النهاية القابلة للقراءة من قبل الوكيل. |
+
+## سير عمل الوكيل الموصى به
+
+1. استدعِ `list_models` عندما لا يحدد المستخدم اسماً لنموذج معين.
+2. استخدم `recommended_for` للمهام غير المتعلقة بالمحادثة، مثل الصور، الفيديو، الموسيقى، 3D، تحويل النص إلى كلام (TTS)، تحويل الكلام إلى نص (STT)، التضمينات، إعادة التصنيف، أو الترجمة.
+3. استدعِ `get_model` قبل إنشاء طلب غير متعلق بالمحادثة، أو إعادة محاولة طلب فاشل، أو التبديل بين عائلات نقاط النهاية.
+4. استدعِ `get_model_pricing` عندما تؤثر تكلفة النموذج على اختيار المستخدم.
+5. استخدم `get_api_overview` عندما يحتاج الوكيل إلى خريطة مدمجة لعائلات API الخاصة بـ TokenLab.
+
+## توجيهات نقاط النهاية الأصلية
+
+يدعم TokenLab المسارات المتوافقة مع OpenAI وعائلات نقاط النهاية الأصلية. يساعد خادم MCP الوكيل في اختيار المسار الصحيح قبل كتابة التعليمات البرمجية:
+
+| العائلة | المسار الشائع |
+|---|---|
+| محادثة متوافقة مع OpenAI | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Gemini native | `/v1beta/models/{model}:generateContent` |
+| الصور | `/v1/images/generations`, `/v1/images/edits` |
+| الفيديو | `/v1/videos/generations` |
+| الموسيقى | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| الصوت | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| التضمينات وإعادة التصنيف | `/v1/embeddings`, `/v1/rerank` |
+| ترجمة النصوص | `/v1/translations` |
+
+## الاستخدام مع مهارات TokenLab
+
+يعد خادم MCP مفيداً في وقت التشغيل، بينما يقوم [مستودع مهارات TokenLab](https://github.com/hedging8563/tokenlab-skills) بتعليم وكلاء البرمجة كيفية إنشاء وإصلاح تعليمات التكامل البرمجية.
+
+استخدم كلاهما عند توفرهما:
+
+- خادم MCP: لاكتشاف النماذج الحالية، والأسعار، وتفاصيل نقاط النهاية.
+- مهارة `tokenlab-api-integration`: لإنشاء أمثلة API قابلة للتشغيل ومعالجة أخطاء TokenLab المهيكلة.
+- مهارة `tokenlab-model-picker`: لاختيار نماذج قوية لمهمة المستخدم.
+- مهارة `tokenlab-native-endpoints`: لاتخاذ قرار بشأن استخدام مسارات Responses، أو Anthropic Messages، أو Gemini، أو الوسائط، أو الصوت، أو التضمينات، أو إعادة التصنيف، أو الترجمة.
+
+## استكشاف الأخطاء وإصلاحها
+
+<AccordionGroup>
+  <Accordion title="لا يمكن للعميل بدء تشغيل الخادم">
+    تحقق من أن مسار `args` يشير إلى ملف `src/index.js` المحلي الخاص بك وأن `npm install` قد اكتمل في المستودع المستنسخ.
+  </Accordion>
+
+  <Accordion title="قائمة النماذج فارغة">
+    تحقق من أن الجهاز يمكنه الوصول إلى `https://api.tokenlab.sh/v1/models`. إذا قمت بتجاوز `TOKENLAB_API_BASE`، فتأكد من أنه لا يتضمن شرطة مائلة في النهاية.
+  </Accordion>
+
+  <Accordion title="لا يزال الوكيل يختار معرفات نماذج قديمة">
+    اطلب من الوكيل استدعاء `list_models` أو `get_model` قبل كتابة اسم النموذج بشكل ثابت (hardcoding). إن إقران خادم MCP مع `tokenlab-model-picker` يعطي نتائج أفضل.
+  </Accordion>
+
+  <Accordion title="هل يمكن لهذا الخادم استدعاء واجهات برمجة تطبيقات الاستدلال المدفوعة لـ TokenLab؟">
+    لا. إنه مخصص للقراءة فقط للكتالوج العام، والعقود، والأسعار، وبيانات النظرة العامة. استخدم TokenLab API مباشرة للاستدلال.
+  </Accordion>
+</AccordionGroup>
+
+## الموارد
+
+<CardGroup cols={2}>
+  <Card title="مستودع GitHub" icon="github" href="https://github.com/hedging8563/tokenlab-mcp-server">
+    الكود المصدري وتعليمات الإعداد المحلي
+  </Card>
+  <Card title="مهارات TokenLab" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
+    مهارات الوكيل المحدثة لتكاملات TokenLab
+  </Card>
+  <Card title="API كتالوج النماذج" icon="list" href="https://api.tokenlab.sh/v1/models">
+    نقطة نهاية اكتشاف النماذج العامة
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
+    نظرة عامة على TokenLab API قابلة للقراءة من قبل الوكيل
+  </Card>
+</CardGroup>

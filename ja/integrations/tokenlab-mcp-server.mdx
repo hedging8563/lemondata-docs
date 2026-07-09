@@ -1,0 +1,155 @@
+---
+title: "TokenLab MCP Server"
+description: "MCPクライアントをTokenLabのパブリックモデルカタログ、モデル詳細、価格設定、およびネイティブエンドポイントガイダンスに接続します。"
+---
+
+[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) は、MCP互換エージェントがコードを記述したりAPIルートを選択したりする前に、TokenLabのモデルを読み取り専用で探索できるようにします。
+
+エージェントが利用可能なモデルの比較、サポートされているリクエスト形式の確認、価格のチェック、またはタスクに適したネイティブエンドポイントファミリーの把握が必要な場合に使用してください。
+
+<Note>
+パブリックカタログツールにTokenLab APIキーは不要です。このサーバーは有料の推論リクエストをプロキシしません。
+</Note>
+
+## 提供機能
+
+- `https://api.tokenlab.sh/v1/models` からのライブモデル探索。
+- `/v1/models/{model}` からのモデル詳細検索。
+- `/v1/models/{model}/pricing` からの価格検索。
+- `https://api.tokenlab.sh/llms.txt` からのエージェントが読み取り可能なAPI概要。
+- OpenAI互換チャット、Responses、Anthropic Messages、Gemini、メディア、オーディオ、埋め込み（embeddings）、再ランク（rerank）、翻訳のためのエンドポイントファミリーガイダンス。
+
+## GitHubからのインストール
+
+パブリックリポジトリをクローンし、依存関係をインストールします：
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+stdio経由でサーバーを起動します：
+
+```bash
+npm start
+```
+
+オプションの `TOKENLAB_API_BASE` 環境変数のデフォルト値は `https://api.tokenlab.sh` です。
+
+## Claude Desktopの設定
+
+MCPクライアント設定にサーバーを追加します。パスをローカルのクローンパスに置き換えてください：
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+設定を保存した後、MCPクライアントを再起動してください。
+
+## Cursor、Windsurf、およびその他のMCPクライアント
+
+stdio MCPサーバーをサポートするすべてのクライアントで、同じコマンドと引数を使用します：
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+クライアントが名前付きサーバーを保存する場合、サーバー名として `tokenlab-model-catalog` を使用してください。
+
+## ツール
+
+| ツール | 目的 |
+|---|---|
+| `list_models` | パブリックTokenLabモデルを一覧表示します。`recommended_for`（`image`、`video`、`embedding`、`rerank`、`translation`など）を使用してフィルタリング可能です。 |
+| `get_model` | 特定のモデルのパブリック詳細とサポートされているリクエスト形式を取得します。 |
+| `get_model_pricing` | 特定のモデルのパブリック価格詳細を取得します。 |
+| `get_api_overview` | エージェントが読み取り可能なエンドポイントガイダンスとして、TokenLabの `llms.txt` 概要を取得します。 |
+
+## 推奨されるエージェントワークフロー
+
+1. ユーザーがモデル名を指定していない場合は `list_models` を呼び出します。
+2. チャット以外のタスク（画像、動画、音楽、3D、TTS、STT、埋め込み、再ランク、翻訳など）には `recommended_for` を使用します。
+3. チャット以外のリクエストを作成する前、失敗したリクエストを再試行する前、またはエンドポイントファミリーを切り替える前に `get_model` を呼び出します。
+4. モデルのコストがユーザーの選択に影響する場合は `get_model_pricing` を呼び出します。
+5. エージェントがTokenLab APIファミリーのコンパクトなマップを必要とする場合は `get_api_overview` を使用します。
+
+## ネイティブエンドポイントガイダンス
+
+TokenLabはOpenAI互換ルートとネイティブエンドポイントファミリーをサポートしています。MCPサーバーは、エージェントがコードを書く前に適切なルートを選択するのを支援します：
+
+| ファミリー | 一般的なルート |
+|---|---|
+| OpenAI互換チャット | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Geminiネイティブ | `/v1beta/models/{model}:generateContent` |
+| 画像 | `/v1/images/generations`, `/v1/images/edits` |
+| 動画 | `/v1/videos/generations` |
+| 音楽 | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| オーディオ | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| 埋め込みと再ランク | `/v1/embeddings`, `/v1/rerank` |
+| テキスト翻訳 | `/v1/translations` |
+
+## TokenLab Skillsとの併用
+
+MCPサーバーは実行時に役立ちますが、[TokenLab skillsリポジトリ](https://github.com/hedging8563/tokenlab-skills) は、コーディングエージェントに対して統合コードの生成と修正方法を教えるためのものです。
+
+利用可能な場合は両方を使用してください：
+
+- MCPサーバー：最新のモデル、価格、エンドポイントの詳細を探索します。
+- `tokenlab-api-integration` スキル：実行可能なAPI例を生成し、構造化されたTokenLabエラーを処理します。
+- `tokenlab-model-picker` スキル：ユーザーのタスクに適した強力なモデルを選択します。
+- `tokenlab-native-endpoints` スキル：Responses、Anthropic Messages、Gemini、メディア、オーディオ、埋め込み、再ランク、または翻訳ルートをいつ使用するかを決定します。
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="クライアントがサーバーを起動できない">
+    `args` パスがローカルの `src/index.js` ファイルを指していること、およびクローンしたリポジトリで `npm install` が完了していることを確認してください。
+  </Accordion>
+
+  <Accordion title="モデルリストが空である">
+    マシンが `https://api.tokenlab.sh/v1/models` に到達できることを確認してください。`TOKENLAB_API_BASE` をオーバーライドする場合は、末尾にスラッシュが含まれていないことを確認してください。
+  </Accordion>
+
+  <Accordion title="エージェントが古いモデルIDを選択し続ける">
+    モデル名をハードコーディングする前に、エージェントに `list_models` または `get_model` を呼び出すよう指示してください。MCPサーバーと `tokenlab-model-picker` を組み合わせると、より良い結果が得られます。
+  </Accordion>
+
+  <Accordion title="このサーバーで有料のTokenLab推論APIを呼び出せますか？">
+    いいえ。パブリックカタログ、契約、価格、概要データ専用の読み取り専用サーバーです。推論にはTokenLab APIを直接使用してください。
+  </Accordion>
+</AccordionGroup>
+
+## リソース
+
+<CardGroup cols={2}>
+  <Card title="GitHubリポジトリ" icon="github" href="https://github.com/hedging8563/tokenlab-mcp-server">
+    ソースコードとローカルセットアップ手順
+  </Card>
+  <Card title="TokenLab Skills" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
+    TokenLab統合のためのメンテナンスされたエージェントスキル
+  </Card>
+  <Card title="モデルカタログAPI" icon="list" href="https://api.tokenlab.sh/v1/models">
+    パブリックモデル探索エンドポイント
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
+    エージェントが読み取り可能なTokenLab API概要
+  </Card>
+</CardGroup>

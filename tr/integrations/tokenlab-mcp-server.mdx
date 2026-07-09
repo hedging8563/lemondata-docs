@@ -1,0 +1,155 @@
+---
+title: "TokenLab MCP Server"
+description: "MCP istemcilerini TokenLab'in genel model kataloğuna, model detaylarına, fiyatlandırmasına ve yerel uç nokta rehberliğine bağlayın."
+---
+
+[TokenLab MCP sunucusu](https://github.com/hedging8563/tokenlab-mcp-server), MCP uyumlu ajanlara, kod yazmadan veya bir API rotası seçmeden önce TokenLab modellerini keşfetmeleri için salt okunur bir yol sunar.
+
+Bunu, bir ajanın mevcut modelleri karşılaştırması, desteklenen istek formatlarını incelemesi, fiyatlandırmayı kontrol etmesi veya bir görev için hangi yerel uç nokta ailesinin kullanılacağını anlaması gerektiğinde kullanın.
+
+<Note>
+Genel katalog araçları bir TokenLab API anahtarı gerektirmez. Sunucu, ücretli çıkarım (inference) isteklerine vekalet etmez (proxy yapmaz).
+</Note>
+
+## Sağladığı Özellikler
+
+- `https://api.tokenlab.sh/v1/models` adresinden canlı model keşfi.
+- `/v1/models/{model}` üzerinden model detay sorgulama.
+- `/v1/models/{model}/pricing` üzerinden fiyatlandırma sorgulama.
+- `https://api.tokenlab.sh/llms.txt` adresinden ajan tarafından okunabilir API genel bakışı.
+- OpenAI uyumlu sohbet, Responses, Anthropic Messages, Gemini, medya, ses, yerleştirmeler (embeddings), yeniden sıralama (rerank) ve çeviri için uç nokta ailesi rehberliği.
+
+## GitHub'dan Kurulum
+
+Genel depoyu klonlayın ve bağımlılıkları yükleyin:
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+Sunucuyu stdio üzerinden başlatın:
+
+```bash
+npm start
+```
+
+İsteğe bağlı `TOKENLAB_API_BASE` ortam değişkeni varsayılan olarak `https://api.tokenlab.sh` değerini alır.
+
+## Claude Desktop Yapılandırması
+
+Sunucuyu MCP istemci yapılandırmanıza ekleyin. Yolu kendi yerel klon yolunuzla değiştirin:
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+Yapılandırmayı kaydettikten sonra MCP istemcisini yeniden başlatın.
+
+## Cursor, Windsurf ve Diğer MCP İstemcileri
+
+Stdio MCP sunucularını destekleyen herhangi bir istemcide aynı komutu ve argümanları kullanın:
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+İstemciniz adlandırılmış sunucuları saklıyorsa, sunucu adı olarak `tokenlab-model-catalog` kullanın.
+
+## Araçlar
+
+| Araç | Amaç |
+|---|---|
+| `list_models` | Genel TokenLab modellerini listeler. İsteğe bağlı olarak `image`, `video`, `embedding`, `rerank` veya `translation` gibi `recommended_for` ile filtreleyin. |
+| `get_model` | Bir modelin genel detaylarını ve desteklenen istek formatını getirir. |
+| `get_model_pricing` | Bir modelin genel fiyatlandırma detaylarını getirir. |
+| `get_api_overview` | Ajan tarafından okunabilir uç nokta rehberliği için TokenLab'in `llms.txt` özetini getirir. |
+
+## Önerilen Ajan İş Akışı
+
+1. Kullanıcı bir model adı belirtmediğinde `list_models` çağrısı yapın.
+2. Sohbet dışı görevler (görüntü, video, müzik, 3D, TTS, STT, yerleştirmeler, yeniden sıralama veya çeviri gibi) için `recommended_for` kullanın.
+3. Sohbet dışı bir istek oluşturmadan, başarısız bir isteği yeniden denemeden veya uç nokta ailelerini değiştirmeden önce `get_model` çağrısı yapın.
+4. Model maliyeti kullanıcının seçimini etkilediğinde `get_model_pricing` çağrısı yapın.
+5. Ajanın TokenLab API ailelerinin kompakt bir haritasına ihtiyacı olduğunda `get_api_overview` kullanın.
+
+## Yerel Uç Nokta Rehberliği
+
+TokenLab, OpenAI uyumlu rotaları ve yerel uç nokta ailelerini destekler. MCP sunucusu, bir ajanın kod yazmadan önce doğru rotayı seçmesine yardımcı olur:
+
+| Aile | Yaygın rota |
+|---|---|
+| OpenAI uyumlu sohbet | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Gemini yerel | `/v1beta/models/{model}:generateContent` |
+| Görüntüler | `/v1/images/generations`, `/v1/images/edits` |
+| Video | `/v1/videos/generations` |
+| Müzik | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| Ses | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| Yerleştirmeler ve yeniden sıralama | `/v1/embeddings`, `/v1/rerank` |
+| Metin çevirisi | `/v1/translations` |
+
+## TokenLab Yetenekleri (Skills) ile Kullanım
+
+MCP sunucusu çalışma zamanında yararlıdır; [TokenLab yetenekleri deposu](https://github.com/hedging8563/tokenlab-skills) ise kodlama ajanlarına entegrasyon kodunu nasıl oluşturacaklarını ve onaracaklarını öğretir.
+
+Mümkün olduğunda her ikisini de kullanın:
+
+- MCP sunucusu: güncel modelleri, fiyatlandırmayı ve uç nokta detaylarını keşfedin.
+- `tokenlab-api-integration` yeteneği: çalıştırılabilir API örnekleri oluşturun ve yapılandırılmış TokenLab hatalarını yönetin.
+- `tokenlab-model-picker` yeteneği: kullanıcının görevi için güçlü modeller seçin.
+- `tokenlab-native-endpoints` yeteneği: Responses, Anthropic Messages, Gemini, medya, ses, yerleştirme, yeniden sıralama veya çeviri rotalarının ne zaman kullanılacağına karar verin.
+
+## Sorun Giderme
+
+<AccordionGroup>
+  <Accordion title="İstemci sunucuyu başlatamıyor">
+    `args` yolunun yerel `src/index.js` dosyanızı işaret ettiğinden ve klonlanmış depoda `npm install` işleminin tamamlandığından emin olun.
+  </Accordion>
+
+  <Accordion title="Model listesi boş">
+    Makinenin `https://api.tokenlab.sh/v1/models` adresine ulaşabildiğini doğrulayın. `TOKENLAB_API_BASE` değerini geçersiz kılıyorsanız, sonunda eğik çizgi (/) olmadığından emin olun.
+  </Accordion>
+
+  <Accordion title="Ajan hala eski model kimliklerini seçiyor">
+    Ajandan bir model adını sabit kodlamadan (hardcoding) önce `list_models` veya `get_model` çağırmasını isteyin. MCP sunucusunu `tokenlab-model-picker` ile eşleştirmek daha iyi sonuçlar verir.
+  </Accordion>
+
+  <Accordion title="Bu sunucu ücretli TokenLab çıkarım API'lerini çağırabilir mi?">
+    Hayır. Genel katalog, sözleşme, fiyatlandırma ve genel bakış verileri için kasıtlı olarak salt okunurdur. Çıkarım için doğrudan TokenLab API'sini kullanın.
+  </Accordion>
+</AccordionGroup>
+
+## Kaynaklar
+
+<CardGroup cols={2}>
+  <Card title="GitHub Deposu" icon="github" href="https://github.com/hedging8563/tokenlab-mcp-server">
+    Kaynak kod ve yerel kurulum talimatları
+  </Card>
+  <Card title="TokenLab Yetenekleri" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
+    TokenLab entegrasyonları için bakımı yapılan ajan yetenekleri
+  </Card>
+  <Card title="Model Kataloğu API" icon="list" href="https://api.tokenlab.sh/v1/models">
+    Genel model keşif uç noktası
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
+    Ajan tarafından okunabilir TokenLab API özeti
+  </Card>
+</CardGroup>

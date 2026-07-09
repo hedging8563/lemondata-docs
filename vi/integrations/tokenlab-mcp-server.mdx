@@ -1,0 +1,155 @@
+---
+title: "TokenLab MCP Server"
+description: "Kết nối các MCP client với danh mục mô hình công khai, chi tiết mô hình, giá cả và hướng dẫn về endpoint gốc của TokenLab."
+---
+
+[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) cung cấp cho các agent tương thích với MCP một phương thức chỉ đọc để khám phá các mô hình của TokenLab trước khi chúng viết code hoặc chọn một route API.
+
+Hãy sử dụng server này khi một agent cần so sánh các mô hình khả dụng, kiểm tra các định dạng request được hỗ trợ, kiểm tra giá cả hoặc tìm hiểu xem nên sử dụng họ endpoint gốc nào cho một tác vụ cụ thể.
+
+<Note>
+Các công cụ danh mục công khai không yêu cầu TokenLab API key. Server này không proxy các request inference trả phí.
+</Note>
+
+## Những gì server cung cấp
+
+- Khám phá mô hình trực tiếp từ `https://api.tokenlab.sh/v1/models`.
+- Tra cứu chi tiết mô hình từ `/v1/models/{model}`.
+- Tra cứu giá cả từ `/v1/models/{model}/pricing`.
+- Tổng quan API mà agent có thể đọc được từ `https://api.tokenlab.sh/llms.txt`.
+- Hướng dẫn về họ endpoint cho chat tương thích với OpenAI, Responses, Anthropic Messages, Gemini, media, audio, embeddings, rerank và dịch thuật.
+
+## Cài đặt từ GitHub
+
+Clone repository công khai và cài đặt các dependency:
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+Khởi động server qua stdio:
+
+```bash
+npm start
+```
+
+Biến môi trường tùy chọn `TOKENLAB_API_BASE` có giá trị mặc định là `https://api.tokenlab.sh`.
+
+## Cấu hình Claude Desktop
+
+Thêm server vào cấu hình MCP client của bạn. Thay thế đường dẫn bằng đường dẫn clone cục bộ của bạn:
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+Khởi động lại MCP client sau khi lưu cấu hình.
+
+## Cursor, Windsurf và các MCP Client khác
+
+Sử dụng cùng lệnh và args trong bất kỳ client nào hỗ trợ stdio MCP server:
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+Nếu client của bạn lưu trữ các server có tên, hãy sử dụng `tokenlab-model-catalog` làm tên server.
+
+## Các công cụ (Tools)
+
+| Công cụ | Mục đích |
+|---|---|
+| `list_models` | Liệt kê các mô hình TokenLab công khai. Có thể lọc tùy chọn với `recommended_for` như `image`, `video`, `embedding`, `rerank` hoặc `translation`. |
+| `get_model` | Lấy chi tiết công khai và định dạng request được hỗ trợ của một mô hình. |
+| `get_model_pricing` | Lấy chi tiết giá cả công khai của một mô hình. |
+| `get_api_overview` | Lấy tổng quan `llms.txt` của TokenLab để hướng dẫn về endpoint cho agent. |
+
+## Quy trình làm việc khuyến nghị cho Agent
+
+1. Gọi `list_models` khi người dùng chưa chỉ định tên mô hình.
+2. Sử dụng `recommended_for` cho các tác vụ không phải chat, chẳng hạn như image, video, music, 3D, TTS, STT, embeddings, rerank hoặc translation.
+3. Gọi `get_model` trước khi xây dựng một request không phải chat, thử lại một request thất bại hoặc chuyển đổi giữa các họ endpoint.
+4. Gọi `get_model_pricing` khi chi phí mô hình ảnh hưởng đến lựa chọn của người dùng.
+5. Sử dụng `get_api_overview` khi agent cần một bản đồ tóm tắt về các họ API của TokenLab.
+
+## Hướng dẫn về Endpoint gốc
+
+TokenLab hỗ trợ các route tương thích với OpenAI và các họ endpoint gốc. MCP server giúp agent chọn đúng route trước khi viết code:
+
+| Họ endpoint | Route phổ biến |
+|---|---|
+| Chat tương thích OpenAI | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Gemini native | `/v1beta/models/{model}:generateContent` |
+| Images | `/v1/images/generations`, `/v1/images/edits` |
+| Video | `/v1/videos/generations` |
+| Music | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| Audio | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| Embeddings và rerank | `/v1/embeddings`, `/v1/rerank` |
+| Dịch văn bản | `/v1/translations` |
+
+## Sử dụng với TokenLab Skills
+
+MCP server hữu ích tại thời điểm runtime, trong khi [TokenLab skills repository](https://github.com/hedging8563/tokenlab-skills) hướng dẫn các agent lập trình cách tạo và sửa chữa code tích hợp.
+
+Sử dụng cả hai khi có thể:
+
+- MCP server: khám phá các mô hình hiện tại, giá cả và chi tiết endpoint.
+- Skill `tokenlab-api-integration`: tạo các ví dụ API có thể chạy được và xử lý các lỗi TokenLab có cấu trúc.
+- Skill `tokenlab-model-picker`: chọn các mô hình mạnh mẽ cho tác vụ của người dùng.
+- Skill `tokenlab-native-endpoints`: quyết định khi nào nên sử dụng các route Responses, Anthropic Messages, Gemini, media, audio, embedding, rerank hoặc translation.
+
+## Khắc phục sự cố
+
+<AccordionGroup>
+  <Accordion title="Client không thể khởi động server">
+    Kiểm tra xem đường dẫn `args` có trỏ đến tệp `src/index.js` cục bộ của bạn hay không và `npm install` đã hoàn tất trong repository đã clone chưa.
+  </Accordion>
+
+  <Accordion title="Danh sách mô hình trống">
+    Xác minh rằng máy có thể truy cập `https://api.tokenlab.sh/v1/models`. Nếu bạn ghi đè `TOKENLAB_API_BASE`, hãy đảm bảo nó không bao gồm dấu gạch chéo ở cuối.
+  </Accordion>
+
+  <Accordion title="Agent vẫn chọn các ID mô hình cũ">
+    Yêu cầu agent gọi `list_models` hoặc `get_model` trước khi hardcode tên mô hình. Việc kết hợp MCP server với `tokenlab-model-picker` sẽ mang lại kết quả tốt hơn.
+  </Accordion>
+
+  <Accordion title="Server này có thể gọi các API inference trả phí của TokenLab không?">
+    Không. Nó được thiết kế chỉ để đọc dữ liệu danh mục công khai, hợp đồng, giá cả và tổng quan. Hãy sử dụng trực tiếp TokenLab API để thực hiện inference.
+  </Accordion>
+</AccordionGroup>
+
+## Tài nguyên
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/hedging8563/tokenlab-mcp-server">
+    Mã nguồn và hướng dẫn thiết lập cục bộ
+  </Card>
+  <Card title="TokenLab Skills" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
+    Các kỹ năng agent được duy trì cho các tích hợp TokenLab
+  </Card>
+  <Card title="Model Catalog API" icon="list" href="https://api.tokenlab.sh/v1/models">
+    Endpoint khám phá mô hình công khai
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
+    Tổng quan API TokenLab mà agent có thể đọc được
+  </Card>
+</CardGroup>

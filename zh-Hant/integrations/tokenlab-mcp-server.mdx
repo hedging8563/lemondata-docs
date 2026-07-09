@@ -1,0 +1,155 @@
+---
+title: "TokenLab MCP Server"
+description: "將 MCP 客戶端連接至 TokenLab 的公開模型目錄、模型詳細資訊、定價以及原生端點指南。"
+---
+
+[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) 為支援 MCP 的代理程式（agents）提供了一種唯讀方式，以便在編寫程式碼或選擇 API 路由之前探索 TokenLab 模型。
+
+當代理程式需要比較可用模型、檢查支援的請求格式、查詢定價或了解針對特定任務應使用哪種原生端點系列時，請使用此伺服器。
+
+<Note>
+公開目錄工具不需要 TokenLab API 金鑰。此伺服器不會代理付費的推論請求。
+</Note>
+
+## 它提供了什麼
+
+- 來自 `https://api.tokenlab.sh/v1/models` 的即時模型探索。
+- 來自 `/v1/models/{model}` 的模型詳細資訊查詢。
+- 來自 `/v1/models/{model}/pricing` 的定價查詢。
+- 來自 `https://api.tokenlab.sh/llms.txt` 的代理程式可讀 API 概覽。
+- 針對 OpenAI 相容聊天、Responses、Anthropic Messages、Gemini、媒體、音訊、嵌入（embeddings）、重排序（rerank）及翻譯的端點系列指南。
+
+## 從 GitHub 安裝
+
+複製公開儲存庫並安裝依賴項：
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+透過 stdio 啟動伺服器：
+
+```bash
+npm start
+```
+
+選用的 `TOKENLAB_API_BASE` 環境變數預設為 `https://api.tokenlab.sh`。
+
+## Claude Desktop 設定
+
+將伺服器新增至您的 MCP 客戶端設定中。請將路徑替換為您的本地複製路徑：
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+儲存設定後，請重新啟動 MCP 客戶端。
+
+## Cursor、Windsurf 及其他 MCP 客戶端
+
+在任何支援 stdio MCP 伺服器的客戶端中使用相同的指令與參數：
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+如果您的客戶端儲存了已命名的伺服器，請使用 `tokenlab-model-catalog` 作為伺服器名稱。
+
+## 工具
+
+| 工具 | 用途 |
+|---|---|
+| `list_models` | 列出公開的 TokenLab 模型。可選擇使用 `recommended_for` 進行篩選，例如 `image`、`video`、`embedding`、`rerank` 或 `translation`。 |
+| `get_model` | 獲取單一模型的公開詳細資訊與支援的請求格式。 |
+| `get_model_pricing` | 獲取單一模型的公開定價詳細資訊。 |
+| `get_api_overview` | 獲取 TokenLab 的 `llms.txt` 概覽，以供代理程式讀取端點指南。 |
+
+## 建議的代理程式工作流程
+
+1. 當使用者未指定模型時，呼叫 `list_models`。
+2. 針對非聊天任務（如圖像、影片、音樂、3D、TTS、STT、嵌入、重排序或翻譯）使用 `recommended_for`。
+3. 在建立非聊天請求、重試失敗請求或切換端點系列之前，呼叫 `get_model`。
+4. 當模型成本影響使用者選擇時，呼叫 `get_model_pricing`。
+5. 當代理程式需要 TokenLab API 系列的精簡對照表時，使用 `get_api_overview`。
+
+## 原生端點指南
+
+TokenLab 支援 OpenAI 相容路由與原生端點系列。MCP 伺服器可協助代理程式在編寫程式碼前選擇正確的路由：
+
+| 系列 | 常見路由 |
+|---|---|
+| OpenAI-compatible chat | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Gemini native | `/v1beta/models/{model}:generateContent` |
+| Images | `/v1/images/generations`, `/v1/images/edits` |
+| Video | `/v1/videos/generations` |
+| Music | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| Audio | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| Embeddings and rerank | `/v1/embeddings`, `/v1/rerank` |
+| Text translation | `/v1/translations` |
+
+## 與 TokenLab Skills 搭配使用
+
+MCP 伺服器在執行階段非常有用，而 [TokenLab skills repository](https://github.com/hedging8563/tokenlab-skills) 則教導編碼代理程式如何產生與修復整合程式碼。
+
+在可用時同時使用兩者：
+
+- MCP server：探索當前模型、定價與端點詳細資訊。
+- `tokenlab-api-integration` skill：產生可執行的 API 範例並處理結構化的 TokenLab 錯誤。
+- `tokenlab-model-picker` skill：為使用者的任務選擇合適的模型。
+- `tokenlab-native-endpoints` skill：決定何時使用 Responses、Anthropic Messages、Gemini、媒體、音訊、嵌入、重排序或翻譯路由。
+
+## 疑難排解
+
+<AccordionGroup>
+  <Accordion title="客戶端無法啟動伺服器">
+    請檢查 `args` 路徑是否指向您本地的 `src/index.js` 檔案，並確認已在複製的儲存庫中完成 `npm install`。
+  </Accordion>
+
+  <Accordion title="模型列表為空">
+    請驗證機器是否能連線至 `https://api.tokenlab.sh/v1/models`。如果您覆寫了 `TOKENLAB_API_BASE`，請確保結尾不包含斜線。
+  </Accordion>
+
+  <Accordion title="代理程式仍選擇過時的模型 ID">
+    請要求代理程式在硬編碼模型名稱之前呼叫 `list_models` 或 `get_model`。將 MCP 伺服器與 `tokenlab-model-picker` 搭配使用可獲得更好的結果。
+  </Accordion>
+
+  <Accordion title="此伺服器可以呼叫付費的 TokenLab 推論 API 嗎？">
+    不行。它僅針對公開目錄、合約、定價與概覽資料提供唯讀存取。請直接使用 TokenLab API 進行推論。
+  </Accordion>
+</AccordionGroup>
+
+## 資源
+
+<CardGroup cols={2}>
+  <Card title="GitHub 儲存庫" icon="github" href="https://github.com/hedging8563/tokenlab-mcp-server">
+    原始碼與本地設定說明
+  </Card>
+  <Card title="TokenLab Skills" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
+    維護中的 TokenLab 整合代理程式技能
+  </Card>
+  <Card title="模型目錄 API" icon="list" href="https://api.tokenlab.sh/v1/models">
+    公開模型探索端點
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
+    代理程式可讀的 TokenLab API 概覽
+  </Card>
+</CardGroup>

@@ -1,0 +1,155 @@
+---
+title: "TokenLab MCP Server"
+description: "Hubungkan klien MCP ke katalog model publik, detail model, harga, dan panduan endpoint native TokenLab."
+---
+
+[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) memberikan agen yang kompatibel dengan MCP cara baca-saja (read-only) untuk menemukan model TokenLab sebelum mereka menulis kode atau memilih rute API.
+
+Gunakan server ini ketika agen perlu membandingkan model yang tersedia, memeriksa format permintaan yang didukung, mengecek harga, atau memahami keluarga endpoint native mana yang harus digunakan untuk suatu tugas.
+
+<Note>
+Alat katalog publik tidak memerlukan API key TokenLab. Server ini tidak memproksi permintaan inferensi berbayar.
+</Note>
+
+## Apa yang Disediakan
+
+- Penemuan model secara langsung dari `https://api.tokenlab.sh/v1/models`.
+- Pencarian detail model dari `/v1/models/{model}`.
+- Pencarian harga dari `/v1/models/{model}/pricing`.
+- Ringkasan API yang dapat dibaca agen dari `https://api.tokenlab.sh/llms.txt`.
+- Panduan keluarga endpoint untuk chat yang kompatibel dengan OpenAI, Responses, Anthropic Messages, Gemini, media, audio, embeddings, rerank, dan terjemahan.
+
+## Instalasi Dari GitHub
+
+Klon repositori publik dan instal dependensi:
+
+```bash
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+```
+
+Jalankan server melalui stdio:
+
+```bash
+npm start
+```
+
+Variabel lingkungan opsional `TOKENLAB_API_BASE` memiliki nilai default `https://api.tokenlab.sh`.
+
+## Konfigurasi Claude Desktop
+
+Tambahkan server ke konfigurasi klien MCP Anda. Ganti path dengan path klon lokal Anda:
+
+```json
+{
+  "mcpServers": {
+    "tokenlab-model-catalog": {
+      "command": "node",
+      "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"]
+    }
+  }
+}
+```
+
+Mulai ulang klien MCP setelah menyimpan konfigurasi.
+
+## Cursor, Windsurf, Dan Klien MCP Lainnya
+
+Gunakan perintah dan args yang sama di klien mana pun yang mendukung server MCP stdio:
+
+```json
+{
+  "command": "node",
+  "args": ["/absolute/path/to/tokenlab-mcp-server/src/index.js"],
+  "env": {
+    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
+  }
+}
+```
+
+Jika klien Anda menyimpan server bernama, gunakan `tokenlab-model-catalog` sebagai nama server.
+
+## Tools
+
+| Tool | Tujuan |
+|---|---|
+| `list_models` | Mencantumkan model TokenLab publik. Secara opsional filter dengan `recommended_for` seperti `image`, `video`, `embedding`, `rerank`, atau `translation`. |
+| `get_model` | Mengambil detail publik satu model dan format permintaan yang didukung. |
+| `get_model_pricing` | Mengambil detail harga publik satu model. |
+| `get_api_overview` | Mengambil ringkasan `llms.txt` TokenLab untuk panduan endpoint yang dapat dibaca agen. |
+
+## Alur Kerja Agen yang Direkomendasikan
+
+1. Panggil `list_models` ketika pengguna belum menyebutkan nama model.
+2. Gunakan `recommended_for` untuk tugas non-chat, seperti image, video, music, 3D, TTS, STT, embeddings, rerank, atau translation.
+3. Panggil `get_model` sebelum membuat permintaan non-chat, mencoba kembali permintaan yang gagal, atau beralih keluarga endpoint.
+4. Panggil `get_model_pricing` ketika biaya model memengaruhi pilihan pengguna.
+5. Gunakan `get_api_overview` ketika agen membutuhkan peta ringkas keluarga API TokenLab.
+
+## Panduan Endpoint Native
+
+TokenLab mendukung rute yang kompatibel dengan OpenAI dan keluarga endpoint native. Server MCP membantu agen memilih rute yang tepat sebelum menulis kode:
+
+| Keluarga | Rute Umum |
+|---|---|
+| Chat kompatibel OpenAI | `/v1/chat/completions` |
+| Responses | `/v1/responses` |
+| Anthropic Messages | `/v1/messages` |
+| Gemini native | `/v1beta/models/{model}:generateContent` |
+| Images | `/v1/images/generations`, `/v1/images/edits` |
+| Video | `/v1/videos/generations` |
+| Music | `/v1/music/generations` |
+| 3D | `/v1/3d/generations` |
+| Audio | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
+| Embeddings dan rerank | `/v1/embeddings`, `/v1/rerank` |
+| Terjemahan teks | `/v1/translations` |
+
+## Gunakan Dengan TokenLab Skills
+
+Server MCP berguna saat runtime, sementara [repositori TokenLab skills](https://github.com/hedging8563/tokenlab-skills) mengajarkan agen pengodean cara membuat dan memperbaiki kode integrasi.
+
+Gunakan keduanya jika tersedia:
+
+- MCP server: menemukan model saat ini, harga, dan detail endpoint.
+- Skill `tokenlab-api-integration`: membuat contoh API yang dapat dijalankan dan menangani error TokenLab yang terstruktur.
+- Skill `tokenlab-model-picker`: memilih model yang kuat untuk tugas pengguna.
+- Skill `tokenlab-native-endpoints`: memutuskan kapan harus menggunakan rute Responses, Anthropic Messages, Gemini, media, audio, embedding, rerank, atau translation.
+
+## Pemecahan Masalah
+
+<AccordionGroup>
+  <Accordion title="Klien tidak dapat memulai server">
+    Periksa apakah path `args` mengarah ke file `src/index.js` lokal Anda dan apakah `npm install` telah selesai di repositori yang dikloning.
+  </Accordion>
+
+  <Accordion title="Daftar model kosong">
+    Verifikasi bahwa mesin dapat menjangkau `https://api.tokenlab.sh/v1/models`. Jika Anda mengganti `TOKENLAB_API_BASE`, pastikan tidak menyertakan garis miring (trailing slash) di akhir.
+  </Accordion>
+
+  <Accordion title="Agen masih memilih ID model yang kedaluwarsa">
+    Minta agen untuk memanggil `list_models` atau `get_model` sebelum melakukan hardcode nama model. Memasangkan server MCP dengan `tokenlab-model-picker` memberikan hasil yang lebih baik.
+  </Accordion>
+
+  <Accordion title="Bisakah server ini memanggil API inferensi TokenLab berbayar?">
+    Tidak. Server ini sengaja dibuat read-only untuk data katalog publik, kontrak, harga, dan ringkasan. Gunakan API TokenLab secara langsung untuk inferensi.
+  </Accordion>
+</AccordionGroup>
+
+## Sumber Daya
+
+<CardGroup cols={2}>
+  <Card title="Repositori GitHub" icon="github" href="https://github.com/hedging8563/tokenlab-mcp-server">
+    Kode sumber dan instruksi pengaturan lokal
+  </Card>
+  <Card title="TokenLab Skills" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
+    Skill agen yang dikelola untuk integrasi TokenLab
+  </Card>
+  <Card title="API Katalog Model" icon="list" href="https://api.tokenlab.sh/v1/models">
+    Endpoint penemuan model publik
+  </Card>
+  <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
+    Ringkasan API TokenLab yang dapat dibaca agen
+  </Card>
+</CardGroup>
