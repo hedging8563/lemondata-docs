@@ -1,14 +1,14 @@
 ---
 title: "خادم TokenLab MCP"
-description: "ربط عملاء MCP بكتالوج النماذج العام الخاص بـ TokenLab، وتفاصيل النماذج، والأسعار، وتوجيهات نقاط النهاية (endpoints) الأصلية."
+description: "ربط عملاء MCP باكتشاف نماذج TokenLab والأسعار والمحادثة المتوافقة مع OpenAI ونقاط الاستدلال الأصلية."
 ---
 
-يمنح [خادم TokenLab MCP](https://github.com/hedging8563/tokenlab-mcp-server) الوكلاء المتوافقين مع MCP طريقة للقراءة فقط لاكتشاف نماذج TokenLab قبل كتابة التعليمات البرمجية أو اختيار مسار API.
+يمنح [خادم TokenLab MCP](https://github.com/hedging8563/tokenlab-mcp-server) الوكلاء المتوافقين مع MCP اكتشافًا مباشرًا للنماذج والأسعار وChat Completions المتوافق مع OpenAI وأدوات الاستدلال الأصلية.
 
-استخدمه عندما يحتاج الوكيل إلى مقارنة النماذج المتاحة، أو فحص تنسيقات الطلبات المدعومة، أو التحقق من الأسعار، أو فهم عائلة نقاط النهاية الأصلية التي يجب استخدامها لمهمة ما.
+استخدمه عندما يحتاج الوكيل إلى مقارنة النماذج أو فحص تنسيقات الطلبات أو التحقق من الأسعار أو استدعاء TokenLab عبر OpenAI Chat Completions أو Responses أو Anthropic Messages أو Gemini generateContent.
 
 <Note>
-لا تتطلب أدوات الكتالوج العام مفتاح API خاص بـ TokenLab. الخادم لا يقوم بعمل وكيل (proxy) لطلبات الاستدلال المدفوعة.
+لا تتطلب أدوات الكتالوج العام مفتاح API خاصًا بـ TokenLab. اضبط `TOKENLAB_API_KEY` لاستخدام أدوات الاستدلال الأربع المدفوعة.
 </Note>
 
 ## ما الذي يوفره
@@ -18,6 +18,7 @@ description: "ربط عملاء MCP بكتالوج النماذج العام ا�
 - البحث عن الأسعار من `/v1/models/{model}/pricing`.
 - نظرة عامة على API قابلة للقراءة من قبل الوكيل من `https://api.tokenlab.sh/llms.txt`.
 - توجيهات حول عائلات نقاط النهاية للمحادثات المتوافقة مع OpenAI، وResponses، وAnthropic Messages، وGemini، والوسائط، والصوت، والتضمينات (embeddings)، وإعادة التصنيف (rerank)، والترجمة.
+- استدلال اختياري عبر Chat Completions المتوافق مع OpenAI وResponses وAnthropic Messages وGemini generateContent.
 
 ## التثبيت من GitHub
 
@@ -47,6 +48,12 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 ```
 
 ابدأ جلسة Codex جديدة بعد إضافة الخادم. لا تتطلب أدوات الكتالوج العام `TOKENLAB_API_KEY`.
+
+لتمكين أدوات الاستدلال، أضف مفتاح TokenLab API عند تسجيل الخادم:
+
+```bash
+codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+```
 
 ## إعداد Claude Desktop
 
@@ -88,7 +95,14 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 | `list_models` | سرد نماذج TokenLab العامة. يمكن التصفية اختيارياً باستخدام `recommended_for` مثل `image` أو `video` أو `embedding` أو `rerank` أو `translation`. |
 | `get_model` | جلب التفاصيل العامة لنموذج واحد وتنسيق الطلب المدعوم. |
 | `get_model_pricing` | جلب تفاصيل الأسعار العامة لنموذج واحد. |
+| `compare_models` | مقارنة تفاصيل وأسعار عدة معرفات للنماذج. |
+| `create_chat_completion` | استدعاء نقطة `/v1/chat/completions` المتوافقة مع OpenAI، مع دعم الرسائل متعددة الوسائط واستدعاء الأدوات. يتطلب `TOKENLAB_API_KEY`. |
+| `create_response` | استدعاء نقطة `/v1/responses`. يتطلب `TOKENLAB_API_KEY`. |
+| `create_anthropic_message` | استدعاء نقطة Anthropic Messages على `/v1/messages`. يتطلب `TOKENLAB_API_KEY`. |
+| `create_gemini_content` | استدعاء نقطة Gemini الأصلية `generateContent`. يتطلب `TOKENLAB_API_KEY`. |
 | `get_api_overview` | جلب نظرة عامة `llms.txt` الخاصة بـ TokenLab للحصول على توجيهات نقاط النهاية القابلة للقراءة من قبل الوكيل. |
+
+تعيد أدوات الاستدلال نتائج JSON عادية. يتم تعطيل البث عمدًا في استدعاءات أدوات MCP.
 
 ## سير عمل الوكيل الموصى به
 
@@ -96,7 +110,8 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 2. استخدم `recommended_for` للمهام غير المتعلقة بالمحادثة، مثل الصور، الفيديو، الموسيقى، 3D، تحويل النص إلى كلام (TTS)، تحويل الكلام إلى نص (STT)، التضمينات، إعادة التصنيف، أو الترجمة.
 3. استدعِ `get_model` قبل إنشاء طلب غير متعلق بالمحادثة، أو إعادة محاولة طلب فاشل، أو التبديل بين عائلات نقاط النهاية.
 4. استدعِ `get_model_pricing` عندما تؤثر تكلفة النموذج على اختيار المستخدم.
-5. استخدم `get_api_overview` عندما يحتاج الوكيل إلى خريطة مدمجة لعائلات API الخاصة بـ TokenLab.
+5. استخدم `compare_models` عندما يعتمد الاختيار على عدة نماذج مرشحة.
+6. استدعِ أداة الاستدلال المطابقة لعقد API المطلوب، أو استخدم `get_api_overview` للحصول على خريطة موجزة لعائلات TokenLab API.
 
 ## توجيهات نقاط النهاية الأصلية
 
@@ -143,7 +158,7 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
   </Accordion>
 
   <Accordion title="هل يمكن لهذا الخادم استدعاء واجهات برمجة تطبيقات الاستدلال المدفوعة لـ TokenLab؟">
-    لا. إنه مخصص للقراءة فقط للكتالوج العام، والعقود، والأسعار، وبيانات النظرة العامة. استخدم TokenLab API مباشرة للاستدلال.
+    نعم. اضبط `TOKENLAB_API_KEY` ثم استخدم `create_chat_completion` أو `create_response` أو `create_anthropic_message` أو `create_gemini_content`. تبقى أدوات الكتالوج والأسعار متاحة دون مفتاح.
   </Accordion>
 </AccordionGroup>
 

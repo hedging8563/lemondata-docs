@@ -1,14 +1,14 @@
 ---
 title: "TokenLab MCP Server"
-description: "MCP 클라이언트를 TokenLab의 공개 모델 카탈로그, 모델 세부 정보, 가격 책정 및 네이티브 엔드포인트 가이드와 연결합니다."
+description: "MCP 클라이언트를 TokenLab 모델 검색, 가격, OpenAI 호환 채팅 및 네이티브 추론 엔드포인트와 연결합니다."
 ---
 
-[TokenLab MCP 서버](https://github.com/hedging8563/tokenlab-mcp-server)는 MCP 호환 에이전트가 코드를 작성하거나 API 경로를 선택하기 전에 TokenLab 모델을 검색할 수 있는 읽기 전용 방법을 제공합니다.
+[TokenLab MCP 서버](https://github.com/hedging8563/tokenlab-mcp-server)는 MCP 호환 에이전트에 실시간 모델 검색, 가격, OpenAI 호환 Chat Completions 및 네이티브 추론 도구를 제공합니다.
 
-에이전트가 사용 가능한 모델을 비교하거나, 지원되는 요청 형식을 검사하거나, 가격을 확인하거나, 특정 작업에 사용할 네이티브 엔드포인트 제품군을 파악해야 할 때 사용하세요.
+에이전트가 모델을 비교하고, 요청 형식을 확인하고, 가격을 조회하거나 OpenAI Chat Completions, Responses, Anthropic Messages 또는 Gemini generateContent로 TokenLab을 호출할 때 사용하세요.
 
 <Note>
-공개 카탈로그 도구는 TokenLab API 키를 필요로 하지 않습니다. 이 서버는 유료 추론 요청을 프록시하지 않습니다.
+공개 카탈로그 도구는 TokenLab API 키가 필요하지 않습니다. 4개의 유료 추론 도구를 사용하려면 `TOKENLAB_API_KEY`를 설정하세요.
 </Note>
 
 ## 제공 기능
@@ -18,6 +18,7 @@ description: "MCP 클라이언트를 TokenLab의 공개 모델 카탈로그, 모
 - `/v1/models/{model}/pricing`을 통한 가격 정보 조회.
 - `https://api.tokenlab.sh/llms.txt`를 통한 에이전트 가독형 API 개요 제공.
 - OpenAI 호환 채팅, Responses, Anthropic Messages, Gemini, 미디어, 오디오, 임베딩, 리랭크(rerank) 및 번역을 위한 엔드포인트 제품군 가이드.
+- OpenAI 호환 Chat Completions, Responses, Anthropic Messages 및 Gemini generateContent를 통한 선택적 추론.
 
 ## GitHub에서 설치
 
@@ -47,6 +48,12 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 ```
 
 추가한 후 새 Codex 세션을 시작하세요. 공개 카탈로그 도구에는 `TOKENLAB_API_KEY`가 필요하지 않습니다.
+
+추론 도구를 활성화하려면 서버를 추가할 때 TokenLab API 키를 포함하세요:
+
+```bash
+codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+```
 
 ## Claude Desktop 설정
 
@@ -88,7 +95,14 @@ stdio MCP 서버를 지원하는 모든 클라이언트에서 동일한 명령�
 | `list_models` | 공개 TokenLab 모델을 나열합니다. `image`, `video`, `embedding`, `rerank` 또는 `translation`과 같은 `recommended_for`를 사용하여 선택적으로 필터링할 수 있습니다. |
 | `get_model` | 특정 모델의 공개 세부 정보와 지원되는 요청 형식을 가져옵니다. |
 | `get_model_pricing` | 특정 모델의 공개 가격 정보를 가져옵니다. |
+| `compare_models` | 여러 모델 ID의 세부 정보와 가격을 비교합니다. |
+| `create_chat_completion` | OpenAI 호환 `/v1/chat/completions` 엔드포인트를 호출합니다. 멀티모달 메시지와 도구 호출을 지원하며 `TOKENLAB_API_KEY`가 필요합니다. |
+| `create_response` | `/v1/responses` 엔드포인트를 호출합니다. `TOKENLAB_API_KEY`가 필요합니다. |
+| `create_anthropic_message` | Anthropic Messages `/v1/messages` 엔드포인트를 호출합니다. `TOKENLAB_API_KEY`가 필요합니다. |
+| `create_gemini_content` | Gemini 네이티브 `generateContent` 엔드포인트를 호출합니다. `TOKENLAB_API_KEY`가 필요합니다. |
 | `get_api_overview` | 에이전트가 읽을 수 있는 엔드포인트 가이드를 위해 TokenLab의 `llms.txt` 개요를 가져옵니다. |
+
+추론 도구는 일반 JSON 결과를 반환합니다. MCP 도구 호출에서는 스트리밍을 의도적으로 비활성화합니다.
 
 ## 권장 에이전트 워크플로우
 
@@ -96,7 +110,8 @@ stdio MCP 서버를 지원하는 모든 클라이언트에서 동일한 명령�
 2. 이미지, 비디오, 음악, 3D, TTS, STT, 임베딩, 리랭크 또는 번역과 같은 비채팅 작업에는 `recommended_for`를 사용합니다.
 3. 비채팅 요청을 생성하거나, 실패한 요청을 재시도하거나, 엔드포인트 제품군을 전환하기 전에 `get_model`을 호출합니다.
 4. 모델 비용이 사용자의 선택에 영향을 미치는 경우 `get_model_pricing`을 호출합니다.
-5. 에이전트가 TokenLab API 제품군에 대한 간략한 지도가 필요할 때 `get_api_overview`를 사용합니다.
+5. 여러 후보를 비교할 때 `compare_models`를 사용합니다.
+6. 필요한 API 계약에 맞는 추론 도구를 호출하거나 `get_api_overview`로 TokenLab API 제품군의 간략한 지도를 확인합니다.
 
 ## 네이티브 엔드포인트 가이드
 
@@ -143,7 +158,7 @@ MCP 서버는 런타임에 유용하며, [TokenLab skills 저장소](https://git
   </Accordion>
 
   <Accordion title="이 서버로 유료 TokenLab 추론 API를 호출할 수 있나요?">
-    아니요. 이 서버는 공개 카탈로그, 계약, 가격 및 개요 데이터를 위한 읽기 전용 서버입니다. 추론을 위해서는 TokenLab API를 직접 사용하세요.
+    예. `TOKENLAB_API_KEY`를 설정한 다음 `create_chat_completion`, `create_response`, `create_anthropic_message` 또는 `create_gemini_content`를 사용하세요. 카탈로그와 가격 도구는 키 없이도 사용할 수 있습니다.
   </Accordion>
 </AccordionGroup>
 

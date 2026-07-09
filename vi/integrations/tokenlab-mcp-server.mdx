@@ -1,14 +1,14 @@
 ---
 title: "TokenLab MCP Server"
-description: "Kết nối các MCP client với danh mục mô hình công khai, chi tiết mô hình, giá cả và hướng dẫn về endpoint gốc của TokenLab."
+description: "Kết nối MCP client với tính năng khám phá mô hình, giá, chat tương thích OpenAI và endpoint inference gốc của TokenLab."
 ---
 
-[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) cung cấp cho các agent tương thích với MCP một phương thức chỉ đọc để khám phá các mô hình của TokenLab trước khi chúng viết code hoặc chọn một route API.
+[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) cung cấp cho các agent tương thích MCP khả năng khám phá mô hình trực tiếp, giá, Chat Completions tương thích OpenAI và các công cụ inference gốc.
 
-Hãy sử dụng server này khi một agent cần so sánh các mô hình khả dụng, kiểm tra các định dạng request được hỗ trợ, kiểm tra giá cả hoặc tìm hiểu xem nên sử dụng họ endpoint gốc nào cho một tác vụ cụ thể.
+Hãy sử dụng khi agent cần so sánh mô hình, kiểm tra định dạng request, xem giá hoặc gọi TokenLab qua OpenAI Chat Completions, Responses, Anthropic Messages hay Gemini generateContent.
 
 <Note>
-Các công cụ danh mục công khai không yêu cầu TokenLab API key. Server này không proxy các request inference trả phí.
+Các công cụ danh mục công khai không yêu cầu TokenLab API key. Đặt `TOKENLAB_API_KEY` để sử dụng bốn công cụ inference trả phí.
 </Note>
 
 ## Những gì server cung cấp
@@ -18,6 +18,7 @@ Các công cụ danh mục công khai không yêu cầu TokenLab API key. Server
 - Tra cứu giá cả từ `/v1/models/{model}/pricing`.
 - Tổng quan API mà agent có thể đọc được từ `https://api.tokenlab.sh/llms.txt`.
 - Hướng dẫn về họ endpoint cho chat tương thích với OpenAI, Responses, Anthropic Messages, Gemini, media, audio, embeddings, rerank và dịch thuật.
+- Inference tùy chọn qua Chat Completions tương thích OpenAI, Responses, Anthropic Messages và Gemini generateContent.
 
 ## Cài đặt từ GitHub
 
@@ -47,6 +48,12 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 ```
 
 Bắt đầu một phiên Codex mới sau khi thêm máy chủ. Các công cụ danh mục công khai không cần `TOKENLAB_API_KEY`.
+
+Để bật các công cụ inference, hãy thêm TokenLab API key khi đăng ký server:
+
+```bash
+codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+```
 
 ## Cấu hình Claude Desktop
 
@@ -88,7 +95,14 @@ Nếu client của bạn lưu trữ các server có tên, hãy sử dụng `toke
 | `list_models` | Liệt kê các mô hình TokenLab công khai. Có thể lọc tùy chọn với `recommended_for` như `image`, `video`, `embedding`, `rerank` hoặc `translation`. |
 | `get_model` | Lấy chi tiết công khai và định dạng request được hỗ trợ của một mô hình. |
 | `get_model_pricing` | Lấy chi tiết giá cả công khai của một mô hình. |
+| `compare_models` | So sánh chi tiết và giá của nhiều ID mô hình. |
+| `create_chat_completion` | Gọi endpoint tương thích OpenAI `/v1/chat/completions`, hỗ trợ tin nhắn đa phương thức và tool calling. Yêu cầu `TOKENLAB_API_KEY`. |
+| `create_response` | Gọi endpoint `/v1/responses`. Yêu cầu `TOKENLAB_API_KEY`. |
+| `create_anthropic_message` | Gọi endpoint Anthropic Messages `/v1/messages`. Yêu cầu `TOKENLAB_API_KEY`. |
+| `create_gemini_content` | Gọi endpoint Gemini native `generateContent`. Yêu cầu `TOKENLAB_API_KEY`. |
 | `get_api_overview` | Lấy tổng quan `llms.txt` của TokenLab để hướng dẫn về endpoint cho agent. |
+
+Các công cụ inference trả về kết quả JSON thông thường. Streaming được chủ động tắt cho các lệnh gọi công cụ MCP.
 
 ## Quy trình làm việc khuyến nghị cho Agent
 
@@ -96,7 +110,8 @@ Nếu client của bạn lưu trữ các server có tên, hãy sử dụng `toke
 2. Sử dụng `recommended_for` cho các tác vụ không phải chat, chẳng hạn như image, video, music, 3D, TTS, STT, embeddings, rerank hoặc translation.
 3. Gọi `get_model` trước khi xây dựng một request không phải chat, thử lại một request thất bại hoặc chuyển đổi giữa các họ endpoint.
 4. Gọi `get_model_pricing` khi chi phí mô hình ảnh hưởng đến lựa chọn của người dùng.
-5. Sử dụng `get_api_overview` khi agent cần một bản đồ tóm tắt về các họ API của TokenLab.
+5. Sử dụng `compare_models` khi lựa chọn phụ thuộc vào nhiều ứng viên.
+6. Gọi công cụ inference phù hợp với hợp đồng API cần thiết hoặc dùng `get_api_overview` để xem bản đồ tóm tắt các họ API của TokenLab.
 
 ## Hướng dẫn về Endpoint gốc
 
@@ -143,7 +158,7 @@ Sử dụng cả hai khi có thể:
   </Accordion>
 
   <Accordion title="Server này có thể gọi các API inference trả phí của TokenLab không?">
-    Không. Nó được thiết kế chỉ để đọc dữ liệu danh mục công khai, hợp đồng, giá cả và tổng quan. Hãy sử dụng trực tiếp TokenLab API để thực hiện inference.
+    Có. Đặt `TOKENLAB_API_KEY`, sau đó dùng `create_chat_completion`, `create_response`, `create_anthropic_message` hoặc `create_gemini_content`. Các công cụ danh mục và giá vẫn dùng được mà không cần key.
   </Accordion>
 </AccordionGroup>
 

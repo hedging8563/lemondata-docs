@@ -1,14 +1,14 @@
 ---
 title: "TokenLab MCP Server"
-description: "MCPクライアントをTokenLabのパブリックモデルカタログ、モデル詳細、価格設定、およびネイティブエンドポイントガイダンスに接続します。"
+description: "MCPクライアントをTokenLabのモデル探索、価格、OpenAI互換チャット、ネイティブ推論エンドポイントに接続します。"
 ---
 
-[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) は、MCP互換エージェントがコードを記述したりAPIルートを選択したりする前に、TokenLabのモデルを読み取り専用で探索できるようにします。
+[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) は、MCP互換エージェントにリアルタイムのモデル探索、価格、OpenAI互換Chat Completions、ネイティブ推論ツールを提供します。
 
-エージェントが利用可能なモデルの比較、サポートされているリクエスト形式の確認、価格のチェック、またはタスクに適したネイティブエンドポイントファミリーの把握が必要な場合に使用してください。
+モデルの比較、リクエスト形式の確認、価格のチェック、またはOpenAI Chat Completions、Responses、Anthropic Messages、Gemini generateContentによるTokenLabの呼び出しが必要な場合に使用してください。
 
 <Note>
-パブリックカタログツールにTokenLab APIキーは不要です。このサーバーは有料の推論リクエストをプロキシしません。
+パブリックカタログツールにTokenLab APIキーは不要です。4つの有料推論ツールを使用するには`TOKENLAB_API_KEY`を設定します。
 </Note>
 
 ## 提供機能
@@ -18,6 +18,7 @@ description: "MCPクライアントをTokenLabのパブリックモデルカタ�
 - `/v1/models/{model}/pricing` からの価格検索。
 - `https://api.tokenlab.sh/llms.txt` からのエージェントが読み取り可能なAPI概要。
 - OpenAI互換チャット、Responses、Anthropic Messages、Gemini、メディア、オーディオ、埋め込み（embeddings）、再ランク（rerank）、翻訳のためのエンドポイントファミリーガイダンス。
+- OpenAI互換Chat Completions、Responses、Anthropic Messages、Gemini generateContentによるオプションの推論。
 
 ## GitHubからのインストール
 
@@ -47,6 +48,12 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 ```
 
 追加後に新しい Codex セッションを開始してください。公開カタログツールに `TOKENLAB_API_KEY` は不要です。
+
+推論ツールを有効にするには、サーバー追加時にTokenLab APIキーを指定します：
+
+```bash
+codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+```
 
 ## Claude Desktopの設定
 
@@ -88,7 +95,14 @@ stdio MCPサーバーをサポートするすべてのクライアントで、�
 | `list_models` | パブリックTokenLabモデルを一覧表示します。`recommended_for`（`image`、`video`、`embedding`、`rerank`、`translation`など）を使用してフィルタリング可能です。 |
 | `get_model` | 特定のモデルのパブリック詳細とサポートされているリクエスト形式を取得します。 |
 | `get_model_pricing` | 特定のモデルのパブリック価格詳細を取得します。 |
+| `compare_models` | 複数のモデルIDの詳細と価格を比較します。 |
+| `create_chat_completion` | OpenAI互換の`/v1/chat/completions`エンドポイントを呼び出します。マルチモーダルメッセージとツール呼び出しに対応します。`TOKENLAB_API_KEY`が必要です。 |
+| `create_response` | `/v1/responses`エンドポイントを呼び出します。`TOKENLAB_API_KEY`が必要です。 |
+| `create_anthropic_message` | Anthropic Messagesの`/v1/messages`エンドポイントを呼び出します。`TOKENLAB_API_KEY`が必要です。 |
+| `create_gemini_content` | Geminiネイティブの`generateContent`エンドポイントを呼び出します。`TOKENLAB_API_KEY`が必要です。 |
 | `get_api_overview` | エージェントが読み取り可能なエンドポイントガイダンスとして、TokenLabの `llms.txt` 概要を取得します。 |
+
+推論ツールは通常のJSON結果を返します。MCPツール呼び出しではストリーミングを意図的に無効にしています。
 
 ## 推奨されるエージェントワークフロー
 
@@ -96,7 +110,8 @@ stdio MCPサーバーをサポートするすべてのクライアントで、�
 2. チャット以外のタスク（画像、動画、音楽、3D、TTS、STT、埋め込み、再ランク、翻訳など）には `recommended_for` を使用します。
 3. チャット以外のリクエストを作成する前、失敗したリクエストを再試行する前、またはエンドポイントファミリーを切り替える前に `get_model` を呼び出します。
 4. モデルのコストがユーザーの選択に影響する場合は `get_model_pricing` を呼び出します。
-5. エージェントがTokenLab APIファミリーのコンパクトなマップを必要とする場合は `get_api_overview` を使用します。
+5. 複数の候補を比較する場合は`compare_models`を使用します。
+6. 必要なAPI契約に合う推論ツールを呼び出すか、`get_api_overview`でTokenLab APIファミリーの概要を確認します。
 
 ## ネイティブエンドポイントガイダンス
 
@@ -143,7 +158,7 @@ MCPサーバーは実行時に役立ちますが、[TokenLab skillsリポジト�
   </Accordion>
 
   <Accordion title="このサーバーで有料のTokenLab推論APIを呼び出せますか？">
-    いいえ。パブリックカタログ、契約、価格、概要データ専用の読み取り専用サーバーです。推論にはTokenLab APIを直接使用してください。
+    はい。`TOKENLAB_API_KEY`を設定し、`create_chat_completion`、`create_response`、`create_anthropic_message`、または`create_gemini_content`を使用します。カタログと価格ツールはキーなしでも利用できます。
   </Accordion>
 </AccordionGroup>
 

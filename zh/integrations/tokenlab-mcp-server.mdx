@@ -1,14 +1,14 @@
 ---
 title: "TokenLab MCP Server"
-description: "将 MCP 客户端连接到 TokenLab 的公共模型目录、模型详情、定价以及原生端点指南。"
+description: "将 MCP 客户端连接到 TokenLab 模型发现、定价、OpenAI 兼容聊天和原生推理端点。"
 ---
 
-[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) 为兼容 MCP 的智能体提供了一种只读方式，以便在编写代码或选择 API 路由之前发现 TokenLab 模型。
+[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) 为兼容 MCP 的智能体提供实时模型发现、定价、OpenAI 兼容 Chat Completions 和原生推理工具。
 
-当智能体需要比较可用模型、检查支持的请求格式、查看定价或了解针对特定任务应使用哪种原生端点系列时，请使用此服务器。
+当智能体需要比较模型、检查支持的请求格式、查看定价，或通过 OpenAI Chat Completions、Responses、Anthropic Messages、Gemini generateContent 调用 TokenLab 时，请使用此服务器。
 
 <Note>
-公共目录工具不需要 TokenLab API key。该服务器不会代理付费推理请求。
+公共目录工具不需要 TokenLab API key。设置 `TOKENLAB_API_KEY` 后可使用四个付费推理工具。
 </Note>
 
 ## 它提供了什么
@@ -18,6 +18,7 @@ description: "将 MCP 客户端连接到 TokenLab 的公共模型目录、模型
 - 从 `/v1/models/{model}/pricing` 获取定价信息。
 - 从 `https://api.tokenlab.sh/llms.txt` 获取智能体可读的 API 概览。
 - 针对 OpenAI 兼容聊天、Responses、Anthropic Messages、Gemini、媒体、音频、嵌入 (embeddings)、重排序 (rerank) 和翻译的端点系列指南。
+- 通过 OpenAI 兼容 Chat Completions、Responses、Anthropic Messages 和 Gemini generateContent 进行可选推理。
 
 ## 从 GitHub 安装
 
@@ -47,6 +48,12 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 ```
 
 添加后新开一个 Codex 会话。公共目录工具不需要 `TOKENLAB_API_KEY`。
+
+如需启用推理工具，请在添加服务器时传入 TokenLab API key：
+
+```bash
+codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+```
 
 ## Claude Desktop 配置
 
@@ -88,7 +95,14 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 | `list_models` | 列出公共 TokenLab 模型。可选择使用 `recommended_for` 进行过滤，例如 `image`、`video`、`embedding`、`rerank` 或 `translation`。 |
 | `get_model` | 获取单个模型的公共详情和支持的请求格式。 |
 | `get_model_pricing` | 获取单个模型的公共定价详情。 |
+| `compare_models` | 比较多个模型 ID 的详情和定价。 |
+| `create_chat_completion` | 调用 OpenAI 兼容的 `/v1/chat/completions` 端点，支持多模态消息和工具调用。需要 `TOKENLAB_API_KEY`。 |
+| `create_response` | 调用 `/v1/responses` 端点。需要 `TOKENLAB_API_KEY`。 |
+| `create_anthropic_message` | 调用 Anthropic Messages `/v1/messages` 端点。需要 `TOKENLAB_API_KEY`。 |
+| `create_gemini_content` | 调用 Gemini 原生 `generateContent` 端点。需要 `TOKENLAB_API_KEY`。 |
 | `get_api_overview` | 获取 TokenLab 的 `llms.txt` 概览，用于智能体可读的端点指南。 |
+
+推理工具返回普通 JSON 结果。MCP 工具调用会有意禁用流式输出。
 
 ## 推荐的智能体工作流程
 
@@ -96,7 +110,8 @@ codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 2. 对于非聊天任务（如图像、视频、音乐、3D、TTS、STT、嵌入、重排序或翻译），使用 `recommended_for`。
 3. 在构建非聊天请求、重试失败请求或切换端点系列之前，调用 `get_model`。
 4. 当模型成本影响用户选择时，调用 `get_model_pricing`。
-5. 当智能体需要 TokenLab API 系列的紧凑映射时，使用 `get_api_overview`。
+5. 当选择取决于多个候选模型时，使用 `compare_models`。
+6. 调用与所需 API 契约匹配的推理工具，或使用 `get_api_overview` 获取 TokenLab API 系列的简明映射。
 
 ## 原生端点指南
 
@@ -143,7 +158,7 @@ MCP 服务器在运行时非常有用，而 [TokenLab skills repository](https:/
   </Accordion>
 
   <Accordion title="此服务器可以调用付费的 TokenLab 推理 API 吗？">
-    不能。它仅用于公共目录、合同、定价和概览数据的只读访问。请直接使用 TokenLab API 进行推理。
+    可以。设置 `TOKENLAB_API_KEY` 后，可使用 `create_chat_completion`、`create_response`、`create_anthropic_message` 或 `create_gemini_content`。目录和定价工具无需 key 仍可使用。
   </Accordion>
 </AccordionGroup>
 

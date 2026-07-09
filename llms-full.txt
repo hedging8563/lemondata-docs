@@ -7344,15 +7344,15 @@ Once OpenClaw is connected, these guides help you use TokenLab more effectively:
 
 ### TokenLab MCP Server
 
-> Connect MCP clients to TokenLab
+> Connect MCP clients to TokenLab model discovery, pricing, OpenAI-compatible chat, and native inference endpoints.
 
 URL: https://docs.tokenlab.sh/integrations/tokenlab-mcp-server
 
-The [TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) gives MCP-compatible agents a read-only way to discover TokenLab models before they write code or choose an API route.
+The [TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) gives MCP-compatible agents live model discovery, pricing, OpenAI-compatible Chat Completions, and native inference tools.
 
-Use it when an agent needs to compare available models, inspect supported request formats, check pricing, or understand which native endpoint family to use for a task.
+Use it when an agent needs to compare models, inspect supported request formats, check pricing, or call TokenLab through OpenAI Chat Completions, Responses, Anthropic Messages, or Gemini generateContent.
 
-> Note: The public catalog tools do not require a TokenLab API key. The server does not proxy paid inference requests.
+> Note: Public catalog tools do not require a TokenLab API key. Set `TOKENLAB_API_KEY` to use the four paid inference tools.
 
 ## What It Provides
 
@@ -7361,6 +7361,7 @@ Use it when an agent needs to compare available models, inspect supported reques
 - Pricing lookup from `/v1/models/{model}/pricing`.
 - Agent-readable API overview from `https://api.tokenlab.sh/llms.txt`.
 - Endpoint-family guidance for OpenAI-compatible chat, Responses, Anthropic Messages, Gemini, media, audio, embeddings, rerank, and translation.
+- Optional inference through OpenAI-compatible Chat Completions, Responses, Anthropic Messages, and Gemini generateContent.
 
 ## Install From GitHub
 
@@ -7380,6 +7381,22 @@ npm start
 ```
 
 The optional `TOKENLAB_API_BASE` environment variable defaults to `https://api.tokenlab.sh`.
+
+## Install in Codex
+
+Add the public catalog server to your Codex configuration:
+
+```bash
+codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+```
+
+Start a new Codex session after adding the server. The public catalog tools do not require `TOKENLAB_API_KEY`.
+
+To enable inference tools, include your TokenLab API key when adding the server:
+
+```bash
+codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+```
 
 ## Claude Desktop Configuration
 
@@ -7421,7 +7438,14 @@ If your client stores named servers, use `tokenlab-model-catalog` as the server 
 | `list_models` | List public TokenLab models. Optionally filter with `recommended_for` such as `image`, `video`, `embedding`, `rerank`, or `translation`. |
 | `get_model` | Fetch one model's public details and supported request format. |
 | `get_model_pricing` | Fetch one model's public pricing details. |
+| `compare_models` | Compare details and pricing for several model IDs. |
+| `create_chat_completion` | Call the OpenAI-compatible `/v1/chat/completions` endpoint. Supports multimodal messages and tool calling. Requires `TOKENLAB_API_KEY`. |
+| `create_response` | Call the `/v1/responses` endpoint. Requires `TOKENLAB_API_KEY`. |
+| `create_anthropic_message` | Call the Anthropic Messages `/v1/messages` endpoint. Requires `TOKENLAB_API_KEY`. |
+| `create_gemini_content` | Call the Gemini native `generateContent` endpoint. Requires `TOKENLAB_API_KEY`. |
 | `get_api_overview` | Fetch TokenLab's `llms.txt` overview for agent-readable endpoint guidance. |
+
+Inference tools return normal JSON results. Streaming is intentionally disabled for MCP tool calls.
 
 ## Recommended Agent Workflow
 
@@ -7429,7 +7453,8 @@ If your client stores named servers, use `tokenlab-model-catalog` as the server 
 2. Use `recommended_for` for non-chat tasks, such as image, video, music, 3D, TTS, STT, embeddings, rerank, or translation.
 3. Call `get_model` before building a non-chat request, retrying a failed request, or switching endpoint families.
 4. Call `get_model_pricing` when model cost affects the user's choice.
-5. Use `get_api_overview` when the agent needs a compact map of TokenLab API families.
+5. Use `compare_models` when the choice depends on several candidates.
+6. Call the inference tool that matches the required API contract, or use `get_api_overview` for a compact map of TokenLab API families.
 
 ## Native Endpoint Guidance
 
@@ -7479,7 +7504,7 @@ Ask the agent to call `list_models` or `get_model` before hardcoding a model nam
 
 #### Can this server call paid TokenLab inference APIs?
 
-No. It is intentionally read-only for public catalog, contract, pricing, and overview data. Use the TokenLab API directly for inference.
+Yes. Set `TOKENLAB_API_KEY`, then use `create_chat_completion`, `create_response`, `create_anthropic_message`, or `create_gemini_content`. Catalog and pricing tools remain available without a key.
 
 ## Resources
 
