@@ -1,20 +1,42 @@
 ---
 title: "迁移指南"
-description: "将 OpenAI、Anthropic、Gemini 和媒体工作负载迁移到 TokenLab，进行小规模、生产安全的更改。"
+description: "通过少量且生产安全的更改，将 OpenAI、Anthropic、Gemini 和媒体工作负载迁移至 TokenLab。"
 ---
 
-TokenLab 是多格式的：您可以保持 OpenAI 兼容的客户端、Anthropic 原生的 Messages 调用、Gemini 原生的 REST 调用以及媒体端点的自然形态。最安全的迁移方式是不要将每个工作负载转换为一种通用格式。选择符合您应用程序所需行为的路线。
+TokenLab 采用多格式设计：您可以保留 OpenAI 兼容的客户端、Anthropic 原生 Messages 调用、Gemini 原生 REST 调用以及媒体端点，并保持其原有形态。最安全的迁移方式并非将所有工作负载转换为一种通用格式，而是选择最符合您应用程序行为需求的路径。
 
-## 路线映射
+## 路由映射
 
 | 现有工作负载 | TokenLab 基础 URL | 主要端点 | 迁移说明 |
-|--------------|-------------------|-----------|----------|
-| OpenAI 聊天完成 | `https://api.tokenlab.sh/v1` | `/chat/completions` | 对于 OpenAI 兼容的聊天和函数调用，进行最小更改 |
-| OpenAI 响应 | `https://api.tokenlab.sh/v1` | `/responses` | 当您的应用依赖于特定于响应的输入、工具或输出处理时使用 |
-| Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | 不要在 SDK 基础 URL 后附加 `/v1` |
+|-------------------|-------------------|------------------|----------------|
+| OpenAI Chat Completions | `https://api.tokenlab.sh/v1` | `/chat/completions` | OpenAI 兼容聊天和函数调用的最小改动方案 |
+| OpenAI Responses | `https://api.tokenlab.sh/v1` | `/responses` | 当您的应用依赖于 Responses 特定的输入、工具或输出处理时使用 |
+| Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | 请勿在 SDK 基础 URL 后添加 `/v1` |
 | Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | 在 Gemini 路由上保留 Gemini 原生字段 |
-| 媒体生成 | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | 通过 `recommended_for` 发现模型，并在文档中预期异步轮询 |
-| 管理和计费 | `https://api.tokenlab.sh/v1` | `/management/...` | 对于服务器端使用和计费对账，使用管理令牌 |
+| 媒体生成 | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | 使用 `recommended_for` 发现模型，并按文档说明处理异步轮询 |
+| 管理与计费 | `https://api.tokenlab.sh/v1` | `/management/...` | 将管理令牌用于服务器端使用情况和计费核对 |
+
+## 快速迁移方案
+
+### 从 OpenAI 迁移至 TokenLab
+
+仅需将 SDK 的 `base_url` / `baseURL` 修改为 `https://api.tokenlab.sh/v1`。如果为了方便推广，可以保留现有的 OpenAI API 密钥环境变量名称，并在检查 `GET /v1/models` 后替换模型 ID。
+
+### 从 OpenRouter 迁移至 TokenLab
+
+在之前使用 OpenRouter 的 OpenAI 兼容基础 URL 的位置，改用 `https://api.tokenlab.sh/v1`。移除带有提供商前缀的模型 ID，并使用来自 `/v1/models` 的 TokenLab 公共模型 ID；当工作负载需要 Claude Messages 或 Gemini `generateContent` 时，请将其迁移至原生的 TokenLab 端点，而不是强行通过 OpenAI 兼容的聊天接口进行调用。
+
+### 从 LiteLLM 迁移至 TokenLab
+
+使用 LiteLLM 的 `custom_openai/<model>` 路由，并将 `api_base` 设置为 `https://api.tokenlab.sh/v1`。请将 LiteLLM 别名与真实的 TokenLab 模型 ID 分开，以便在不更改应用程序提示词的情况下调整路由策略。
+
+### 通过 TokenLab 使用 Claude Messages
+
+将 Anthropic SDK 客户端指向 `https://api.tokenlab.sh` 并调用 `messages.create`。请勿在 SDK 基础 URL 后添加 `/v1`；SDK 会自动处理 `/v1/messages` 路径。
+
+### 通过 TokenLab 使用 Gemini 原生接口
+
+在 `https://api.tokenlab.sh/v1beta/models/{model}:generateContent` 上保留 Gemini 有效负载。当您的应用依赖于 Gemini 行为时，Gemini 原生的 `contents`、`parts`、文件、缓存内容、函数声明和内置工具应保留在此路由上。
 
 ## OpenAI 兼容迁移
 
@@ -32,7 +54,7 @@ response = client.chat.completions.create(
 )
 ```
 
-保留您现有的重试、超时和流式代码，但在生产流量之前使用 `GET /v1/models` 验证模型 ID。对于图像生成，明确发送 `model` 并阅读图像指南，因为图像模型的差异大于聊天模型。
+保留您现有的重试、超时和流式传输代码，但在生产流量上线前，请务必使用 `GET /v1/models` 验证模型 ID。对于图像生成，请显式发送 `model` 参数并阅读图像指南，因为图像模型与聊天模型之间的差异更大。
 
 ## Anthropic 迁移
 
@@ -51,7 +73,7 @@ message = client.messages.create(
 )
 ```
 
-对于 Claude 原生工具使用、思维流程和 Anthropic 消息语义，请使用 `/v1/messages`。除非您有意想要 OpenAI 兼容的行为更改，否则不要通过聊天完成翻译仅限于 Anthropic 的字段。
+对于 Claude 原生的工具使用、思维链（thinking flows）和 Anthropic 消息语义，请使用 `/v1/messages`。除非您有意想要更改为 OpenAI 兼容的行为，否则不要通过 Chat Completions 转换 Anthropic 独有的字段。
 
 ## Gemini 迁移
 
@@ -62,43 +84,43 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-当您的应用依赖于 Gemini 原生行为时，请在 `/v1beta` 上保留 Gemini 内置工具、文件 API 引用、缓存内容、函数声明和原生内容部分。
+当您的应用依赖于 Gemini 原生行为时，请在 `/v1beta` 上保留 Gemini 内置工具、File API 引用、缓存内容、函数声明和原生内容部分。
 
 ## 媒体迁移
 
 1. 查询 `GET /v1/models?recommended_for=image|video|music|3d`。
-2. 在列表响应中阅读 `GET /v1/models` 和可用的完整 `GET /v1/models/{model}`。
-3. 明确发送 `model`，特别是对于图像端点。
-4. 存储 `task_id`、`poll_url`、端点、模型和您自己的作业 ID 以用于异步作业。
-5. 通过使用记录和 `billing_transaction_id` 而不是供应商任务 ID 来对账费用。
+2. 在列表响应中读取 `GET /v1/models`，并在可用时读取完整的 `GET /v1/models/{model}`。
+3. 显式发送 `model`，特别是对于图像端点。
+4. 为异步任务存储 `task_id`、`poll_url`、端点、模型以及您自己的作业 ID。
+5. 通过使用记录和 `billing_transaction_id`（而非提供商任务 ID）来核对成本。
 
-媒体工作负载需要自己的发布计划，因为延迟、重试和最终资产的行为与聊天完成不同。
+媒体工作负载需要单独的上线计划，因为其延迟、重试和最终资产的行为与聊天补全不同。
 
-## 生产发布计划
+## 生产上线计划
 
-| 阶段 | 目标 | 检查 |
-|------|------|------|
-| 1. 清单 | 列出端点、模型、请求字段、流式/异步行为和计费所有者 | 不假设任何隐藏的仅限供应商字段是公开的 |
-| 2. 单一路线试点 | 移动一个端点和一个模型系列 | 响应形状、成本和日志符合预期 |
-| 3. 影子或样本 | 将选定的输出与之前的供应商进行比较 | 用户可见的质量和延迟是可以接受的 |
-| 4. 渐进式发布 | 按关键、组织或功能标志增加流量 | 监控 `4xx`、`5xx`、延迟、平衡和重复的异步作业 |
-| 5. 清理 | 仅在稳定使用后删除旧的供应商路径 | 回滚路径和支持手册已记录 |
+| 阶段 | 目标 | 检查项 |
+|-------|------|--------|
+| 1. 清单梳理 | 列出端点、模型、请求字段、流式/异步行为以及计费所有者 | 确保没有假设隐藏的提供商特定字段为公共字段 |
+| 2. 单路由试点 | 迁移一个端点和一个模型系列 | 响应形态、成本和日志符合预期 |
+| 3. 影子测试或采样 | 将选定的输出与之前的提供商进行对比 | 用户可见的质量和延迟在可接受范围内 |
+| 4. 逐步上线 | 按密钥、组织或功能标志增加流量 | 监控 `4xx`、`5xx`、延迟、余额和重复的异步作业 |
+| 5. 清理 | 仅在稳定使用后移除旧的提供商路径 | 回滚路径和支持手册已记录在案 |
 
 ## 迁移陷阱
 
-- 如果您的应用需要原生的 Anthropic、Gemini 或 Responses 行为，请不要将每个模型放在一个 OpenAI 聊天完成路径后面。
-- 不要假设旧的图像默认值。明确发送 `model`。
+- 如果您的应用需要原生的 Anthropic、Gemini 或 Responses 行为，请勿将所有模型置于同一个 OpenAI Chat Completions 路径下。
+- 不要假设旧的图像默认值。请显式发送 `model`。
 - 在检查任务是否已创建之前，不要重试异步创建请求。
-- 不要在您的日志或 UI 中暴露供应商路由元数据。
-- 不要使用供应商任务 ID 比较计费。使用 TokenLab 使用记录。
+- 不要在日志或 UI 中暴露提供商特定的标识符。
+- 不要使用提供商任务 ID 来核对账单。请使用 TokenLab 的使用记录。
 
 ## API 参考
 
 | 主题 | 参考 |
-|------|------|
-| 多格式 API | [多格式 API](/zh/guides/api-formats) |
-| OpenAI SDK | [OpenAI SDK](/zh/integrations/openai-sdk) |
-| Anthropic SDK | [Anthropic SDK](/zh/integrations/anthropic-sdk) |
-| Gemini 原生 | [Gemini 原生 API](/zh/api-reference/gemini/generate-content) |
-| 图像生成 | [图像生成](/zh/guides/image-generation) |
-| 异步作业与轮询 | [异步作业与轮询](/zh/guides/async-jobs-polling) |
+|-------|-----------|
+| 多格式 API | [Multi-Format API](/guides/api-formats) |
+| OpenAI SDK | [OpenAI SDK](/integrations/openai-sdk) |
+| Anthropic SDK | [Anthropic SDK](/integrations/anthropic-sdk) |
+| Gemini 原生 | [Gemini Native API](/api-reference/gemini/generate-content) |
+| 图像生成 | [Image Generation](/guides/image-generation) |
+| 异步作业与轮询 | [Async Jobs & Polling](/guides/async-jobs-polling) |

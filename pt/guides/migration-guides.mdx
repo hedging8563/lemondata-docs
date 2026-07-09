@@ -1,20 +1,42 @@
 ---
 title: "Guias de Migração"
-description: "Mova cargas de trabalho OpenAI, Anthropic, Gemini e de mídia para o TokenLab com pequenas mudanças seguras para produção."
+description: "Migre cargas de trabalho da OpenAI, Anthropic, Gemini e de mídia para o TokenLab com alterações pequenas e seguras para produção."
 ---
 
-TokenLab é multi-formato: você pode manter clientes compatíveis com OpenAI, chamadas de Messages nativas da Anthropic, chamadas REST nativas da Gemini e endpoints de mídia em suas formas naturais. A migração mais segura não é traduzir cada carga de trabalho em um formato universal. Escolha a rota que possui o comportamento que sua aplicação precisa.
+O TokenLab é multiformato: você pode manter clientes compatíveis com OpenAI, chamadas de Messages nativas da Anthropic, chamadas REST nativas do Gemini e endpoints de mídia em seus formatos originais. A migração mais segura não é traduzir cada carga de trabalho para um formato universal. Escolha a rota que possui o comportamento que sua aplicação necessita.
 
 ## Mapeamento de Rotas
 
 | Carga de trabalho existente | URL base do TokenLab | Endpoint principal | Nota de migração |
-|-----------------------------|----------------------|--------------------|------------------|
-| OpenAI Chat Completions     | `https://api.tokenlab.sh/v1` | `/chat/completions` | Menor mudança para chat compatível com OpenAI e chamadas de função |
-| OpenAI Responses            | `https://api.tokenlab.sh/v1` | `/responses` | Use quando seu aplicativo depende de entrada, ferramentas ou manipulação de saída específicas de Responses |
-| Anthropic SDK               | `https://api.tokenlab.sh` | `/v1/messages` | Não acrescente `/v1` à URL base do SDK |
-| Gemini REST                 | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Mantenha campos nativos da Gemini na rota da Gemini |
-| Geração de mídia            | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Descubra modelos com `recommended_for` e espere polling assíncrono onde documentado |
-| Gestão e faturamento        | `https://api.tokenlab.sh/v1` | `/management/...` | Use tokens de gestão para uso do lado do servidor e reconciliação de faturamento |
+|-------------------|-------------------|------------------|----------------|
+| OpenAI Chat Completions | `https://api.tokenlab.sh/v1` | `/chat/completions` | Menor alteração para chat e chamadas de função compatíveis com OpenAI |
+| OpenAI Responses | `https://api.tokenlab.sh/v1` | `/responses` | Use quando seu app depender de entradas, ferramentas ou tratamento de saída específicos de Responses |
+| Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | Não adicione `/v1` à URL base do SDK |
+| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Mantenha os campos nativos do Gemini na rota do Gemini |
+| Geração de mídia | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Descubra modelos com `recommended_for` e espere polling assíncrono onde documentado |
+| Gerenciamento e faturamento | `https://api.tokenlab.sh/v1` | `/management/...` | Use tokens de gerenciamento para uso no lado do servidor e reconciliação de faturamento |
+
+## Receitas de Migração Rápida
+
+### OpenAI para TokenLab
+
+Altere apenas o `base_url` / `baseURL` do SDK para `https://api.tokenlab.sh/v1`, mantenha o nome da variável de ambiente da sua chave de API da OpenAI existente se isso facilitar a implementação, e substitua os IDs de modelo após verificar `GET /v1/models`.
+
+### OpenRouter para TokenLab
+
+Use `https://api.tokenlab.sh/v1` onde seu app usava anteriormente a URL base compatível com OpenAI do OpenRouter. Remova os IDs de modelo com prefixo de provedor e use os IDs de modelo públicos do TokenLab a partir de `/v1/models`; quando uma carga de trabalho precisar de Claude Messages ou `generateContent` do Gemini, mova-a para o endpoint nativo do TokenLab em vez de forçá-la através do chat compatível com OpenAI.
+
+### LiteLLM para TokenLab
+
+Use a rota `custom_openai/<model>` do LiteLLM com `api_base: https://api.tokenlab.sh/v1`. Mantenha os aliases do LiteLLM separados dos IDs de modelo reais do TokenLab para que você possa alterar a política de roteamento sem alterar os prompts da aplicação.
+
+### Claude Messages via TokenLab
+
+Aponte os clientes do SDK da Anthropic para `https://api.tokenlab.sh` e chame `messages.create`. Não adicione `/v1` à URL base do SDK; o SDK já possui o caminho `/v1/messages`.
+
+### Gemini Nativo via TokenLab
+
+Mantenha os payloads do Gemini em `https://api.tokenlab.sh/v1beta/models/{model}:generateContent`. Os campos `contents`, `parts`, arquivos, conteúdos em cache, declarações de função e ferramentas integradas nativos do Gemini devem permanecer nesta rota quando seu app depender do comportamento do Gemini.
 
 ## Migração Compatível com OpenAI
 
@@ -32,9 +54,9 @@ response = client.chat.completions.create(
 )
 ```
 
-Mantenha seu código existente de retry, timeout e streaming, mas valide os IDs dos modelos com `GET /v1/models` antes do tráfego de produção. Para geração de imagens, envie `model` explicitamente e leia o guia de imagens porque os modelos de imagem diferem mais do que os modelos de chat.
+Mantenha seu código existente de retry, timeout e streaming, mas valide os IDs de modelo com `GET /v1/models` antes do tráfego de produção. Para geração de imagens, envie o `model` explicitamente e leia o guia de imagens, pois os modelos de imagem diferem mais do que os modelos de chat.
 
-## Migração da Anthropic
+## Migração Anthropic
 
 ```python
 from anthropic import Anthropic
@@ -51,9 +73,9 @@ message = client.messages.create(
 )
 ```
 
-Use `/v1/messages` para uso de ferramentas nativas do Claude, fluxos de pensamento e semântica de mensagens da Anthropic. Não traduza campos exclusivos da Anthropic através de Chat Completions a menos que você queira intencionalmente uma mudança de comportamento compatível com OpenAI.
+Use `/v1/messages` para uso de ferramentas nativas do Claude, fluxos de pensamento e semântica de mensagens da Anthropic. Não traduza campos exclusivos da Anthropic através de Chat Completions, a menos que você intencionalmente queira uma mudança de comportamento compatível com OpenAI.
 
-## Migração da Gemini
+## Migração Gemini
 
 ```bash
 curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
@@ -62,43 +84,43 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-Mantenha ferramentas integradas da Gemini, referências da API de Arquivo, conteúdos em cache, declarações de função e partes de conteúdo nativas em `/v1beta` quando seu aplicativo depender do comportamento nativo da Gemini.
+Mantenha ferramentas integradas do Gemini, referências da File API, conteúdos em cache, declarações de função e partes de conteúdo nativas em `/v1beta` quando seu app depender do comportamento nativo do Gemini.
 
 ## Migração de Mídia
 
 1. Consulte `GET /v1/models?recommended_for=image|video|music|3d`.
-2. Leia `GET /v1/models` nas respostas da lista e o `GET /v1/models/{model}` completo onde disponível.
+2. Leia `GET /v1/models` nas respostas de lista e o `GET /v1/models/{model}` completo onde disponível.
 3. Envie um `model` explícito, especialmente para endpoints de imagem.
-4. Armazene `task_id`, `poll_url`, endpoint, modelo e seu próprio ID de trabalho para trabalhos assíncronos.
-5. Reconcile custos através de registros de uso e `billing_transaction_id`, não IDs de tarefa do provedor.
+4. Armazene `task_id`, `poll_url`, endpoint, modelo e seu próprio ID de trabalho para tarefas assíncronas.
+5. Reconcilie custos através de registros de uso e `billing_transaction_id`, não IDs de tarefa do provedor.
 
-Cargas de trabalho de mídia precisam de seu próprio plano de lançamento porque latência, retries e ativos finais se comportam de maneira diferente das conclusões de chat.
+Cargas de trabalho de mídia precisam de seu próprio plano de implementação porque a latência, retries e ativos finais se comportam de forma diferente das conclusões de chat.
 
-## Plano de Lançamento em Produção
+## Plano de Implementação em Produção
 
 | Fase | Objetivo | Verificações |
-|------|----------|--------------|
-| 1. Inventário | Listar endpoints, modelos, campos de solicitação, comportamento de streaming/assíncrono e proprietário de faturamento | Nenhum campo oculto exclusivo do provedor é assumido como público |
-| 2. Piloto de rota única | Mover um endpoint e uma família de modelos | Forma da resposta, custo e logs correspondem às expectativas |
-| 3. Sombra ou amostra | Comparar saídas selecionadas com o provedor anterior | Qualidade e latência visíveis para o usuário são aceitáveis |
-| 4. Lançamento gradual | Aumentar o tráfego por chave, organização ou flag de recurso | Monitorar `4xx`, `5xx`, latência, equilíbrio e trabalhos assíncronos duplicados |
-| 5. Limpeza | Remover o caminho do provedor antigo somente após uso estável | O caminho de reversão e o playbook de suporte estão documentados |
+|-------|------|--------|
+| 1. Inventário | Listar endpoints, modelos, campos de requisição, comportamento de streaming/async e proprietário do faturamento | Nenhum campo oculto exclusivo de provedor é assumido como público |
+| 2. Piloto de rota única | Mover um endpoint e uma família de modelos | Formato de resposta, custo e logs correspondem às expectativas |
+| 3. Shadow ou amostra | Comparar saídas selecionadas com o provedor anterior | Qualidade visível ao usuário e latência são aceitáveis |
+| 4. Implementação gradual | Aumentar tráfego por chave, organização ou feature flag | Monitorar `4xx`, `5xx`, latência, saldo e trabalhos assíncronos duplicados |
+| 5. Limpeza | Remover caminho do provedor antigo apenas após uso estável | Caminho de rollback e playbook de suporte estão documentados |
 
-## Armadilhas de Migração
+## Armadilhas da Migração
 
-- Não coloque cada modelo atrás de um único caminho de OpenAI Chat Completions se seu aplicativo precisar de comportamento nativo da Anthropic, Gemini ou Responses.
-- Não assuma os padrões antigos de imagem. Envie `model` explicitamente.
-- Não tente novamente solicitações de criação assíncronas sem verificar se uma tarefa já foi criada.
-- Não exponha metadados de roteamento do provedor em seus logs ou UI.
-- Não compare faturamento com IDs de tarefa do provedor. Use registros de uso do TokenLab.
+- Não coloque todos os modelos atrás de um único caminho de OpenAI Chat Completions se seu app precisar de comportamento nativo da Anthropic, Gemini ou Responses.
+- Não assuma padrões antigos de imagem. Envie o `model` explicitamente.
+- Não tente realizar retry em requisições de criação assíncronas sem verificar se uma tarefa já foi criada.
+- Não exponha identificadores específicos do provedor em seus logs ou interface.
+- Não compare o faturamento com IDs de tarefa do provedor. Use registros de uso do TokenLab.
 
 ## Referência da API
 
 | Tópico | Referência |
-|--------|------------|
-| API Multi-Formato | [API Multi-Formato](/pt/guides/api-formats) |
-| SDK OpenAI | [SDK OpenAI](/pt/integrations/openai-sdk) |
-| SDK Anthropic | [SDK Anthropic](/pt/integrations/anthropic-sdk) |
-| Nativo da Gemini | [API Nativa da Gemini](/pt/api-reference/gemini/generate-content) |
-| Geração de Imagem | [Geração de Imagem](/pt/guides/image-generation) |
-| Trabalhos Assíncronos & Polling | [Trabalhos Assíncronos & Polling](/pt/guides/async-jobs-polling) |
+|-------|-----------|
+| API Multiformato | [Multi-Format API](/guides/api-formats) |
+| SDK OpenAI | [OpenAI SDK](/integrations/openai-sdk) |
+| SDK Anthropic | [Anthropic SDK](/integrations/anthropic-sdk) |
+| Gemini Nativo | [Gemini Native API](/api-reference/gemini/generate-content) |
+| Geração de Imagem | [Image Generation](/guides/image-generation) |
+| Trabalhos Assíncronos & Polling | [Async Jobs & Polling](/guides/async-jobs-polling) |

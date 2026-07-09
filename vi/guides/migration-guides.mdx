@@ -1,22 +1,44 @@
 ---
-title: "Hướng Dẫn Di Chuyển"
-description: "Di chuyển OpenAI, Anthropic, Gemini và các khối lượng công việc truyền thông sang TokenLab với những thay đổi nhỏ, an toàn cho sản xuất."
+title: "Hướng dẫn di chuyển"
+description: "Chuyển đổi các khối lượng công việc từ OpenAI, Anthropic, Gemini và media sang TokenLab với những thay đổi nhỏ, an toàn cho môi trường production."
 ---
 
-TokenLab hỗ trợ nhiều định dạng: bạn có thể giữ lại các khách hàng tương thích với OpenAI, các cuộc gọi Messages gốc của Anthropic, các cuộc gọi REST gốc của Gemini và các điểm cuối truyền thông ở dạng tự nhiên của chúng. Việc di chuyển an toàn nhất là không dịch mọi khối lượng công việc thành một định dạng chung. Chọn lộ trình phù hợp với hành vi mà ứng dụng của bạn cần.
+TokenLab hỗ trợ đa định dạng: bạn có thể giữ nguyên các client tương thích với OpenAI, các lệnh gọi Messages gốc của Anthropic, các lệnh gọi REST gốc của Gemini và các endpoint media ở định dạng tự nhiên của chúng. Cách di chuyển an toàn nhất không phải là chuyển đổi mọi khối lượng công việc sang một định dạng chung duy nhất. Hãy chọn lộ trình sở hữu hành vi mà ứng dụng của bạn cần.
 
-## Bản Đồ Lộ Trình
+## Ánh xạ lộ trình (Route Mapping)
 
-| Khối lượng công việc hiện tại | URL cơ sở TokenLab | Điểm cuối chính | Ghi chú di chuyển |
+| Khối lượng công việc hiện tại | URL cơ sở TokenLab | Endpoint chính | Lưu ý di chuyển |
 |-------------------|-------------------|------------------|----------------|
-| OpenAI Chat Completions | `https://api.tokenlab.sh/v1` | `/chat/completions` | Thay đổi nhỏ nhất cho cuộc trò chuyện tương thích với OpenAI và gọi hàm |
-| OpenAI Responses | `https://api.tokenlab.sh/v1` | `/responses` | Sử dụng khi ứng dụng của bạn phụ thuộc vào đầu vào, công cụ hoặc xử lý đầu ra cụ thể cho Responses |
+| OpenAI Chat Completions | `https://api.tokenlab.sh/v1` | `/chat/completions` | Thay đổi nhỏ nhất cho chat và gọi hàm tương thích với OpenAI |
+| OpenAI Responses | `https://api.tokenlab.sh/v1` | `/responses` | Sử dụng khi ứng dụng của bạn phụ thuộc vào đầu vào, công cụ hoặc cách xử lý đầu ra đặc thù của Responses |
 | Anthropic SDK | `https://api.tokenlab.sh` | `/v1/messages` | Không thêm `/v1` vào URL cơ sở của SDK |
-| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Giữ các trường gốc của Gemini trên lộ trình Gemini |
-| Tạo phương tiện | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Khám phá các mô hình với `recommended_for` và mong đợi việc kiểm tra bất đồng bộ nơi có tài liệu |
-| Quản lý và thanh toán | `https://api.tokenlab.sh/v1` | `/management/...` | Sử dụng mã thông báo quản lý cho việc sử dụng phía máy chủ và đối chiếu thanh toán |
+| Gemini REST | `https://api.tokenlab.sh` | `/v1beta/models/:model:generateContent` | Giữ nguyên các trường gốc của Gemini trên lộ trình Gemini |
+| Tạo media | `https://api.tokenlab.sh/v1` | `/images`, `/videos`, `/music`, `/3d` | Khám phá các model với `recommended_for` và dự kiến polling bất đồng bộ (async) ở nơi có tài liệu hướng dẫn |
+| Quản lý và thanh toán | `https://api.tokenlab.sh/v1` | `/management/...` | Sử dụng token quản lý cho việc sử dụng phía server và đối soát thanh toán |
 
-## Di Chuyển Tương Thích Với OpenAI
+## Các công thức di chuyển nhanh
+
+### Từ OpenAI sang TokenLab
+
+Chỉ thay đổi `base_url` / `baseURL` của SDK thành `https://api.tokenlab.sh/v1`, giữ nguyên tên biến môi trường chứa API key OpenAI hiện tại của bạn nếu điều đó giúp việc triển khai dễ dàng hơn, và thay thế các ID model sau khi đã kiểm tra qua `GET /v1/models`.
+
+### Từ OpenRouter sang TokenLab
+
+Sử dụng `https://api.tokenlab.sh/v1` ở nơi ứng dụng của bạn trước đây sử dụng URL cơ sở tương thích với OpenAI của OpenRouter. Loại bỏ các ID model có tiền tố nhà cung cấp và sử dụng ID model công khai của TokenLab từ `/v1/models`; khi một khối lượng công việc cần Claude Messages hoặc `generateContent` của Gemini, hãy chuyển nó sang endpoint gốc của TokenLab thay vì ép buộc nó thông qua chat tương thích với OpenAI.
+
+### Từ LiteLLM sang TokenLab
+
+Sử dụng lộ trình `custom_openai/<model>` của LiteLLM với `api_base: https://api.tokenlab.sh/v1`. Giữ các bí danh (alias) của LiteLLM tách biệt với các ID model thực của TokenLab để bạn có thể thay đổi chính sách định tuyến mà không cần thay đổi các prompt của ứng dụng.
+
+### Claude Messages qua TokenLab
+
+Trỏ các client Anthropic SDK vào `https://api.tokenlab.sh` và gọi `messages.create`. Không thêm `/v1` vào URL cơ sở của SDK; SDK đã sở hữu đường dẫn `/v1/messages`.
+
+### Gemini Native qua TokenLab
+
+Giữ các payload của Gemini trên `https://api.tokenlab.sh/v1beta/models/{model}:generateContent`. Các thành phần `contents`, `parts`, tệp tin, nội dung được lưu cache, khai báo hàm và các công cụ tích hợp sẵn của Gemini nên được giữ trên lộ trình này khi ứng dụng của bạn phụ thuộc vào hành vi của Gemini.
+
+## Di chuyển tương thích với OpenAI
 
 ```python
 from openai import OpenAI
@@ -32,9 +54,9 @@ response = client.chat.completions.create(
 )
 ```
 
-Giữ lại mã retry, timeout và streaming hiện tại của bạn, nhưng xác thực ID mô hình với `GET /v1/models` trước khi có lưu lượng sản xuất. Đối với việc tạo hình ảnh, gửi `model` một cách rõ ràng và đọc hướng dẫn hình ảnh vì các mô hình hình ảnh khác nhau nhiều hơn so với các mô hình trò chuyện.
+Giữ nguyên mã xử lý thử lại (retry), timeout và streaming hiện tại của bạn, nhưng hãy xác thực các ID model bằng `GET /v1/models` trước khi đưa vào lưu lượng truy cập thực tế. Đối với việc tạo hình ảnh, hãy gửi `model` một cách rõ ràng và đọc hướng dẫn về hình ảnh vì các model hình ảnh khác biệt nhiều hơn so với các model chat.
 
-## Di Chuyển Anthropic
+## Di chuyển Anthropic
 
 ```python
 from anthropic import Anthropic
@@ -51,9 +73,9 @@ message = client.messages.create(
 )
 ```
 
-Sử dụng `/v1/messages` cho việc sử dụng công cụ gốc của Claude, các luồng suy nghĩ và ngữ nghĩa tin nhắn của Anthropic. Không dịch các trường chỉ có của Anthropic thông qua Chat Completions trừ khi bạn cố ý muốn thay đổi hành vi tương thích với OpenAI.
+Sử dụng `/v1/messages` cho việc sử dụng công cụ gốc của Claude, các luồng suy nghĩ (thinking flows) và ngữ nghĩa tin nhắn của Anthropic. Đừng chuyển đổi các trường chỉ dành riêng cho Anthropic thông qua Chat Completions trừ khi bạn cố tình muốn thay đổi hành vi tương thích với OpenAI.
 
-## Di Chuyển Gemini
+## Di chuyển Gemini
 
 ```bash
 curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
@@ -62,43 +84,43 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
 
-Giữ lại các công cụ tích hợp sẵn của Gemini, các tham chiếu API File, nội dung đã lưu, khai báo hàm và các phần nội dung gốc trên `/v1beta` khi ứng dụng của bạn phụ thuộc vào hành vi gốc của Gemini.
+Giữ các công cụ tích hợp sẵn của Gemini, tham chiếu File API, nội dung được lưu cache, khai báo hàm và các phần nội dung gốc trên `/v1beta` khi ứng dụng của bạn phụ thuộc vào hành vi gốc của Gemini.
 
-## Di Chuyển Phương Tiện
+## Di chuyển Media
 
 1. Truy vấn `GET /v1/models?recommended_for=image|video|music|3d`.
-2. Đọc `GET /v1/models` trong các phản hồi danh sách và toàn bộ `GET /v1/models/{model}` nơi có sẵn.
-3. Gửi một `model` rõ ràng, đặc biệt cho các điểm cuối hình ảnh.
-4. Lưu trữ `task_id`, `poll_url`, điểm cuối, mô hình và ID công việc của riêng bạn cho các công việc bất đồng bộ.
-5. Đối chiếu chi phí thông qua các bản ghi sử dụng và `billing_transaction_id`, không phải ID công việc của nhà cung cấp.
+2. Đọc `GET /v1/models` trong các phản hồi danh sách và `GET /v1/models/{model}` đầy đủ nếu có.
+3. Gửi một `model` rõ ràng, đặc biệt là đối với các endpoint hình ảnh.
+4. Lưu trữ `task_id`, `poll_url`, endpoint, model và ID công việc của riêng bạn cho các công việc bất đồng bộ.
+5. Đối soát chi phí thông qua hồ sơ sử dụng và `billing_transaction_id`, không phải ID tác vụ của nhà cung cấp.
 
-Các khối lượng công việc truyền thông cần có kế hoạch triển khai riêng vì độ trễ, các lần thử lại và tài sản cuối cùng hoạt động khác với các cuộc trò chuyện hoàn thành.
+Các khối lượng công việc media cần kế hoạch triển khai riêng vì độ trễ, việc thử lại và tài sản cuối cùng hoạt động khác với các tác vụ chat completions.
 
-## Kế Hoạch Triển Khai Sản Xuất
+## Kế hoạch triển khai Production
 
 | Giai đoạn | Mục tiêu | Kiểm tra |
 |-------|------|--------|
-| 1. Kiểm kê | Liệt kê các điểm cuối, mô hình, trường yêu cầu, hành vi streaming/bất đồng bộ và chủ sở hữu thanh toán | Không có trường chỉ có của nhà cung cấp nào được giả định là công khai |
-| 2. Thí điểm một lộ trình | Di chuyển một điểm cuối và một gia đình mô hình | Hình dạng phản hồi, chi phí và nhật ký khớp với mong đợi |
-| 3. Bóng hoặc mẫu | So sánh các đầu ra đã chọn với nhà cung cấp trước đó | Chất lượng và độ trễ có thể nhìn thấy bởi người dùng là chấp nhận được |
-| 4. Triển khai dần dần | Tăng lưu lượng theo khóa, tổ chức hoặc cờ tính năng | Theo dõi `4xx`, `5xx`, độ trễ, cân bằng và các công việc bất đồng bộ trùng lặp |
-| 5. Dọn dẹp | Xóa đường dẫn của nhà cung cấp cũ chỉ sau khi sử dụng ổn định | Đường dẫn quay lại và sách hướng dẫn hỗ trợ được tài liệu hóa |
+| 1. Kiểm kê | Liệt kê các endpoint, model, trường yêu cầu, hành vi streaming/async và chủ sở hữu thanh toán | Không giả định các trường ẩn chỉ dành riêng cho nhà cung cấp là công khai |
+| 2. Thử nghiệm một lộ trình | Di chuyển một endpoint và một dòng model | Hình dạng phản hồi, chi phí và nhật ký khớp với kỳ vọng |
+| 3. Shadow hoặc mẫu | So sánh các đầu ra đã chọn với nhà cung cấp trước đó | Chất lượng hiển thị cho người dùng và độ trễ ở mức chấp nhận được |
+| 4. Triển khai dần dần | Tăng lưu lượng truy cập theo key, tổ chức hoặc feature flag | Theo dõi `4xx`, `5xx`, độ trễ, số dư và các công việc async trùng lặp |
+| 5. Dọn dẹp | Chỉ xóa đường dẫn nhà cung cấp cũ sau khi sử dụng ổn định | Đường dẫn rollback và playbook hỗ trợ đã được ghi lại |
 
-## Cạm Bẫy Di Chuyển
+## Các cạm bẫy khi di chuyển
 
-- Không đặt mọi mô hình sau một đường dẫn OpenAI Chat Completions nếu ứng dụng của bạn cần hành vi gốc của Anthropic, Gemini hoặc Responses.
-- Không giả định các mặc định hình ảnh cũ. Gửi `model` một cách rõ ràng.
-- Không thử lại các yêu cầu tạo bất đồng bộ mà không kiểm tra xem một nhiệm vụ đã được tạo hay chưa.
-- Không tiết lộ siêu dữ liệu định tuyến của nhà cung cấp trong nhật ký hoặc giao diện người dùng của bạn.
-- Không so sánh thanh toán với ID công việc của nhà cung cấp. Sử dụng các bản ghi sử dụng của TokenLab.
+- Đừng đặt mọi model đằng sau một đường dẫn OpenAI Chat Completions nếu ứng dụng của bạn cần hành vi gốc của Anthropic, Gemini hoặc Responses.
+- Đừng giả định các giá trị mặc định cũ của hình ảnh. Hãy gửi `model` một cách rõ ràng.
+- Đừng thử lại các yêu cầu tạo bất đồng bộ mà không kiểm tra xem tác vụ đã được tạo hay chưa.
+- Đừng để lộ các định danh cụ thể của nhà cung cấp trong nhật ký hoặc giao diện người dùng của bạn.
+- Đừng so sánh thanh toán với ID tác vụ của nhà cung cấp. Hãy sử dụng hồ sơ sử dụng của TokenLab.
 
-## Tài Liệu API
+## Tài liệu tham khảo API
 
-| Chủ đề | Tài liệu tham khảo |
+| Chủ đề | Tham khảo |
 |-------|-----------|
-| API Đa Định Dạng | [API Đa Định Dạng](/vi/guides/api-formats) |
-| OpenAI SDK | [OpenAI SDK](/vi/integrations/openai-sdk) |
-| Anthropic SDK | [Anthropic SDK](/vi/integrations/anthropic-sdk) |
-| Gemini Native | [Gemini Native API](/vi/api-reference/gemini/generate-content) |
-| Tạo Hình Ảnh | [Tạo Hình Ảnh](/vi/guides/image-generation) |
-| Công Việc Bất Đồng Bộ & Kiểm Tra | [Công Việc Bất Đồng Bộ & Kiểm Tra](/vi/guides/async-jobs-polling) |
+| Multi-Format API | [Multi-Format API](/guides/api-formats) |
+| OpenAI SDK | [OpenAI SDK](/integrations/openai-sdk) |
+| Anthropic SDK | [Anthropic SDK](/integrations/anthropic-sdk) |
+| Gemini Native | [Gemini Native API](/api-reference/gemini/generate-content) |
+| Image Generation | [Image Generation](/guides/image-generation) |
+| Async Jobs & Polling | [Async Jobs & Polling](/guides/async-jobs-polling) |
