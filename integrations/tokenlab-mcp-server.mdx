@@ -1,14 +1,14 @@
 ---
 title: "TokenLab MCP Server"
-description: "Connect MCP clients to TokenLab model discovery, pricing, OpenAI-compatible chat, and native inference endpoints."
+description: "Connect MCP clients to TokenLab's OpenAPI-generated tools for native AI endpoints, multimodal media, files, and async tasks."
 ---
 
-The [TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) gives MCP-compatible agents live model discovery, pricing, OpenAI-compatible Chat Completions, and native inference tools.
+The [TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) generates MCP tools from TokenLab's public OpenAPI contract. MCP-compatible agents can discover models and pricing, call OpenAI-compatible and native LLM endpoints, create multimodal media, upload files, and manage asynchronous tasks.
 
-Use it when an agent needs to compare models, inspect supported request formats, check pricing, or call TokenLab through OpenAI Chat Completions, Responses, Anthropic Messages, or Gemini generateContent.
+Use it when an agent needs the current TokenLab API contract instead of a manually maintained tool list. The default `core` profile exposes 29 generated endpoint tools plus two composite discovery tools. The `full` profile exposes 76 generated endpoint tools plus the same two composite tools.
 
 <Note>
-Public catalog tools do not require a TokenLab API key. Set `TOKENLAB_API_KEY` to use the four paid inference tools.
+Public catalog and pricing tools do not require a TokenLab API key. Set `TOKENLAB_API_KEY` for credentialed inference, media, audio, file, task, embedding, rerank, and translation operations. Never place an API key in tool arguments.
 </Note>
 
 ## What It Provides
@@ -17,8 +17,11 @@ Public catalog tools do not require a TokenLab API key. Set `TOKENLAB_API_KEY` t
 - Model detail lookup from `/v1/models/{model}`.
 - Pricing lookup from `/v1/models/{model}/pricing`.
 - Agent-readable API overview from `https://api.tokenlab.sh/llms.txt`.
-- Endpoint-family guidance for OpenAI-compatible chat, Responses, Anthropic Messages, Gemini, media, audio, embeddings, rerank, and translation.
-- Optional inference through OpenAI-compatible Chat Completions, Responses, Anthropic Messages, and Gemini generateContent.
+- OpenAI-compatible Chat Completions and Responses, Anthropic Messages, and Gemini generateContent without flattening their native request shapes.
+- Image generation and editing through JSON URLs, TokenLab file IDs, or local multipart files.
+- Video, music, 3D, speech, transcription, audio translation, embeddings, multimodal embeddings, rerank, and text translation.
+- Normalized async task summaries for image, video, music, 3D, and world-generation operations.
+- A daily contract sync that fetches the public OpenAPI document, regenerates tool schemas, runs endpoint and file tests, and updates `main` only when every check passes.
 
 ## Install From GitHub
 
@@ -37,7 +40,7 @@ Start the server over stdio:
 npm start
 ```
 
-The optional `TOKENLAB_API_BASE` environment variable defaults to `https://api.tokenlab.sh`.
+The optional `TOKENLAB_API_BASE` environment variable defaults to `https://api.tokenlab.sh`. Set `TOKENLAB_MCP_TOOL_PROFILE=full` when a client should expose the broader developer API instead of the default `core` profile.
 
 ## Install in Codex
 
@@ -98,21 +101,34 @@ Use the same command and args in any client that supports stdio MCP servers:
 
 If your client stores named servers, use `tokenlab-model-catalog` as the server name.
 
-## Tools
+## Generated Tool Profiles
 
-| Tool | Purpose |
+| Profile | Tools exposed | Coverage |
+|---|---:|---|
+| `core` (default) | 31 | 29 generated endpoint tools plus `compare_models` and `get_api_overview`. Covers catalog, pricing, native LLM endpoints, images, video, music, 3D, audio, tasks, files, embeddings, rerank, and translation. |
+| `full` | 78 | 76 generated endpoint tools plus the two composite discovery tools. Adds response lifecycle, batches, worlds, native model discovery, and other allowlisted developer operations. |
+
+Tool names, descriptions, input schemas, HTTP methods, paths, content types, auth requirements, and task behavior are generated from the checked-in OpenAPI snapshot. An MCP-only overlay supplies stable tool aliases, profile membership, async task semantics, multipart variants, secret omission, and non-streaming constraints.
+
+Common `core` tools include:
+
+| Family | Representative tools |
 |---|---|
-| `list_models` | List public TokenLab models. Optionally filter with `recommended_for` such as `image`, `video`, `embedding`, `rerank`, or `translation`. |
-| `get_model` | Fetch one model's public details and supported request format. |
-| `get_model_pricing` | Fetch one model's public pricing details. |
-| `compare_models` | Compare details and pricing for several model IDs. |
-| `create_chat_completion` | Call the OpenAI-compatible `/v1/chat/completions` endpoint. Supports multimodal messages and tool calling. Requires `TOKENLAB_API_KEY`. |
-| `create_response` | Call `/v1/responses` with string or structured input, tools, tool choice, metadata, and text configuration. Requires `TOKENLAB_API_KEY`. |
-| `create_anthropic_message` | Call `/v1/messages` with native multi-message content blocks and tools. Requires `TOKENLAB_API_KEY`. |
-| `create_gemini_content` | Call native `generateContent` with contents, multimodal parts, tools, and generation config. Requires `TOKENLAB_API_KEY`. |
-| `get_api_overview` | Fetch TokenLab's `llms.txt` overview for agent-readable endpoint guidance. |
+| Catalog and pricing | `list_models`, `get_model`, `get_model_pricing`, `get_pricing`, `compare_models` |
+| Native LLM endpoints | `create_chat_completion`, `create_response`, `create_anthropic_message`, `create_gemini_content` |
+| Images | `create_image`, `create_image_file`, `edit_image`, `edit_image_file` |
+| Video, music, and 3D | `create_video`, `create_music`, `create_3d_model` |
+| Audio | `create_speech`, `transcribe_audio`, `translate_audio` |
+| Embeddings and text | `create_embedding`, `create_multimodal_embedding`, `rerank_documents`, `translate_text` |
+| Files and tasks | `upload_file`, `list_files`, `retrieve_file`, `retrieve_file_content`, `delete_file`, `get_task_status`, `cancel_task` |
 
-Inference tools return normal JSON results. Streaming is intentionally disabled for MCP tool calls.
+MCP tool calls return one final result. Streaming-only and realtime operations are excluded, and generated request schemas constrain supported `stream` fields to `false`. Small image and audio responses return native MCP content; larger binary responses are written to `TOKENLAB_ARTIFACT_DIR` and returned with their local path, MIME type, and byte count.
+
+## Async Media Results
+
+Video, music, and 3D creation return async task summaries. Image generation and editing can return either a completed result or an async task, depending on the selected model and request.
+
+When `delivery.mode` is `async`, call `get_task_status` with `{ "id": delivery.task_id }` until `delivery.terminal` is `true`. Determine completion from `status`; `progress` is optional and must not be used as the terminal condition.
 
 ## Recommended Agent Workflow
 
@@ -121,7 +137,7 @@ Inference tools return normal JSON results. Streaming is intentionally disabled 
 3. Call `get_model` before building a non-chat request, retrying a failed request, or switching endpoint families.
 4. Call `get_model_pricing` when model cost affects the user's choice.
 5. Use `compare_models` when the choice depends on several candidates.
-6. Call the inference tool that matches the required API contract, or use `get_api_overview` for a compact map of TokenLab API families.
+6. Call the generated tool that matches the required API contract, or use `get_api_overview` for a compact map of TokenLab API families.
 
 ## Native Endpoint Guidance
 
@@ -149,7 +165,7 @@ Clients that support Streamable HTTP can connect to:
 https://tokenlab-model-explorer.vercel.app/mcp
 ```
 
-The hosted explorer is public and exposes `open_tokenlab_model_explorer`, `compare_tokenlab_models`, and `generate_tokenlab_endpoint_example`. Use the local npm server above when you need all nine tools or credentialed inference.
+The hosted explorer is public and exposes `open_tokenlab_model_explorer`, `compare_tokenlab_models`, and `generate_tokenlab_endpoint_example`. Use the local npm server above when you need the generated core/full profiles, local file uploads, or credentialed API operations.
 
 ## Use It With TokenLab Skills
 
@@ -178,7 +194,7 @@ Use both when available:
   </Accordion>
 
   <Accordion title="Can this server call paid TokenLab inference APIs?">
-    Yes. Set `TOKENLAB_API_KEY`, then use `create_chat_completion`, `create_response`, `create_anthropic_message`, or `create_gemini_content`. Catalog and pricing tools remain available without a key.
+    Yes. Set `TOKENLAB_API_KEY`, then use the generated LLM, media, audio, task, file, embedding, rerank, or translation tools. Catalog and pricing tools remain available without a key.
   </Accordion>
 </AccordionGroup>
 

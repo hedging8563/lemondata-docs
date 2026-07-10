@@ -1,28 +1,31 @@
 ---
 title: "TokenLab MCP Server"
-description: "将 MCP 客户端连接到 TokenLab 模型发现、定价、OpenAI 兼容聊天和原生推理端点。"
+description: "将 MCP 客户端连接到 TokenLab 的 OpenAPI 生成工具，以实现原生 AI 端点、多模态媒体、文件处理和异步任务。"
 ---
 
-[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) 为兼容 MCP 的智能体提供实时模型发现、定价、OpenAI 兼容 Chat Completions 和原生推理工具。
+[TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) 根据 TokenLab 的公共 OpenAPI 契约生成 MCP 工具。支持 MCP 的智能体（Agent）可以发现模型和定价、调用兼容 OpenAI 及原生的 LLM 端点、创建多模态媒体、上传文件以及管理异步任务。
 
-当智能体需要比较模型、检查支持的请求格式、查看定价，或通过 OpenAI Chat Completions、Responses、Anthropic Messages、Gemini generateContent 调用 TokenLab 时，请使用此服务器。
+当智能体需要当前的 TokenLab API 契约而非手动维护的工具列表时，请使用此服务器。默认的 `core` 配置文件公开了 29 个生成的端点工具以及两个复合发现工具。`full` 配置文件则公开了 76 个生成的端点工具以及相同的两个复合工具。
 
 <Note>
-公共目录工具不需要 TokenLab API key。设置 `TOKENLAB_API_KEY` 后可使用四个付费推理工具。
+公共目录和定价工具不需要 TokenLab API key。如需进行凭证验证的推理、媒体、音频、文件、任务、嵌入（embedding）、重排序（rerank）和翻译操作，请设置 `TOKENLAB_API_KEY`。切勿将 API key 放入工具参数中。
 </Note>
 
 ## 它提供了什么
 
 - 从 `https://api.tokenlab.sh/v1/models` 进行实时模型发现。
-- 从 `/v1/models/{model}` 获取模型详情。
-- 从 `/v1/models/{model}/pricing` 获取定价信息。
+- 从 `/v1/models/{model}` 进行模型详情查询。
+- 从 `/v1/models/{model}/pricing` 进行定价查询。
 - 从 `https://api.tokenlab.sh/llms.txt` 获取智能体可读的 API 概览。
-- 针对 OpenAI 兼容聊天、Responses、Anthropic Messages、Gemini、媒体、音频、嵌入 (embeddings)、重排序 (rerank) 和翻译的端点系列指南。
-- 通过 OpenAI 兼容 Chat Completions、Responses、Anthropic Messages 和 Gemini generateContent 进行可选推理。
+- 兼容 OpenAI 的 Chat Completions 和 Responses、Anthropic Messages 以及 Gemini generateContent，且无需扁平化其原生请求格式。
+- 通过 JSON URL、TokenLab 文件 ID 或本地多部分（multipart）文件进行图像生成和编辑。
+- 视频、音乐、3D、语音、转录、音频翻译、嵌入、多模态嵌入、重排序和文本翻译。
+- 针对图像、视频、音乐、3D 和世界生成操作的标准化异步任务摘要。
+- 每日契约同步：获取公共 OpenAPI 文档、重新生成工具模式（schema）、运行端点和文件测试，仅在所有检查通过时更新 `main` 分支。
 
 ## 从 GitHub 安装
 
-克隆公共仓库并安装依赖项：
+克隆公共仓库并安装依赖：
 
 ```bash
 git clone https://github.com/hedging8563/tokenlab-mcp-server.git
@@ -37,19 +40,19 @@ npm test
 npm start
 ```
 
-可选的 `TOKENLAB_API_BASE` 环境变量默认为 `https://api.tokenlab.sh`。
+可选的 `TOKENLAB_API_BASE` 环境变量默认为 `https://api.tokenlab.sh`。当客户端需要公开更广泛的开发者 API 而非默认的 `core` 配置文件时，请设置 `TOKENLAB_MCP_TOOL_PROFILE=full`。
 
 ## 在 Codex 中安装
 
-将公共目录服务器添加到 Codex 配置：
+将公共目录服务器添加到你的 Codex 配置中：
 
 ```bash
 codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
 ```
 
-添加后新开一个 Codex 会话。公共目录工具不需要 `TOKENLAB_API_KEY`。
+添加服务器后，启动一个新的 Codex 会话。公共目录工具不需要 `TOKENLAB_API_KEY`。
 
-如需启用推理工具，请在添加服务器时传入 TokenLab API key：
+要启用推理工具，请在添加服务器时包含你的 TokenLab API key：
 
 ```bash
 codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
@@ -63,11 +66,11 @@ codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalo
 cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
 ```
 
-该命令已通过 Cline CLI 验证，可在没有安装警告的情况下完成。公共目录工具可直接使用；需要推理工具时，请在 Cline 环境中设置 `TOKENLAB_API_KEY`。
+该命令已通过 Cline CLI 验证，执行时不会出现设置警告。公共目录工具可立即使用；当你需要推理工具时，请在 Cline 环境中设置 `TOKENLAB_API_KEY`。
 
 ## Claude Desktop 配置
 
-将已发布的 npm package 添加到 MCP 客户端配置：
+将已发布的 npm 包添加到你的 MCP 客户端配置中：
 
 ```json
 {
@@ -96,40 +99,53 @@ cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
 }
 ```
 
-如果您的客户端存储了命名服务器，请使用 `tokenlab-model-catalog` 作为服务器名称。
+如果你的客户端存储了命名服务器，请使用 `tokenlab-model-catalog` 作为服务器名称。
 
-## 工具
+## 生成的工具配置文件
 
-| 工具 | 用途 |
+| 配置文件 | 公开工具数 | 覆盖范围 |
+|---|---:|---|
+| `core` (默认) | 31 | 29 个生成的端点工具加上 `compare_models` 和 `get_api_overview`。涵盖目录、定价、原生 LLM 端点、图像、视频、音乐、3D、音频、任务、文件、嵌入、重排序和翻译。 |
+| `full` | 78 | 76 个生成的端点工具加上两个复合发现工具。增加了响应生命周期、批处理、世界生成、原生模型发现以及其他已列入白名单的开发者操作。 |
+
+工具名称、描述、输入模式、HTTP 方法、路径、内容类型、身份验证要求和任务行为均从已检入的 OpenAPI 快照中生成。仅限 MCP 的覆盖层提供了稳定的工具别名、配置文件成员资格、异步任务语义、多部分变体、密钥省略和非流式传输限制。
+
+常见的 `core` 工具包括：
+
+| 系列 | 代表性工具 |
 |---|---|
-| `list_models` | 列出公共 TokenLab 模型。可选择使用 `recommended_for` 进行过滤，例如 `image`、`video`、`embedding`、`rerank` 或 `translation`。 |
-| `get_model` | 获取单个模型的公共详情和支持的请求格式。 |
-| `get_model_pricing` | 获取单个模型的公共定价详情。 |
-| `compare_models` | 比较多个模型 ID 的详情和定价。 |
-| `create_chat_completion` | 调用 OpenAI 兼容的 `/v1/chat/completions` 端点，支持多模态消息和工具调用。需要 `TOKENLAB_API_KEY`。 |
-| `create_response` | 使用字符串或结构化 input、tools、tool choice、metadata 和 text 配置调用 `/v1/responses`。需要 `TOKENLAB_API_KEY`。 |
-| `create_anthropic_message` | 使用原生多消息 content blocks 和 tools 调用 `/v1/messages`。需要 `TOKENLAB_API_KEY`。 |
-| `create_gemini_content` | 使用 contents、多模态 parts、tools 和 generation config 调用原生 `generateContent`。需要 `TOKENLAB_API_KEY`。 |
-| `get_api_overview` | 获取 TokenLab 的 `llms.txt` 概览，用于智能体可读的端点指南。 |
+| 目录和定价 | `list_models`, `get_model`, `get_model_pricing`, `get_pricing`, `compare_models` |
+| 原生 LLM 端点 | `create_chat_completion`, `create_response`, `create_anthropic_message`, `create_gemini_content` |
+| 图像 | `create_image`, `create_image_file`, `edit_image`, `edit_image_file` |
+| 视频、音乐和 3D | `create_video`, `create_music`, `create_3d_model` |
+| 音频 | `create_speech`, `transcribe_audio`, `translate_audio` |
+| 嵌入和文本 | `create_embedding`, `create_multimodal_embedding`, `rerank_documents`, `translate_text` |
+| 文件和任务 | `upload_file`, `list_files`, `retrieve_file`, `retrieve_file_content`, `delete_file`, `get_task_status`, `cancel_task` |
 
-推理工具返回普通 JSON 结果。MCP 工具调用会有意禁用流式输出。
+MCP 工具调用返回一个最终结果。排除了仅流式传输和实时操作，生成的请求模式将支持的 `stream` 字段限制为 `false`。小型图像和音频响应返回原生 MCP 内容；较大的二进制响应会被写入 `TOKENLAB_ARTIFACT_DIR` 并返回其本地路径、MIME 类型和字节数。
 
-## 推荐的智能体工作流程
+## 异步媒体结果
+
+视频、音乐和 3D 创建操作返回异步任务摘要。图像生成和编辑操作根据所选模型和请求，可能返回已完成的结果，也可能返回异步任务。
+
+当 `delivery.mode` 为 `async` 时，请调用 `get_task_status` 并传入 `{ "id": delivery.task_id }`，直到 `delivery.terminal` 为 `true`。通过 `status` 判断完成情况；`progress` 是可选的，不得用作终止条件。
+
+## 推荐的智能体工作流
 
 1. 当用户未指定模型时，调用 `list_models`。
 2. 对于非聊天任务（如图像、视频、音乐、3D、TTS、STT、嵌入、重排序或翻译），使用 `recommended_for`。
 3. 在构建非聊天请求、重试失败请求或切换端点系列之前，调用 `get_model`。
 4. 当模型成本影响用户选择时，调用 `get_model_pricing`。
 5. 当选择取决于多个候选模型时，使用 `compare_models`。
-6. 调用与所需 API 契约匹配的推理工具，或使用 `get_api_overview` 获取 TokenLab API 系列的简明映射。
+6. 调用与所需 API 契约匹配的生成工具，或使用 `get_api_overview` 获取 TokenLab API 系列的紧凑映射。
 
 ## 原生端点指南
 
-TokenLab 支持 OpenAI 兼容路由和原生端点系列。MCP 服务器可帮助智能体在编写代码前选择正确的路由：
+TokenLab 支持兼容 OpenAI 的路由和原生端点系列。MCP 服务器可帮助智能体在编写代码前选择正确的路由：
 
 | 系列 | 常用路由 |
 |---|---|
-| OpenAI 兼容聊天 | `/v1/chat/completions` |
+| 兼容 OpenAI 的聊天 | `/v1/chat/completions` |
 | Responses | `/v1/responses` |
 | Anthropic Messages | `/v1/messages` |
 | Gemini 原生 | `/v1beta/models/{model}:generateContent` |
@@ -143,13 +159,13 @@ TokenLab 支持 OpenAI 兼容路由和原生端点系列。MCP 服务器可帮�
 
 ## 托管模型浏览器
 
-支持 Streamable HTTP 的客户端可以连接：
+支持 Streamable HTTP 的客户端可以连接到：
 
 ```text
 https://tokenlab-model-explorer.vercel.app/mcp
 ```
 
-该托管浏览器公开提供 `open_tokenlab_model_explorer`、`compare_tokenlab_models` 和 `generate_tokenlab_endpoint_example`。需要全部九个工具或带凭证的推理时，请使用上面的本地 npm 服务器。
+托管的浏览器是公开的，并公开了 `open_tokenlab_model_explorer`、`compare_tokenlab_models` 和 `generate_tokenlab_endpoint_example`。当你需要生成的 core/full 配置文件、本地文件上传或凭证验证的 API 操作时，请使用上述本地 npm 服务器。
 
 ## 与 TokenLab Skills 配合使用
 
@@ -157,28 +173,28 @@ MCP 服务器在运行时非常有用，而 [TokenLab skills repository](https:/
 
 在可用时同时使用它们：
 
-- MCP server：发现当前模型、定价和端点详情。
-- `tokenlab-api-integration` skill：生成可运行的 API 示例并处理结构化的 TokenLab 错误。
-- `tokenlab-model-picker` skill：为用户的任务选择强大的模型。
-- `tokenlab-native-endpoints` skill：决定何时使用 Responses、Anthropic Messages、Gemini、媒体、音频、嵌入、重排序或翻译路由。
+- MCP 服务器：发现当前模型、定价和端点详情。
+- `tokenlab-api-integration` 技能：生成可运行的 API 示例并处理结构化的 TokenLab 错误。
+- `tokenlab-model-picker` 技能：为用户的任务选择强大的模型。
+- `tokenlab-native-endpoints` 技能：决定何时使用 Responses、Anthropic Messages、Gemini、媒体、音频、嵌入、重排序或翻译路由。
 
 ## 故障排除
 
 <AccordionGroup>
   <Accordion title="客户端无法启动服务器">
-    确认 Node.js 至少为 18.17，然后在终端运行一次 `npx -y @tokenlabai/mcp-server`，以查看 npm 或网络错误。
+    确认 Node.js 版本至少为 18.17，然后在终端中运行一次 `npx -y @tokenlabai/mcp-server` 以查看 npm 或网络错误。
   </Accordion>
 
   <Accordion title="模型列表为空">
-    验证机器是否可以访问 `https://api.tokenlab.sh/v1/models`。如果您覆盖了 `TOKENLAB_API_BASE`，请确保其末尾不包含斜杠。
+    验证机器是否可以访问 `https://api.tokenlab.sh/v1/models`。如果你覆盖了 `TOKENLAB_API_BASE`，请确保它不包含末尾的斜杠。
   </Accordion>
 
   <Accordion title="智能体仍然选择过时的模型 ID">
-    要求智能体在硬编码模型名称之前调用 `list_models` 或 `get_model`。将 MCP 服务器与 `tokenlab-model-picker` 配合使用效果更佳。
+    要求智能体在硬编码模型名称之前调用 `list_models` 或 `get_model`。将 MCP 服务器与 `tokenlab-model-picker` 配合使用可获得更好的结果。
   </Accordion>
 
   <Accordion title="此服务器可以调用付费的 TokenLab 推理 API 吗？">
-    可以。设置 `TOKENLAB_API_KEY` 后，可使用 `create_chat_completion`、`create_response`、`create_anthropic_message` 或 `create_gemini_content`。目录和定价工具无需 key 仍可使用。
+    可以。设置 `TOKENLAB_API_KEY`，然后使用生成的 LLM、媒体、音频、任务、文件、嵌入、重排序或翻译工具。目录和定价工具无需密钥即可使用。
   </Accordion>
 </AccordionGroup>
 
@@ -189,7 +205,7 @@ MCP 服务器在运行时非常有用，而 [TokenLab skills repository](https:/
     源代码和本地设置说明
   </Card>
   <Card title="TokenLab Skills" icon="sparkles" href="https://github.com/hedging8563/tokenlab-skills">
-    维护用于 TokenLab 集成的智能体技能
+    维护良好的 TokenLab 集成智能体技能
   </Card>
   <Card title="模型目录 API" icon="list" href="https://api.tokenlab.sh/v1/models">
     公共模型发现端点
@@ -197,13 +213,13 @@ MCP 服务器在运行时非常有用，而 [TokenLab skills repository](https:/
   <Card title="llms.txt" icon="file-lines" href="https://api.tokenlab.sh/llms.txt">
     智能体可读的 TokenLab API 概览
   </Card>
-  <Card title="Glama MCP Server" icon="globe" href="https://glama.ai/mcp/servers/hedging8563/tokenlab-mcp-server">
-    查看已验证的 TokenLab MCP Server 条目
+  <Card title="Glama MCP 服务器" icon="globe" href="https://glama.ai/mcp/servers/hedging8563/tokenlab-mcp-server">
+    查看已验证的 TokenLab MCP 服务器列表
   </Card>
   <Card title="Glama 模型浏览器" icon="search" href="https://glama.ai/mcp/servers/hedging8563/tokenlab-openai-apps-model-explorer">
-    浏览模型、定价和原生端点示例
+    探索模型、定价和原生端点示例
   </Card>
-  <Card title="MCP.so 条目" icon="compass" href="https://mcp.so/servers/tokenlab-mcp-server">
+  <Card title="MCP.so 列表" icon="compass" href="https://mcp.so/servers/tokenlab-mcp-server">
     在 AI & Agents 目录中发现 TokenLab
   </Card>
   <Card title="托管模型浏览器" icon="rocket" href="https://tokenlab-model-explorer.vercel.app">
