@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-07-09
+Generated: 2026-07-15
 Source: https://docs.tokenlab.sh
 
 ---
@@ -1921,7 +1921,7 @@ curl "https://api.tokenlab.sh/v1/management/api-keys/key_abc123def456/usage?page
   -H "Authorization: Bearer mt-your-management-token"
 ```
 
-`GET /v1/management/api-keys/{keyId}/usage` can filter by `scene`, `accessChannel`, `model`, `modelVendor`, `startDate`, and `endDate`. Use these records instead of scraping dashboard pages or relying on provider task IDs.
+`GET /v1/management/api-keys/{keyId}/usage` can filter by `scene`, `model`, `modelVendor`, `startDate`, and `endDate`. Use these records instead of scraping dashboard pages or relying on provider task IDs.
 
 Streaming responses may settle after the stream is sent, so a billing header can be absent even when usage is later recorded. Async media tasks may settle after terminal polling.
 
@@ -2710,6 +2710,8 @@ socket.on('message', (event) => console.log(event.toString()));
 
 URL: https://docs.tokenlab.sh/guides/video-generation
 
+import VideoModelContracts from "../snippets/generated/video-model-contracts.mdx";
+
 Video generation is asynchronous. `POST /v1/videos/generations` returns a public task identity and usually a `poll_url`; the final video appears on later status responses.
 
 When the selected Seedance model can use the TokenLab material library, image URLs and supported inline data URLs are prepared as reusable TokenLab materials before generation. If preparation takes longer than 60 seconds, retry after the returned `auto_material_asset_ids` become `ACTIVE`. If the selected model cannot use the material library, ordinary image inputs continue on the regular image path.
@@ -3384,8 +3386,7 @@ All responses include a `_routing` field with channel information:
     "channel": {
       "id": "ch_xxx",
       "name": "channel-name",
-      "provider": "openai",
-      "channelType": "PLATFORM"
+      "provider": "openai"
     },
     "cached": false,
     "retryCount": 0
@@ -3397,7 +3398,6 @@ All responses include a `_routing` field with channel information:
 |-------|-------------|
 | `channel.id` | Channel identifier used |
 | `channel.provider` | Upstream provider (openai, anthropic, etc.) |
-| `channel.channelType` | `PLATFORM` (TokenLab) or `PRIVATE` (BYOK) |
 | `cached` | Whether response was served from cache |
 | `retryCount` | Number of retry attempts (if any) |
 
@@ -4602,6 +4602,8 @@ If the task no longer exists or is no longer available in the public task record
 > Creates a video generation task
 
 URL: https://docs.tokenlab.sh/api-reference/video/create-video
+
+import VideoModelContractNote from "../../snippets/generated/video-model-contract-note.mdx";
 
 ## Overview
 
@@ -6094,7 +6096,6 @@ Authorization: Bearer mt-your-management-token
 | `model` | string | max length `100` | Requested model name |
 | `modelVendor` | string | max length `100` | Public model vendor |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d`, `realtime` |
-| `accessChannel` | enum | - | `platform` or `byok` |
 | `startDate` | string | - | Inclusive lower bound; accepts RFC3339 with timezone or `YYYY-MM-DD` |
 | `endDate` | string | - | Inclusive upper bound; accepts RFC3339 with timezone or `YYYY-MM-DD` |
 
@@ -6135,8 +6136,6 @@ At least one PATCH field must be provided.
 - `model` refers to the model requested by the caller.
 - `modelVendor` refers to the public model vendor, not provider-specific execution details.
 - `scene` is the public request scene derived from the endpoint or task type.
-- `accessChannel=platform` means the request was billed via TokenLab’s platform channel.
-- `accessChannel=byok` means the request used your own provider key.
 
 Responses expose public billing and reporting fields only. Provider execution details are not included in management responses.
 - `/usage` line items can include `billing_transaction_id` once the underlying request has reached settled billing state. Use `request_id` + `billing_transaction_id` for request-level reconciliation.
@@ -6319,7 +6318,6 @@ This endpoint returns key-level usage details without exposing provider-specific
 | `model` | string | max length `100` | Requested model name |
 | `modelVendor` | string | max length `100` | Public model vendor |
 | `scene` | enum | - | `chat`, `image`, `audio`, `video`, `embedding`, `rerank`, `translation`, `music`, `3d`, `realtime` |
-| `accessChannel` | enum | - | `platform` or `byok` |
 | `startDate` | string | - | Inclusive lower bound; accepts RFC3339 with timezone or `YYYY-MM-DD` |
 | `endDate` | string | - | Inclusive upper bound; accepts RFC3339 with timezone or `YYYY-MM-DD` |
 
@@ -6354,7 +6352,7 @@ URL: https://docs.tokenlab.sh/api-reference/management/get-api-key-billing
 
 ## Overview
 
-This endpoint returns consumption-only billing aggregates for the selected API key, including total cost, total requests, usage unit breakdowns, and breakdowns by requested model name (`model`), vendor, `scene`, `accessChannel`, cache class, plus a daily cost trend.
+This endpoint returns consumption-only billing aggregates for the selected API key, including total cost, total requests, usage unit breakdowns, and breakdowns by requested model name (`model`), vendor, `scene`, ``, cache class, plus a daily cost trend.
 
 ## Notes
 
@@ -7164,11 +7162,24 @@ URL: https://docs.tokenlab.sh/guides/tokenlab-provider
 
 > Note: This guide is for **self-hosted OpenClaw** users who want to connect TokenLab as their AI provider.
 
-## Overview
+## Recommended: install the plugin
 
-For current OpenClaw versions, the recommended approach is to configure TokenLab through `models.providers`.
+For standard OpenClaw agent execution, install the TokenLab provider plugin:
 
-If you just want to get started quickly, configuring `tokenlab` alone is enough. Add the other providers only when you explicitly need **Responses API**, **Claude native**, **Gemini native**, or **MiniMax native** behavior.
+```bash
+openclaw plugins install @tokenlabai/openclaw-provider
+openclaw onboard --tokenlab-api-key "$TOKENLAB_API_KEY"
+```
+
+The plugin discovers TokenLab's live chat-model catalog and keeps 18 fallback models for offline discovery. Models use the `tokenlab/` format.
+
+[npm package](https://www.npmjs.com/package/@tokenlabai/openclaw-provider) · [ClawHub listing](https://clawhub.ai/tokenlabai/plugins/openclaw-provider) · [Source code](https://github.com/hedging8563/tokenlab-openclaw-provider)
+
+## Manual provider configuration
+
+Use manual `models.providers` entries when you explicitly need separate **Responses API**, **Claude native**, **Gemini native**, or **MiniMax native** routes.
+
+If you choose manual configuration, configuring `tokenlab` alone is enough. Add the other providers only when you explicitly need **Responses API**, **Claude native**, **Gemini native**, or **MiniMax native** behavior.
 
 | Provider | OpenClaw `api` | Best for | baseUrl |
 |----------|----------------|----------|---------|
@@ -7344,15 +7355,15 @@ Once OpenClaw is connected, these guides help you use TokenLab more effectively:
 
 ### TokenLab MCP Server
 
-> Connect MCP clients to TokenLab model discovery, pricing, OpenAI-compatible chat, and native inference endpoints.
+> Connect MCP clients to TokenLab
 
 URL: https://docs.tokenlab.sh/integrations/tokenlab-mcp-server
 
-The [TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) gives MCP-compatible agents live model discovery, pricing, OpenAI-compatible Chat Completions, and native inference tools.
+The [TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) generates MCP tools from TokenLab's public OpenAPI contract. MCP-compatible agents can discover models and pricing, call OpenAI-compatible and native LLM endpoints, create multimodal media, upload files, and manage asynchronous tasks.
 
-Use it when an agent needs to compare models, inspect supported request formats, check pricing, or call TokenLab through OpenAI Chat Completions, Responses, Anthropic Messages, or Gemini generateContent.
+Use it when an agent needs the current TokenLab API contract instead of a manually maintained tool list. The default `core` profile exposes 29 generated endpoint tools plus two composite discovery tools. The `full` profile exposes 76 generated endpoint tools plus the same two composite tools.
 
-> Note: Public catalog tools do not require a TokenLab API key. Set `TOKENLAB_API_KEY` to use the four paid inference tools.
+> Note: Public catalog and pricing tools do not require a TokenLab API key. Set `TOKENLAB_API_KEY` for credentialed inference, media, audio, file, task, embedding, rerank, and translation operations. Never place an API key in tool arguments.
 
 ## What It Provides
 
@@ -7360,8 +7371,11 @@ Use it when an agent needs to compare models, inspect supported request formats,
 - Model detail lookup from `/v1/models/{model}`.
 - Pricing lookup from `/v1/models/{model}/pricing`.
 - Agent-readable API overview from `https://api.tokenlab.sh/llms.txt`.
-- Endpoint-family guidance for OpenAI-compatible chat, Responses, Anthropic Messages, Gemini, media, audio, embeddings, rerank, and translation.
-- Optional inference through OpenAI-compatible Chat Completions, Responses, Anthropic Messages, and Gemini generateContent.
+- OpenAI-compatible Chat Completions and Responses, Anthropic Messages, and Gemini generateContent without flattening their native request shapes.
+- Image generation and editing through JSON URLs, TokenLab file IDs, or local multipart files.
+- Video, music, 3D, speech, transcription, audio translation, embeddings, multimodal embeddings, rerank, and text translation.
+- Normalized async task summaries for image, video, music, 3D, and world-generation operations.
+- A daily contract sync that fetches the public OpenAPI document, regenerates tool schemas, runs endpoint and file tests, and updates `main` only when every check passes.
 
 ## Install From GitHub
 
@@ -7380,153 +7394,19 @@ Start the server over stdio:
 npm start
 ```
 
-The optional `TOKENLAB_API_BASE` environment variable defaults to `https://api.tokenlab.sh`.
+The optional `TOKENLAB_API_BASE` environment variable defaults to `https://api.tokenlab.sh`. Set `TOKENLAB_MCP_TOOL_PROFILE=full` when a client should expose the broader developer API instead of the default `core` profile.
 
-## Install in Codex
+## Configure any stdio MCP client
 
-Add the public catalog server to your Codex configuration:
+Use the same values in any client that supports local stdio MCP servers. A client may show these as form fields or store them in JSON, TOML, or YAML; the field meanings stay the same. Add each argument as a separate item.
 
-```bash
-codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
-```
-
-Start a new Codex session after adding the server. The public catalog tools do not require `TOKENLAB_API_KEY`.
-
-To enable inference tools, include your TokenLab API key when adding the server:
-
-```bash
-codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
-```
-
-## Install in Cline
-
-Install the published stdio server with Cline CLI:
-
-```bash
-cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
-```
-
-The command was verified with Cline CLI and completes without setup warnings. Public catalog tools work immediately; set `TOKENLAB_API_KEY` in your Cline environment when you need inference tools.
-
-## Claude Desktop Configuration
-
-Add the published npm package to your MCP client configuration:
-
-```json
-{
-  "mcpServers": {
-    "tokenlab-model-catalog": {
-      "command": "npx",
-      "args": ["-y", "@tokenlabai/mcp-server"]
-    }
-  }
-}
-```
-
-Restart the MCP client after saving the configuration.
-
-## Cursor, Windsurf, And Other MCP Clients
-
-Use the same command and args in any client that supports stdio MCP servers:
-
-```json
-{
-  "command": "npx",
-  "args": ["-y", "@tokenlabai/mcp-server"],
-  "env": {
-    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
-  }
-}
-```
-
-If your client stores named servers, use `tokenlab-model-catalog` as the server name.
-
-## Tools
-
-| Tool | Purpose |
-|---|---|
-| `list_models` | List public TokenLab models. Optionally filter with `recommended_for` such as `image`, `video`, `embedding`, `rerank`, or `translation`. |
-| `get_model` | Fetch one model's public details and supported request format. |
-| `get_model_pricing` | Fetch one model's public pricing details. |
-| `compare_models` | Compare details and pricing for several model IDs. |
-| `create_chat_completion` | Call the OpenAI-compatible `/v1/chat/completions` endpoint. Supports multimodal messages and tool calling. Requires `TOKENLAB_API_KEY`. |
-| `create_response` | Call `/v1/responses` with string or structured input, tools, tool choice, metadata, and text configuration. Requires `TOKENLAB_API_KEY`. |
-| `create_anthropic_message` | Call `/v1/messages` with native multi-message content blocks and tools. Requires `TOKENLAB_API_KEY`. |
-| `create_gemini_content` | Call native `generateContent` with contents, multimodal parts, tools, and generation config. Requires `TOKENLAB_API_KEY`. |
-| `get_api_overview` | Fetch TokenLab's `llms.txt` overview for agent-readable endpoint guidance. |
-
-Inference tools return normal JSON results. Streaming is intentionally disabled for MCP tool calls.
-
-## Recommended Agent Workflow
-
-1. Call `list_models` when the user has not named a model.
-2. Use `recommended_for` for non-chat tasks, such as image, video, music, 3D, TTS, STT, embeddings, rerank, or translation.
-3. Call `get_model` before building a non-chat request, retrying a failed request, or switching endpoint families.
-4. Call `get_model_pricing` when model cost affects the user's choice.
-5. Use `compare_models` when the choice depends on several candidates.
-6. Call the inference tool that matches the required API contract, or use `get_api_overview` for a compact map of TokenLab API families.
-
-## Native Endpoint Guidance
-
-TokenLab supports OpenAI-compatible routes and native endpoint families. The MCP server helps an agent choose the right route before it writes code:
-
-| Family | Common route |
-|---|---|
-| OpenAI-compatible chat | `/v1/chat/completions` |
-| Responses | `/v1/responses` |
-| Anthropic Messages | `/v1/messages` |
-| Gemini native | `/v1beta/models/{model}:generateContent` |
-| Images | `/v1/images/generations`, `/v1/images/edits` |
-| Video | `/v1/videos/generations` |
-| Music | `/v1/music/generations` |
-| 3D | `/v1/3d/generations` |
-| Audio | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` |
-| Embeddings and rerank | `/v1/embeddings`, `/v1/rerank` |
-| Text translation | `/v1/translations` |
-
-## Hosted Model Explorer
-
-Clients that support Streamable HTTP can connect to:
-
-```text
-https://tokenlab-model-explorer.vercel.app/mcp
-```
-
-The hosted explorer is public and exposes `open_tokenlab_model_explorer`, `compare_tokenlab_models`, and `generate_tokenlab_endpoint_example`. Use the local npm server above when you need all nine tools or credentialed inference.
-
-## Use It With TokenLab Skills
-
-The MCP server is useful at runtime, while the [TokenLab skills repository](https://github.com/hedging8563/tokenlab-skills) teaches coding agents how to generate and repair integration code.
-
-Use both when available:
-
-- MCP server: discover current models, pricing, and endpoint details.
-- `tokenlab-api-integration` skill: generate runnable API examples and handle structured TokenLab errors.
-- `tokenlab-model-picker` skill: choose strong models for the user's task.
-- `tokenlab-native-endpoints` skill: decide when to use Responses, Anthropic Messages, Gemini, media, audio, embedding, rerank, or translation routes.
-
-## Troubleshooting
-
-#### The client cannot start the server
-
-Confirm Node.js is at least 18.17, then run `npx -y @tokenlabai/mcp-server` once in a terminal to surface npm or network errors.
-
-
-#### The model list is empty
-
-Verify that the machine can reach `https://api.tokenlab.sh/v1/models`. If you override `TOKENLAB_API_BASE`, make sure it does not include a trailing slash.
-
-
-#### The agent still chooses stale model IDs
-
-Ask the agent to call `list_models` or `get_model` before hardcoding a model name. Pairing the MCP server with `tokenlab-model-picker` gives better results.
-
-
-#### Can this server call paid TokenLab inference APIs?
-
-Yes. Set `TOKENLAB_API_KEY`, then use `create_chat_completion`, `create_response`, `create_anthropic_message`, or `create_gemini_content`. Catalog and pricing tools remain available without a key.
-
-## Resources
+| Field | Value | Notes |
+|---|---|---|
+| Server name | `tokenlab-model-catalog` | Any unique name works. |
+| Transport | `stdio` | TokenLab MCP runs as a local child process. |
+| Startup command | `npx` | Starts the published npm package. |
+| Arguments | `-y`, then `@tokenlabai/mcp-server` | Use `@tokenlabai/mcp-server@0.6.4` to pin the currently verified release. |
+| Environment variable | `TOKENLAB_API_KEY` = `
 
 ---
 
