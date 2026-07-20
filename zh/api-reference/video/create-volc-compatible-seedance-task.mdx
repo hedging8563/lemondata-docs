@@ -27,6 +27,8 @@ description: "使用火山风格 REST body 或 Action 请求创建 Seedance 2.0 
 - `type: "image_url"` 不传 `role` 或传 `role: "first_frame"` 时按首帧处理。
 - `role: "last_frame"` 必须和首帧一起使用。
 - `role: "reference_image"`、`reference_video`、`reference_audio` 表示参考素材。
+- `image_url.url` 可以是公网图片 URL，也可以是 `asset://asset-YYYYMMDDHHMMSS-xxxxx` 形式的 TokenLab 素材 URI；`role` 决定该素材是首帧、尾帧还是参考图。
+- TokenLab 额外兼容一个顶层 `material_asset_id`，并将其按首帧处理。多个顶层 `material_asset_ids` 因用途不明确会被拒绝；请改放到 `content[]` 中并为每个素材明确填写 `role`。
 - 同一个请求里不要混用首尾帧输入和参考素材。
 
 ## 参数说明
@@ -41,6 +43,8 @@ description: "使用火山风格 REST body 或 Action 请求创建 Seedance 2.0 
 ## 图片准备
 
 `content[]` 中包含图片 URL 时，TokenLab 会在所选 Seedance 模型需要素材引用时把它们准备为可复用素材。如果 60 秒内仍未准备完成，创建请求会返回可重试的素材准备中错误，而不是提交一个不完整的视频任务。
+
+使用已有 TokenLab 素材时，请传公开的 `asset-YYYYMMDDHHMMSS-xxxxx` ID，不要传其他系统返回的原始素材 ID。TokenLab 会在生成前校验素材归属。
 
 ## 创建响应
 
@@ -71,6 +75,31 @@ curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
     "resolution": "720p",
     "generate_audio": true
   }'
+```
+
+如果只使用一个已有素材作为首帧，可以让 `content[]` 只包含文本，并额外传入：
+
+```json
+{
+  "material_asset_id": "asset-20260720123456-qn7wr"
+}
+```
+
+如果有多个素材，请把每个素材放进 `content[]` 并明确用途：
+
+```json
+[
+  {
+    "type": "image_url",
+    "role": "first_frame",
+    "image_url": {"url": "asset://asset-20260720123458-start"}
+  },
+  {
+    "type": "image_url",
+    "role": "last_frame",
+    "image_url": {"url": "asset://asset-20260720123459-end01"}
+  }
+]
 ```
 
 ### Action 创建

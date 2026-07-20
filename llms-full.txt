@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-07-16
+Generated: 2026-07-20
 Source: https://docs.tokenlab.sh
 
 ---
@@ -2898,12 +2898,16 @@ For `aigc_avatar`, `group_id` is optional; TokenLab uses or creates the organiza
 | Type | Supported input |
 |------|-----------------|
 | Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
-| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
-| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2068676; up to 200 MB; 24-60 FPS. |
+| Audio | `aac`, `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
+
+TokenLab validates the source URL, declared or detected media format, and file-size limit. Dimensions, aspect ratio, duration, resolution, total pixels, and FPS are passed through on a best-effort basis; the selected video service makes the final media eligibility decision.
 
 Material ingestion is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. A successful HTTP response only means the request was accepted; always read the business status. If the status is `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
 
 In create-material requests, `asset_url` is only the import source. TokenLab returns a material asset `id`; use that `id` for generation instead of reusing the original URL.
+
+Asset and group IDs use Volcengine-compatible shapes such as `asset-20260720123456-qn7wr` and `group-20260720123456-vrt01`, while remaining TokenLab-owned mappings.
 
 TokenLab keeps material assets in your organization material library until you delete the asset or its material group.
 
@@ -2926,9 +2930,9 @@ curl https://api.tokenlab.sh/v1/videos/assets/groups \
 curl https://api.tokenlab.sh/v1/videos/assets \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_id":"seedance_group_abc123","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_def456 \
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
@@ -4627,7 +4631,7 @@ For production integrations, prefer publicly reachable `https` URLs for images, 
 
 ## Request Body
 
-> Info: When the selected Seedance model can use the TokenLab material library, TokenLab prepares image fields (`image`, `image_url`, `image_urls`, `reference_images`, `start_image`, `end_image`) as reusable materials before generation. If preparation is not complete within 60 seconds, the API returns `409 seedance_material_preparing` with `auto_material_asset_ids`; retry after those material assets become `ACTIVE`. If the selected model cannot use the material library, ordinary image inputs continue on the regular image path and explicit material IDs return a material availability error.
+> Info: When the selected Seedance model can use the TokenLab material library, TokenLab prepares image fields (`image`, `image_url`, `image_urls`, `reference_images`, `start_image`, `end_image`) as reusable materials before generation. These fields also accept TokenLab material URIs in the form `asset://asset-YYYYMMDDHHMMSS-xxxxx`; TokenLab verifies that the material belongs to the requesting organization and preserves the field's role. Raw upstream `asset://` IDs are rejected. If preparation is not complete within 60 seconds, the API returns `409 seedance_material_preparing` with `auto_material_asset_ids`; retry after those material assets become `ACTIVE`. If the selected model cannot use the material library, ordinary image inputs continue on the regular image path and explicit material IDs return a material availability error.
 
 ## Compatibility Notes
 
@@ -4841,6 +4845,8 @@ See also [Seedance 2.0 Video Models](/guides/seedance-2-video) and [Video Genera
 - `type: "image_url"` without `role`, or with `role: "first_frame"`, is treated as the first frame.
 - `role: "last_frame"` must be paired with a first frame.
 - `role: "reference_image"`, `reference_video`, and `reference_audio` are used as references.
+- `image_url.url` accepts a public image URL or a TokenLab material URI such as `asset://asset-YYYYMMDDHHMMSS-xxxxx`. The `role` determines whether that material is a first frame, last frame, or reference image.
+- As a TokenLab compatibility shorthand, one top-level `material_asset_id` is treated as the first frame. Multiple top-level `material_asset_ids` are rejected because their roles are ambiguous; put them in `content[]` with explicit roles instead.
 - Do not mix first/last frame inputs with reference media in one request.
 
 ## Parameter Notes
@@ -4855,6 +4861,8 @@ See also [Seedance 2.0 Video Models](/guides/seedance-2-video) and [Video Genera
 ## Image Preparation
 
 When `content[]` contains image URLs, TokenLab prepares them as reusable materials when required by the selected Seedance model. If preparation is not complete within 60 seconds, the create request returns a retryable material-preparing error instead of submitting an incomplete video task.
+
+For existing TokenLab materials, use the public `asset-YYYYMMDDHHMMSS-xxxxx` ID, not an upstream provider asset ID. TokenLab verifies material ownership before generation.
 
 ## Create Response
 
@@ -4885,6 +4893,31 @@ curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
     "resolution": "720p",
     "generate_audio": true
   }'
+```
+
+For a single existing material used as the first frame, you may keep `content[]` text-only and add:
+
+```json
+{
+  "material_asset_id": "asset-20260720123456-qn7wr"
+}
+```
+
+For multiple materials, put each one in `content[]` and declare its role:
+
+```json
+[
+  {
+    "type": "image_url",
+    "role": "first_frame",
+    "image_url": {"url": "asset://asset-20260720123458-start"}
+  },
+  {
+    "type": "image_url",
+    "role": "last_frame",
+    "image_url": {"url": "asset://asset-20260720123459-end01"}
+  }
+]
 ```
 
 ### Action Create
@@ -5142,9 +5175,9 @@ curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
 ```json
 {
   "object": "seedance.visual_validation_result",
-  "group_id": "seedance_group_real_123",
+  "group_id": "group-20260720123456-real1",
   "material_group": {
-    "id": "seedance_group_real_123",
+    "id": "group-20260720123456-real1",
     "library_type": "liveness_face",
     "status": "ACTIVE",
     "group_name": "Creator A"
@@ -5184,7 +5217,7 @@ curl "https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions?page_s
       "status": "bound",
       "verification_status": "succeeded",
       "result_code": "10000",
-      "group_id": "seedance_group_real_123",
+      "group_id": "group-20260720123456-real1",
       "group_name": "Creator A",
       "created_at": 1782998400000,
       "expires_at": 1782998520000,
@@ -5221,7 +5254,7 @@ curl https://api.tokenlab.sh/v1/videos/assets/groups \
 
 ```json
 {
-  "id": "seedance_group_virtual_123",
+  "id": "group-20260720123456-vrt01",
   "object": "seedance.material_asset_group",
   "library_type": "aigc_avatar",
   "group_name": "Product references",
@@ -5257,7 +5290,7 @@ curl "https://api.tokenlab.sh/v1/videos/assets/groups?library_type=aigc_avatar&p
 {
   "groups": [
     {
-      "id": "seedance_group_virtual_123",
+      "id": "group-20260720123456-vrt01",
       "object": "seedance.material_asset_group",
       "library_type": "aigc_avatar",
       "group_name": "Product references",
@@ -5284,7 +5317,7 @@ Use this endpoint before uploading if you need to confirm that the group still e
 ## Example Request
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 \
+curl https://api.tokenlab.sh/v1/videos/assets/groups/group-20260720123456-vrt01 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
@@ -5292,7 +5325,7 @@ curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 
 
 ```json
 {
-  "id": "seedance_group_virtual_123",
+  "id": "group-20260720123456-vrt01",
   "object": "seedance.material_asset_group",
   "library_type": "aigc_avatar",
   "group_name": "Product references",
@@ -5316,7 +5349,7 @@ Update the display name, description, or metadata for a material group. For mana
 ## Example Request
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 \
+curl https://api.tokenlab.sh/v1/videos/assets/groups/group-20260720123456-vrt01 \
   -X PUT \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
@@ -5327,7 +5360,7 @@ curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 
 
 ```json
 {
-  "id": "seedance_group_virtual_123",
+  "id": "group-20260720123456-vrt01",
   "object": "seedance.material_asset_group",
   "library_type": "aigc_avatar",
   "group_name": "Updated references",
@@ -5353,7 +5386,7 @@ If the TokenLab material library cannot complete the deletion because the curren
 ## Example Request
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 \
+curl https://api.tokenlab.sh/v1/videos/assets/groups/group-20260720123456-vrt01 \
   -X DELETE \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
@@ -5363,7 +5396,7 @@ curl https://api.tokenlab.sh/v1/videos/assets/groups/seedance_group_virtual_123 
 ```json
 {
   "deleted": true,
-  "id": "seedance_group_virtual_123"
+  "id": "group-20260720123456-vrt01"
 }
 ```
 
@@ -5382,8 +5415,10 @@ For `library_type: "aigc_avatar"`, `group_id` is optional; TokenLab uses or crea
 | Type | Supported input |
 |------|-----------------|
 | Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
-| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2086876; up to 50 MB; 24-60 FPS. |
-| Audio | `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2068676; up to 200 MB; 24-60 FPS. |
+| Audio | `aac`, `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
+
+TokenLab validates the source URL, declared or detected media format, and file-size limit. Dimensions, aspect ratio, duration, resolution, total pixels, and FPS are passed through on a best-effort basis and are finally evaluated by the selected video service.
 
 Creation is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` is `ACTIVE`. For real-person groups, one group maps to one verified person; uploads with multiple faces or a face that does not match the verified person can fail.
 
@@ -5393,16 +5428,16 @@ Creation is asynchronous. Poll [Get Material Asset](/api-reference/video/get-mat
 curl https://api.tokenlab.sh/v1/videos/assets \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_id":"seedance_group_virtual_123","asset_url":"https://example.com/reference.png","asset_type":"Image","asset_name":"Front view"}'
+  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-vrt01","asset_url":"https://example.com/reference.png","asset_type":"Image","asset_name":"Front view"}'
 ```
 
 ## Example Response
 
 ```json
 {
-  "id": "seedance_asset_123",
+  "id": "asset-20260720123456-qn7wr",
   "object": "seedance.material_asset",
-  "group_id": "seedance_group_virtual_123",
+  "group_id": "group-20260720123456-vrt01",
   "library_type": "aigc_avatar",
   "asset_name": "Front view",
   "asset_type": "Image",
@@ -5429,7 +5464,7 @@ Use only assets whose `status` is `ACTIVE`. Use the returned TokenLab material a
 ## Example Request
 
 ```bash
-curl "https://api.tokenlab.sh/v1/videos/assets?library_type=aigc_avatar&group_id=seedance_group_virtual_123&page_size=20" \
+curl "https://api.tokenlab.sh/v1/videos/assets?library_type=aigc_avatar&group_id=group-20260720123456-vrt01&page_size=20" \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
@@ -5439,9 +5474,9 @@ curl "https://api.tokenlab.sh/v1/videos/assets?library_type=aigc_avatar&group_id
 {
   "assets": [
     {
-      "id": "seedance_asset_123",
+      "id": "asset-20260720123456-qn7wr",
       "object": "seedance.material_asset",
-      "group_id": "seedance_group_virtual_123",
+      "group_id": "group-20260720123456-vrt01",
       "library_type": "aigc_avatar",
       "asset_name": "Front view",
       "asset_type": "Image",
@@ -5469,7 +5504,7 @@ If video generation returns `Seedance material asset not found or not accessible
 ## Example Request
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123456-qn7wr \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
@@ -5477,9 +5512,9 @@ curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
 
 ```json
 {
-  "id": "seedance_asset_123",
+  "id": "asset-20260720123456-qn7wr",
   "object": "seedance.material_asset",
-  "group_id": "seedance_group_virtual_123",
+  "group_id": "group-20260720123456-vrt01",
   "library_type": "aigc_avatar",
   "asset_name": "Front view",
   "asset_type": "Image",
@@ -5504,7 +5539,7 @@ Update the material name or metadata. The source URL and asset type are fixed af
 ## Example Request
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123456-qn7wr \
   -X PUT \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
@@ -5515,9 +5550,9 @@ curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
 
 ```json
 {
-  "id": "seedance_asset_123",
+  "id": "asset-20260720123456-qn7wr",
   "object": "seedance.material_asset",
-  "group_id": "seedance_group_virtual_123",
+  "group_id": "group-20260720123456-vrt01",
   "library_type": "aigc_avatar",
   "asset_name": "Front view approved",
   "asset_type": "Image",
@@ -5542,7 +5577,7 @@ Delete one material asset. This does not delete the containing material group. A
 ## Example Request
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123456-qn7wr \
   -X DELETE \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
@@ -5552,7 +5587,7 @@ curl https://api.tokenlab.sh/v1/videos/assets/seedance_asset_123 \
 ```json
 {
   "deleted": true,
-  "id": "seedance_asset_123"
+  "id": "asset-20260720123456-qn7wr"
 }
 ```
 
@@ -7405,7 +7440,7 @@ Use the same values in any client that supports local stdio MCP servers. A clien
 | Server name | `tokenlab-model-catalog` | Any unique name works. |
 | Transport | `stdio` | TokenLab MCP runs as a local child process. |
 | Startup command | `npx` | Starts the published npm package. |
-| Arguments | `-y`, then `@tokenlabai/mcp-server` | Use `@tokenlabai/mcp-server@0.6.5` to pin the currently verified release. |
+| Arguments | `-y`, then `@tokenlabai/mcp-server` | Use `@tokenlabai/mcp-server@0.6.6` to pin the currently verified release. |
 | Environment variable | `TOKENLAB_API_KEY` = `
 
 ---
