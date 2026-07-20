@@ -1,0 +1,56 @@
+---
+title: "Görsel doğrulama oturumu oluştur"
+openapi: "POST /api/v3"
+description: "Volc uyumlu biçimde gerçek kişi görsel doğrulama oturumu oluşturur."
+---
+
+Yeniden kullanılabilir `liveness_face` materyallerini yüklemeden önce bir görsel doğrulama oturumu oluşturun. TokenLab, Volc Action API biçimini ve TokenLab Bearer kimlik doğrulamasını kullanır.
+
+## Uç nokta ve kimlik doğrulama
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+Volc AK/SK imzaları kabul edilmez. `CallbackURL` zorunludur ve herkese açık bir HTTP veya HTTPS URL’si olmalıdır. `ProjectName` isteğe bağlıdır ve varsayılan değeri `default` şeklindedir.
+
+## Akış
+
+1. `Result.BytedToken` değerini kaydedin ve doğrulanacak kişi için `Result.H5Link` bağlantısını açın.
+2. H5 dilini seçmek için `H5Link` bağlantısına `lng` ekleyin; örneğin `&lng=en`. Dil, istek gövdesi alanı değildir.
+3. H5 akışı tamamlandığında tarayıcı `Result.CallbackURL` adresini açar. Callback sorgusu `bytedToken`, `resultCode`, `algorithmBaseRespCode`, `reqMeasureInfoValue` ve `verify_type` içerebilir.
+4. `Result.GroupId` dönene kadar kaydedilen `BytedToken` ile [Görsel doğrulama sonucunu al](/tr/api-reference/video/get-visual-validation-result) çağrısını tekrarlayın.
+
+`BytedToken` 30 dakika geçerlidir ve kimliği doğrulanmış kuruluş ile `ProjectName` değerine bağlıdır. H5 bağlantısı tamamlanmış tek bir doğrulamayı destekler ve kullanımdan sonra geçersiz olur.
+
+## Örnek İstek
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## Örnek Yanıt
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+Hatalar aynı üst düzey yapıyı kullanır. TokenLab’in diğer `/v1` API hata alanları yerine `ResponseMetadata.Error.Code` ve `ResponseMetadata.Error.Message` değerlerini okuyun.

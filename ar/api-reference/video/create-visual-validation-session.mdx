@@ -1,0 +1,56 @@
+---
+title: "إنشاء جلسة تحقق مرئي"
+openapi: "POST /api/v3"
+description: "تنشئ جلسة تحقق مرئي لشخص حقيقي بتنسيق متوافق مع Volc."
+---
+
+أنشئ جلسة تحقق مرئي قبل رفع مواد `liveness_face` القابلة لإعادة الاستخدام. يستخدم TokenLab تنسيق Action API من Volc ومصادقة Bearer الخاصة بـ TokenLab.
+
+## نقطة النهاية والمصادقة
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+لا تُقبل توقيعات AK/SK من Volc. الحقل `CallbackURL` مطلوب ويجب أن يكون عنوان HTTP أو HTTPS عامًا. الحقل `ProjectName` اختياري وقيمته الافتراضية `default`.
+
+## التدفق
+
+1. احفظ `Result.BytedToken` وافتح `Result.H5Link` للشخص المراد التحقق منه.
+2. لاختيار لغة H5، أضف `lng` إلى `H5Link`، مثل `&lng=en`. اللغة ليست حقلاً في نص الطلب.
+3. بعد اكتمال تدفق H5، يفتح المتصفح `Result.CallbackURL`. قد يتضمن استعلام callback القيم `bytedToken` و`resultCode` و`algorithmBaseRespCode` و`reqMeasureInfoValue` و`verify_type`.
+4. استعلم دوريًا عن [الحصول على نتيجة التحقق المرئي](/ar/api-reference/video/get-visual-validation-result) باستخدام `BytedToken` المحفوظ حتى تُعاد `Result.GroupId`.
+
+تظل `BytedToken` صالحة لمدة 30 دقيقة وترتبط بالمؤسسة المصادق عليها وبـ `ProjectName`. يسمح رابط H5 بإكمال تحقق واحد فقط ويصبح غير صالح بعد الاستخدام.
+
+## مثال على الطلب
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## مثال على الاستجابة
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+تستخدم الأخطاء البنية العليا نفسها. اقرأ `ResponseMetadata.Error.Code` و`ResponseMetadata.Error.Message` بدل توقع حقول الأخطاء في واجهات TokenLab الأخرى ضمن `/v1`.

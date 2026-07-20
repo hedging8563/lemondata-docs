@@ -49,12 +49,13 @@ description: "استخدم توليد الفيديو عبر Seedance 2.0 مع م
 
 استخدم التحقق من مواد الأشخاص الحقيقيين عندما يحتاج منتجك إلى موافقة وتحقق من الوجه قبل أن يتم استخدام شخص حقيقي كمرجع قابل لإعادة الاستخدام في Seedance.
 
-1. اتصل بـ [إنشاء جلسة تحقق من الشخصية الحقيقية](/ar/api-reference/video/create-real-person-verification-session) مع `callback_url` الخاص بك.
-2. أرسل المستخدم إلى رابط `h5_link` المُرجع. تنتهي صلاحية `session_id` ورابط H5 بعد 120 ثانية. لا يتم إرجاع `verification_token` إلا عبر إعادة توجيه callback من TokenLab.
-3. بعد اكتمال تدفق H5، ستقوم TokenLab بإعادة التوجيه إلى `callback_url` الخاص بك مع `session_id` و `verification_token` و `verification_status` و `result_code`.
-4. عندما تكون حالة `verification_status` هي `succeeded`، اتصل بـ [ربط نتيجة التحقق من الشخصية الحقيقية](/ar/api-reference/video/bind-real-person-verification-result).
-5. قم بتخزين `group_id` المُرجع؛ وقم بتمريره عند إنشاء أصول مواد `liveness_face`.
-6. استخدم [سرد سجل التحقق من الشخص الحقيقي](/ar/api-reference/video/list-real-person-verification-history) لمراجعة الجلسات السابقة. السجل طويل الأمد، لكنه لا يمدد نافذة الربط البالغة 120 ثانية.
+1. استدعِ [إنشاء جلسة تحقق مرئي](/ar/api-reference/video/create-visual-validation-session) مع `CallbackURL` واحفظ `Result.BytedToken` المُعادة.
+2. افتح `Result.H5Link` للشخص المراد التحقق منه. أضف `lng` إلى رابط H5 إذا احتجت إلى لغة محددة.
+3. بعد اكتمال تدفق H5، يفتح المتصفح `Result.CallbackURL` مع أسماء الاستعلام الرسمية مثل `bytedToken` و`resultCode`.
+4. استعلم دوريًا عن [الحصول على نتيجة التحقق المرئي](/ar/api-reference/video/get-visual-validation-result) باستخدام `BytedToken` حتى تُعاد `Result.GroupId`.
+5. احفظ `GroupId` واستخدمها بوصفها `group_id` عند إنشاء مواد `liveness_face`.
+
+تظل `BytedToken` صالحة لمدة 30 دقيقة. استخدم `ProjectName` نفسها في طلبي Action. تستخدم المصادقة `Authorization: Bearer <TOKENLAB_API_KEY>`؛ ولا تُقبل توقيعات AK/SK من Volc.
 
 اختياري: استخدم [وحدة التحكم للاختبار](https://tokenlab.sh/dashboard/seedance-assets) للتحقق من تدفق الطلب والاستدعاء (callback)، وفحص مجموعات المواد، ومراجعة سجل التحقق. يجب أن يقوم تكامل الإنتاج الخاص بك باستدعاء واجهات برمجة التطبيقات (APIs) مباشرة.
 
@@ -70,7 +71,7 @@ description: "استخدم توليد الفيديو عبر Seedance 2.0 مع م
 
 استخدم [إنشاء أصل مادي (Material Asset)](/ar/api-reference/video/create-material-asset) لاستيراد رابط مصدر واحد يمكن الوصول إليه علنياً في كل مرة.
 
-بالنسبة لـ `aigc_avatar`، يعتبر `group_id` اختيارياً؛ حيث تستخدم TokenLab أو تنشئ مجموعة الصور الرمزية الافتراضية الافتراضية للمؤسسة. بالنسبة لـ `liveness_face`، يعتبر `group_id` مطلوباً ويجب أن يكون المجموعة المُرجعة من [ربط نتيجة التحقق من الشخصية الحقيقية](/ar/api-reference/video/bind-real-person-verification-result).
+بالنسبة لـ `aigc_avatar`، يعتبر `group_id` اختيارياً؛ حيث تستخدم TokenLab أو تنشئ مجموعة الصور الرمزية الافتراضية الافتراضية للمؤسسة. بالنسبة لـ `liveness_face`، يعتبر `group_id` مطلوباً ويجب أن يكون المجموعة المُرجعة من [الحصول على نتيجة التحقق المرئي](/ar/api-reference/video/get-visual-validation-result).
 
 | النوع | المدخلات المدعومة |
 |------|-----------------|
@@ -109,18 +110,18 @@ curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-بالنسبة لمجموعة مواد الأشخاص الحقيقيين، أنشئ جلسة تحقق أولاً واربط النتيجة قبل رفع المواد.
+بالنسبة إلى مجموعة مواد شخص حقيقي، أنشئ جلسة تحقق مرئي واحصل على نتيجتها قبل رفع المواد.
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
 ## التسعير والنتائج غير المتزامنة

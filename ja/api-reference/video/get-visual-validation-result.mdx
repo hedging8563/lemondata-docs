@@ -1,0 +1,49 @@
+---
+title: "ビジュアル確認結果の取得"
+openapi: "POST /api/v3"
+description: "ビジュアル確認で作成された実在人物の素材グループを取得します。"
+---
+
+H5 ビジュアル確認フローの後に、この Action をポーリングします。成功すると、確認済み人物の TokenLab 素材グループ ID が返ります。
+
+## エンドポイントと認証
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+[ビジュアル確認セッションの作成](/ja/api-reference/video/create-visual-validation-session) で返された `BytedToken` を送信します。作成時に `ProjectName` を設定した場合は、ここでも大文字と小文字を区別して同じ値を送信します。それ以外は省略するか `default` を使用します。
+
+ブラウザーのコールバック直後は結果が未準備の場合があります。`Result.GroupId` が返るか、30分間有効な `BytedToken` が失効するまで同じリクエストを再試行してください。同じ token で成功済みのリクエストを繰り返すと、同じ `GroupId` が返ります。
+
+`liveness_face` 素材を作成するときは、返された `GroupId` を `group_id` として使用します。
+
+## リクエスト例
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+```
+
+## レスポンス例
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_def456",
+    "Action": "GetVisualValidateResult",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "GroupId": "group-20260720123456-real1"
+  }
+}
+```
+
+エラーでは `ResponseMetadata.Error.Code` と `ResponseMetadata.Error.Message` を使用します。成功レスポンスには `ResponseMetadata` と `Result` が含まれ、TokenLab の他の `/v1` API のレスポンス形式は使用しません。

@@ -1,0 +1,56 @@
+---
+title: "Visuelle Verifizierungssitzung erstellen"
+openapi: "POST /api/v3"
+description: "Erstellt eine Volc-kompatible Sitzung zur visuellen Verifizierung einer echten Person."
+---
+
+Erstellen Sie vor dem Hochladen wiederverwendbarer `liveness_face`-Materialien eine visuelle Verifizierungssitzung. TokenLab verwendet das Format der Volc Action API und die Bearer-Authentifizierung von TokenLab.
+
+## Endpunkt und Authentifizierung
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+Volc-AK/SK-Signaturen werden nicht akzeptiert. `CallbackURL` ist erforderlich und muss eine öffentliche HTTP- oder HTTPS-URL sein. `ProjectName` ist optional und hat den Standardwert `default`.
+
+## Ablauf
+
+1. Speichern Sie `Result.BytedToken` und öffnen Sie `Result.H5Link` für die zu verifizierende Person.
+2. Hängen Sie zur Auswahl der H5-Sprache `lng` an `H5Link` an, zum Beispiel `&lng=en`. Die Sprache ist kein Feld des Anforderungstexts.
+3. Nach Abschluss des H5-Ablaufs öffnet der Browser `Result.CallbackURL`. Die Callback-Abfrage kann `bytedToken`, `resultCode`, `algorithmBaseRespCode`, `reqMeasureInfoValue` und `verify_type` enthalten.
+4. Rufen Sie [Visuelles Verifizierungsergebnis abrufen](/de/api-reference/video/get-visual-validation-result) wiederholt mit dem gespeicherten `BytedToken` auf, bis `Result.GroupId` zurückgegeben wird.
+
+`BytedToken` ist 30 Minuten gültig und an die authentifizierte Organisation sowie `ProjectName` gebunden. Der H5-Link erlaubt eine abgeschlossene Verifizierung und wird danach ungültig.
+
+## Beispielanfrage
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## Beispielantwort
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+Fehler verwenden dieselbe oberste Struktur. Lesen Sie `ResponseMetadata.Error.Code` und `ResponseMetadata.Error.Message` statt der Fehlerfelder anderer TokenLab-`/v1`-APIs.

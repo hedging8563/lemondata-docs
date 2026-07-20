@@ -1,0 +1,56 @@
+---
+title: "ビジュアル確認セッションの作成"
+openapi: "POST /api/v3"
+description: "Volc互換形式で実在人物のビジュアル確認セッションを作成します。"
+---
+
+再利用可能な `liveness_face` 素材をアップロードする前に、実在人物のビジュアル確認セッションを作成します。TokenLab は Volc Action API 形式と TokenLab Bearer 認証を使用します。
+
+## エンドポイントと認証
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+Volc の AK/SK 署名は受け付けません。`CallbackURL` は必須で、公開 HTTP または HTTPS URL である必要があります。`ProjectName` は省略でき、既定値は `default` です。
+
+## フロー
+
+1. `Result.BytedToken` を保存し、確認対象者に `Result.H5Link` を開きます。
+2. H5 の言語を指定するには、`H5Link` に `lng` を追加します（例: `&lng=en`）。言語はリクエスト本文のフィールドではありません。
+3. H5 フローが完了すると、ブラウザーが `Result.CallbackURL` を開きます。コールバックのクエリには `bytedToken`、`resultCode`、`algorithmBaseRespCode`、`reqMeasureInfoValue`、`verify_type` が含まれる場合があります。
+4. 保存した `BytedToken` で [ビジュアル確認結果の取得](/ja/api-reference/video/get-visual-validation-result) をポーリングし、`Result.GroupId` が返るまで待ちます。
+
+`BytedToken` の有効期間は30分で、認証済み組織と `ProjectName` に紐付きます。H5リンクで完了できる認証は1回だけで、使用後は無効になります。
+
+## リクエスト例
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## レスポンス例
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+エラーも同じ最上位形式を使用します。TokenLab の他の `/v1` API のフィールドではなく、`ResponseMetadata.Error.Code` と `ResponseMetadata.Error.Message` を参照してください。

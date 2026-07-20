@@ -49,12 +49,13 @@ Si los materiales pasan a `ACTIVE` en 60 segundos, la generación continúa en l
 
 Utilice la verificación de material de persona real cuando su producto requiera consentimiento y verificación facial antes de que una persona real pueda ser utilizada como referencia reutilizable de Seedance.
 
-1. Llame a [Crear sesión de verificación de persona real](/es/api-reference/video/create-real-person-verification-session) con su `callback_url`.
-2. Envíe al usuario al `h5_link` devuelto. El `session_id` y el enlace H5 caducan después de 120 segundos. El `verification_token` solo lo devuelve el redireccionamiento de callback de TokenLab.
-3. Una vez completado el flujo H5, TokenLab redirige a su `callback_url` con `session_id`, `verification_token`, `verification_status` y `result_code`.
-4. Cuando `verification_status` sea `succeeded`, llame a [Vincular resultado de verificación de persona real](/es/api-reference/video/bind-real-person-verification-result).
-5. Almacene el `group_id` devuelto; páselo al crear activos de material de tipo `liveness_face`.
-6. Utilice [Listar historial de verificación de persona real](/es/api-reference/video/list-real-person-verification-history) para revisar sesiones anteriores. El historial es duradero, pero no extiende la ventana de vinculación de 120 segundos.
+1. Llame a [Crear sesión de validación visual](/es/api-reference/video/create-visual-validation-session) con `CallbackURL` y guarde el `Result.BytedToken` devuelto.
+2. Abra `Result.H5Link` para la persona que se verificará. Añada `lng` al enlace H5 si necesita un idioma específico.
+3. Al finalizar el flujo H5, el navegador abre `Result.CallbackURL` con nombres de consulta oficiales como `bytedToken` y `resultCode`.
+4. Consulte [Obtener resultado de validación visual](/es/api-reference/video/get-visual-validation-result) con `BytedToken` hasta que se devuelva `Result.GroupId`.
+5. Guarde `GroupId` y úselo como `group_id` al crear materiales `liveness_face`.
+
+`BytedToken` es válido durante 30 minutos. Use el mismo `ProjectName` en ambas solicitudes Action. La autenticación usa `Authorization: Bearer <TOKENLAB_API_KEY>`; no se aceptan firmas AK/SK de Volc.
 
 Opcional: utilice la [consola de prueba](https://tokenlab.sh/dashboard/seedance-assets) para verificar su flujo de solicitud y callback, inspeccionar grupos de materiales y revisar el historial de verificación. Su integración de producción debe llamar a las APIs directamente.
 
@@ -70,7 +71,7 @@ Eliminar un grupo de material también elimina los materiales de TokenLab conten
 
 Utilice [Crear activo de material](/es/api-reference/video/create-material-asset) para importar una URL de origen accesible públicamente a la vez.
 
-Para `aigc_avatar`, `group_id` es opcional; TokenLab utiliza o crea el grupo de avatar virtual predeterminado de la organización. Para `liveness_face`, `group_id` es obligatorio y debe ser el grupo devuelto por [Vincular resultado de verificación de persona real](/es/api-reference/video/bind-real-person-verification-result).
+Para `aigc_avatar`, `group_id` es opcional; TokenLab utiliza o crea el grupo de avatar virtual predeterminado de la organización. Para `liveness_face`, `group_id` es obligatorio y debe ser el grupo devuelto por [Obtener resultado de validación visual](/es/api-reference/video/get-visual-validation-result).
 
 | Tipo | Entrada admitida |
 |------|-----------------|
@@ -109,18 +110,18 @@ curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-Para un grupo de material de persona real, cree primero una sesión de verificación y vincule el resultado antes de cargar materiales.
+Para un grupo de materiales de persona real, cree una sesión de validación visual y obtenga el resultado antes de cargar materiales.
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
 ## Precios y resultados asíncronos

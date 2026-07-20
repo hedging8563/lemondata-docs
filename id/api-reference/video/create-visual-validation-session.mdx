@@ -1,0 +1,56 @@
+---
+title: "Membuat sesi validasi visual"
+openapi: "POST /api/v3"
+description: "Membuat sesi validasi visual orang asli dengan format kompatibel Volc."
+---
+
+Buat sesi validasi visual sebelum mengunggah material `liveness_face` yang dapat digunakan kembali. TokenLab menggunakan format Action API Volc dan autentikasi Bearer TokenLab.
+
+## Endpoint dan autentikasi
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+Tanda tangan AK/SK Volc tidak diterima. `CallbackURL` wajib diisi dan harus berupa URL HTTP atau HTTPS publik. `ProjectName` bersifat opsional dengan nilai default `default`.
+
+## Alur
+
+1. Simpan `Result.BytedToken` dan buka `Result.H5Link` untuk orang yang akan diverifikasi.
+2. Untuk memilih bahasa H5, tambahkan `lng` ke `H5Link`, misalnya `&lng=en`. Bahasa bukan kolom dalam isi permintaan.
+3. Setelah alur H5 selesai, browser membuka `Result.CallbackURL`. Kueri callback dapat memuat `bytedToken`, `resultCode`, `algorithmBaseRespCode`, `reqMeasureInfoValue`, dan `verify_type`.
+4. Lakukan polling [Mendapatkan hasil validasi visual](/id/api-reference/video/get-visual-validation-result) dengan `BytedToken` yang disimpan hingga `Result.GroupId` dikembalikan.
+
+`BytedToken` berlaku selama 30 menit dan terikat pada organisasi terautentikasi serta `ProjectName`. Tautan H5 hanya mendukung satu verifikasi yang selesai dan menjadi tidak valid setelah digunakan.
+
+## Contoh Permintaan
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## Contoh Respons
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+Kesalahan menggunakan struktur tingkat atas yang sama. Baca `ResponseMetadata.Error.Code` dan `ResponseMetadata.Error.Message`, bukan kolom kesalahan API `/v1` TokenLab lainnya.

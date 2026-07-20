@@ -49,12 +49,13 @@ Seedance 素材是可复用的、组织范围内的引用，可在后续视频�
 
 当您的产品在使用真人作为可复用的 Seedance 引用前需要获得同意并进行人脸验证时，请使用真人素材验证。
 
-1. 使用您的 `callback_url` 调用 [创建真人验证会话](/zh/api-reference/video/create-real-person-verification-session)。
-2. 将用户引导至返回的 `h5_link`。`session_id` 和 H5 链接将在 120 秒后过期。`verification_token` 只会通过 TokenLab 回调重定向返回。
-3. H5 流程完成后，TokenLab 会携带 `session_id`、`verification_token`、`verification_status` 和 `result_code` 重定向到您的 `callback_url`。
-4. 当 `verification_status` 为 `succeeded` 时，调用 [绑定真人验证结果](/zh/api-reference/video/bind-real-person-verification-result)。
-5. 存储返回的 `group_id`；在创建 `liveness_face` 素材资产时传入该 ID。
-6. 使用 [列出真人验证历史记录](/zh/api-reference/video/list-real-person-verification-history) 查看之前的会话。历史记录会长期保存，但这不会延长 120 秒的绑定窗口。
+1. 调用 [创建视觉验证会话](/zh/api-reference/video/create-visual-validation-session)，传入 `CallbackURL`，并保存返回的 `Result.BytedToken`。
+2. 为待验证人员打开 `Result.H5Link`。如需指定语言，请在 H5 链接后追加 `lng`。
+3. H5 流程完成后，浏览器会打开 `Result.CallbackURL`，并携带 `bytedToken`、`resultCode` 等官方查询参数。
+4. 使用 `BytedToken` 轮询 [获取视觉验证结果](/zh/api-reference/video/get-visual-validation-result)，直到返回 `Result.GroupId`。
+5. 保存 `GroupId`；创建 `liveness_face` 素材时将其作为 `group_id`。
+
+`BytedToken` 的有效期为 30 分钟。两次 Action 请求必须使用相同的 `ProjectName`。认证使用 `Authorization: Bearer <TOKENLAB_API_KEY>`，不接受火山引擎 AK/SK 签名。
 
 可选：使用 [测试控制台](https://tokenlab.sh/dashboard/seedance-assets) 来验证您的请求和回调流程、检查素材组并查看验证历史。您的生产环境集成应直接调用 API。
 
@@ -70,7 +71,7 @@ Seedance 素材是可复用的、组织范围内的引用，可在后续视频�
 
 使用 [创建素材资产](/zh/api-reference/video/create-material-asset) 每次导入一个可公开访问的源 URL。
 
-对于 `aigc_avatar`，`group_id` 是可选的；TokenLab 将使用或创建组织默认的虚拟人像组。对于 `liveness_face`，`group_id` 是必需的，且必须是 [绑定真人验证结果](/zh/api-reference/video/bind-real-person-verification-result) 返回的组 ID。
+对于 `aigc_avatar`，`group_id` 是可选的；TokenLab 将使用或创建组织默认的虚拟人像组。对于 `liveness_face`，`group_id` 是必需的，且必须是 [获取视觉验证结果](/zh/api-reference/video/get-visual-validation-result) 返回的组 ID。
 
 | 类型 | 支持的输入 |
 |------|-----------------|
@@ -113,18 +114,18 @@ curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-对于真人素材组，请先创建验证会话并绑定结果，然后再上传素材。
+对于真人素材组，请先创建视觉验证会话并获取验证结果，再上传素材。
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
 ## 定价与异步结果

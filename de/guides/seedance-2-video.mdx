@@ -49,12 +49,13 @@ Werden die Materialien innerhalb von 60 Sekunden `ACTIVE`, läuft die Generierun
 
 Verwenden Sie die Verifizierung von Material echter Personen, wenn Ihr Produkt eine Zustimmung und Gesichtsverifizierung erfordert, bevor eine echte Person als wiederverwendbare Seedance-Referenz genutzt werden kann.
 
-1. Rufen Sie [Real-Person-Verifizierungssitzung erstellen](/de/api-reference/video/create-real-person-verification-session) mit Ihrer `callback_url` auf.
-2. Leiten Sie den Benutzer an den zurückgegebenen `h5_link` weiter. Die `session_id` und der H5-Link laufen nach 120 Sekunden ab. Das `verification_token` wird nur durch den TokenLab-Callback-Redirect zurückgegeben.
-3. Nach Abschluss des H5-Prozesses leitet TokenLab an Ihre `callback_url` mit `session_id`, `verification_token`, `verification_status` und `result_code` weiter.
-4. Wenn der `verification_status` `succeeded` ist, rufen Sie [Ergebnis der Real-Person-Verifizierung binden](/de/api-reference/video/bind-real-person-verification-result) auf.
-5. Speichern Sie die zurückgegebene `group_id`; übergeben Sie diese beim Erstellen von `liveness_face`-Material-Assets.
-6. Verwenden Sie [Verlauf der Real-Person-Verifizierung auflisten](/de/api-reference/video/list-real-person-verification-history), um frühere Sitzungen zu überprüfen. Der Verlauf ist langlebig, verlängert jedoch nicht das 120-sekündige Bindungsfenster.
+1. Rufen Sie [Visuelle Verifizierungssitzung erstellen](/de/api-reference/video/create-visual-validation-session) mit `CallbackURL` auf und speichern Sie den zurückgegebenen `Result.BytedToken`.
+2. Öffnen Sie `Result.H5Link` für die zu verifizierende Person. Hängen Sie für eine bestimmte Sprache `lng` an den H5-Link an.
+3. Nach Abschluss des H5-Ablaufs öffnet der Browser `Result.CallbackURL` mit offiziellen Abfragenamen wie `bytedToken` und `resultCode`.
+4. Rufen Sie [Visuelles Verifizierungsergebnis abrufen](/de/api-reference/video/get-visual-validation-result) wiederholt mit `BytedToken` auf, bis `Result.GroupId` zurückgegeben wird.
+5. Speichern Sie `GroupId` und verwenden Sie sie beim Erstellen von `liveness_face`-Materialien als `group_id`.
+
+`BytedToken` ist 30 Minuten gültig. Verwenden Sie in beiden Action-Anfragen denselben `ProjectName`. Die Authentifizierung erfolgt mit `Authorization: Bearer <TOKENLAB_API_KEY>`; Volc-AK/SK-Signaturen werden nicht akzeptiert.
 
 Optional: Verwenden Sie die [Testkonsole](https://tokenlab.sh/dashboard/seedance-assets), um Ihren Anfrage- und Callback-Ablauf zu verifizieren, Materialgruppen zu untersuchen und den Verifizierungsverlauf einzusehen. Ihre Produktionsintegration sollte die APIs direkt aufrufen.
 
@@ -70,7 +71,7 @@ Das Löschen einer Materialgruppe löscht auch die darin enthaltenen TokenLab-Ma
 
 Verwenden Sie [Material-Asset erstellen](/de/api-reference/video/create-material-asset), um jeweils eine öffentlich erreichbare Quell-URL zu importieren.
 
-Für `aigc_avatar` ist die `group_id` optional; TokenLab verwendet oder erstellt die standardmäßige virtuelle Avatar-Gruppe der Organisation. Für `liveness_face` ist die `group_id` erforderlich und muss die Gruppe sein, die von [Ergebnis der Real-Person-Verifizierung binden](/de/api-reference/video/bind-real-person-verification-result) zurückgegeben wurde.
+Für `aigc_avatar` ist die `group_id` optional; TokenLab verwendet oder erstellt die standardmäßige virtuelle Avatar-Gruppe der Organisation. Für `liveness_face` ist die `group_id` erforderlich und muss die Gruppe sein, die von [Visuelles Verifizierungsergebnis abrufen](/de/api-reference/video/get-visual-validation-result) zurückgegeben wurde.
 
 | Typ | Unterstützte Eingabe |
 |------|-----------------|
@@ -109,18 +110,18 @@ curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-Für eine Materialgruppe für echte Personen erstellen Sie zuerst eine Verifizierungssitzung und binden das Ergebnis, bevor Sie Materialien hochladen.
+Erstellen Sie für eine Materialgruppe einer echten Person zuerst eine visuelle Verifizierungssitzung und rufen Sie das Ergebnis ab, bevor Sie Materialien hochladen.
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
 ## Preise und asynchrone Ergebnisse

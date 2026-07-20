@@ -1,0 +1,56 @@
+---
+title: "Create Visual Validation Session"
+openapi: "POST /api/v3"
+description: "Creates a Volc-compatible real-person visual validation session."
+---
+
+Create the real-person visual validation session before uploading reusable `liveness_face` materials. TokenLab uses the Volc Action API shape and TokenLab Bearer authentication.
+
+## Endpoint And Authentication
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+Volc AK/SK signing is not accepted. `CallbackURL` is required and must be a public HTTP or HTTPS URL. `ProjectName` is optional and defaults to `default`.
+
+## Flow
+
+1. Save `Result.BytedToken` and open `Result.H5Link` for the person being verified.
+2. To select the H5 language, append `lng` to `H5Link`, for example `&lng=en`. The language is not a request-body field.
+3. After the H5 flow finishes, the browser opens `Result.CallbackURL`. The callback query can contain `bytedToken`, `resultCode`, `algorithmBaseRespCode`, `reqMeasureInfoValue`, and `verify_type`.
+4. Poll [Get Visual Validation Result](/api-reference/video/get-visual-validation-result) with the saved `BytedToken` until `Result.GroupId` is returned.
+
+`BytedToken` is valid for 30 minutes and is scoped to the authenticated organization and `ProjectName`. The H5 link supports one completed authentication and becomes invalid after use.
+
+## Example Request
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## Example Response
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+Errors use the same top-level envelope. Read `ResponseMetadata.Error.Code` and `ResponseMetadata.Error.Message` instead of expecting the fields from TokenLab's other `/v1` APIs.

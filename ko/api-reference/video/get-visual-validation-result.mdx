@@ -1,0 +1,49 @@
+---
+title: "시각 인증 결과 조회"
+openapi: "POST /api/v3"
+description: "시각 인증으로 생성된 실제 인물 자료 그룹을 조회합니다."
+---
+
+H5 시각 인증 흐름 이후 이 Action을 폴링합니다. 성공하면 인증된 인물의 TokenLab 자료 그룹 ID가 반환됩니다.
+
+## 엔드포인트 및 인증
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+[시각 인증 세션 생성](/ko/api-reference/video/create-visual-validation-session)에서 반환된 `BytedToken`을 전송합니다. 생성 시 `ProjectName`을 설정했다면 대소문자를 구분하여 같은 값을 전송하고, 그렇지 않으면 생략하거나 `default`를 사용합니다.
+
+브라우저 콜백 직후에는 결과가 준비되지 않을 수 있습니다. `Result.GroupId`가 반환되거나 30분 유효한 `BytedToken`이 만료될 때까지 같은 요청을 재시도하십시오. 같은 token으로 성공한 요청을 반복하면 동일한 `GroupId`가 반환됩니다.
+
+`liveness_face` 자료를 생성할 때 반환된 `GroupId`를 `group_id`로 사용합니다.
+
+## 요청 예시
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+```
+
+## 응답 예시
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_def456",
+    "Action": "GetVisualValidateResult",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "GroupId": "group-20260720123456-real1"
+  }
+}
+```
+
+오류에는 `ResponseMetadata.Error.Code`와 `ResponseMetadata.Error.Message`가 사용됩니다. 성공 응답에는 `ResponseMetadata`와 `Result`가 포함되며 TokenLab의 다른 `/v1` API 응답 형식을 사용하지 않습니다.

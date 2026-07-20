@@ -49,12 +49,13 @@ Nếu material chuyển sang `ACTIVE` trong 60 giây, quá trình tạo video ti
 
 Sử dụng xác minh tài nguyên người thật khi sản phẩm của bạn cần sự đồng ý và xác minh khuôn mặt trước khi một người thật có thể được sử dụng làm tham chiếu Seedance có thể tái sử dụng.
 
-1. Gọi [Tạo phiên xác thực người thật](/vi/api-reference/video/create-real-person-verification-session) với `callback_url` của bạn.
-2. Chuyển hướng người dùng đến `h5_link` được trả về. `session_id` và liên kết H5 sẽ hết hạn sau 120 giây. `verification_token` chỉ được trả về qua chuyển hướng callback của TokenLab.
-3. Sau khi quy trình H5 hoàn tất, TokenLab sẽ chuyển hướng đến `callback_url` của bạn cùng với `session_id`, `verification_token`, `verification_status` và `result_code`.
-4. Khi `verification_status` là `succeeded`, hãy gọi [Liên kết kết quả xác thực người thật](/vi/api-reference/video/bind-real-person-verification-result).
-5. Lưu trữ `group_id` được trả về; truyền nó khi tạo tài sản tài nguyên `liveness_face`.
-6. Sử dụng [Liệt kê lịch sử xác minh người thật](/vi/api-reference/video/list-real-person-verification-history) để xem lại các phiên trước đó. Lịch sử được lưu trữ lâu dài, nhưng không kéo dài thời hạn liên kết 120 giây.
+1. Gọi [Tạo phiên xác thực trực quan](/vi/api-reference/video/create-visual-validation-session) với `CallbackURL` và lưu `Result.BytedToken` được trả về.
+2. Mở `Result.H5Link` cho người cần xác thực. Thêm `lng` vào liên kết H5 nếu cần ngôn ngữ cụ thể.
+3. Sau khi quy trình H5 hoàn tất, trình duyệt mở `Result.CallbackURL` với các tên truy vấn chính thức như `bytedToken` và `resultCode`.
+4. Thăm dò [Lấy kết quả xác thực trực quan](/vi/api-reference/video/get-visual-validation-result) bằng `BytedToken` cho đến khi trả về `Result.GroupId`.
+5. Lưu `GroupId` và dùng làm `group_id` khi tạo tư liệu `liveness_face`.
+
+`BytedToken` có hiệu lực trong 30 phút. Dùng cùng `ProjectName` trong cả hai yêu cầu Action. Xác thực dùng `Authorization: Bearer <TOKENLAB_API_KEY>`; không chấp nhận chữ ký AK/SK của Volc.
 
 Tùy chọn: sử dụng [bảng điều khiển kiểm thử](https://tokenlab.sh/dashboard/seedance-assets) để xác minh yêu cầu và quy trình callback của bạn, kiểm tra các nhóm tài nguyên và xem lại lịch sử xác minh. Việc tích hợp trong môi trường production của bạn nên gọi trực tiếp các API.
 
@@ -70,7 +71,7 @@ Việc xóa một nhóm tài nguyên cũng sẽ xóa các tài nguyên TokenLab 
 
 Sử dụng [Tạo Tài nguyên Vật liệu](/vi/api-reference/video/create-material-asset) để nhập từng URL nguồn có thể truy cập công khai.
 
-Đối với `aigc_avatar`, `group_id` là tùy chọn; TokenLab sẽ sử dụng hoặc tạo nhóm avatar ảo mặc định của tổ chức. Đối với `liveness_face`, `group_id` là bắt buộc và phải là nhóm được trả về bởi [Liên kết kết quả xác thực người thật](/vi/api-reference/video/bind-real-person-verification-result).
+Đối với `aigc_avatar`, `group_id` là tùy chọn; TokenLab sẽ sử dụng hoặc tạo nhóm avatar ảo mặc định của tổ chức. Đối với `liveness_face`, `group_id` là bắt buộc và phải là nhóm được trả về bởi [Lấy kết quả xác thực trực quan](/vi/api-reference/video/get-visual-validation-result).
 
 | Loại | Đầu vào hỗ trợ |
 |------|-----------------|
@@ -109,18 +110,18 @@ curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-Đối với nhóm tài nguyên người thật, trước tiên hãy tạo phiên xác minh và liên kết kết quả trước khi tải lên tài nguyên.
+Đối với nhóm tư liệu người thật, hãy tạo phiên xác thực trực quan và lấy kết quả trước khi tải tư liệu lên.
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
 ## Giá cả và kết quả không đồng bộ

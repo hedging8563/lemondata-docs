@@ -1,0 +1,56 @@
+---
+title: "Tạo phiên xác thực trực quan"
+openapi: "POST /api/v3"
+description: "Tạo phiên xác thực trực quan người thật theo định dạng tương thích Volc."
+---
+
+Tạo phiên xác thực trực quan trước khi tải lên tư liệu `liveness_face` có thể tái sử dụng. TokenLab dùng định dạng Action API của Volc và xác thực Bearer của TokenLab.
+
+## Endpoint và xác thực
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+Không chấp nhận chữ ký AK/SK của Volc. `CallbackURL` là trường bắt buộc và phải là URL HTTP hoặc HTTPS công khai. `ProjectName` là trường tùy chọn, mặc định là `default`.
+
+## Quy trình
+
+1. Lưu `Result.BytedToken` và mở `Result.H5Link` cho người cần xác thực.
+2. Để chọn ngôn ngữ H5, thêm `lng` vào `H5Link`, ví dụ `&lng=en`. Ngôn ngữ không phải là trường trong nội dung yêu cầu.
+3. Sau khi quy trình H5 hoàn tất, trình duyệt sẽ mở `Result.CallbackURL`. Truy vấn callback có thể chứa `bytedToken`, `resultCode`, `algorithmBaseRespCode`, `reqMeasureInfoValue` và `verify_type`.
+4. Thăm dò [Lấy kết quả xác thực trực quan](/vi/api-reference/video/get-visual-validation-result) bằng `BytedToken` đã lưu cho đến khi trả về `Result.GroupId`.
+
+`BytedToken` có hiệu lực trong 30 phút và gắn với tổ chức đã xác thực cùng `ProjectName`. Liên kết H5 chỉ cho phép hoàn tất một lần xác thực và sẽ hết hiệu lực sau khi sử dụng.
+
+## Ví dụ yêu cầu
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## Ví dụ phản hồi
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+Lỗi dùng cùng cấu trúc cấp cao nhất. Hãy đọc `ResponseMetadata.Error.Code` và `ResponseMetadata.Error.Message` thay vì các trường lỗi của những API `/v1` khác của TokenLab.

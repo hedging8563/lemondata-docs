@@ -49,12 +49,13 @@ Seedanceの素材は、ビデオ生成時に後から選択できる、組織ス
 
 製品において、実在人物を再利用可能なSeedanceリファレンスとして使用する前に同意と顔認証が必要な場合は、実在人物の素材認証を使用してください。
 
-1. `callback_url` を指定して [実在人物確認セッションの作成](/ja/api-reference/video/create-real-person-verification-session) を呼び出します。
-2. ユーザーを返された `h5_link` に誘導します。`session_id` とH5リンクは120秒後に期限切れになります。`verification_token` はTokenLabのコールバックリダイレクトでのみ返されます。
-3. H5フローが完了すると、TokenLabは `session_id`、`verification_token`、`verification_status`、および `result_code` を含めて `callback_url` にリダイレクトします。
-4. `verification_status` が `succeeded` の場合、[実人認証結果の紐付け](/ja/api-reference/video/bind-real-person-verification-result) を呼び出します。
-5. 返された `group_id` を保存し、`liveness_face` 素材アセットを作成する際に渡します。
-6. [実在人物確認履歴の一覧取得](/ja/api-reference/video/list-real-person-verification-history) を使用して過去のセッションを確認します。履歴は長期間保持されますが、120秒のバインド期間を延長するものではありません。
+1. `CallbackURL` を指定して [ビジュアル確認セッションの作成](/ja/api-reference/video/create-visual-validation-session) を呼び出し、返された `Result.BytedToken` を保存します。
+2. 確認対象者に `Result.H5Link` を開きます。言語を指定する場合は H5 リンクに `lng` を追加します。
+3. H5 フローが完了すると、ブラウザーは `bytedToken` や `resultCode` などの公式クエリ名を付けて `Result.CallbackURL` を開きます。
+4. `BytedToken` で [ビジュアル確認結果の取得](/ja/api-reference/video/get-visual-validation-result) をポーリングし、`Result.GroupId` が返るまで待ちます。
+5. `GroupId` を保存し、`liveness_face` 素材作成時の `group_id` として使用します。
+
+`BytedToken` の有効期間は30分です。両方の Action リクエストで同じ `ProjectName` を使用してください。認証には `Authorization: Bearer <TOKENLAB_API_KEY>` を使用し、Volc AK/SK 署名は受け付けません。
 
 オプション：[テストコンソール](https://tokenlab.sh/dashboard/seedance-assets) を使用して、リクエストとコールバックフローの検証、素材グループの確認、および認証履歴の確認を行ってください。本番環境の統合では、APIを直接呼び出す必要があります。
 
@@ -70,7 +71,7 @@ Seedanceの素材は、ビデオ生成時に後から選択できる、組織ス
 
 [マテリアルアセットの作成](/ja/api-reference/video/create-material-asset) を使用して、公開アクセス可能なソースURLを一度に1つずつインポートします。
 
-`aigc_avatar` の場合、`group_id` はオプションです。TokenLabは組織のデフォルトのバーチャルアバターグループを使用または作成します。`liveness_face` の場合、`group_id` は必須であり、[実人認証結果の紐付け](/ja/api-reference/video/bind-real-person-verification-result) によって返されたグループである必要があります。
+`aigc_avatar` の場合、`group_id` はオプションです。TokenLabは組織のデフォルトのバーチャルアバターグループを使用または作成します。`liveness_face` の場合、`group_id` は必須であり、[ビジュアル確認結果の取得](/ja/api-reference/video/get-visual-validation-result) によって返されたグループである必要があります。
 
 | タイプ | サポートされている入力 |
 |------|-----------------|
@@ -109,18 +110,18 @@ curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-実在人物の素材グループの場合は、まず認証セッションを作成し、素材をアップロードする前に結果をバインドします。
+実在人物の素材グループでは、素材をアップロードする前にビジュアル確認セッションを作成し、結果を取得します。
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
 ## 料金と非同期結果

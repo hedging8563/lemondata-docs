@@ -1,0 +1,56 @@
+---
+title: "建立視覺驗證會話"
+openapi: "POST /api/v3"
+description: "建立與火山引擎格式相容的真人視覺驗證會話。"
+---
+
+上傳可重複使用的 `liveness_face` 素材前，請先建立真人視覺驗證會話。TokenLab 採用火山引擎 Action API 的請求格式，並使用 TokenLab Bearer 驗證。
+
+## 端點與驗證
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+不接受火山引擎 AK/SK 簽名。`CallbackURL` 為必填，且必須是公開的 HTTP 或 HTTPS URL。`ProjectName` 可省略，預設值為 `default`。
+
+## 流程
+
+1. 儲存 `Result.BytedToken`，並為待驗證的人員開啟 `Result.H5Link`。
+2. 若要指定 H5 語言，請在 `H5Link` 後附加 `lng`，例如 `&lng=en`。語言不是請求本文欄位。
+3. H5 流程完成後，瀏覽器會開啟 `Result.CallbackURL`。回呼查詢參數可能包含 `bytedToken`、`resultCode`、`algorithmBaseRespCode`、`reqMeasureInfoValue` 與 `verify_type`。
+4. 使用已儲存的 `BytedToken` 輪詢 [取得視覺驗證結果](/zh-Hant/api-reference/video/get-visual-validation-result)，直到回傳 `Result.GroupId`。
+
+`BytedToken` 的有效期限為 30 分鐘，並綁定至已驗證的組織與 `ProjectName`。H5 連結只允許完成一次驗證，使用後即失效。
+
+## 請求範例
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## 回應範例
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+錯誤也使用相同的頂層結構。請讀取 `ResponseMetadata.Error.Code` 與 `ResponseMetadata.Error.Message`，不要預期 TokenLab 其他 `/v1` API 的錯誤欄位。

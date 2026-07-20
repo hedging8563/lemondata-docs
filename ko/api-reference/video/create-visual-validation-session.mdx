@@ -1,0 +1,56 @@
+---
+title: "시각 인증 세션 생성"
+openapi: "POST /api/v3"
+description: "Volc 호환 형식으로 실제 인물 시각 인증 세션을 생성합니다."
+---
+
+재사용 가능한 `liveness_face` 자료를 업로드하기 전에 실제 인물 시각 인증 세션을 생성합니다. TokenLab은 Volc Action API 형식과 TokenLab Bearer 인증을 사용합니다.
+
+## 엔드포인트 및 인증
+
+```text
+POST https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+Volc AK/SK 서명은 허용되지 않습니다. `CallbackURL`은 필수이며 공개 HTTP 또는 HTTPS URL이어야 합니다. `ProjectName`은 선택 사항이며 기본값은 `default`입니다.
+
+## 흐름
+
+1. `Result.BytedToken`을 저장하고 인증 대상자가 `Result.H5Link`를 열도록 합니다.
+2. H5 언어를 지정하려면 `H5Link`에 `lng`를 추가합니다(예: `&lng=en`). 언어는 요청 본문 필드가 아닙니다.
+3. H5 흐름이 완료되면 브라우저가 `Result.CallbackURL`을 엽니다. 콜백 쿼리에는 `bytedToken`, `resultCode`, `algorithmBaseRespCode`, `reqMeasureInfoValue`, `verify_type`가 포함될 수 있습니다.
+4. 저장한 `BytedToken`으로 [시각 인증 결과 조회](/ko/api-reference/video/get-visual-validation-result)를 폴링하여 `Result.GroupId`가 반환될 때까지 기다립니다.
+
+`BytedToken`은 30분 동안 유효하며 인증된 조직 및 `ProjectName`에 귀속됩니다. H5 링크에서는 한 번의 인증만 완료할 수 있으며 사용 후에는 무효화됩니다.
+
+## 요청 예시
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+```
+
+## 응답 예시
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req_abc123",
+    "Action": "CreateVisualValidateSession",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "BytedToken": "ZXhhbXBsZS10b2tlbg",
+    "H5Link": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?...",
+    "CallbackURL": "https://yourapp.example.com/seedance/callback"
+  }
+}
+```
+
+오류도 동일한 최상위 형식을 사용합니다. TokenLab의 다른 `/v1` API 필드 대신 `ResponseMetadata.Error.Code`와 `ResponseMetadata.Error.Message`를 확인하십시오.

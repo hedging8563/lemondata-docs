@@ -49,12 +49,13 @@ Materyaller 60 saniye içinde `ACTIVE` olursa oluşturma aynı istekte devam ede
 
 Ürününüz, bir gerçek kişinin yeniden kullanılabilir bir Seedance referansı olarak kullanılabilmesi için onay ve yüz doğrulaması gerektiriyorsa gerçek kişi materyal doğrulamasını kullanın.
 
-1. `callback_url` adresinizle [Gerçek Kişi Doğrulama Oturumu Oluştur](/tr/api-reference/video/create-real-person-verification-session) fonksiyonunu çağırın.
-2. Kullanıcıyı dönen `h5_link` adresine yönlendirin. `session_id` ve H5 bağlantısı 120 saniye sonra sona erer. `verification_token` yalnızca TokenLab callback yönlendirmesiyle döndürülür.
-3. H5 akışı tamamlandıktan sonra TokenLab, `session_id`, `verification_token`, `verification_status` ve `result_code` ile `callback_url` adresinize yönlendirme yapar.
-4. `verification_status` değeri `succeeded` olduğunda, [Gerçek Kişi Doğrulama Sonucunu Bağlama](/tr/api-reference/video/bind-real-person-verification-result) fonksiyonunu çağırın.
-5. Dönen `group_id` değerini saklayın; `liveness_face` materyal varlıkları oluştururken bu değeri iletin.
-6. Önceki oturumları incelemek için [Gerçek Kişi Doğrulama Geçmişini Listele](/tr/api-reference/video/list-real-person-verification-history) kullanın. Geçmiş uzun ömürlüdür ancak 120 saniyelik bağlama süresini uzatmaz.
+1. `CallbackURL` ile [Görsel doğrulama oturumu oluştur](/tr/api-reference/video/create-visual-validation-session) çağrısı yapın ve döndürülen `Result.BytedToken` değerini kaydedin.
+2. Doğrulanacak kişi için `Result.H5Link` bağlantısını açın. Belirli bir dil gerekiyorsa H5 bağlantısına `lng` ekleyin.
+3. H5 akışı tamamlandığında tarayıcı, `bytedToken` ve `resultCode` gibi resmi sorgu adlarıyla `Result.CallbackURL` adresini açar.
+4. `Result.GroupId` dönene kadar `BytedToken` ile [Görsel doğrulama sonucunu al](/tr/api-reference/video/get-visual-validation-result) çağrısını tekrarlayın.
+5. `GroupId` değerini kaydedin ve `liveness_face` materyalleri oluştururken `group_id` olarak kullanın.
+
+`BytedToken` 30 dakika geçerlidir. Her iki Action isteğinde aynı `ProjectName` değerini kullanın. Kimlik doğrulamada `Authorization: Bearer <TOKENLAB_API_KEY>` kullanılır; Volc AK/SK imzaları kabul edilmez.
 
 İsteğe bağlı: İstek ve geri çağırma (callback) akışınızı doğrulamak, materyal gruplarını incelemek ve doğrulama geçmişini gözden geçirmek için [test konsolunu](https://tokenlab.sh/dashboard/seedance-assets) kullanın. Üretim (production) entegrasyonunuz API'leri doğrudan çağırmalıdır.
 
@@ -70,7 +71,7 @@ Bir materyal grubunu silmek, içindeki TokenLab materyallerini de siler ve bu i�
 
 Her seferinde genel olarak erişilebilir bir kaynak URL'sini içe aktarmak için [Materyal Varlığı Oluştur](/tr/api-reference/video/create-material-asset) kullanın.
 
-`aigc_avatar` için `group_id` isteğe bağlıdır; TokenLab, organizasyonun varsayılan sanal avatar grubunu kullanır veya oluşturur. `liveness_face` için `group_id` zorunludur ve [Gerçek Kişi Doğrulama Sonucunu Bağlama](/tr/api-reference/video/bind-real-person-verification-result) tarafından döndürülen grup olmalıdır.
+`aigc_avatar` için `group_id` isteğe bağlıdır; TokenLab, organizasyonun varsayılan sanal avatar grubunu kullanır veya oluşturur. `liveness_face` için `group_id` zorunludur ve [Görsel doğrulama sonucunu al](/tr/api-reference/video/get-visual-validation-result) tarafından döndürülen grup olmalıdır.
 
 | Tür | Desteklenen girdi |
 |------|-----------------|
@@ -109,18 +110,18 @@ curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-Gerçek kişi materyal grubu için, materyalleri yüklemeden önce bir doğrulama oturumu oluşturun ve sonucu bağlayın.
+Gerçek kişi materyal grubu için materyalleri yüklemeden önce bir görsel doğrulama oturumu oluşturun ve sonucu alın.
 
 ```bash
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-sessions \
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"callback_url":"https://yourapp.example.com/seedance/callback","language":"en"}'
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/visual-validation-results \
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"session_id":"svv_abc123","verification_token":"svvt_def456","group_name":"Creator A"}'
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
 ## Fiyatlandırma ve Asenkron Sonuçlar
