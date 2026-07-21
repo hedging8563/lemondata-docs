@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-07-20
+Generated: 2026-07-21
 Source: https://docs.tokenlab.sh
 
 ---
@@ -2797,11 +2797,21 @@ Completed video tasks may return `video_url`, `video`, or `videos` depending on 
 
 ### Seedance 2.0 Video Models
 
-> Use Seedance 2.0 video generation with virtual-avatar and real-person material groups.
+> Choose a Seedance 2.0 model and the right TokenLab integration path.
 
 URL: https://docs.tokenlab.sh/guides/seedance-2-video
 
-Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, reference-to-video, video editing, and video extension. Use model IDs such as `seedance-2.0`, `seedance-2.0-fast`, and `seedance-2.0-mini`, then choose the workflow with `operation`.
+Start here if you are adding Seedance 2.0 to an application. This page covers model and workflow selection; migration, reusable materials, and real-person verification have their own guides.
+
+## Choose Your Integration Path
+
+| Goal | Use | Continue with |
+|------|-----|---------------|
+| Build a new TokenLab video integration | Unified `POST /v1/videos/generations` API | [Video Generation](/guides/video-generation) |
+| Move an existing Volcengine Seedance client | Volc-compatible REST or Action endpoints | [Migrate Seedance from Volcengine](/guides/seedance-volcengine-migration) |
+| Reuse virtual-avatar, product, style, or real-person references | TokenLab material library | [Seedance Materials and Real-Person Verification](/guides/seedance-materials) |
+
+All three paths use `Authorization: Bearer `. The Volc-compatible paths preserve the Volcengine request shape, but do not accept AK/SK signing.
 
 ## Model Choice
 
@@ -2811,151 +2821,277 @@ Seedance 2.0 supports text-to-video, image-to-video, start/end-frame video, refe
 | `seedance-2.0-fast` | Faster, lower-cost output | `480p`, `720p` |
 | `seedance-2.0-mini` | Lowest-cost output | `480p`, `720p` |
 
-`seedance-2.0-fast` and `seedance-2.0-mini` reject `1080p` and `4k` requests. Audio can be used only in supported reference workflows; pure audio-only and text-plus-audio-only Seedance requests are not supported.
+`seedance-2.0-fast` and `seedance-2.0-mini` reject `1080p` and `4k` requests. Query the [Models API](/api-reference/models/list-models) when model availability must be decided at runtime.
 
 ## Supported Operations
 
 | Operation | Typical inputs |
 |-----------|----------------|
 | `text-to-video` | `prompt` |
-| `image-to-video` | `prompt`, `image_url` or compatible image input |
+| `image-to-video` | `prompt`, `image_url` or a compatible image input |
 | `start-end-to-video` | `prompt`, `start_image`, `end_image` |
 | `reference-to-video` | `prompt`, `reference_images`, optional `video_urls`, optional `audio_urls` |
-| `video-to-video` | `prompt`, `video_url` or compatible video input |
+| `video-to-video` | `prompt`, `video_url` or a compatible video input |
 | `video-extension` | `task_id` or model-specific continuation input |
 
-## Volc-Compatible Seedance Endpoint
+Use an explicit `operation` in production. TokenLab can infer some operations from the supplied media, but an explicit value makes validation and retries predictable.
 
-Use this endpoint when your existing system already builds Seedance requests with Volc-style `content[]`, REST task paths, or Action names, and you want to change the base URL and authentication without rewriting the request shape. For new cross-model video integrations, prefer TokenLab's unified [`/v1/videos/generations`](/api-reference/video/create-video) API.
+For `seedance-2.0` and `seedance-2.0-fast`, reference workflows currently support up to 9 reference images, 3 reference videos, and 3 reference audios. Audio is available only in supported reference workflows; audio-only and text-plus-audio-only Seedance requests are not supported.
 
-### Migration Flow
+## Results And Pricing
 
-1. Authenticate with `Authorization: Bearer `. Volc AK/SK signatures are not accepted in this version.
-2. Create with REST `POST /api/v3/contents/generations/tasks`, or with Action `POST /api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01`.
-3. Store the returned `cgt-...` task ID and poll the task endpoint until `status` is `succeeded`, `failed`, `cancelled`, or `expired`.
-4. `callback_url` is rejected for now, so do not rely on completion callbacks for this endpoint.
+Video generation is asynchronous. Store the returned task ID and follow its exact `poll_url` until the task reaches a terminal state. See [Async Jobs and Polling](/guides/async-jobs-polling) for retry and timeout guidance.
 
-### Request Body Notes
+Pricing depends on the model, output resolution, and input type. Read it from the [Pricing API](/api-reference/pricing/get-pricing) instead of hard-coding it in your product.
 
-- `content[]` accepts `text`, `image_url`, `video_url`, `audio_url`, and `draft_task` items.
-- For `image_url`, omit `role` or use `first_frame` for image-to-video; use `last_frame` together with a first frame; use `reference_image` for reference-to-video.
-- Image URLs are prepared as reusable TokenLab materials when the selected Seedance model needs material references. If preparation takes longer than 60 seconds, the create request returns a retryable material-preparing error.
-- Common generation fields include `model`, `ratio`, `duration`, `resolution`, `generate_audio`, `watermark`, `return_last_frame`, `seed`, `priority`, `execution_expires_after`, and `safety_identifier`.
+## API Reference
 
-### Reference Pages
+| Topic | Reference |
+|-------|-----------|
+| Create a unified video task | [Create Video](/api-reference/video/create-video) |
+| Poll a unified task | [Get Task Status](/api-reference/tasks/get-task-status) |
+| Volc-compatible task operations | [Create Task (Volc Compatible)](/api-reference/video/create-volc-compatible-seedance-task) |
+| Volc-compatible material operations | [Material Actions (Volc Compatible)](/api-reference/video/volc-compatible-material-actions) |
+
+---
+
+### Migrate Seedance from Volcengine
+
+> Move Volcengine-style Seedance task and material integrations to TokenLab with minimal request changes.
+
+URL: https://docs.tokenlab.sh/guides/seedance-volcengine-migration
+
+Use this guide when your application already sends Volcengine-style Seedance requests. You can retain Action names, `Version=2024-01-01`, `content[]`, PascalCase material bodies, and the Volcengine response envelope. The required migration is the endpoint and authentication method.
+
+## What Changes
+
+| Concern | Existing Volcengine client | TokenLab |
+|---------|----------------------------|----------|
+| Base URL | Your Volcengine endpoint | `https://api.tokenlab.sh/` |
+| Authentication | AK/SK request signing | `Authorization: Bearer ` |
+| Action requests | `Action` and `Version` query parameters | Preserved |
+| Task body | Volcengine-style `content[]` | Preserved |
+| Material body | PascalCase fields such as `GroupId` and `ProjectName` | Preserved |
+| Async result | Provider task lifecycle | TokenLab `cgt-...` task ID and polling |
+
+AK/SK signing is the only intentionally unsupported part. A request that contains only an AK/SK signature returns `401 InvalidCredential` with a Bearer-authentication message.
+
+## Choose A Request Shape
+
+| Existing client | TokenLab endpoint |
+|-----------------|-------------------|
+| Volcengine Action client | `POST /?Action=...&Version=2024-01-01` |
+| Action client using the TokenLab v3 prefix | `POST /api/v3?Action=...&Version=2024-01-01` |
+| Volcengine-style REST task client | `/api/v3/contents/generations/tasks` and its task paths |
+
+The API root produces the smallest change for an Action client: replace the host and authentication, then keep the Action query and JSON body. The `/api/v3` Action endpoint remains available for existing TokenLab integrations.
+
+## Task Actions
+
+| Action | Purpose | Important input |
+|--------|---------|-----------------|
+| `CreateContentsGenerationsTasks` | Create a video task | `model`, `content[]`, and generation options |
+| `GetContentsGenerationsTask` | Read one task | `TaskId` |
+| `ListContentsGenerationsTasks` | List tasks | Pagination and filters |
+| `DeleteContentsGenerationsTasks` | Cancel or delete a task | `TaskId` |
+
+REST clients can use these equivalent references:
 
 - [Create Task (Volc Compatible)](/api-reference/video/create-volc-compatible-seedance-task)
 - [Get Task (Volc Compatible)](/api-reference/video/get-volc-compatible-seedance-task)
 - [List Tasks (Volc Compatible)](/api-reference/video/list-volc-compatible-seedance-tasks)
 - [Cancel Task (Volc Compatible)](/api-reference/video/delete-volc-compatible-seedance-task)
 
+### Request Body Rules
+
+- `content[]` accepts `text`, `image_url`, `video_url`, `audio_url`, and `draft_task` items.
+- For `image_url`, omit `role` or use `first_frame` for image-to-video. Use `last_frame` together with a first frame, or `reference_image` for reference-to-video.
+- A public material URI such as `asset://asset-YYYYMMDDHHMMSS-xxxxx` can be used where the selected Seedance workflow accepts that media role.
+- Common fields include `model`, `ratio`, `duration`, `resolution`, `generate_audio`, `watermark`, `return_last_frame`, `seed`, `priority`, `execution_expires_after`, and `safety_identifier`.
+- `callback_url` is not supported on the task-compatibility endpoint. Poll the returned task instead.
+
+## Minimal Action Example
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "seedance-2.0",
+    "content": [
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p"
+  }'
+```
+
+Store the returned `cgt-...` ID. Poll until `status` becomes `succeeded`, `failed`, `cancelled`, or `expired`; do not treat the create response as a completed video.
+
+## Materials And Real-Person Verification
+
+The same Action endpoint also supports the 10 material and material-group operations. See [Material Actions (Volc Compatible)](/api-reference/video/volc-compatible-material-actions) for their exact PascalCase bodies, filters, paging, response envelope, and 12-hour material URLs.
+
+Real-person materials add two Actions before upload:
+
+1. [Create Visual Validation Session](/api-reference/video/create-visual-validation-session)
+2. [Get Visual Validation Result](/api-reference/video/get-visual-validation-result)
+
+The second Action returns the verified `GroupId`. Use that ID with `CreateAsset`; a client cannot create a `LivenessFace` group directly.
+
+## Migration Checklist
+
+1. Replace the API host with `https://api.tokenlab.sh`.
+2. Replace AK/SK signing with a TokenLab Bearer API key.
+3. Keep the existing Action, version, and request-body casing.
+4. Keep the same `ProjectName` across related material and verification requests.
+5. Store TokenLab task, group, and asset IDs instead of upstream-only identifiers.
+6. Verify one create, poll, list, and error response before moving production traffic.
+
+---
+
+### Seedance Materials and Real-Person Verification
+
+> Create reusable Seedance materials, verify real people, and use active assets in video generation.
+
+URL: https://docs.tokenlab.sh/guides/seedance-materials
+
+Seedance materials are organization-scoped image, video, or audio references that can be reused across video tasks. Choose the workflow first; virtual-avatar materials and verified real-person materials do not have the same creation path.
+
+## Choose A Material Workflow
+
+| Goal | Required flow |
+|------|---------------|
+| Use a one-off image URL | Send the URL in the video request; compatible Seedance models prepare it automatically |
+| Reuse a virtual person, product, or style | Create an `aigc_avatar` group, create an asset, wait for `ACTIVE`, then use the asset ID |
+| Reuse a real person | Complete visual validation, receive its `GroupId`, create an asset in that group, wait for `ACTIVE`, then use the asset ID |
+| Migrate an existing Volcengine material client | Keep the Action request shape and use the [Volc-compatible material reference](/api-reference/video/volc-compatible-material-actions) |
+
 ## Material Concepts
 
-Seedance materials are reusable, organization-scoped references that can be selected later during video generation.
+| Concept | REST field | Action field | What it means |
+|---------|------------|--------------|---------------|
+| Material group | `group_id` | `GroupId` | Owns related Seedance materials; use it when creating or filtering assets |
+| Material asset | `id` | `Id` | One imported image, video, or audio file; use it for generation after it becomes active |
+| Virtual-avatar group | `library_type: "aigc_avatar"` | `GroupType: "AIGC"` | Does not require real-person verification |
+| Real-person group | `library_type: "liveness_face"` | `GroupType: "LivenessFace"` | Created only by a successful visual-validation flow |
+| Project boundary | `project_name` | `ProjectName` | Isolates groups and assets inside the authenticated organization; defaults to `default` |
 
-| Concept | Public field | What it means |
-|---------|--------------|---------------|
-| Material group | `group_id` | A TokenLab group that owns related Seedance materials. Use it when uploading or listing materials. |
-| Material asset | `id` | One uploaded image, video, or audio file. Use this value as `material_asset_id` after the asset becomes `ACTIVE`. |
-| Virtual-avatar material group | `library_type: "aigc_avatar"` | For virtual people, avatars, products, styles, and other reusable references that do not require real-person verification. |
-| Real-person material group | `library_type: "liveness_face"` | Created by real-person material verification. One group represents one verified real person. |
-
-Keep `group_id` and material asset `id` separate. `group_id` is for organizing uploads; material asset `id` is for video generation. If a video request returns `Seedance material asset not found or not accessible`, confirm that you passed a material asset `id`, not a `group_id`, and that the asset belongs to the same organization, is not deleted, and has `status: "ACTIVE"`.
+Keep group IDs and asset IDs separate. A group organizes uploads; an asset ID is the reference used by video generation. Public IDs look like `group-20260720123456-vrt01` and `asset-20260720123457-def45`.
 
 ## Automatic Image Materials
 
-When the selected Seedance model can use the TokenLab material library, you may send image URLs or supported inline data URLs directly in `image`, `image_url`, `image_urls`, `reference_images`, `start_image`, or `end_image`. TokenLab imports those images into the organization default virtual-avatar material group and keeps their role as first frame, last frame, or reference image.
+When the selected Seedance model can use the TokenLab material library, you may send image URLs or supported inline data URLs directly in `image`, `image_url`, `image_urls`, `reference_images`, `start_image`, or `end_image`. TokenLab imports them into the organization's default virtual-avatar group and preserves their first-frame, last-frame, or reference-image role.
 
-If the material assets become `ACTIVE` within 60 seconds, generation continues in the same request. If not, the API returns `409 seedance_material_preparing` with `auto_material_asset_ids`; list or get those assets until they are `ACTIVE`, then retry with `material_asset_id` or `material_asset_ids`. If the selected model cannot use the material library, ordinary image URL or data URL inputs stay on the regular image path; explicit material IDs return a material availability error. Existing virtual-avatar and real-person material IDs are used as-is and are not imported again.
+If preparation finishes within 60 seconds, video generation continues in the same request. Otherwise the API returns `409 seedance_material_preparing` with `auto_material_asset_ids`. Poll those assets until they are `ACTIVE`, then retry with `material_asset_id`, `material_asset_ids`, or an `asset://` URI in the appropriate media field.
 
-## Real-Person Material Verification
+Existing material IDs are used as-is and are not imported again. If the selected model cannot use the material library, ordinary URL and data URL inputs continue on the regular media path; explicit material IDs return a material-availability error.
 
-Use real-person material verification when your product needs consent and face verification before a real person can be used as a reusable Seedance reference.
+## Virtual-Avatar Materials
 
-1. Call [Create Visual Validation Session](/api-reference/video/create-visual-validation-session) with `CallbackURL` and save the returned `Result.BytedToken`.
-2. Open `Result.H5Link` for the person being verified. Append `lng` to the H5 link when you need a specific language.
-3. After the H5 flow completes, the browser opens `Result.CallbackURL` with official query names such as `bytedToken` and `resultCode`.
-4. Poll [Get Visual Validation Result](/api-reference/video/get-visual-validation-result) with `BytedToken` until `Result.GroupId` is returned.
-5. Store `GroupId`; pass it as `group_id` when creating `liveness_face` material assets.
+Use [Create Material Asset Group](/api-reference/video/create-material-asset-group) to create an `aigc_avatar` group. For REST asset creation, `group_id` is optional; TokenLab uses or creates the organization's default virtual-avatar group when it is omitted.
 
-`BytedToken` is valid for 30 minutes. Use the same `ProjectName` in both Action requests. Authentication uses `Authorization: Bearer `; Volc AK/SK signing is not accepted.
+After a group exists, manage it with:
 
-Optional: use the [test console](https://tokenlab.sh/dashboard/seedance-assets) to verify your request and callback flow, inspect material groups, and review verification history. Your production integration should call the APIs directly.
+- [List Material Asset Groups](/api-reference/video/list-material-asset-groups)
+- [Get Material Asset Group](/api-reference/video/get-material-asset-group)
+- [Update Material Asset Group](/api-reference/video/update-material-asset-group)
+- [Delete Material Asset Group](/api-reference/video/delete-material-asset-group)
 
-## Creating Material Groups
+Deleting a group also deletes the TokenLab materials it contains and cannot be undone.
 
-Use [Create Material Asset Group](/api-reference/video/create-material-asset-group) for `aigc_avatar` groups. New real-person groups are created through the verification flow so the verified person and the material group stay linked.
+## Real-Person Verification
 
-Use [List Material Asset Groups](/api-reference/video/list-material-asset-groups), [Get Material Asset Group](/api-reference/video/get-material-asset-group), [Update Material Asset Group](/api-reference/video/update-material-asset-group), and [Delete Material Asset Group](/api-reference/video/delete-material-asset-group) to manage groups after they exist.
+Use this flow when your product must collect consent and verify a face before reusing a real person as a Seedance reference.
 
-Deleting a material group also deletes the TokenLab materials inside it and cannot be undone. If the TokenLab material library cannot complete the deletion because the current authorization state does not allow it, TokenLab returns a neutral material-library error.
+1. Call [Create Visual Validation Session](/api-reference/video/create-visual-validation-session) with `CallbackURL`; save `Result.BytedToken` and open `Result.H5Link` for the person being verified.
+2. After the H5 flow redirects to the callback, poll [Get Visual Validation Result](/api-reference/video/get-visual-validation-result) with the same `BytedToken` and `ProjectName`.
+3. Store the returned `Result.GroupId`. TokenLab creates and binds the `LivenessFace` group during this step.
+4. Create an asset with that group ID, then poll the asset until it becomes `ACTIVE`.
 
-## Uploading Materials
+`BytedToken` is valid for 30 minutes. A client cannot create a `LivenessFace` group with `CreateAssetGroup`; this prevents an unverified group from being presented as verified.
 
-Use [Create Material Asset](/api-reference/video/create-material-asset) to import one publicly reachable source URL at a time.
+For a real-person group, uploads are checked against the verified face. An asset can fail if it contains multiple faces or the face does not match. For best results, upload a full-body front reference and a clear front-facing close-up.
 
-For `aigc_avatar`, `group_id` is optional; TokenLab uses or creates the organization default virtual-avatar group. For `liveness_face`, `group_id` is required and must be the group returned by [Get Visual Validation Result](/api-reference/video/get-visual-validation-result).
+## Create And Prepare An Asset
+
+Use [Create Material Asset](/api-reference/video/create-material-asset) to import one publicly reachable URL at a time.
 
 | Type | Supported input |
 |------|-----------------|
-| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB. |
-| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2068676; up to 200 MB; 24-60 FPS. |
-| Audio | `aac`, `wav`, `mp3`; 2-15 seconds; up to 15 MB. |
+| Image | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; aspect ratio `(0.4, 2.5)`; width and height `(300, 6000)` px; under 30 MB |
+| Video | `mp4`, `mov`; `480p`, `720p`, or `1080p`; 2-15 seconds; aspect ratio `[0.4, 2.5]`; width and height `[300, 6000]` px; total pixels between 409600 and 2068676; up to 200 MB; 24-60 FPS |
+| Audio | `aac`, `wav`, `mp3`; 2-15 seconds; up to 15 MB |
 
-TokenLab validates the source URL, declared or detected media format, and file-size limit. Dimensions, aspect ratio, duration, resolution, total pixels, and FPS are passed through on a best-effort basis; the selected video service makes the final media eligibility decision.
+Material ingestion is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. HTTP success means the import was accepted, not that the asset is ready. If the asset becomes `FAILED`, inspect `error_message`, correct the source, and create a new asset.
 
-Material ingestion is asynchronous. Poll [Get Material Asset](/api-reference/video/get-material-asset) until `status` becomes `ACTIVE`. A successful HTTP response only means the request was accepted; always read the business status. If the status is `FAILED`, inspect `error_message`, fix the source material, and create a new asset.
+The source URL is only used for import. TokenLab returns its own asset ID and keeps the asset in your organization's material library until you delete the asset or its group.
 
-In create-material requests, `asset_url` is only the import source. TokenLab returns a material asset `id`; use that `id` for generation instead of reusing the original URL.
+## Use An Asset In Video Generation
 
-Asset and group IDs use Volcengine-compatible shapes such as `asset-20260720123456-qn7wr` and `group-20260720123456-vrt01`, while remaining TokenLab-owned mappings.
+After an asset is `ACTIVE`, choose one of these forms when calling [Create Video](/api-reference/video/create-video):
 
-TokenLab keeps material assets in your organization material library until you delete the asset or its material group.
+- `material_asset_id` for one generic material reference
+- `material_asset_ids` for multiple generic references
+- `asset://` in `start_image`, `end_image`, or `reference_images` when the media role must be explicit
 
-For real-person material groups, one group maps to one real person. Uploads are checked against the verified face. Assets with multiple faces or a face that does not match the verified person can fail. For best results, upload both a full-body front reference image and a front-facing close-up where the face is clear.
+Material references count toward the selected model's Seedance reference limits. If the API returns `Seedance material asset not found or not accessible`, confirm that the value is an asset ID rather than a group ID, belongs to the same organization and project, is not deleted, and is `ACTIVE`.
 
-## Using Materials In Video Generation
+## REST Or Volcengine Action
 
-After an asset is `ACTIVE`, pass the returned TokenLab asset `id` as `material_asset_id`, or include it in `material_asset_ids`, when calling [Create Video](/api-reference/video/create-video). Material assets count toward Seedance reference limits.
+TokenLab-native integrations can continue to use the snake_case `/v1/videos/assets*` REST endpoints. Existing Volcengine clients can retain PascalCase bodies with [Material Actions (Volc Compatible)](/api-reference/video/volc-compatible-material-actions). Both interfaces operate on the same organization- and project-scoped material data.
 
-## API Examples
-
-Create a virtual-avatar group, upload an image, poll until it is active, then use the material asset ID in a video request.
+## REST Example: Virtual-Avatar Asset
 
 ```bash
 curl https://api.tokenlab.sh/v1/videos/assets/groups \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+  -d '{"library_type":"aigc_avatar","group_name":"Product references","project_name":"default"}'
 
 curl https://api.tokenlab.sh/v1/videos/assets \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+  -d '{"group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_name":"Front view","asset_type":"Image","project_name":"default"}'
 
-curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45?project_name=default \
   -H "Authorization: Bearer $TOKENLAB_API_KEY"
 ```
 
-For a real-person material group, create a visual validation session and get its result before uploading materials.
+## Action Example: Verified Real-Person Asset
+
+First create and complete visual validation:
 
 ```bash
-curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+curl 'https://api.tokenlab.sh/?Action=CreateVisualValidateSession&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
 
-curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+curl 'https://api.tokenlab.sh/?Action=GetVisualValidateResult&Version=2024-01-01' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+  -d '{"BytedToken":"","ProjectName":"default"}'
 ```
 
-## Pricing And Async Results
+Then pass the returned `GroupId` to `CreateAsset`:
 
-Seedance 2.0 pricing depends on output resolution, input type, and model. Use the [Pricing API](/api-reference/pricing/get-pricing) or [Models API](/api-reference/models/list-models) before hard-coding product UI.
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-real1",
+    "URL":"https://example.com/person-front.png",
+    "Name":"Verified front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
 
-Video generation is asynchronous. Follow the `poll_url` returned by create requests, or use [Get Task Status](/api-reference/tasks/get-task-status) with the returned task ID.
+Poll with `GetAsset` until its status is `Active`, then pass the returned asset ID to video generation. For all 10 Action operations, filters, pagination, response shapes, and errors, see [Material Actions (Volc Compatible)](/api-reference/video/volc-compatible-material-actions).
 
 ---
 
@@ -5220,6 +5356,159 @@ Errors use `ResponseMetadata.Error.Code` and `ResponseMetadata.Error.Message`. A
 
 ---
 
+### Material Actions (Volc Compatible)
+
+> Reference for the 10 Volcengine-compatible material and material-group Actions.
+
+URL: https://docs.tokenlab.sh/api-reference/video/volc-compatible-material-actions
+
+These Actions let an existing Volcengine material client keep its Action names, `Version=2024-01-01`, PascalCase JSON bodies, filters, sorting, pagination, and `ResponseMetadata + Result` envelope. TokenLab replaces only the endpoint and authentication method.
+
+## Endpoint And Authentication
+
+```text
+POST https://api.tokenlab.sh/?Action=&Version=2024-01-01
+Authorization: Bearer
+Content-Type: application/json
+```
+
+`POST /api/v3?Action=&Version=2024-01-01` is also supported. All material Actions are POST-only. Volcengine AK/SK signatures are not accepted; a request with no valid TokenLab Bearer key returns `401 InvalidCredential`.
+
+`ProjectName` defaults to `default` and is a real isolation boundary inside the authenticated organization. Use the same value when creating, listing, reading, updating, or deleting related groups and assets.
+
+## Material-Group Actions
+
+| Action | Purpose | Request body |
+|--------|---------|--------------|
+| `CreateAssetGroup` | Create a virtual-avatar material group | `Name`; optional `Description`; optional `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | List groups in one project | Optional `Filter.GroupIds`, `Filter.GroupType`, `Filter.Name`; `PageNumber`, `PageSize`, `SortBy`, `SortOrder`, `ProjectName` |
+| `GetAssetGroup` | Read one group | `Id`, `ProjectName` |
+| `UpdateAssetGroup` | Change group name or description | `Id`; `Name` and/or `Description`; `ProjectName` |
+| `DeleteAssetGroup` | Delete a group and its assets | `Id`, `ProjectName` |
+
+`CreateAssetGroup` accepts only `GroupType: "AIGC"`. A `LivenessFace` group is created by successful real-person verification, not by this Action. `ListAssetGroups` can filter both `AIGC` and `LivenessFace` groups.
+
+### Create A Group
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Name":"Product references",
+    "Description":"Reusable product shots",
+    "GroupType":"AIGC",
+    "ProjectName":"default"
+  }'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": { "Id": "group-20260720123456-abc12" }
+}
+```
+
+## Material-Asset Actions
+
+| Action | Purpose | Request body |
+|--------|---------|--------------|
+| `CreateAsset` | Import one public image, video, or audio URL | `GroupId`, `URL`, `Name`, `AssetType`, `ProjectName` |
+| `ListAssets` | List assets in one project | Optional `Filter.GroupIds`, `Filter.GroupType`, `Filter.Statuses`, `Filter.Name`; `PageNumber`, `PageSize`, `SortBy`, `SortOrder`, `ProjectName` |
+| `GetAsset` | Read one asset and its temporary URL | `Id`, `ProjectName` |
+| `UpdateAsset` | Rename an asset | `Id`; optional `Name`; `ProjectName` |
+| `DeleteAsset` | Delete one asset | `Id`, `ProjectName` |
+
+`AssetType` accepts `Image`, `Video`, or `Audio`. The target group determines whether the asset is a normal `AIGC` material or a verified `LivenessFace` material.
+
+### Create An Asset
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-abc12",
+    "URL":"https://example.com/reference.png",
+    "Name":"Front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+The create response returns `Result.Id`. Creation is asynchronous: poll `GetAsset` until `Result.Status` becomes `Active` or `Failed`.
+
+## List Behavior
+
+`PageNumber` defaults to `1`; `PageSize` defaults to `10` and accepts up to `100`. `SortBy` accepts `CreateTime` or `UpdateTime`; `SortOrder` accepts `Desc` or `Asc`.
+
+List responses return:
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "Items": [],
+    "TotalCount": 0,
+    "PageNumber": 1,
+    "PageSize": 10
+  }
+}
+```
+
+Asset status values are `Active`, `Processing`, and `Failed`. `GetAsset` and `ListAssets` return a temporary `URL` valid for 12 hours; do not store it as the permanent asset identity. Store `Id` instead.
+
+## Real-Person Materials
+
+Before importing an asset for a real person:
+
+1. Call [Create Visual Validation Session](/api-reference/video/create-visual-validation-session).
+2. Complete the H5 verification flow.
+3. Call [Get Visual Validation Result](/api-reference/video/get-visual-validation-result) until it returns `Result.GroupId`.
+4. Call `CreateAsset` with that verified group ID.
+
+Uploads to a `LivenessFace` group are checked against the verified face. Active verified groups can also have stricter deletion rules than ordinary AIGC groups.
+
+## Errors
+
+Errors keep the Volcengine response envelope and place the code and message under `ResponseMetadata.Error`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {
+      "Code": "InvalidParameter",
+      "Message": "GroupId is required"
+    }
+  }
+}
+```
+
+Common codes include `InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, and `InternalError`.
+
+## REST Alternative
+
+TokenLab's `/v1/videos/assets*` REST endpoints remain available. New TokenLab-native integrations may prefer their snake_case bodies; existing Volcengine clients can use the Actions on this page without reshaping requests. See [Seedance Materials and Real-Person Verification](/guides/seedance-materials) for the complete asset lifecycle.
+
+---
+
 ### Create Material Asset Group
 
 > Creates a Seedance virtual-avatar material group.
@@ -7429,7 +7718,7 @@ Use the same values in any client that supports local stdio MCP servers. A clien
 | Server name | `tokenlab-model-catalog` | Any unique name works. |
 | Transport | `stdio` | TokenLab MCP runs as a local child process. |
 | Startup command | `npx` | Starts the published npm package. |
-| Arguments | `-y`, then `@tokenlabai/mcp-server` | Use `@tokenlabai/mcp-server@0.6.8` to pin the currently verified release. |
+| Arguments | `-y`, then `@tokenlabai/mcp-server` | Use `@tokenlabai/mcp-server@0.6.10` to pin the currently verified release. |
 | Environment variable | `TOKENLAB_API_KEY` = `
 
 ---

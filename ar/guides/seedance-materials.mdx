@@ -1,0 +1,136 @@
+---
+title: "مواد Seedance والتحقق من الأشخاص"
+description: "أنشئ مواد Seedance قابلة لإعادة الاستخدام، وتحقق من الأشخاص الحقيقيين، واستخدم الأصول النشطة في توليد الفيديو."
+---
+
+مواد Seedance هي مراجع صور أو فيديو أو صوت قابلة لإعادة الاستخدام داخل المؤسسة. اختر مسار العمل أولًا؛ تختلف طريقة إنشاء مواد الصور الرمزية العادية عن مواد الأشخاص الموثقين.
+
+## اختر مسار المواد
+
+| الهدف | المسار المطلوب |
+| --- | --- |
+| استخدام رابط صورة مرة واحدة | أرسل الرابط مباشرة في طلب الفيديو؛ يجهز النموذج المتوافق المادة تلقائيًا |
+| إعادة استخدام صورة رمزية أو منتج أو نمط | أنشئ مجموعة `aigc_avatar` ومادة، وانتظر `ACTIVE`، ثم استخدم المعرف |
+| إعادة استخدام شخص حقيقي | أكمل التحقق المرئي، واحصل على `GroupId`، وأنشئ المادة، وانتظر `ACTIVE`، ثم استخدم المعرف |
+| ترحيل عميل مواد Volcengine | احتفظ بشكل Action واستخدم مرجع المواد المتوافق مع Volcengine: [إجراءات المواد المتوافقة مع Volcengine](/ar/api-reference/video/volc-compatible-material-actions) |
+
+## مفاهيم المواد
+
+مواد Seedance هي مراجع قابلة لإعادة الاستخدام ومحددة على مستوى المؤسسة، ويمكن اختيارها لاحقاً أثناء توليد الفيديو.
+
+| المفهوم | الحقل العام | المعنى |
+|---------|--------------|---------------|
+| مجموعة المواد | `group_id` | مجموعة TokenLab تمتلك مواد Seedance ذات صلة. استخدمها عند رفع أو سرد المواد. |
+| أصل المادة | `id` | ملف صورة أو فيديو أو صوت مرفوع. استخدم هذه القيمة كـ `material_asset_id` بعد أن يصبح الأصل `ACTIVE`. |
+| مجموعة مواد الصور الرمزية الافتراضية | `library_type: "aigc_avatar"` | للأشخاص الافتراضيين، الصور الرمزية، المنتجات، الأنماط، والمراجع الأخرى القابلة لإعادة الاستخدام التي لا تتطلب تحققاً من شخص حقيقي. |
+| مجموعة مواد الأشخاص الحقيقيين | `library_type: "liveness_face"` | يتم إنشاؤها من خلال التحقق من مواد الأشخاص الحقيقيين. تمثل المجموعة الواحدة شخصاً حقيقياً تم التحقق منه. |
+
+حافظ على الفصل بين `group_id` و `id` الخاص بأصل المادة. يُستخدم `group_id` لتنظيم المرفوعات، بينما يُستخدم `id` الخاص بأصل المادة لتوليد الفيديو. إذا أرجع طلب الفيديو خطأ `Seedance material asset not found or not accessible`، فتأكد من أنك مررت `id` الخاص بأصل المادة وليس `group_id`، وأن الأصل ينتمي لنفس المؤسسة، ولم يتم حذفه، وأن حالته `status: "ACTIVE"`.
+
+## مواد الصور التلقائية
+
+عندما يستطيع نموذج Seedance المحدد استخدام مكتبة مواد TokenLab، يمكنك إرسال روابط الصور أو data URL المضمنة المدعومة مباشرة في `image` أو `image_url` أو `image_urls` أو `reference_images` أو `start_image` أو `end_image`. يستورد TokenLab هذه الصور إلى مجموعة مواد الأفاتار الافتراضية للمؤسسة ويحافظ على دورها كإطار أول أو إطار أخير أو صورة مرجعية.
+
+إذا أصبحت المواد `ACTIVE` خلال 60 ثانية، يستمر التوليد في الطلب نفسه. وإذا لم تجهز بعد، تعيد الواجهة `409 seedance_material_preparing` مع `auto_material_asset_ids`؛ استعلم عن هذه المواد حتى تصبح `ACTIVE` ثم أعد المحاولة باستخدام `material_asset_id` أو `material_asset_ids`. إذا لم يستطع النموذج المحدد استخدام مكتبة المواد، تبقى روابط الصور أو data URL العادية في مسار الصور المعتاد؛ أما معرفات المواد الصريحة فتفشل بأمان مع خطأ قابل لإعادة المحاولة يخص توفر المادة. تُستخدم معرفات مواد الأفاتار أو الشخص الحقيقي الموجودة كما هي ولا يتم استيرادها مرة أخرى.
+
+## التحقق من مواد الأشخاص الحقيقيين
+
+استخدم التحقق من مواد الأشخاص الحقيقيين عندما يحتاج منتجك إلى موافقة وتحقق من الوجه قبل أن يتم استخدام شخص حقيقي كمرجع قابل لإعادة الاستخدام في Seedance.
+
+1. استدعِ [إنشاء جلسة تحقق مرئي](/ar/api-reference/video/create-visual-validation-session) مع `CallbackURL` واحفظ `Result.BytedToken` المُعادة.
+2. افتح `Result.H5Link` للشخص المراد التحقق منه. أضف `lng` إلى رابط H5 إذا احتجت إلى لغة محددة.
+3. بعد اكتمال تدفق H5، يفتح المتصفح `Result.CallbackURL` مع أسماء الاستعلام الرسمية مثل `bytedToken` و`resultCode`.
+4. استعلم دوريًا عن [الحصول على نتيجة التحقق المرئي](/ar/api-reference/video/get-visual-validation-result) باستخدام `BytedToken` حتى تُعاد `Result.GroupId`.
+5. احفظ `GroupId` واستخدمها بوصفها `group_id` عند إنشاء مواد `liveness_face`.
+
+تظل `BytedToken` صالحة لمدة 30 دقيقة. استخدم `ProjectName` نفسها في طلبي Action. تستخدم المصادقة `Authorization: Bearer <TOKENLAB_API_KEY>`؛ ولا تُقبل توقيعات AK/SK من Volc.
+
+اختياري: استخدم [وحدة التحكم للاختبار](https://tokenlab.sh/dashboard/seedance-assets) للتحقق من تدفق الطلب والاستدعاء (callback)، وفحص مجموعات المواد، ومراجعة سجل التحقق. يجب أن يقوم تكامل الإنتاج الخاص بك باستدعاء واجهات برمجة التطبيقات (APIs) مباشرة.
+
+## إنشاء مجموعات المواد
+
+استخدم [إنشاء مجموعة أصول المواد](/ar/api-reference/video/create-material-asset-group) لمجموعات `aigc_avatar`. يتم إنشاء مجموعات الأشخاص الحقيقيين الجديدة من خلال تدفق التحقق بحيث يظل الشخص الذي تم التحقق منه ومجموعة المواد مرتبطين.
+
+استخدم [سرد مجموعات أصول المواد](/ar/api-reference/video/list-material-asset-groups) و [الحصول على مجموعة أصول المواد](/ar/api-reference/video/get-material-asset-group) و [تحديث مجموعة أصول المواد](/ar/api-reference/video/update-material-asset-group) و [حذف مجموعة أصول المواد](/ar/api-reference/video/delete-material-asset-group) لإدارة المجموعات بعد إنشائها.
+
+حذف مجموعة مواد يؤدي أيضاً إلى حذف مواد TokenLab الموجودة بداخلها ولا يمكن التراجع عن هذا الإجراء. إذا لم تتمكن مكتبة مواد TokenLab من إكمال الحذف لأن حالة التفويض الحالية لا تسمح بذلك، فسترجع TokenLab خطأً محايداً في مكتبة المواد.
+
+## رفع المواد
+
+استخدم [إنشاء أصل مادي (Material Asset)](/ar/api-reference/video/create-material-asset) لاستيراد رابط مصدر واحد يمكن الوصول إليه علنياً في كل مرة.
+
+بالنسبة لـ `aigc_avatar`، يعتبر `group_id` اختيارياً؛ حيث تستخدم TokenLab أو تنشئ مجموعة الصور الرمزية الافتراضية الافتراضية للمؤسسة. بالنسبة لـ `liveness_face`، يعتبر `group_id` مطلوباً ويجب أن يكون المجموعة المُرجعة من [الحصول على نتيجة التحقق المرئي](/ar/api-reference/video/get-visual-validation-result).
+
+| النوع | المدخلات المدعومة |
+|------|-----------------|
+| صورة | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; نسبة العرض إلى الارتفاع `(0.4, 2.5)`; العرض والارتفاع `(300, 6000)` بكسل؛ أقل من 30 ميجابايت. |
+| فيديو | `mp4`, `mov`; `480p`, `720p`, أو `1080p`; 2-15 ثانية؛ نسبة العرض إلى الارتفاع `[0.4, 2.5]`; العرض والارتفاع `[300, 6000]` بكسل؛ إجمالي البكسلات بين 409600 و 2068676؛ حتى 200 ميجابايت؛ 24-60 إطاراً في الثانية. |
+| صوت | `aac`, `wav`, `mp3`; 2-15 ثانية؛ حتى 15 ميجابايت. |
+
+استيعاب المواد عملية غير متزامنة. قم باستطلاع [الحصول على أصل مادي (Material Asset)](/ar/api-reference/video/get-material-asset) حتى تصبح الحالة `ACTIVE`. استجابة HTTP الناجحة تعني فقط أنه تم قبول الطلب؛ اقرأ دائماً حالة العمل. إذا كانت الحالة `FAILED`، افحص `error_message` وقم بإصلاح المادة المصدر وأنشئ أصلاً جديداً.
+
+في طلبات إنشاء المواد، يمثل `asset_url` مصدر الاستيراد فقط. تعيد TokenLab `id` لأصل المادة؛ استخدم هذا `id` عند التوليد بدلاً من إعادة استخدام الرابط الأصلي.
+
+تحتفظ TokenLab بأصول المواد في مكتبة مؤسستك إلى أن تحذف الأصل أو مجموعة المواد الخاصة به.
+
+بالنسبة لمجموعات مواد الأشخاص الحقيقيين، ترتبط المجموعة الواحدة بشخص حقيقي واحد. يتم فحص المرفوعات مقابل الوجه الذي تم التحقق منه. قد تفشل الأصول التي تحتوي على وجوه متعددة أو وجه لا يطابق الشخص الذي تم التحقق منه. للحصول على أفضل النتائج، ارفع صورة مرجعية كاملة للجسم من الأمام وصورة مقربة للوجه من الأمام حيث يكون الوجه واضحاً.
+
+## استخدام المواد في توليد الفيديو
+
+بعد أن يصبح الأصل `ACTIVE`، مرر `id` الخاص بأصل TokenLab المُرجع كـ `material_asset_id`، أو قم بتضمينه في `material_asset_ids` عند استدعاء [إنشاء فيديو](/ar/api-reference/video/create-video). تُحتسب أصول المواد ضمن حدود مراجع Seedance.
+
+## REST أو Action من Volcengine
+
+يمكن للتكامل الأصلي مع TokenLab متابعة استخدام واجهة REST بصيغة snake_case على `/v1/videos/assets*`. ويمكن لعميل Volcengine الحالي الاحتفاظ بأجسام PascalCase واستخدام [إجراءات المواد المتوافقة مع Volcengine](/ar/api-reference/video/volc-compatible-material-actions). تعمل الواجهتان على بيانات المواد نفسها ضمن المؤسسة والمشروع.
+
+## أمثلة على API
+
+أنشئ مجموعة صور رمزية افتراضية، وارفع صورة، وقم بالاستطلاع حتى تصبح نشطة، ثم استخدم معرف أصل المادة في طلب فيديو.
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+بالنسبة إلى مجموعة مواد شخص حقيقي، أنشئ جلسة تحقق مرئي واحصل على نتيجتها قبل رفع المواد.
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+```
+
+## مسار Action الكامل لشخص حقيقي
+
+مرر `GroupId` الذي أعادته نتيجة التحقق إلى `CreateAsset`.
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-real1",
+    "URL":"https://example.com/person-front.png",
+    "Name":"Verified front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+استعلم عن `GetAsset` حتى تصبح الحالة `Active`، ثم استخدم معرف المادة في توليد الفيديو.

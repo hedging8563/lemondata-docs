@@ -1,0 +1,71 @@
+---
+title: "Migrasi Seedance dari Volcengine"
+description: "Pindahkan task Seedance dan integrasi material bergaya Volcengine ke TokenLab dengan perubahan request minimal."
+---
+
+Gunakan panduan ini bila aplikasi sudah mengirim request Seedance bergaya Volcengine. Nama Action, `Version=2024-01-01`, `content[]`, body material PascalCase, dan envelope respons Volcengine dapat dipertahankan. Hanya endpoint dan autentikasi yang harus berubah.
+
+## Yang berubah
+
+| Bagian | Klien Volcengine saat ini | TokenLab |
+| --- | --- | --- |
+| URL dasar | `Volcengine API` | `https://api.tokenlab.sh/` |
+| Autentikasi | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Request Action | `Action`, `Version` | `Action`, `Version` |
+| Body task | `content[]` | `content[]` |
+| Body material | `PascalCase` | `PascalCase` |
+| Hasil asinkron | `ID task` | `cgt-...` + Polling |
+
+Request yang hanya berisi tanda tangan AK/SK mengembalikan `401 InvalidCredential`. Klien Action dapat memakai `POST /?Action=...&Version=2024-01-01`; `POST /api/v3?Action=...&Version=2024-01-01` tetap tersedia. Klien REST memakai `/api/v3/contents/generations/tasks`.
+
+## Bentuk request dan siklus hidup task
+
+Jika integrasi Anda sudah mengirim permintaan Seedance bergaya Volc, gunakan endpoint kompatibel ini tanpa mengubah body menjadi format `/v1/videos/generations`. Kirim TokenLab API key sebagai `Authorization: Bearer ...`, gunakan `POST /api/v3/contents/generations/tasks` untuk pembuatan REST, atau `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` untuk permintaan Action. Respons pembuatan mengembalikan ID tugas `cgt-...`; respons status menggunakan `queued`, `running`, `succeeded`, `failed`, `cancelled`, atau `expired`.
+
+Endpoint kompatibel ini menerima item `content[]` seperti `text`, `image_url`, `video_url`, `audio_url`, dan `draft_task`. Role gambar seperti `first_frame`, `last_frame`, dan `reference_image` dipertahankan. `callback_url` belum didukung; lakukan polling endpoint tugas.
+### Halaman referensi
+
+- [Buat tugas (kompatibel Volc)](/id/api-reference/video/create-volc-compatible-seedance-task)
+- [Ambil tugas (kompatibel Volc)](/id/api-reference/video/get-volc-compatible-seedance-task)
+- [Daftar tugas (kompatibel Volc)](/id/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Batalkan tugas (kompatibel Volc)](/id/api-reference/video/delete-volc-compatible-seedance-task)
+
+## Action task
+
+| Action | Bagian | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | Membuat task video | `model`, `content[]` |
+| `GetContentsGenerationsTask` | Mengambil satu task | `TaskId` |
+| `ListContentsGenerationsTasks` | Mencantumkan task | Filter, paginasi |
+| `DeleteContentsGenerationsTasks` | Membatalkan atau menghapus task | `TaskId` |
+
+## Contoh Action minimal
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## Material dan verifikasi orang asli
+
+Endpoint Action yang sama juga mendukung sepuluh operasi material dan grup. Lihat [Action material kompatibel Volcengine](/id/api-reference/video/volc-compatible-material-actions) untuk body PascalCase, filter, paginasi, envelope respons, dan URL material 12 jam. Material orang asli juga memerlukan [Buat sesi verifikasi visual](/id/api-reference/video/create-visual-validation-session) dan [Ambil hasil verifikasi visual](/id/api-reference/video/get-visual-validation-result) sebelum upload.
+
+## Checklist migrasi
+
+1. Ganti host API dengan `https://api.tokenlab.sh`.
+2. Ganti tanda tangan AK/SK dengan TokenLab Bearer API Key.
+3. Pertahankan Action, versi, dan kapitalisasi body.
+4. Gunakan `ProjectName` yang sama pada request material dan verifikasi terkait.
+5. Simpan ID task, grup, dan material yang dikembalikan TokenLab.
+6. Validasi create, polling, list, dan error sebelum memindahkan traffic produksi.

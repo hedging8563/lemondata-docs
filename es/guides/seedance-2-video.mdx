@@ -1,9 +1,19 @@
 ---
 title: "Modelos de video Seedance 2.0"
-description: "Utilice la generación de video de Seedance 2.0 con grupos de material de avatares virtuales y personas reales."
+description: "Elige un modelo Seedance 2.0 y la ruta de integración de TokenLab adecuada."
 ---
 
-Seedance 2.0 admite text-to-video, image-to-video, start/end-frame video, reference-to-video, edición de video y extensión de video. Utilice IDs de modelo como `seedance-2.0`, `seedance-2.0-fast` y `seedance-2.0-mini`, y luego elija el flujo de trabajo con `operation`.
+Empieza aquí si vas a añadir Seedance 2.0 a una aplicación. Esta página se centra en elegir modelo y flujo; la migración desde Volcengine, los materiales reutilizables y la verificación de personas tienen guías separadas.
+
+## Elige la ruta de integración
+
+| Objetivo | Usa | Continúa con |
+| --- | --- | --- |
+| Crear una nueva integración de video en TokenLab | API unificada `POST /v1/videos/generations` | [Guía de generación de video](/es/guides/video-generation) |
+| Migrar un cliente Seedance de Volcengine | API REST o Action compatible con Volcengine | [Migrar Seedance desde Volcengine](/es/guides/seedance-volcengine-migration) |
+| Reutilizar avatares, productos, estilos o personas reales | Biblioteca de materiales de TokenLab | [Materiales de Seedance y verificación de personas](/es/guides/seedance-materials) |
+
+Las tres rutas usan `Authorization: Bearer <TOKENLAB_API_KEY>`. Las rutas compatibles con Volcengine conservan el formato de solicitud, pero no aceptan firmas AK/SK.
 
 ## Elección del modelo
 
@@ -26,118 +36,17 @@ Seedance 2.0 admite text-to-video, image-to-video, start/end-frame video, refere
 | `video-to-video` | `prompt`, `video_url` o entrada de video compatible |
 | `video-extension` | `task_id` o entrada de continuación específica del modelo |
 
-## Conceptos de material
-
-Los materiales de Seedance son referencias reutilizables con alcance de organización que pueden seleccionarse posteriormente durante la generación de video.
-
-| Concepto | Campo público | Qué significa |
-|---------|--------------|---------------|
-| Grupo de material | `group_id` | Un grupo de TokenLab que posee materiales de Seedance relacionados. Úselo al cargar o listar materiales. |
-| Activo de material | `id` | Un archivo de imagen, video o audio cargado. Use este valor como `material_asset_id` después de que el activo pase a estado `ACTIVE`. |
-| Grupo de material de avatar virtual | `library_type: "aigc_avatar"` | Para personas virtuales, avatares, productos, estilos y otras referencias reutilizables que no requieren verificación de persona real. |
-| Grupo de material de persona real | `library_type: "liveness_face"` | Creado mediante la verificación de material de persona real. Un grupo representa a una persona real verificada. |
-
-Mantenga `group_id` y el `id` del activo de material separados. `group_id` es para organizar las cargas; el `id` del activo de material es para la generación de video. Si una solicitud de video devuelve `Seedance material asset not found or not accessible`, confirme que ha pasado un `id` de activo de material, no un `group_id`, y que el activo pertenece a la misma organización, no ha sido eliminado y tiene `status: "ACTIVE"`.
-
-## Materiales de imagen automáticos
-
-Cuando el modelo Seedance seleccionado puede usar la biblioteca de materiales de TokenLab, puedes enviar URLs de imagen o data URLs inline compatibles directamente en `image`, `image_url`, `image_urls`, `reference_images`, `start_image` o `end_image`. TokenLab importa esas imágenes al grupo predeterminado de materiales de avatar virtual de la organización y conserva su rol como primer fotograma, último fotograma o imagen de referencia.
-
-Si los materiales pasan a `ACTIVE` en 60 segundos, la generación continúa en la misma solicitud. Si no, la API devuelve `409 seedance_material_preparing` con `auto_material_asset_ids`; consulta esos materiales hasta que estén `ACTIVE` y luego reintenta con `material_asset_id` o `material_asset_ids`. Si el modelo seleccionado no puede usar la biblioteca de materiales, las URLs de imagen o data URLs normales permanecen en el flujo de imagen habitual; los IDs de material explícitos fallan de forma segura con un error de disponibilidad de material. Los IDs de materiales de avatar virtual o persona real existentes se usan tal cual y no se importan de nuevo.
-
-## Verificación de material de persona real
-
-Utilice la verificación de material de persona real cuando su producto requiera consentimiento y verificación facial antes de que una persona real pueda ser utilizada como referencia reutilizable de Seedance.
-
-1. Llame a [Crear sesión de validación visual](/es/api-reference/video/create-visual-validation-session) con `CallbackURL` y guarde el `Result.BytedToken` devuelto.
-2. Abra `Result.H5Link` para la persona que se verificará. Añada `lng` al enlace H5 si necesita un idioma específico.
-3. Al finalizar el flujo H5, el navegador abre `Result.CallbackURL` con nombres de consulta oficiales como `bytedToken` y `resultCode`.
-4. Consulte [Obtener resultado de validación visual](/es/api-reference/video/get-visual-validation-result) con `BytedToken` hasta que se devuelva `Result.GroupId`.
-5. Guarde `GroupId` y úselo como `group_id` al crear materiales `liveness_face`.
-
-`BytedToken` es válido durante 30 minutos. Use el mismo `ProjectName` en ambas solicitudes Action. La autenticación usa `Authorization: Bearer <TOKENLAB_API_KEY>`; no se aceptan firmas AK/SK de Volc.
-
-Opcional: utilice la [consola de prueba](https://tokenlab.sh/dashboard/seedance-assets) para verificar su flujo de solicitud y callback, inspeccionar grupos de materiales y revisar el historial de verificación. Su integración de producción debe llamar a las APIs directamente.
-
-## Creación de grupos de materiales
-
-Utilice [Crear grupo de activos de material](/es/api-reference/video/create-material-asset-group) para grupos de tipo `aigc_avatar`. Los nuevos grupos de personas reales se crean a través del flujo de verificación para que la persona verificada y el grupo de material permanezcan vinculados.
-
-Utilice [Listar grupos de activos de material](/es/api-reference/video/list-material-asset-groups), [Obtener grupo de activos de material](/es/api-reference/video/get-material-asset-group), [Actualizar grupo de activos de material](/es/api-reference/video/update-material-asset-group) y [Eliminar grupo de activos de material](/es/api-reference/video/delete-material-asset-group) para gestionar los grupos una vez creados.
-
-Eliminar un grupo de material también elimina los materiales de TokenLab contenidos en él y no se puede deshacer. Si la biblioteca de materiales de TokenLab no puede completar la eliminación porque el estado de autorización actual no lo permite, TokenLab devuelve un error neutral de biblioteca de materiales.
-
-## Carga de materiales
-
-Utilice [Crear activo de material](/es/api-reference/video/create-material-asset) para importar una URL de origen accesible públicamente a la vez.
-
-Para `aigc_avatar`, `group_id` es opcional; TokenLab utiliza o crea el grupo de avatar virtual predeterminado de la organización. Para `liveness_face`, `group_id` es obligatorio y debe ser el grupo devuelto por [Obtener resultado de validación visual](/es/api-reference/video/get-visual-validation-result).
-
-| Tipo | Entrada admitida |
-|------|-----------------|
-| Imagen | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; relación de aspecto `(0.4, 2.5)`; ancho y alto `(300, 6000)` px; menos de 30 MB. |
-| Video | `mp4`, `mov`; `480p`, `720p` o `1080p`; 2-15 segundos; relación de aspecto `[0.4, 2.5]`; ancho y alto `[300, 6000]` px; píxeles totales entre 409600 y 2068676; hasta 200 MB; 24-60 FPS. |
-| Audio | `aac`, `wav`, `mp3`; 2-15 segundos; hasta 15 MB. |
-
-La ingesta de material es asíncrona. Realice sondeos (polling) a [Obtener activo de material](/es/api-reference/video/get-material-asset) hasta que el `status` sea `ACTIVE`. Una respuesta HTTP exitosa solo significa que la solicitud fue aceptada; lea siempre el estado comercial. Si el estado es `FAILED`, inspeccione `error_message`, corrija el material de origen y cree un nuevo activo.
-
-En las solicitudes de creación de material, `asset_url` es solo el origen de importación. TokenLab devuelve un `id` de activo de material; use ese `id` para generar videos en lugar de reutilizar la URL original.
-
-TokenLab conserva los activos de material en la biblioteca de su organización hasta que elimine el activo o su grupo de material.
-
-Para grupos de material de persona real, un grupo se asigna a una persona real. Las cargas se verifican contra el rostro verificado. Los activos con múltiples rostros o un rostro que no coincida con la persona verificada pueden fallar. Para obtener mejores resultados, cargue tanto una imagen de referencia de cuerpo completo como un primer plano frontal donde el rostro sea claro.
-
-## Uso de materiales en la generación de video
-
-Después de que un activo esté `ACTIVE`, pase el `id` del activo de TokenLab devuelto como `material_asset_id`, o inclúyalo en `material_asset_ids`, al llamar a [Crear video](/es/api-reference/video/create-video). Los activos de material cuentan para los límites de referencia de Seedance.
-
-## Ejemplos de API
-
-Cree un grupo de avatar virtual, cargue una imagen, realice sondeos hasta que esté activo y luego use el ID del activo de material en una solicitud de video.
-
-```bash
-curl https://api.tokenlab.sh/v1/videos/assets/groups \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
-
-curl https://api.tokenlab.sh/v1/videos/assets \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
-
-curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY"
-```
-
-Para un grupo de materiales de persona real, cree una sesión de validación visual y obtenga el resultado antes de cargar materiales.
-
-```bash
-curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
-
-curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
-```
-
 ## Precios y resultados asíncronos
 
 Los precios de Seedance 2.0 dependen de la resolución de salida, el tipo de entrada y el modelo. Utilice la [Pricing API](/es/api-reference/pricing/get-pricing) o la [Models API](/es/api-reference/models/list-models) antes de codificar la interfaz de usuario de su producto.
 
 La generación de video es asíncrona. Siga la `poll_url` devuelta por las solicitudes de creación, o utilice [Obtener estado de la tarea](/es/api-reference/tasks/get-task-status) con el ID de tarea devuelto.
 
-## Endpoint Seedance compatible con Volc
+## API relacionadas
 
-Si tu integración ya envía solicitudes Seedance estilo Volc, puedes usar el endpoint compatible en vez de transformar el body para `/v1/videos/generations`. Envía tu API key de TokenLab como `Authorization: Bearer ...`, usa `POST /api/v3/contents/generations/tasks` para creación REST o `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` para solicitudes Action. La creación devuelve un ID `cgt-...`; los estados usan `queued`, `running`, `succeeded`, `failed`, `cancelled` o `expired`.
-
-Este endpoint compatible acepta elementos `content[]` como `text`, `image_url`, `video_url`, `audio_url` y `draft_task`. Se conservan roles de imagen como `first_frame`, `last_frame` y `reference_image`. `callback_url` todavía no está soportado; consulta el endpoint de tarea.
-### Páginas de referencia
-
-- [Crear tarea (compatible con Volc)](/es/api-reference/video/create-volc-compatible-seedance-task)
-- [Obtener tarea (compatible con Volc)](/es/api-reference/video/get-volc-compatible-seedance-task)
-- [Listar tareas (compatible con Volc)](/es/api-reference/video/list-volc-compatible-seedance-tasks)
-- [Cancelar tarea (compatible con Volc)](/es/api-reference/video/delete-volc-compatible-seedance-task)
+| API | Continúa con |
+|-----|---------------|
+| `POST /v1/videos/generations` | [Crear video](/es/api-reference/video/create-video) |
+| `GET /v1/tasks/{id}` | [Obtener estado de tarea](/es/api-reference/tasks/get-task-status) |
+| Compatibilidad de tareas Seedance | [Crear tarea (compatible con Volcengine)](/es/api-reference/video/create-volc-compatible-seedance-task) |
+| Compatibilidad de Actions de materiales | [Actions de materiales (compatibles con Volcengine)](/es/api-reference/video/volc-compatible-material-actions) |

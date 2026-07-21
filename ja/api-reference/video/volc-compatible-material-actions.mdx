@@ -1,0 +1,126 @@
+---
+title: "素材 Action（Volcengine 互換）"
+openapi: "POST /api/v3"
+description: "10 個の Volcengine 互換素材・素材グループ Action のリファレンスです。"
+---
+
+既存の Volcengine 素材クライアントは、Action 名、`Version=2024-01-01`、PascalCase JSON、フィルター、ソート、ページング、`ResponseMetadata + Result` エンベロープを維持できます。TokenLab ではエンドポイントと認証方式だけを変更します。
+
+## エンドポイントと認証
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+`POST /api/v3?Action=<ACTION>&Version=2024-01-01` も利用できます。素材 Action はすべて POST 専用です。AK/SK 署名だけのリクエストは `401 InvalidCredential` を返します。
+
+`ProjectName` の既定値は `default` で、認証済み組織内の実際の分離境界です。関連する作成、一覧、取得、更新、削除で同じ値を使ってください。
+
+## 素材グループ Action
+
+| Action | 目的 | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | 通常の素材グループを作成 | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | プロジェクト内のグループを一覧表示 | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | 1 件のグループを取得 | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | グループ名または説明を変更 | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | グループとその素材を削除 | `Id`; `ProjectName` |
+
+`CreateAssetGroup` が作成できるのは `AIGC` グループだけです。`LivenessFace` グループは実在人物の認証成功時に作成されます。`ListAssetGroups` は両方を絞り込めます。
+
+### 素材グループを作成
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## 素材 Action
+
+| Action | 目的 | JSON |
+| --- | --- | --- |
+| `CreateAsset` | 公開されている画像、ビデオ、音声 URL を 1 件インポート | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | プロジェクト内の素材を一覧表示 | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | 素材と一時 URL を取得 | `Id`; `ProjectName` |
+| `UpdateAsset` | 素材名を変更 | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | 1 件の素材を削除 | `Id`; `ProjectName` |
+
+`AssetType` は `Image`、`Video`、`Audio` を受け付けます。対象グループによって通常の `AIGC` 素材か、認証済み `LivenessFace` 素材かが決まります。
+
+### 素材を作成
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## 一覧の動作
+
+`PageNumber` の既定値は `1`、`PageSize` は `10` で最大 `100` です。`SortBy` は `CreateTime` または `UpdateTime`、`SortOrder` は `Desc` または `Asc` を受け付けます。
+
+素材状態は `Active`、`Processing`、`Failed` です。`GetAsset` と `ListAssets` の一時 `URL` は 12 時間有効です。永続的な識別子として `Id` を保存してください。
+
+`ListAssetGroups` と `ListAssets` は `Result.Items` にリソースを返し、`TotalCount`、`PageNumber`、`PageSize` も含みます。
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## 実在人物の素材
+
+視覚認証セッションを作成して H5 認証を完了し、結果の `GroupId` を取得してから、そのグループで `CreateAsset` を呼び出します。アップロードは認証済みの顔と照合されます。
+
+1. [視覚認証セッションを作成](/ja/api-reference/video/create-visual-validation-session)
+2. [視覚認証結果を取得](/ja/api-reference/video/get-visual-validation-result)
+3. 返された `GroupId` で `CreateAsset` を呼び出す
+
+## エラー
+
+エラーも Volcengine レスポンスエンベロープを使用し、コードとメッセージは `ResponseMetadata.Error` に入ります。
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## REST の代替
+
+TokenLab の `/v1/videos/assets*` REST API も引き続き利用できます。新しい統合は snake_case REST を選べ、既存の Volcengine クライアントは本文を変更する必要がありません。 [Seedance 素材と実在人物の認証](/ja/guides/seedance-materials).

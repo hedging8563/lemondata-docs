@@ -1,0 +1,136 @@
+---
+title: "Material Seedance và xác minh người thật"
+description: "Tạo material Seedance có thể tái sử dụng, xác minh người thật và dùng asset đang hoạt động trong quá trình tạo video."
+---
+
+Material Seedance là tham chiếu hình ảnh, video hoặc âm thanh có thể tái sử dụng trong phạm vi tổ chức. Hãy chọn quy trình trước: material avatar thông thường và material người thật đã xác minh có đường tạo khác nhau.
+
+## Chọn quy trình material
+
+| Mục tiêu | Quy trình bắt buộc |
+| --- | --- |
+| Dùng URL hình ảnh một lần | Gửi URL trực tiếp trong request video; mô hình tương thích tự chuẩn bị material |
+| Tái sử dụng avatar, sản phẩm hoặc phong cách | Tạo nhóm `aigc_avatar` và material, chờ `ACTIVE`, rồi dùng ID |
+| Tái sử dụng người thật | Hoàn tất xác minh hình ảnh, nhận `GroupId`, tạo material, chờ `ACTIVE`, rồi dùng ID |
+| Di chuyển client material Volcengine | Giữ định dạng Action và dùng tài liệu tham chiếu tương thích Volcengine: [Action material tương thích Volcengine](/vi/api-reference/video/volc-compatible-material-actions) |
+
+## Khái niệm về tài nguyên (Material)
+
+Tài nguyên Seedance là các tham chiếu có thể tái sử dụng, thuộc phạm vi tổ chức, có thể được chọn sau này trong quá trình tạo video.
+
+| Khái niệm | Trường công khai | Ý nghĩa |
+|---------|--------------|---------------|
+| Nhóm tài nguyên | `group_id` | Một nhóm TokenLab sở hữu các tài nguyên Seedance liên quan. Sử dụng khi tải lên hoặc liệt kê tài nguyên. |
+| Tài sản tài nguyên | `id` | Một tệp hình ảnh, video hoặc âm thanh đã tải lên. Sử dụng giá trị này làm `material_asset_id` sau khi tài sản chuyển sang trạng thái `ACTIVE`. |
+| Nhóm tài nguyên avatar ảo | `library_type: "aigc_avatar"` | Dành cho người ảo, avatar, sản phẩm, phong cách và các tham chiếu có thể tái sử dụng khác không yêu cầu xác minh người thật. |
+| Nhóm tài nguyên người thật | `library_type: "liveness_face"` | Được tạo thông qua xác minh tài nguyên người thật. Một nhóm đại diện cho một người thật đã được xác minh. |
+
+Hãy giữ riêng biệt `group_id` và `id` của tài sản tài nguyên. `group_id` dùng để tổ chức các tệp tải lên; `id` của tài sản tài nguyên dùng để tạo video. Nếu một yêu cầu video trả về lỗi `Seedance material asset not found or not accessible`, hãy xác nhận rằng bạn đã truyền `id` của tài sản tài nguyên chứ không phải `group_id`, và tài sản đó thuộc cùng một tổ chức, chưa bị xóa và có `status: "ACTIVE"`.
+
+## Material hình ảnh tự động
+
+Khi model Seedance đã chọn có thể dùng thư viện material của TokenLab, bạn có thể gửi URL hình ảnh hoặc data URL inline được hỗ trợ trực tiếp trong `image`, `image_url`, `image_urls`, `reference_images`, `start_image` hoặc `end_image`. TokenLab nhập các hình ảnh đó vào nhóm material avatar ảo mặc định của tổ chức và giữ vai trò của chúng là frame đầu, frame cuối hoặc ảnh tham chiếu.
+
+Nếu material chuyển sang `ACTIVE` trong 60 giây, quá trình tạo video tiếp tục trong cùng request. Nếu chưa sẵn sàng, API trả về `409 seedance_material_preparing` kèm `auto_material_asset_ids`; hãy truy vấn các material đó đến khi `ACTIVE`, rồi thử lại với `material_asset_id` hoặc `material_asset_ids`. Nếu model đã chọn không thể dùng thư viện material, URL hình ảnh hoặc data URL thông thường vẫn đi theo luồng hình ảnh thông thường; ID material tường minh sẽ trả về lỗi khả dụng material. Các ID material avatar ảo hoặc người thật đã có sẽ được dùng nguyên trạng và không nhập lại.
+
+## Xác minh tài nguyên người thật
+
+Sử dụng xác minh tài nguyên người thật khi sản phẩm của bạn cần sự đồng ý và xác minh khuôn mặt trước khi một người thật có thể được sử dụng làm tham chiếu Seedance có thể tái sử dụng.
+
+1. Gọi [Tạo phiên xác thực trực quan](/vi/api-reference/video/create-visual-validation-session) với `CallbackURL` và lưu `Result.BytedToken` được trả về.
+2. Mở `Result.H5Link` cho người cần xác thực. Thêm `lng` vào liên kết H5 nếu cần ngôn ngữ cụ thể.
+3. Sau khi quy trình H5 hoàn tất, trình duyệt mở `Result.CallbackURL` với các tên truy vấn chính thức như `bytedToken` và `resultCode`.
+4. Thăm dò [Lấy kết quả xác thực trực quan](/vi/api-reference/video/get-visual-validation-result) bằng `BytedToken` cho đến khi trả về `Result.GroupId`.
+5. Lưu `GroupId` và dùng làm `group_id` khi tạo tư liệu `liveness_face`.
+
+`BytedToken` có hiệu lực trong 30 phút. Dùng cùng `ProjectName` trong cả hai yêu cầu Action. Xác thực dùng `Authorization: Bearer <TOKENLAB_API_KEY>`; không chấp nhận chữ ký AK/SK của Volc.
+
+Tùy chọn: sử dụng [bảng điều khiển kiểm thử](https://tokenlab.sh/dashboard/seedance-assets) để xác minh yêu cầu và quy trình callback của bạn, kiểm tra các nhóm tài nguyên và xem lại lịch sử xác minh. Việc tích hợp trong môi trường production của bạn nên gọi trực tiếp các API.
+
+## Tạo nhóm tài nguyên
+
+Sử dụng [Tạo Nhóm Tài Nguyên Vật Liệu](/vi/api-reference/video/create-material-asset-group) cho các nhóm `aigc_avatar`. Các nhóm người thật mới được tạo thông qua quy trình xác minh để người được xác minh và nhóm tài nguyên luôn được liên kết với nhau.
+
+Sử dụng [Liệt kê các nhóm tài nguyên vật liệu](/vi/api-reference/video/list-material-asset-groups), [Lấy Nhóm Tài Nguyên Vật Liệu](/vi/api-reference/video/get-material-asset-group), [Cập nhật Nhóm Tài nguyên Vật liệu](/vi/api-reference/video/update-material-asset-group) và [Xóa Nhóm Tài Nguyên Vật Liệu](/vi/api-reference/video/delete-material-asset-group) để quản lý các nhóm sau khi chúng đã tồn tại.
+
+Việc xóa một nhóm tài nguyên cũng sẽ xóa các tài nguyên TokenLab bên trong nhóm đó và không thể hoàn tác. Nếu thư viện tài nguyên TokenLab không thể hoàn tất việc xóa do trạng thái ủy quyền hiện tại không cho phép, TokenLab sẽ trả về lỗi thư viện tài nguyên trung lập.
+
+## Tải lên tài nguyên
+
+Sử dụng [Tạo Tài nguyên Vật liệu](/vi/api-reference/video/create-material-asset) để nhập từng URL nguồn có thể truy cập công khai.
+
+Đối với `aigc_avatar`, `group_id` là tùy chọn; TokenLab sẽ sử dụng hoặc tạo nhóm avatar ảo mặc định của tổ chức. Đối với `liveness_face`, `group_id` là bắt buộc và phải là nhóm được trả về bởi [Lấy kết quả xác thực trực quan](/vi/api-reference/video/get-visual-validation-result).
+
+| Loại | Đầu vào hỗ trợ |
+|------|-----------------|
+| Hình ảnh | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; tỷ lệ khung hình `(0.4, 2.5)`; chiều rộng và chiều cao `(300, 6000)` px; dưới 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, hoặc `1080p`; 2-15 giây; tỷ lệ khung hình `[0.4, 2.5]`; chiều rộng và chiều cao `[300, 6000]` px; tổng số pixel từ 409600 đến 2068676; tối đa 200 MB; 24-60 FPS. |
+| Âm thanh | `aac`, `wav`, `mp3`; 2-15 giây; tối đa 15 MB. |
+
+Việc tiếp nhận tài nguyên là không đồng bộ. Hãy thăm dò [Lấy tài nguyên vật liệu (Get Material Asset)](/vi/api-reference/video/get-material-asset) cho đến khi `status` trở thành `ACTIVE`. Phản hồi HTTP thành công chỉ có nghĩa là yêu cầu đã được chấp nhận; hãy luôn đọc trạng thái nghiệp vụ. Nếu trạng thái là `FAILED`, hãy kiểm tra `error_message`, sửa tài nguyên nguồn và tạo tài sản mới.
+
+Trong yêu cầu tạo vật liệu, `asset_url` chỉ là nguồn nhập. TokenLab trả về `id` tài nguyên vật liệu; hãy dùng `id` đó để tạo video thay vì dùng lại URL gốc.
+
+TokenLab giữ tài nguyên trong thư viện tài nguyên của tổ chức cho đến khi bạn xóa tài nguyên đó hoặc nhóm tài nguyên chứa nó.
+
+Đối với các nhóm tài nguyên người thật, một nhóm tương ứng với một người thật. Các tệp tải lên sẽ được kiểm tra đối chiếu với khuôn mặt đã xác minh. Các tài sản có nhiều khuôn mặt hoặc khuôn mặt không khớp với người đã xác minh có thể bị lỗi. Để có kết quả tốt nhất, hãy tải lên cả hình ảnh tham chiếu toàn thân từ phía trước và ảnh cận cảnh khuôn mặt rõ nét từ phía trước.
+
+## Sử dụng tài nguyên trong tạo video
+
+Sau khi tài sản ở trạng thái `ACTIVE`, hãy truyền `id` tài sản TokenLab được trả về dưới dạng `material_asset_id`, hoặc đưa nó vào `material_asset_ids`, khi gọi [Tạo video](/vi/api-reference/video/create-video). Các tài sản tài nguyên được tính vào giới hạn tham chiếu của Seedance.
+
+## REST hoặc Action Volcengine
+
+Tích hợp TokenLab native có thể tiếp tục dùng API REST snake_case `/v1/videos/assets*`. Client Volcengine hiện có giữ body PascalCase và dùng [Action material tương thích Volcengine](/vi/api-reference/video/volc-compatible-material-actions). Hai giao diện thao tác cùng dữ liệu material theo tổ chức và project.
+
+## Ví dụ về API
+
+Tạo một nhóm avatar ảo, tải lên một hình ảnh, thăm dò cho đến khi nó hoạt động, sau đó sử dụng ID tài sản tài nguyên trong một yêu cầu video.
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+Đối với nhóm tư liệu người thật, hãy tạo phiên xác thực trực quan và lấy kết quả trước khi tải tư liệu lên.
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+```
+
+## Quy trình Action đầy đủ cho người thật
+
+Truyền `GroupId` từ kết quả xác minh vào `CreateAsset`.
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-real1",
+    "URL":"https://example.com/person-front.png",
+    "Name":"Verified front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+Polling `GetAsset` đến khi trạng thái là `Active`, rồi dùng ID material được trả về để tạo video.

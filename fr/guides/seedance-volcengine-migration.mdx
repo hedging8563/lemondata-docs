@@ -1,0 +1,71 @@
+---
+title: "Migrer Seedance depuis Volcengine"
+description: "Migrez les tâches Seedance et les intégrations de ressources au format Volcengine vers TokenLab avec un minimum de modifications."
+---
+
+Ce guide s’adresse aux applications qui envoient déjà des requêtes Seedance au format Volcengine. Vous pouvez conserver les noms d’Action, `Version=2024-01-01`, `content[]`, les corps PascalCase des ressources et l’enveloppe de réponse Volcengine. Seuls le point de terminaison et l’authentification doivent changer.
+
+## Ce qui change
+
+| Élément | Client Volcengine existant | TokenLab |
+| --- | --- | --- |
+| URL de base | `Volcengine API` | `https://api.tokenlab.sh/` |
+| Authentification | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Requête Action | `Action`, `Version` | `Action`, `Version` |
+| Corps de tâche | `content[]` | `content[]` |
+| Corps de ressource | `PascalCase` | `PascalCase` |
+| Résultat asynchrone | `ID de tâche` | `cgt-...` + Polling |
+
+Les requêtes contenant uniquement une signature AK/SK renvoient `401 InvalidCredential`. Les clients Action peuvent utiliser `POST /?Action=...&Version=2024-01-01` ; `POST /api/v3?Action=...&Version=2024-01-01` reste disponible. Les clients REST utilisent `/api/v3/contents/generations/tasks`.
+
+## Format des requêtes et cycle de vie des tâches
+
+Si votre intégration envoie déjà des requêtes Seedance de style Volc, vous pouvez utiliser le point de terminaison compatible au lieu de remodeler le body pour `/v1/videos/generations`. Envoyez votre clé API TokenLab avec `Authorization: Bearer ...`, utilisez `POST /api/v3/contents/generations/tasks` pour la création REST ou `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` pour les requêtes Action. La création retourne un ID `cgt-...`; les statuts utilisent `queued`, `running`, `succeeded`, `failed`, `cancelled` ou `expired`.
+
+Ce point de terminaison compatible accepte les éléments `content[]` comme `text`, `image_url`, `video_url`, `audio_url` et `draft_task`. Les rôles d’image comme `first_frame`, `last_frame` et `reference_image` sont conservés. `callback_url` n’est pas encore pris en charge; interrogez plutôt l’endpoint de tâche.
+### Pages de référence
+
+- [Créer une tâche (compatible Volc)](/fr/api-reference/video/create-volc-compatible-seedance-task)
+- [Obtenir une tâche (compatible Volc)](/fr/api-reference/video/get-volc-compatible-seedance-task)
+- [Lister les tâches (compatible Volc)](/fr/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Annuler une tâche (compatible Volc)](/fr/api-reference/video/delete-volc-compatible-seedance-task)
+
+## Actions de tâche
+
+| Action | Élément | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | Créer une tâche vidéo | `model`, `content[]` |
+| `GetContentsGenerationsTask` | Lire une tâche | `TaskId` |
+| `ListContentsGenerationsTasks` | Lister les tâches | Filtres, pagination |
+| `DeleteContentsGenerationsTasks` | Annuler ou supprimer une tâche | `TaskId` |
+
+## Exemple Action minimal
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## Ressources et vérification des personnes
+
+Le même point de terminaison Action prend en charge dix opérations sur les ressources et leurs groupes. Consultez [Actions de ressources compatibles Volcengine](/fr/api-reference/video/volc-compatible-material-actions) pour les corps PascalCase, les filtres, la pagination, l’enveloppe de réponse et les URL valables 12 heures. Pour une personne réelle, appelez aussi [Créer une session de vérification visuelle](/fr/api-reference/video/create-visual-validation-session) et [Obtenir le résultat de la vérification visuelle](/fr/api-reference/video/get-visual-validation-result) avant l’import.
+
+## Liste de contrôle de migration
+
+1. Remplacez l’hôte API par `https://api.tokenlab.sh`.
+2. Remplacez la signature AK/SK par une clé API Bearer TokenLab.
+3. Conservez l’Action, la version et la casse du corps existants.
+4. Utilisez le même `ProjectName` pour les requêtes associées de ressources et de vérification.
+5. Enregistrez les identifiants de tâche, de groupe et de ressource renvoyés par TokenLab.
+6. Validez une création, un polling, une liste et une erreur avant de déplacer le trafic de production.

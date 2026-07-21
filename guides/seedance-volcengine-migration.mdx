@@ -1,0 +1,93 @@
+---
+title: "Migrate Seedance from Volcengine"
+description: "Move Volcengine-style Seedance task and material integrations to TokenLab with minimal request changes."
+---
+
+Use this guide when your application already sends Volcengine-style Seedance requests. You can retain Action names, `Version=2024-01-01`, `content[]`, PascalCase material bodies, and the Volcengine response envelope. The required migration is the endpoint and authentication method.
+
+## What Changes
+
+| Concern | Existing Volcengine client | TokenLab |
+|---------|----------------------------|----------|
+| Base URL | Your Volcengine endpoint | `https://api.tokenlab.sh/` |
+| Authentication | AK/SK request signing | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Action requests | `Action` and `Version` query parameters | Preserved |
+| Task body | Volcengine-style `content[]` | Preserved |
+| Material body | PascalCase fields such as `GroupId` and `ProjectName` | Preserved |
+| Async result | Provider task lifecycle | TokenLab `cgt-...` task ID and polling |
+
+AK/SK signing is the only intentionally unsupported part. A request that contains only an AK/SK signature returns `401 InvalidCredential` with a Bearer-authentication message.
+
+## Choose A Request Shape
+
+| Existing client | TokenLab endpoint |
+|-----------------|-------------------|
+| Volcengine Action client | `POST /?Action=...&Version=2024-01-01` |
+| Action client using the TokenLab v3 prefix | `POST /api/v3?Action=...&Version=2024-01-01` |
+| Volcengine-style REST task client | `/api/v3/contents/generations/tasks` and its task paths |
+
+The API root produces the smallest change for an Action client: replace the host and authentication, then keep the Action query and JSON body. The `/api/v3` Action endpoint remains available for existing TokenLab integrations.
+
+## Task Actions
+
+| Action | Purpose | Important input |
+|--------|---------|-----------------|
+| `CreateContentsGenerationsTasks` | Create a video task | `model`, `content[]`, and generation options |
+| `GetContentsGenerationsTask` | Read one task | `TaskId` |
+| `ListContentsGenerationsTasks` | List tasks | Pagination and filters |
+| `DeleteContentsGenerationsTasks` | Cancel or delete a task | `TaskId` |
+
+REST clients can use these equivalent references:
+
+- [Create Task (Volc Compatible)](/api-reference/video/create-volc-compatible-seedance-task)
+- [Get Task (Volc Compatible)](/api-reference/video/get-volc-compatible-seedance-task)
+- [List Tasks (Volc Compatible)](/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Cancel Task (Volc Compatible)](/api-reference/video/delete-volc-compatible-seedance-task)
+
+### Request Body Rules
+
+- `content[]` accepts `text`, `image_url`, `video_url`, `audio_url`, and `draft_task` items.
+- For `image_url`, omit `role` or use `first_frame` for image-to-video. Use `last_frame` together with a first frame, or `reference_image` for reference-to-video.
+- A public material URI such as `asset://asset-YYYYMMDDHHMMSS-xxxxx` can be used where the selected Seedance workflow accepts that media role.
+- Common fields include `model`, `ratio`, `duration`, `resolution`, `generate_audio`, `watermark`, `return_last_frame`, `seed`, `priority`, `execution_expires_after`, and `safety_identifier`.
+- `callback_url` is not supported on the task-compatibility endpoint. Poll the returned task instead.
+
+## Minimal Action Example
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "seedance-2.0",
+    "content": [
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p"
+  }'
+```
+
+Store the returned `cgt-...` ID. Poll until `status` becomes `succeeded`, `failed`, `cancelled`, or `expired`; do not treat the create response as a completed video.
+
+## Materials And Real-Person Verification
+
+The same Action endpoint also supports the 10 material and material-group operations. See [Material Actions (Volc Compatible)](/api-reference/video/volc-compatible-material-actions) for their exact PascalCase bodies, filters, paging, response envelope, and 12-hour material URLs.
+
+Real-person materials add two Actions before upload:
+
+1. [Create Visual Validation Session](/api-reference/video/create-visual-validation-session)
+2. [Get Visual Validation Result](/api-reference/video/get-visual-validation-result)
+
+The second Action returns the verified `GroupId`. Use that ID with `CreateAsset`; a client cannot create a `LivenessFace` group directly.
+
+## Migration Checklist
+
+1. Replace the API host with `https://api.tokenlab.sh`.
+2. Replace AK/SK signing with a TokenLab Bearer API key.
+3. Keep the existing Action, version, and request-body casing.
+4. Keep the same `ProjectName` across related material and verification requests.
+5. Store TokenLab task, group, and asset IDs instead of upstream-only identifiers.
+6. Verify one create, poll, list, and error response before moving production traffic.

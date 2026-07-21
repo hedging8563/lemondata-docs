@@ -1,0 +1,126 @@
+---
+title: "Actions de materiais (compatíveis com Volcengine)"
+openapi: "POST /api/v3"
+description: "Referência das dez Actions compatíveis com Volcengine para materiais e grupos."
+---
+
+Um cliente Volcengine pode manter nomes de Action, `Version=2024-01-01`, JSON PascalCase, filtros, ordenação, paginação e o envelope `ResponseMetadata + Result`. No TokenLab, apenas endpoint e autenticação mudam.
+
+## Endpoint e autenticação
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+`POST /api/v3?Action=<ACTION>&Version=2024-01-01` também é aceito. Todas as Actions de materiais usam apenas POST. Uma solicitação apenas com assinatura AK/SK retorna `401 InvalidCredential`.
+
+`ProjectName` usa `default` por padrão e é uma fronteira real de isolamento na organização autenticada. Use o mesmo valor nas solicitações relacionadas.
+
+## Actions de grupos
+
+| Action | Objetivo | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | Criar grupo de materiais comum | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | Listar grupos de um projeto | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | Obter um grupo | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | Alterar nome ou descrição | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | Excluir grupo e materiais | `Id`; `ProjectName` |
+
+`CreateAssetGroup` cria apenas grupos `AIGC`. Um grupo `LivenessFace` é criado após verificação bem-sucedida; `ListAssetGroups` filtra ambos os tipos.
+
+### Criar grupo
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## Actions de materiais
+
+| Action | Objetivo | JSON |
+| --- | --- | --- |
+| `CreateAsset` | Importar uma URL pública de imagem, vídeo ou áudio | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | Listar materiais de um projeto | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | Obter material e URL temporária | `Id`; `ProjectName` |
+| `UpdateAsset` | Renomear material | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | Excluir um material | `Id`; `ProjectName` |
+
+`AssetType` aceita `Image`, `Video` e `Audio`. O grupo de destino determina se é material `AIGC` comum ou `LivenessFace` verificado.
+
+### Criar material
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## Comportamento das listas
+
+`PageNumber` usa `1` por padrão; `PageSize` usa `10` e aceita até `100`. `SortBy` aceita `CreateTime` ou `UpdateTime`; `SortOrder` aceita `Desc` ou `Asc`.
+
+Os estados são `Active`, `Processing` e `Failed`. URLs temporárias de `GetAsset` e `ListAssets` valem por 12 horas. Guarde `Id` como identidade permanente.
+
+`ListAssetGroups` e `ListAssets` retornam recursos em `Result.Items`, junto com `TotalCount`, `PageNumber` e `PageSize`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## Materiais de pessoas reais
+
+Crie uma sessão de verificação visual, conclua a verificação H5, obtenha `GroupId` e chame `CreateAsset` nesse grupo. Os uploads são comparados ao rosto verificado.
+
+1. [Criar sessão de verificação visual](/pt/api-reference/video/create-visual-validation-session)
+2. [Obter resultado da verificação visual](/pt/api-reference/video/get-visual-validation-result)
+3. Chamar `CreateAsset` com o `GroupId` retornado
+
+## Erros
+
+Erros preservam o envelope Volcengine; código e mensagem ficam em `ResponseMetadata.Error`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## Alternativa REST
+
+Os endpoints REST `/v1/videos/assets*` continuam disponíveis. Novas integrações podem escolher REST snake_case; clientes Volcengine não precisam reformular seus corpos. [Materiais Seedance e verificação de pessoas](/pt/guides/seedance-materials).

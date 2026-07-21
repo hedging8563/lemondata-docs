@@ -1,0 +1,126 @@
+---
+title: "素材 Action（火山相容）"
+openapi: "POST /api/v3"
+description: "10 個火山相容素材與素材群組 Action 的介面參考。"
+---
+
+這些 Action 讓既有火山素材用戶端保留 Action 名稱、`Version=2024-01-01`、PascalCase JSON、篩選、排序、分頁及 `ResponseMetadata + Result` 信封。TokenLab 只替換端點與驗證方式。
+
+## 端點與驗證
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+也支援 `POST /api/v3?Action=<ACTION>&Version=2024-01-01`。所有素材 Action 僅接受 POST。只有 AK/SK 簽名的請求會回傳 `401 InvalidCredential`。
+
+`ProjectName` 預設為 `default`，並在目前組織內形成真正的隔離邊界。相關建立、列表、讀取、更新和刪除請求必須使用相同值。
+
+## 素材群組 Action
+
+| Action | 目標 | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | 建立一般素材群組 | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | 列出專案內的素材群組 | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | 取得單一素材群組 | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | 修改素材群組名稱或描述 | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | 刪除素材群組及其中素材 | `Id`; `ProjectName` |
+
+`CreateAssetGroup` 只能建立 `AIGC` 群組。`LivenessFace` 群組必須在真人驗證成功後建立；`ListAssetGroups` 可篩選兩種群組。
+
+### 建立素材群組
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## 素材 Action
+
+| Action | 目標 | JSON |
+| --- | --- | --- |
+| `CreateAsset` | 匯入一個公開圖片、影片或音訊 URL | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | 列出專案內的素材 | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | 取得素材及暫時 URL | `Id`; `ProjectName` |
+| `UpdateAsset` | 重新命名素材 | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | 刪除單一素材 | `Id`; `ProjectName` |
+
+`AssetType` 支援 `Image`、`Video` 和 `Audio`。目標群組決定素材屬於一般 `AIGC` 或已驗證的 `LivenessFace`。
+
+### 建立素材
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## 列表行為
+
+`PageNumber` 預設為 `1`，`PageSize` 預設為 `10` 且最大為 `100`。`SortBy` 支援 `CreateTime` 或 `UpdateTime`；`SortOrder` 支援 `Desc` 或 `Asc`。
+
+素材狀態為 `Active`、`Processing` 或 `Failed`。`GetAsset` 和 `ListAssets` 回傳有效 12 小時的暫時 `URL`；請儲存 `Id`，不要把 URL 當作永久識別。
+
+`ListAssetGroups` 和 `ListAssets` 透過 `Result.Items` 回傳資源，並同時回傳 `TotalCount`、`PageNumber` 和 `PageSize`。
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## 真人素材
+
+先建立視覺驗證工作階段並完成 H5 驗證，再取得驗證結果回傳的 `GroupId`，最後以該群組呼叫 `CreateAsset`。上傳內容會與已驗證人臉比對。
+
+1. [建立視覺驗證工作階段](/zh-Hant/api-reference/video/create-visual-validation-session)
+2. [取得視覺驗證結果](/zh-Hant/api-reference/video/get-visual-validation-result)
+3. 使用回傳的 `GroupId` 呼叫 `CreateAsset`
+
+## 錯誤
+
+錯誤沿用火山回應信封，錯誤碼與訊息位於 `ResponseMetadata.Error`。
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## REST 替代介面
+
+TokenLab 的 `/v1/videos/assets*` REST 介面仍然可用。新整合可選擇 snake_case REST；既有火山用戶端無須改造請求內容。 [Seedance 素材與真人驗證](/zh-Hant/guides/seedance-materials).

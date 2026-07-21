@@ -1,0 +1,126 @@
+---
+title: "Materyal Action’ları (Volcengine uyumlu)"
+openapi: "POST /api/v3"
+description: "Volcengine uyumlu on materyal ve materyal grubu Action’ı için referans."
+---
+
+Mevcut Volcengine istemcileri Action adlarını, `Version=2024-01-01`, PascalCase JSON, filtreleme, sıralama, sayfalama ve `ResponseMetadata + Result` zarfını koruyabilir. TokenLab yalnızca endpoint ve kimlik doğrulamayı değiştirir.
+
+## Endpoint ve kimlik doğrulama
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+`POST /api/v3?Action=<ACTION>&Version=2024-01-01` de desteklenir. Tüm materyal Action’ları yalnızca POST kabul eder. Yalnızca AK/SK imzası bulunan istek `401 InvalidCredential` döndürür.
+
+`ProjectName` varsayılan olarak `default` değerini alır ve doğrulanmış kuruluş içinde gerçek bir yalıtım sınırıdır. İlişkili isteklerde aynı değeri kullanın.
+
+## Materyal grubu Action’ları
+
+| Action | Amaç | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | Normal materyal grubu oluşturma | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | Projedeki grupları listeleme | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | Tek grup alma | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | Ad veya açıklama değiştirme | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | Grup ve materyallerini silme | `Id`; `ProjectName` |
+
+`CreateAssetGroup` yalnızca `AIGC` grubu oluşturur. `LivenessFace` grubu başarılı kişi doğrulamasından sonra oluşturulur; `ListAssetGroups` iki türü de filtreleyebilir.
+
+### Materyal grubu oluşturma
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## Materyal Action’ları
+
+| Action | Amaç | JSON |
+| --- | --- | --- |
+| `CreateAsset` | Herkese açık görsel, video veya ses URL’si içe aktarma | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | Projedeki materyalleri listeleme | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | Materyali ve geçici URL’yi alma | `Id`; `ProjectName` |
+| `UpdateAsset` | Materyali yeniden adlandırma | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | Tek materyal silme | `Id`; `ProjectName` |
+
+`AssetType`, `Image`, `Video` ve `Audio` değerlerini kabul eder. Hedef grup materyalin normal `AIGC` mi yoksa doğrulanmış `LivenessFace` mı olduğunu belirler.
+
+### Materyal oluşturma
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## Liste davranışı
+
+`PageNumber` varsayılanı `1`, `PageSize` varsayılanı `10` ve üst sınırı `100`dür. `SortBy`, `CreateTime` veya `UpdateTime`; `SortOrder`, `Desc` veya `Asc` kabul eder.
+
+Materyal durumları `Active`, `Processing` ve `Failed` değerleridir. `GetAsset` ve `ListAssets` geçici URL’leri 12 saat geçerlidir. Kalıcı kimlik olarak `Id` değerini saklayın.
+
+`ListAssetGroups` ve `ListAssets`, kaynakları `Result.Items` içinde; `TotalCount`, `PageNumber` ve `PageSize` ile birlikte döndürür.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## Gerçek kişi materyalleri
+
+Görsel doğrulama oturumu oluşturun, H5 doğrulamasını tamamlayın, `GroupId` alın ve bu grupla `CreateAsset` çağırın. Yüklemeler doğrulanmış yüzle karşılaştırılır.
+
+1. [Görsel doğrulama oturumu oluştur](/tr/api-reference/video/create-visual-validation-session)
+2. [Görsel doğrulama sonucunu al](/tr/api-reference/video/get-visual-validation-result)
+3. Dönen `GroupId` ile `CreateAsset` çağırma
+
+## Hatalar
+
+Hatalar Volcengine yanıt zarfını korur; kod ve mesaj `ResponseMetadata.Error` altında yer alır.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## REST alternatifi
+
+TokenLab `/v1/videos/assets*` REST endpoint’leri kullanılmaya devam eder. Yeni entegrasyonlar snake_case REST’i seçebilir; mevcut Volcengine istemcilerinin gövdeleri değiştirmesi gerekmez. [Seedance materyalleri ve gerçek kişi doğrulaması](/tr/guides/seedance-materials).

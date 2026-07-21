@@ -1,0 +1,126 @@
+---
+title: "Material-Actions (Volcengine-kompatibel)"
+openapi: "POST /api/v3"
+description: "Referenz für die zehn Volcengine-kompatiblen Material- und Materialgruppen-Actions."
+---
+
+Bestehende Volcengine-Materialclients behalten Action-Namen, `Version=2024-01-01`, PascalCase JSON, Filter, Sortierung, Paging und den Envelope `ResponseMetadata + Result`. Bei TokenLab ändern sich nur Endpunkt und Authentifizierung.
+
+## Endpunkt und Authentifizierung
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+`POST /api/v3?Action=<ACTION>&Version=2024-01-01` wird ebenfalls unterstützt. Alle Material-Actions akzeptieren nur POST. Requests nur mit AK/SK-Signatur liefern `401 InvalidCredential`.
+
+`ProjectName` ist standardmäßig `default` und bildet eine echte Isolationsgrenze innerhalb der authentifizierten Organisation. Verwenden Sie denselben Wert für zusammengehörige Requests.
+
+## Materialgruppen-Actions
+
+| Action | Ziel | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | Normale Materialgruppe erstellen | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | Gruppen eines Projekts auflisten | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | Eine Gruppe abrufen | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | Name oder Beschreibung ändern | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | Gruppe und enthaltene Assets löschen | `Id`; `ProjectName` |
+
+`CreateAssetGroup` erstellt ausschließlich `AIGC`-Gruppen. Eine `LivenessFace`-Gruppe entsteht nach erfolgreicher Personenverifizierung; `ListAssetGroups` kann beide Typen filtern.
+
+### Materialgruppe erstellen
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## Material-Actions
+
+| Action | Ziel | JSON |
+| --- | --- | --- |
+| `CreateAsset` | Eine öffentliche Bild-, Video- oder Audio-URL importieren | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | Assets eines Projekts auflisten | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | Asset und temporäre URL abrufen | `Id`; `ProjectName` |
+| `UpdateAsset` | Asset umbenennen | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | Ein Asset löschen | `Id`; `ProjectName` |
+
+`AssetType` akzeptiert `Image`, `Video` und `Audio`. Die Zielgruppe bestimmt, ob es sich um normales `AIGC`-Material oder verifiziertes `LivenessFace`-Material handelt.
+
+### Material erstellen
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## Listenverhalten
+
+`PageNumber` ist standardmäßig `1`, `PageSize` standardmäßig `10` und maximal `100`. `SortBy` akzeptiert `CreateTime` oder `UpdateTime`; `SortOrder` akzeptiert `Desc` oder `Asc`.
+
+Asset-Statuswerte sind `Active`, `Processing` und `Failed`. Temporäre URLs von `GetAsset` und `ListAssets` sind zwölf Stunden gültig. Speichern Sie `Id` als dauerhafte Identität.
+
+`ListAssetGroups` und `ListAssets` geben Ressourcen in `Result.Items` sowie `TotalCount`, `PageNumber` und `PageSize` zurück.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## Materialien realer Personen
+
+Erstellen Sie eine visuelle Verifizierungssitzung, schließen Sie die H5-Verifizierung ab, rufen Sie die `GroupId` ab und verwenden Sie diese Gruppe mit `CreateAsset`. Uploads werden mit dem verifizierten Gesicht abgeglichen.
+
+1. [Visuelle Verifizierungssitzung erstellen](/de/api-reference/video/create-visual-validation-session)
+2. [Ergebnis der visuellen Verifizierung abrufen](/de/api-reference/video/get-visual-validation-result)
+3. `CreateAsset` mit der zurückgegebenen `GroupId` aufrufen
+
+## Fehler
+
+Fehler verwenden weiterhin den Volcengine-Response-Envelope; Code und Nachricht stehen unter `ResponseMetadata.Error`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## REST-Alternative
+
+Die REST-Endpunkte `/v1/videos/assets*` bleiben verfügbar. Neue Integrationen können snake_case REST wählen; bestehende Volcengine-Clients müssen ihre Bodies nicht umformen. [Seedance-Materialien und Personenverifizierung](/de/guides/seedance-materials).

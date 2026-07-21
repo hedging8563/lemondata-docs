@@ -1,0 +1,71 @@
+---
+title: "Di chuyển Seedance từ Volcengine"
+description: "Di chuyển task Seedance và tích hợp material theo định dạng Volcengine sang TokenLab với ít thay đổi request nhất."
+---
+
+Dùng hướng dẫn này nếu ứng dụng đã gửi request Seedance theo định dạng Volcengine. Tên Action, `Version=2024-01-01`, `content[]`, body PascalCase của material và envelope phản hồi Volcengine đều được giữ lại. Chỉ endpoint và phương thức xác thực phải thay đổi.
+
+## Những gì thay đổi
+
+| Hạng mục | Client Volcengine hiện có | TokenLab |
+| --- | --- | --- |
+| URL cơ sở | `Volcengine API` | `https://api.tokenlab.sh/` |
+| Xác thực | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Request Action | `Action`, `Version` | `Action`, `Version` |
+| Body task | `content[]` | `content[]` |
+| Body material | `PascalCase` | `PascalCase` |
+| Kết quả bất đồng bộ | `ID task` | `cgt-...` + Polling |
+
+Request chỉ có chữ ký AK/SK trả về `401 InvalidCredential`. Client Action có thể dùng `POST /?Action=...&Version=2024-01-01`; `POST /api/v3?Action=...&Version=2024-01-01` vẫn được hỗ trợ. Client REST dùng `/api/v3/contents/generations/tasks`.
+
+## Định dạng request và vòng đời task
+
+Nếu tích hợp của bạn đã gửi yêu cầu Seedance kiểu Volc, bạn có thể dùng endpoint tương thích thay vì đổi body sang định dạng `/v1/videos/generations`. Gửi TokenLab API key dưới dạng `Authorization: Bearer ...`, dùng `POST /api/v3/contents/generations/tasks` để tạo theo REST hoặc `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` cho yêu cầu Action. Phản hồi tạo trả về ID tác vụ `cgt-...`; phản hồi trạng thái dùng `queued`, `running`, `succeeded`, `failed`, `cancelled` hoặc `expired`.
+
+Endpoint tương thích này nhận các mục `content[]` như `text`, `image_url`, `video_url`, `audio_url` và `draft_task`. Vai trò ảnh như `first_frame`, `last_frame` và `reference_image` được giữ nguyên. `callback_url` chưa được hỗ trợ; hãy polling endpoint tác vụ.
+### Trang tham chiếu
+
+- [Tạo tác vụ (tương thích Volc)](/vi/api-reference/video/create-volc-compatible-seedance-task)
+- [Lấy tác vụ (tương thích Volc)](/vi/api-reference/video/get-volc-compatible-seedance-task)
+- [Danh sách tác vụ (tương thích Volc)](/vi/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Hủy tác vụ (tương thích Volc)](/vi/api-reference/video/delete-volc-compatible-seedance-task)
+
+## Action của task
+
+| Action | Hạng mục | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | Tạo task video | `model`, `content[]` |
+| `GetContentsGenerationsTask` | Lấy một task | `TaskId` |
+| `ListContentsGenerationsTasks` | Liệt kê task | Bộ lọc, phân trang |
+| `DeleteContentsGenerationsTasks` | Hủy hoặc xóa task | `TaskId` |
+
+## Ví dụ Action tối thiểu
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## Material và xác minh người thật
+
+Cùng endpoint Action cũng hỗ trợ mười thao tác material và nhóm. Xem [Action material tương thích Volcengine](/vi/api-reference/video/volc-compatible-material-actions) để biết body PascalCase, bộ lọc, phân trang, envelope phản hồi và URL 12 giờ. Với người thật, trước khi upload còn phải gọi [Tạo phiên xác minh hình ảnh](/vi/api-reference/video/create-visual-validation-session) và [Lấy kết quả xác minh hình ảnh](/vi/api-reference/video/get-visual-validation-result).
+
+## Danh sách kiểm tra di chuyển
+
+1. Thay host API bằng `https://api.tokenlab.sh`.
+2. Thay chữ ký AK/SK bằng TokenLab Bearer API Key.
+3. Giữ nguyên Action, phiên bản và kiểu chữ của body.
+4. Dùng cùng `ProjectName` cho các request material và xác minh liên quan.
+5. Lưu ID task, nhóm và material do TokenLab trả về.
+6. Kiểm tra tạo, polling, liệt kê và lỗi trước khi chuyển traffic production.

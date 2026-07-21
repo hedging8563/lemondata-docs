@@ -1,0 +1,126 @@
+---
+title: "Action material tương thích Volcengine"
+openapi: "POST /api/v3"
+description: "Tài liệu tham chiếu cho mười Action material và nhóm tương thích Volcengine."
+---
+
+Client material Volcengine hiện có có thể giữ tên Action, `Version=2024-01-01`, JSON PascalCase, bộ lọc, sắp xếp, phân trang và envelope `ResponseMetadata + Result`. TokenLab chỉ thay endpoint và xác thực.
+
+## Endpoint và xác thực
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+Cũng hỗ trợ `POST /api/v3?Action=<ACTION>&Version=2024-01-01`. Mọi Action material chỉ nhận POST. Request chỉ có chữ ký AK/SK trả về `401 InvalidCredential`.
+
+`ProjectName` mặc định là `default` và là ranh giới cách ly thật trong tổ chức đã xác thực. Hãy dùng cùng giá trị cho các request liên quan.
+
+## Action nhóm material
+
+| Action | Mục tiêu | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | Tạo nhóm material thông thường | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | Liệt kê nhóm trong project | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | Lấy một nhóm | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | Đổi tên hoặc mô tả | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | Xóa nhóm và material bên trong | `Id`; `ProjectName` |
+
+`CreateAssetGroup` chỉ tạo nhóm `AIGC`. Nhóm `LivenessFace` được tạo sau khi xác minh người thật thành công; `ListAssetGroups` có thể lọc cả hai loại.
+
+### Tạo nhóm material
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## Action material
+
+| Action | Mục tiêu | JSON |
+| --- | --- | --- |
+| `CreateAsset` | Nhập một URL hình ảnh, video hoặc âm thanh công khai | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | Liệt kê material trong project | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | Lấy material và URL tạm thời | `Id`; `ProjectName` |
+| `UpdateAsset` | Đổi tên material | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | Xóa một material | `Id`; `ProjectName` |
+
+`AssetType` nhận `Image`, `Video` và `Audio`. Nhóm đích quyết định đây là material `AIGC` thông thường hay `LivenessFace` đã xác minh.
+
+### Tạo material
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## Hành vi danh sách
+
+`PageNumber` mặc định là `1`; `PageSize` mặc định là `10` và tối đa `100`. `SortBy` nhận `CreateTime` hoặc `UpdateTime`; `SortOrder` nhận `Desc` hoặc `Asc`.
+
+Trạng thái material là `Active`, `Processing` và `Failed`. URL tạm thời từ `GetAsset` và `ListAssets` có hiệu lực 12 giờ. Hãy lưu `Id` làm định danh lâu dài.
+
+`ListAssetGroups` và `ListAssets` trả tài nguyên trong `Result.Items`, cùng `TotalCount`, `PageNumber` và `PageSize`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## Material người thật
+
+Tạo phiên xác minh hình ảnh, hoàn tất xác minh H5, lấy `GroupId`, rồi gọi `CreateAsset` với nhóm đó. Upload được so khớp với khuôn mặt đã xác minh.
+
+1. [Tạo phiên xác minh hình ảnh](/vi/api-reference/video/create-visual-validation-session)
+2. [Lấy kết quả xác minh hình ảnh](/vi/api-reference/video/get-visual-validation-result)
+3. Gọi `CreateAsset` với `GroupId` được trả về
+
+## Lỗi
+
+Lỗi giữ envelope phản hồi Volcengine; mã và thông báo nằm trong `ResponseMetadata.Error`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## Phương án REST
+
+Các endpoint REST `/v1/videos/assets*` vẫn khả dụng. Tích hợp mới có thể chọn REST snake_case; client Volcengine hiện có không cần đổi body. [Material Seedance và xác minh người thật](/vi/guides/seedance-materials).

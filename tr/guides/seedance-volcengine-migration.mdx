@@ -1,0 +1,71 @@
+---
+title: "Seedance’i Volcengine’den taşıma"
+description: "Volcengine biçimindeki Seedance görev ve materyal entegrasyonlarını en az istek değişikliğiyle TokenLab’e taşıyın."
+---
+
+Uygulamanız zaten Volcengine biçiminde Seedance istekleri gönderiyorsa bu kılavuzu kullanın. Action adları, `Version=2024-01-01`, `content[]`, PascalCase materyal gövdeleri ve Volcengine yanıt zarfı korunabilir. Yalnızca endpoint ve kimlik doğrulama değişir.
+
+## Değişenler
+
+| Konu | Mevcut Volcengine istemcisi | TokenLab |
+| --- | --- | --- |
+| Temel URL | `Volcengine API` | `https://api.tokenlab.sh/` |
+| Kimlik doğrulama | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Action isteği | `Action`, `Version` | `Action`, `Version` |
+| Görev gövdesi | `content[]` | `content[]` |
+| Materyal gövdesi | `PascalCase` | `PascalCase` |
+| Asenkron sonuç | `Görev ID’si` | `cgt-...` + Polling |
+
+Yalnızca AK/SK imzası bulunan istekler `401 InvalidCredential` döndürür. Action istemcileri `POST /?Action=...&Version=2024-01-01` kullanabilir; `POST /api/v3?Action=...&Version=2024-01-01` de kullanılmaya devam eder. REST görev istemcileri `/api/v3/contents/generations/tasks` yolunu kullanır.
+
+## İstek şekli ve görev yaşam döngüsü
+
+Entegrasyonunuz zaten Volc tarzı Seedance istekleri gönderiyorsa, body’yi `/v1/videos/generations` formatına dönüştürmek yerine uyumluluk endpoint’ini kullanabilirsiniz. TokenLab API key’i `Authorization: Bearer ...` olarak gönderin; REST oluşturma için `POST /api/v3/contents/generations/tasks`, Action tarzı istekler için `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` kullanın. Oluşturma yanıtı `cgt-...` görev ID’si döndürür; durum yanıtları `queued`, `running`, `succeeded`, `failed`, `cancelled` veya `expired` kullanır.
+
+Bu uyumluluk endpoint’i `content[]` içinde `text`, `image_url`, `video_url`, `audio_url` ve `draft_task` öğelerini kabul eder. `first_frame`, `last_frame` ve `reference_image` gibi görsel rolleri korunur. `callback_url` henüz desteklenmez; görev endpoint’ini sorgulayın.
+### Referans sayfaları
+
+- [Görev oluştur (Volc uyumlu)](/tr/api-reference/video/create-volc-compatible-seedance-task)
+- [Görevi al (Volc uyumlu)](/tr/api-reference/video/get-volc-compatible-seedance-task)
+- [Görev listesi (Volc uyumlu)](/tr/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Görevi iptal et (Volc uyumlu)](/tr/api-reference/video/delete-volc-compatible-seedance-task)
+
+## Görev Action’ları
+
+| Action | Konu | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | Video görevi oluşturma | `model`, `content[]` |
+| `GetContentsGenerationsTask` | Tek görevi alma | `TaskId` |
+| `ListContentsGenerationsTasks` | Görevleri listeleme | Filtreler, sayfalama |
+| `DeleteContentsGenerationsTasks` | Görevi iptal etme veya silme | `TaskId` |
+
+## En küçük Action örneği
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## Materyaller ve gerçek kişi doğrulaması
+
+Aynı Action endpoint’i on materyal ve grup işlemini de destekler. PascalCase gövdeler, filtreler, sayfalama, yanıt zarfı ve 12 saatlik materyal URL’leri için [Volcengine uyumlu materyal Action’ları](/tr/api-reference/video/volc-compatible-material-actions) sayfasına bakın. Gerçek kişi materyali yüklemeden önce ayrıca [Görsel doğrulama oturumu oluştur](/tr/api-reference/video/create-visual-validation-session) ve [Görsel doğrulama sonucunu al](/tr/api-reference/video/get-visual-validation-result) çağrıları gerekir.
+
+## Geçiş kontrol listesi
+
+1. API host’unu `https://api.tokenlab.sh` ile değiştirin.
+2. AK/SK imzasını TokenLab Bearer API Key ile değiştirin.
+3. Mevcut Action, sürüm ve gövde harf düzenini koruyun.
+4. İlişkili materyal ve doğrulama isteklerinde aynı `ProjectName` değerini kullanın.
+5. TokenLab’in döndürdüğü görev, grup ve materyal ID’lerini saklayın.
+6. Üretim trafiğini taşımadan önce oluşturma, polling, liste ve hata yanıtlarını doğrulayın.

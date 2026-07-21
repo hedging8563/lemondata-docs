@@ -1,0 +1,71 @@
+---
+title: "ترحيل Seedance من Volcengine"
+description: "انقل مهام Seedance وتكاملات المواد بأسلوب Volcengine إلى TokenLab بأقل تغييرات ممكنة."
+---
+
+استخدم هذا الدليل إذا كان تطبيقك يرسل طلبات Seedance بأسلوب Volcengine. يمكنك الاحتفاظ بأسماء Action و`Version=2024-01-01` و`content[]` وأجسام المواد بصيغة PascalCase وغلاف الاستجابة الخاص بـ Volcengine. يلزم تغيير نقطة النهاية وطريقة المصادقة فقط.
+
+## ما الذي يتغير
+
+| العنصر | عميل Volcengine الحالي | TokenLab |
+| --- | --- | --- |
+| عنوان URL الأساسي | `Volcengine API` | `https://api.tokenlab.sh/` |
+| المصادقة | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| طلب Action | `Action`, `Version` | `Action`, `Version` |
+| جسم المهمة | `content[]` | `content[]` |
+| جسم المادة | `PascalCase` | `PascalCase` |
+| النتيجة غير المتزامنة | `معرف المهمة` | `cgt-...` + الاستعلام |
+
+تعيد الطلبات التي تحتوي على توقيع AK/SK فقط الخطأ `401 InvalidCredential`. يمكن لعملاء Action استخدام `POST /?Action=...&Version=2024-01-01`، كما يبقى `POST /api/v3?Action=...&Version=2024-01-01` متاحًا. يستخدم عملاء REST المسار `/api/v3/contents/generations/tasks`.
+
+## شكل الطلب ودورة حياة المهمة
+
+إذا كان تكاملك يرسل بالفعل طلبات Seedance بأسلوب Volc، يمكنك استخدام واجهة التوافق بدلا من إعادة تشكيل الجسم لـ `/v1/videos/generations`. أرسل مفتاح TokenLab API على شكل `Authorization: Bearer ...`، واستخدم `POST /api/v3/contents/generations/tasks` للإنشاء بنمط REST أو `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` لطلبات Action. تعيد استجابة الإنشاء معرف مهمة `cgt-...`؛ وتستخدم استجابات الحالة `queued` أو `running` أو `succeeded` أو `failed` أو `cancelled` أو `expired`.
+
+تقبل واجهة التوافق عناصر `content[]` مثل `text` و `image_url` و `video_url` و `audio_url` و `draft_task`. يتم الحفاظ على أدوار الصور مثل `first_frame` و `last_frame` و `reference_image`. لا يتم دعم `callback_url` بعد؛ استعلم عن واجهة المهمة.
+### صفحات المرجع
+
+- [إنشاء مهمة (متوافق مع Volc)](/ar/api-reference/video/create-volc-compatible-seedance-task)
+- [جلب مهمة (متوافق مع Volc)](/ar/api-reference/video/get-volc-compatible-seedance-task)
+- [قائمة المهام (متوافق مع Volc)](/ar/api-reference/video/list-volc-compatible-seedance-tasks)
+- [إلغاء مهمة (متوافق مع Volc)](/ar/api-reference/video/delete-volc-compatible-seedance-task)
+
+## إجراءات المهام
+
+| Action | العنصر | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | إنشاء مهمة فيديو | `model`, `content[]` |
+| `GetContentsGenerationsTask` | جلب مهمة واحدة | `TaskId` |
+| `ListContentsGenerationsTasks` | عرض المهام | الفلاتر والترقيم |
+| `DeleteContentsGenerationsTasks` | إلغاء مهمة أو حذفها | `TaskId` |
+
+## مثال Action بسيط
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## المواد والتحقق من الأشخاص
+
+تدعم نقطة Action نفسها عشر عمليات للمواد ومجموعاتها. راجع [إجراءات المواد المتوافقة مع Volcengine](/ar/api-reference/video/volc-compatible-material-actions) لمعرفة أجسام PascalCase والفلاتر والترقيم وغلاف الاستجابة وروابط المواد الصالحة 12 ساعة. تتطلب مواد الأشخاص أيضًا [إنشاء جلسة تحقق مرئي](/ar/api-reference/video/create-visual-validation-session) و[جلب نتيجة التحقق المرئي](/ar/api-reference/video/get-visual-validation-result) قبل الرفع.
+
+## قائمة التحقق من الترحيل
+
+1. استبدل مضيف API بـ `https://api.tokenlab.sh`.
+2. استبدل توقيع AK/SK بمفتاح TokenLab من نوع Bearer.
+3. احتفظ بـ Action والإصدار وحالة الأحرف في الجسم.
+4. استخدم `ProjectName` نفسه لطلبات المواد والتحقق المرتبطة.
+5. احفظ معرفات المهمة والمجموعة والمادة التي يعيدها TokenLab.
+6. تحقق من الإنشاء والاستعلام والقائمة والخطأ قبل نقل حركة الإنتاج.

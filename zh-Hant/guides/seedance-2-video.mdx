@@ -1,9 +1,19 @@
 ---
 title: "Seedance 2.0 影片模型"
-description: "使用 Seedance 2.0 影片生成功能，支援虛擬人像與真人素材群組。"
+description: "選擇 Seedance 2.0 模型以及正確的 TokenLab 整合路徑。"
 ---
 
-Seedance 2.0 支援文字轉影片、圖片轉影片、起始/結束影格轉影片、參考素材轉影片、影片編輯以及影片延伸。請使用如 `seedance-2.0`、`seedance-2.0-fast` 和 `seedance-2.0-mini` 等模型 ID，並透過 `operation` 選擇工作流程。
+如果要在應用程式中加入 Seedance 2.0，請從這裡開始。本頁只負責模型與工作流程選擇；火山遷移、可重用素材及真人驗證各有獨立指南。
+
+## 選擇整合路徑
+
+| 目標 | 使用方式 | 下一步 |
+| --- | --- | --- |
+| 建立新的 TokenLab 影片整合 | 統一 `POST /v1/videos/generations` API | [影片生成指南](/zh-Hant/guides/video-generation) |
+| 遷移既有火山 Seedance 用戶端 | 火山相容 REST 或 Action 介面 | [從火山遷移 Seedance](/zh-Hant/guides/seedance-volcengine-migration) |
+| 重用虛擬人、商品、風格或真人參考 | TokenLab 素材庫 | [Seedance 素材與真人驗證](/zh-Hant/guides/seedance-materials) |
+
+三條路徑都使用 `Authorization: Bearer <TOKENLAB_API_KEY>`。火山相容路徑保留火山請求格式，但不接受 AK/SK 簽名。
 
 ## 模型選擇
 
@@ -26,118 +36,17 @@ Seedance 2.0 支援文字轉影片、圖片轉影片、起始/結束影格轉影
 | `video-to-video` | `prompt`, `video_url` 或相容的影片輸入 |
 | `video-extension` | `task_id` 或模型特定的續傳輸入 |
 
-## 素材概念
-
-Seedance 素材是可重複使用、以組織為範圍的參考資料，可在影片生成過程中選取。
-
-| 概念 | 公開欄位 | 含義 |
-|---------|--------------|---------------|
-| 素材群組 | `group_id` | 擁有相關 Seedance 素材的 TokenLab 群組。在上傳或列出素材時使用。 |
-| 素材資產 | `id` | 單一已上傳的圖片、影片或音訊檔案。在資產狀態變為 `ACTIVE` 後，將此值作為 `material_asset_id` 使用。 |
-| 虛擬人像素材群組 | `library_type: "aigc_avatar"` | 用於虛擬人像、產品、風格及其他無需真人驗證即可重複使用的參考資料。 |
-| 真人素材群組 | `library_type: "liveness_face"` | 透過真人素材驗證建立。一個群組代表一位已驗證的真人。 |
-
-請區分 `group_id` 與素材資產 `id`。`group_id` 用於組織上傳內容；素材資產 `id` 用於影片生成。若影片請求回傳 `Seedance material asset not found or not accessible`，請確認您傳入的是素材資產 `id` 而非 `group_id`，且該資產屬於同一組織、未被刪除，且狀態為 `status: "ACTIVE"`。
-
-## 自動圖片素材
-
-當所選 Seedance 模型可使用 TokenLab 素材庫時，您可以直接在 `image`、`image_url`、`image_urls`、`reference_images`、`start_image` 或 `end_image` 中傳入圖片 URL 或支援的內嵌 data URL。TokenLab 會將這些圖片匯入組織預設的虛擬人像素材群組，並保留其首幀、尾幀或參考圖角色。
-
-如果素材在 60 秒內變為 `ACTIVE`，同一個請求會繼續進入生成。如果尚未準備完成，API 會回傳 `409 seedance_material_preparing` 和 `auto_material_asset_ids`；請查詢這些素材直到它們變為 `ACTIVE`，再使用 `material_asset_id` 或 `material_asset_ids` 重試。如果所選模型暫不可使用素材庫，一般圖片 URL 或 data URL 會繼續走常規圖片路徑；明確傳入素材 ID 會安全失敗，並回傳可重試的素材可用性錯誤。既有虛擬人像素材 ID 和真人素材 ID 會原樣使用，不會重複匯入。
-
-## 真人素材驗證
-
-當您的產品在將真人作為可重複使用的 Seedance 參考資料前，需要取得同意並進行人臉驗證時，請使用真人素材驗證。
-
-1. 呼叫 [建立視覺驗證會話](/zh-Hant/api-reference/video/create-visual-validation-session)，傳入 `CallbackURL`，並儲存回傳的 `Result.BytedToken`。
-2. 為待驗證人員開啟 `Result.H5Link`。若需要特定語言，請在 H5 連結後附加 `lng`。
-3. H5 流程完成後，瀏覽器會開啟 `Result.CallbackURL`，並帶有 `bytedToken`、`resultCode` 等官方查詢參數。
-4. 使用 `BytedToken` 輪詢 [取得視覺驗證結果](/zh-Hant/api-reference/video/get-visual-validation-result)，直到回傳 `Result.GroupId`。
-5. 儲存 `GroupId`；建立 `liveness_face` 素材時將其作為 `group_id`。
-
-`BytedToken` 的有效期限為 30 分鐘。兩個 Action 請求必須使用相同的 `ProjectName`。驗證使用 `Authorization: Bearer <TOKENLAB_API_KEY>`；不接受火山引擎 AK/SK 簽名。
-
-選用：使用 [測試控制台](https://tokenlab.sh/dashboard/seedance-assets) 來驗證您的請求與回呼流程、檢查素材群組並查看驗證紀錄。正式環境整合應直接呼叫 API。
-
-## 建立素材群組
-
-針對 `aigc_avatar` 群組，請使用 [建立素材資產群組](/zh-Hant/api-reference/video/create-material-asset-group)。新的真人素材群組是透過驗證流程建立的，以確保已驗證的人物與素材群組保持連結。
-
-使用 [列出素材資源群組](/zh-Hant/api-reference/video/list-material-asset-groups)、[取得素材資源群組](/zh-Hant/api-reference/video/get-material-asset-group)、[更新素材資產群組](/zh-Hant/api-reference/video/update-material-asset-group) 和 [刪除素材資源群組](/zh-Hant/api-reference/video/delete-material-asset-group) 來管理現有的群組。
-
-刪除素材群組會同時刪除其中的 TokenLab 素材，且無法復原。若 TokenLab 素材庫因目前的授權狀態不允許而無法完成刪除，TokenLab 將回傳中性的素材庫錯誤。
-
-## 上傳素材
-
-使用 [建立素材資產](/zh-Hant/api-reference/video/create-material-asset) 每次匯入一個可公開存取的來源 URL。
-
-對於 `aigc_avatar`，`group_id` 為選填；TokenLab 會使用或建立組織預設的虛擬人像群組。對於 `liveness_face`，`group_id` 為必填，且必須是 [取得視覺驗證結果](/zh-Hant/api-reference/video/get-visual-validation-result) 所回傳的群組。
-
-| 類型 | 支援的輸入 |
-|------|-----------------|
-| 圖片 | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`；長寬比 `(0.4, 2.5)`；寬高 `(300, 6000)` px；小於 30 MB。 |
-| 影片 | `mp4`, `mov`；`480p`, `720p` 或 `1080p`；2-15 秒；長寬比 `[0.4, 2.5]`；寬高 `[300, 6000]` px；總像素介於 409600 與 2068676 之間；最大 200 MB；24-60 FPS。 |
-| 音訊 | `aac`, `wav`, `mp3`；2-15 秒；最大 15 MB。 |
-
-素材擷取為非同步處理。請輪詢 [取得素材資源 (Get Material Asset)](/zh-Hant/api-reference/video/get-material-asset) 直到 `status` 變為 `ACTIVE`。成功的 HTTP 回應僅代表請求已被接受；請務必讀取業務狀態。若狀態為 `FAILED`，請檢查 `error_message`，修正來源素材並建立新資產。
-
-在建立素材請求中，`asset_url` 只表示匯入來源。TokenLab 會回傳素材資產 `id`；產生影片時請使用這個 `id`，不要繼續使用原始 URL。
-
-TokenLab 會將素材保留在您的組織素材庫中，直到您刪除該素材或其所在素材群組。
-
-對於真人素材群組，一個群組對應一位真人。上傳內容會與已驗證的人臉進行比對。包含多張人臉或人臉與已驗證人物不符的資產可能會失敗。為獲得最佳效果，請同時上傳全身正面參考圖與臉部清晰的正面特寫照。
-
-## 在影片生成中使用素材
-
-當資產狀態為 `ACTIVE` 後，在呼叫 [建立影片](/zh-Hant/api-reference/video/create-video) 時，將回傳的 TokenLab 資產 `id` 作為 `material_asset_id` 傳入，或包含在 `material_asset_ids` 中。素材資產會計入 Seedance 參考限制。
-
-## API 範例
-
-建立一個虛擬人像群組、上傳圖片、輪詢直到其啟用，然後在影片請求中使用該素材資產 ID。
-
-```bash
-curl https://api.tokenlab.sh/v1/videos/assets/groups \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
-
-curl https://api.tokenlab.sh/v1/videos/assets \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
-
-curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY"
-```
-
-對於真人素材群組，請先建立視覺驗證會話並取得結果，再上傳素材。
-
-```bash
-curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
-
-curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
-```
-
 ## 定價與非同步結果
 
 Seedance 2.0 的定價取決於輸出解析度、輸入類型與模型。在將產品 UI 硬編碼之前，請使用 [Pricing API](/zh-Hant/api-reference/pricing/get-pricing) 或 [Models API](/zh-Hant/api-reference/models/list-models)。
 
 影片生成為非同步處理。請追蹤建立請求時回傳的 `poll_url`，或使用 [取得任務狀態](/zh-Hant/api-reference/tasks/get-task-status) 搭配回傳的任務 ID。
 
-## 火山風格 Seedance 相容入口
+## 相關介面
 
-如果你的系統已經按火山風格發送 Seedance 請求，可以使用相容入口，而不必把請求體改成 `/v1/videos/generations` 的統一格式。請使用 TokenLab API Key 作為 `Authorization: Bearer ...`，REST 建立使用 `POST /api/v3/contents/generations/tasks`，Action 風格請求使用 `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01`。建立回應返回 `cgt-...` 任務 ID；狀態回應使用 `queued`、`running`、`succeeded`、`failed`、`cancelled` 或 `expired`。
-
-該入口接受 `content[]` 中的 `text`、`image_url`、`video_url`、`audio_url` 和 `draft_task`。`first_frame`、`last_frame`、`reference_image` 等圖片角色會被保留。`callback_url` 暫不支援；請輪詢任務介面。
-### 參考頁面
-
-- [建立任務（火山相容）](/zh-Hant/api-reference/video/create-volc-compatible-seedance-task)
-- [查詢任務（火山相容）](/zh-Hant/api-reference/video/get-volc-compatible-seedance-task)
-- [任務列表（火山相容）](/zh-Hant/api-reference/video/list-volc-compatible-seedance-tasks)
-- [取消任務（火山相容）](/zh-Hant/api-reference/video/delete-volc-compatible-seedance-task)
+| API | 下一步 |
+|-----|---------------|
+| `POST /v1/videos/generations` | [建立影片](/zh-Hant/api-reference/video/create-video) |
+| `GET /v1/tasks/{id}` | [取得任務狀態](/zh-Hant/api-reference/tasks/get-task-status) |
+| Seedance 任務相容 | [建立任務（火山相容）](/zh-Hant/api-reference/video/create-volc-compatible-seedance-task) |
+| 素材 Action 相容 | [素材 Action（火山相容）](/zh-Hant/api-reference/video/volc-compatible-material-actions) |

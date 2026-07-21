@@ -1,0 +1,126 @@
+---
+title: "Action material kompatibel Volcengine"
+openapi: "POST /api/v3"
+description: "Referensi untuk sepuluh Action material dan grup yang kompatibel dengan Volcengine."
+---
+
+Klien material Volcengine dapat mempertahankan nama Action, `Version=2024-01-01`, JSON PascalCase, filter, pengurutan, paginasi, dan envelope `ResponseMetadata + Result`. TokenLab hanya mengganti endpoint dan autentikasi.
+
+## Endpoint dan autentikasi
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+`POST /api/v3?Action=<ACTION>&Version=2024-01-01` juga didukung. Semua Action material hanya menerima POST. Request dengan tanda tangan AK/SK saja mengembalikan `401 InvalidCredential`.
+
+`ProjectName` default adalah `default` dan menjadi batas isolasi nyata di dalam organisasi terautentikasi. Gunakan nilai yang sama untuk request terkait.
+
+## Action grup material
+
+| Action | Tujuan | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | Membuat grup material biasa | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | Mencantumkan grup dalam project | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | Mengambil satu grup | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | Mengubah nama atau deskripsi | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | Menghapus grup dan materialnya | `Id`; `ProjectName` |
+
+`CreateAssetGroup` hanya membuat grup `AIGC`. Grup `LivenessFace` dibuat setelah verifikasi orang asli berhasil; `ListAssetGroups` dapat memfilter keduanya.
+
+### Membuat grup material
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## Action material
+
+| Action | Tujuan | JSON |
+| --- | --- | --- |
+| `CreateAsset` | Mengimpor satu URL gambar, video, atau audio publik | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | Mencantumkan material dalam project | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | Mengambil material dan URL sementara | `Id`; `ProjectName` |
+| `UpdateAsset` | Mengganti nama material | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | Menghapus satu material | `Id`; `ProjectName` |
+
+`AssetType` menerima `Image`, `Video`, dan `Audio`. Grup tujuan menentukan apakah material termasuk `AIGC` biasa atau `LivenessFace` terverifikasi.
+
+### Membuat material
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## Perilaku daftar
+
+`PageNumber` default `1`; `PageSize` default `10` dan maksimum `100`. `SortBy` menerima `CreateTime` atau `UpdateTime`; `SortOrder` menerima `Desc` atau `Asc`.
+
+Status material adalah `Active`, `Processing`, dan `Failed`. URL sementara dari `GetAsset` dan `ListAssets` berlaku 12 jam. Simpan `Id` sebagai identitas permanen.
+
+`ListAssetGroups` dan `ListAssets` mengembalikan resource dalam `Result.Items`, bersama `TotalCount`, `PageNumber`, dan `PageSize`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## Material orang asli
+
+Buat sesi verifikasi visual, selesaikan verifikasi H5, ambil `GroupId`, lalu panggil `CreateAsset` dengan grup tersebut. Upload dicocokkan dengan wajah terverifikasi.
+
+1. [Buat sesi verifikasi visual](/id/api-reference/video/create-visual-validation-session)
+2. [Ambil hasil verifikasi visual](/id/api-reference/video/get-visual-validation-result)
+3. Panggil `CreateAsset` dengan `GroupId` yang dikembalikan
+
+## Error
+
+Error mempertahankan envelope respons Volcengine; kode dan pesan berada di `ResponseMetadata.Error`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## Alternatif REST
+
+Endpoint REST `/v1/videos/assets*` tetap tersedia. Integrasi baru dapat memilih REST snake_case; klien Volcengine tidak perlu mengubah body. [Material Seedance dan verifikasi orang asli](/id/guides/seedance-materials).

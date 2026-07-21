@@ -1,0 +1,71 @@
+---
+title: "Migrar Seedance do Volcengine"
+description: "Migre tarefas Seedance e integrações de materiais no formato Volcengine para o TokenLab com poucas alterações."
+---
+
+Use este guia quando sua aplicação já envia solicitações Seedance no formato Volcengine. Nomes de Action, `Version=2024-01-01`, `content[]`, corpos PascalCase de materiais e o envelope de resposta Volcengine podem ser mantidos. Apenas endpoint e autenticação precisam mudar.
+
+## O que muda
+
+| Item | Cliente Volcengine existente | TokenLab |
+| --- | --- | --- |
+| URL base | `Volcengine API` | `https://api.tokenlab.sh/` |
+| Autenticação | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Solicitação Action | `Action`, `Version` | `Action`, `Version` |
+| Corpo da tarefa | `content[]` | `content[]` |
+| Corpo do material | `PascalCase` | `PascalCase` |
+| Resultado assíncrono | `ID da tarefa` | `cgt-...` + Polling |
+
+Solicitações apenas com assinatura AK/SK retornam `401 InvalidCredential`. Clientes Action podem usar `POST /?Action=...&Version=2024-01-01`; `POST /api/v3?Action=...&Version=2024-01-01` continua disponível. Clientes REST usam `/api/v3/contents/generations/tasks`.
+
+## Formato da solicitação e ciclo da tarefa
+
+Se sua integração já envia solicitações Seedance no estilo Volc, use o endpoint compatível em vez de remodelar o body para `/v1/videos/generations`. Envie sua API key TokenLab como `Authorization: Bearer ...`, use `POST /api/v3/contents/generations/tasks` para criação REST ou `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` para solicitações Action. A criação retorna um ID `cgt-...`; respostas de status usam `queued`, `running`, `succeeded`, `failed`, `cancelled` ou `expired`.
+
+Este endpoint compatível aceita itens `content[]` como `text`, `image_url`, `video_url`, `audio_url` e `draft_task`. Papéis de imagem como `first_frame`, `last_frame` e `reference_image` são preservados. `callback_url` ainda não é suportado; consulte o endpoint de tarefa.
+### Páginas de referência
+
+- [Criar tarefa (compatível com Volc)](/pt/api-reference/video/create-volc-compatible-seedance-task)
+- [Obter tarefa (compatível com Volc)](/pt/api-reference/video/get-volc-compatible-seedance-task)
+- [Listar tarefas (compatível com Volc)](/pt/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Cancelar tarefa (compatível com Volc)](/pt/api-reference/video/delete-volc-compatible-seedance-task)
+
+## Actions de tarefa
+
+| Action | Item | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | Criar tarefa de vídeo | `model`, `content[]` |
+| `GetContentsGenerationsTask` | Obter uma tarefa | `TaskId` |
+| `ListContentsGenerationsTasks` | Listar tarefas | Filtros, paginação |
+| `DeleteContentsGenerationsTasks` | Cancelar ou excluir tarefa | `TaskId` |
+
+## Exemplo Action mínimo
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## Materiais e verificação de pessoas
+
+O mesmo endpoint Action aceita dez operações de materiais e grupos. Consulte [Actions de materiais compatíveis com Volcengine](/pt/api-reference/video/volc-compatible-material-actions) para corpos PascalCase, filtros, paginação, envelope e URLs de 12 horas. Para pessoas reais, antes do upload também use [Criar sessão de verificação visual](/pt/api-reference/video/create-visual-validation-session) e [Obter resultado da verificação visual](/pt/api-reference/video/get-visual-validation-result).
+
+## Checklist de migração
+
+1. Troque o host da API por `https://api.tokenlab.sh`.
+2. Substitua a assinatura AK/SK por uma chave API Bearer do TokenLab.
+3. Mantenha Action, versão e capitalização do corpo.
+4. Use o mesmo `ProjectName` em solicitações relacionadas de materiais e verificação.
+5. Armazene os IDs de tarefa, grupo e material retornados pelo TokenLab.
+6. Valide criação, polling, listagem e erro antes de mover tráfego de produção.

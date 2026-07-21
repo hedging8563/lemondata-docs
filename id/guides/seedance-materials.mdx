@@ -1,0 +1,136 @@
+---
+title: "Material Seedance dan verifikasi orang asli"
+description: "Buat material Seedance yang dapat digunakan ulang, verifikasi orang asli, dan gunakan asset aktif dalam pembuatan video."
+---
+
+Material Seedance adalah referensi gambar, video, atau audio yang dapat digunakan ulang dalam organisasi. Pilih alur terlebih dahulu: material avatar biasa dan material orang asli terverifikasi memiliki jalur pembuatan yang berbeda.
+
+## Pilih alur material
+
+| Tujuan | Alur wajib |
+| --- | --- |
+| Memakai URL gambar satu kali | Kirim URL langsung dalam request video; model kompatibel menyiapkan material otomatis |
+| Menggunakan ulang avatar, produk, atau gaya | Buat grup `aigc_avatar` dan material, tunggu `ACTIVE`, lalu gunakan ID |
+| Menggunakan ulang orang asli | Selesaikan verifikasi visual, dapatkan `GroupId`, buat material, tunggu `ACTIVE`, lalu gunakan ID |
+| Memigrasikan klien material Volcengine | Pertahankan bentuk Action dan gunakan referensi kompatibel Volcengine: [Action material kompatibel Volcengine](/id/api-reference/video/volc-compatible-material-actions) |
+
+## Konsep Materi
+
+Materi Seedance adalah referensi yang dapat digunakan kembali dan dicakup oleh organisasi yang dapat dipilih nanti selama pembuatan video.
+
+| Konsep | Bidang publik | Apa artinya |
+|---------|--------------|---------------|
+| Grup materi | `group_id` | Grup TokenLab yang memiliki materi Seedance terkait. Gunakan saat mengunggah atau mencantumkan materi. |
+| Aset materi | `id` | Satu file gambar, video, atau audio yang diunggah. Gunakan nilai ini sebagai `material_asset_id` setelah aset menjadi `ACTIVE`. |
+| Grup materi avatar virtual | `library_type: "aigc_avatar"` | Untuk orang virtual, avatar, produk, gaya, dan referensi lain yang dapat digunakan kembali yang tidak memerlukan verifikasi orang asli. |
+| Grup materi orang asli | `library_type: "liveness_face"` | Dibuat melalui verifikasi materi orang asli. Satu grup mewakili satu orang asli yang terverifikasi. |
+
+Pisahkan `group_id` dan `id` aset materi. `group_id` digunakan untuk mengatur unggahan; `id` aset materi digunakan untuk pembuatan video. Jika permintaan video mengembalikan `Seedance material asset not found or not accessible`, pastikan Anda memberikan `id` aset materi, bukan `group_id`, dan bahwa aset tersebut milik organisasi yang sama, tidak dihapus, dan memiliki `status: "ACTIVE"`.
+
+## Material Gambar Otomatis
+
+Jika model Seedance yang dipilih dapat menggunakan pustaka material TokenLab, Anda dapat mengirim URL gambar atau data URL inline yang didukung langsung di `image`, `image_url`, `image_urls`, `reference_images`, `start_image`, atau `end_image`. TokenLab mengimpor gambar tersebut ke grup material avatar virtual default organisasi dan mempertahankan perannya sebagai frame pertama, frame terakhir, atau gambar referensi.
+
+Jika material menjadi `ACTIVE` dalam 60 detik, generasi berlanjut dalam request yang sama. Jika belum siap, API mengembalikan `409 seedance_material_preparing` dengan `auto_material_asset_ids`; lihat material tersebut sampai `ACTIVE`, lalu coba lagi dengan `material_asset_id` atau `material_asset_ids`. Jika model yang dipilih tidak dapat menggunakan pustaka material, URL gambar atau data URL biasa tetap berada di jalur gambar normal; ID material eksplisit gagal secara aman dengan error ketersediaan material yang dapat dicoba ulang. ID material avatar virtual atau real-person yang sudah ada digunakan apa adanya dan tidak diimpor ulang.
+
+## Verifikasi Materi Orang Asli
+
+Gunakan verifikasi materi orang asli ketika produk Anda memerlukan persetujuan dan verifikasi wajah sebelum orang asli dapat digunakan sebagai referensi Seedance yang dapat digunakan kembali.
+
+1. Panggil [Membuat sesi validasi visual](/id/api-reference/video/create-visual-validation-session) dengan `CallbackURL` dan simpan `Result.BytedToken` yang dikembalikan.
+2. Buka `Result.H5Link` untuk orang yang akan diverifikasi. Tambahkan `lng` ke tautan H5 jika Anda memerlukan bahasa tertentu.
+3. Setelah alur H5 selesai, browser membuka `Result.CallbackURL` dengan nama kueri resmi seperti `bytedToken` dan `resultCode`.
+4. Lakukan polling [Mendapatkan hasil validasi visual](/id/api-reference/video/get-visual-validation-result) dengan `BytedToken` hingga `Result.GroupId` dikembalikan.
+5. Simpan `GroupId` dan gunakan sebagai `group_id` saat membuat material `liveness_face`.
+
+`BytedToken` berlaku selama 30 menit. Gunakan `ProjectName` yang sama dalam kedua permintaan Action. Autentikasi menggunakan `Authorization: Bearer <TOKENLAB_API_KEY>`; tanda tangan AK/SK Volc tidak diterima.
+
+Opsional: gunakan [konsol pengujian](https://tokenlab.sh/dashboard/seedance-assets) untuk memverifikasi permintaan dan alur callback Anda, memeriksa grup materi, dan meninjau riwayat verifikasi. Integrasi produksi Anda harus memanggil API secara langsung.
+
+## Membuat Grup Materi
+
+Gunakan [Membuat Grup Aset Material](/id/api-reference/video/create-material-asset-group) untuk grup `aigc_avatar`. Grup orang asli yang baru dibuat melalui alur verifikasi agar orang yang terverifikasi dan grup materi tetap tertaut.
+
+Gunakan [Mencantumkan Grup Aset Material](/id/api-reference/video/list-material-asset-groups), [Mendapatkan Grup Aset Material](/id/api-reference/video/get-material-asset-group), [Memperbarui Grup Aset Material](/id/api-reference/video/update-material-asset-group), dan [Hapus Grup Aset Material](/id/api-reference/video/delete-material-asset-group) untuk mengelola grup setelah grup tersebut ada.
+
+Menghapus grup materi juga akan menghapus materi TokenLab di dalamnya dan tidak dapat dibatalkan. Jika pustaka materi TokenLab tidak dapat menyelesaikan penghapusan karena status otorisasi saat ini tidak mengizinkannya, TokenLab akan mengembalikan kesalahan pustaka materi netral.
+
+## Mengunggah Materi
+
+Gunakan [Membuat Aset Material](/id/api-reference/video/create-material-asset) untuk mengimpor satu URL sumber yang dapat diakses publik dalam satu waktu.
+
+Untuk `aigc_avatar`, `group_id` bersifat opsional; TokenLab menggunakan atau membuat grup avatar virtual default organisasi. Untuk `liveness_face`, `group_id` wajib diisi dan harus berupa grup yang dikembalikan oleh [Mendapatkan hasil validasi visual](/id/api-reference/video/get-visual-validation-result).
+
+| Tipe | Input yang didukung |
+|------|-----------------|
+| Gambar | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; rasio aspek `(0.4, 2.5)`; lebar dan tinggi `(300, 6000)` px; di bawah 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p`, atau `1080p`; 2-15 detik; rasio aspek `[0.4, 2.5]`; lebar dan tinggi `[300, 6000]` px; total piksel antara 409600 dan 2068676; hingga 200 MB; 24-60 FPS. |
+| Audio | `aac`, `wav`, `mp3`; 2-15 detik; hingga 15 MB. |
+
+Penyerapan materi bersifat asinkron. Lakukan polling pada [Mendapatkan Material Asset](/id/api-reference/video/get-material-asset) hingga `status` menjadi `ACTIVE`. Respons HTTP yang berhasil hanya berarti permintaan telah diterima; selalu baca status bisnisnya. Jika statusnya `FAILED`, periksa `error_message`, perbaiki materi sumber, dan buat aset baru.
+
+Dalam permintaan pembuatan material, `asset_url` hanya merupakan sumber impor. TokenLab mengembalikan `id` aset material; gunakan `id` tersebut untuk pembuatan video, bukan URL asli.
+
+TokenLab menyimpan aset material di pustaka material organisasi Anda sampai Anda menghapus aset tersebut atau grup materialnya.
+
+Untuk grup materi orang asli, satu grup memetakan ke satu orang asli. Unggahan diperiksa terhadap wajah yang terverifikasi. Aset dengan banyak wajah atau wajah yang tidak cocok dengan orang yang terverifikasi dapat gagal. Untuk hasil terbaik, unggah gambar referensi seluruh tubuh dari depan dan foto close-up menghadap ke depan di mana wajah terlihat jelas.
+
+## Menggunakan Materi dalam Pembuatan Video
+
+Setelah aset berstatus `ACTIVE`, berikan `id` aset TokenLab yang dikembalikan sebagai `material_asset_id`, atau sertakan dalam `material_asset_ids`, saat memanggil [Buat video](/id/api-reference/video/create-video). Aset materi dihitung terhadap batas referensi Seedance.
+
+## REST atau Action Volcengine
+
+Integrasi native TokenLab dapat tetap memakai API REST snake_case `/v1/videos/assets*`. Klien Volcengine yang ada dapat mempertahankan body PascalCase dengan [Action material kompatibel Volcengine](/id/api-reference/video/volc-compatible-material-actions). Keduanya mengoperasikan data material yang sama dalam lingkup organisasi dan project.
+
+## Contoh API
+
+Buat grup avatar virtual, unggah gambar, lakukan polling hingga aktif, lalu gunakan ID aset materi dalam permintaan video.
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+Untuk grup material orang asli, buat sesi validasi visual dan dapatkan hasilnya sebelum mengunggah material.
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+```
+
+## Alur Action lengkap untuk orang asli
+
+Berikan `GroupId` dari hasil verifikasi ke `CreateAsset`.
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-real1",
+    "URL":"https://example.com/person-front.png",
+    "Name":"Verified front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+Polling `GetAsset` sampai status menjadi `Active`, lalu gunakan ID material yang dikembalikan untuk pembuatan video.

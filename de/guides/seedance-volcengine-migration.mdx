@@ -1,0 +1,71 @@
+---
+title: "Seedance von Volcengine migrieren"
+description: "Migrieren Sie Volcengine-artige Seedance-Aufgaben und Materialintegrationen mit minimalen Request-Änderungen zu TokenLab."
+---
+
+Dieser Leitfaden richtet sich an Anwendungen, die bereits Volcengine-artige Seedance-Requests senden. Action-Namen, `Version=2024-01-01`, `content[]`, PascalCase-Material-Bodies und der Volcengine-Response-Envelope bleiben erhalten. Geändert werden müssen Endpunkt und Authentifizierung.
+
+## Was sich ändert
+
+| Bereich | Vorhandener Volcengine-Client | TokenLab |
+| --- | --- | --- |
+| Basis-URL | `Volcengine API` | `https://api.tokenlab.sh/` |
+| Authentifizierung | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Action-Request | `Action`, `Version` | `Action`, `Version` |
+| Task-Body | `content[]` | `content[]` |
+| Material-Body | `PascalCase` | `PascalCase` |
+| Asynchrones Ergebnis | `Task-ID` | `cgt-...` + Polling |
+
+Requests nur mit AK/SK-Signatur liefern `401 InvalidCredential`. Action-Clients können `POST /?Action=...&Version=2024-01-01` verwenden; `POST /api/v3?Action=...&Version=2024-01-01` bleibt verfügbar. REST-Task-Clients verwenden `/api/v3/contents/generations/tasks`.
+
+## Request-Format und Task-Lebenszyklus
+
+Wenn Ihre Integration bereits Volc-ähnliche Seedance-Anfragen sendet, können Sie den Kompatibilitätsendpunkt verwenden, statt den Body für `/v1/videos/generations` umzuformen. Senden Sie Ihren TokenLab API Key als `Authorization: Bearer ...`, verwenden Sie `POST /api/v3/contents/generations/tasks` für REST-Erstellung oder `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` für Action-Anfragen. Die Erstellung gibt eine Aufgaben-ID `cgt-...` zurück; Statusantworten verwenden `queued`, `running`, `succeeded`, `failed`, `cancelled` oder `expired`.
+
+Dieser Kompatibilitätsendpunkt akzeptiert `content[]`-Einträge wie `text`, `image_url`, `video_url`, `audio_url` und `draft_task`. Bildrollen wie `first_frame`, `last_frame` und `reference_image` bleiben erhalten. `callback_url` wird noch nicht unterstützt; fragen Sie stattdessen den Aufgabenendpunkt ab.
+### Referenzseiten
+
+- [Aufgabe erstellen (Volc-kompatibel)](/de/api-reference/video/create-volc-compatible-seedance-task)
+- [Aufgabe abrufen (Volc-kompatibel)](/de/api-reference/video/get-volc-compatible-seedance-task)
+- [Aufgabenliste (Volc-kompatibel)](/de/api-reference/video/list-volc-compatible-seedance-tasks)
+- [Aufgabe abbrechen (Volc-kompatibel)](/de/api-reference/video/delete-volc-compatible-seedance-task)
+
+## Task-Actions
+
+| Action | Bereich | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | Video-Task erstellen | `model`, `content[]` |
+| `GetContentsGenerationsTask` | Einen Task abrufen | `TaskId` |
+| `ListContentsGenerationsTasks` | Tasks auflisten | Filter, Paging |
+| `DeleteContentsGenerationsTasks` | Task abbrechen oder löschen | `TaskId` |
+
+## Minimales Action-Beispiel
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## Materialien und Personenverifizierung
+
+Derselbe Action-Endpunkt unterstützt auch zehn Material- und Materialgruppenoperationen. PascalCase-Bodies, Filter, Paging, Response-Envelope und zwölf Stunden gültige Material-URLs finden Sie unter [Volcengine-kompatible Material-Actions](/de/api-reference/video/volc-compatible-material-actions). Für Personenmaterialien sind vor dem Upload zusätzlich [Visuelle Verifizierungssitzung erstellen](/de/api-reference/video/create-visual-validation-session) und [Ergebnis der visuellen Verifizierung abrufen](/de/api-reference/video/get-visual-validation-result) erforderlich.
+
+## Migrationscheckliste
+
+1. Ersetzen Sie den API-Host durch `https://api.tokenlab.sh`.
+2. Ersetzen Sie die AK/SK-Signatur durch einen TokenLab Bearer API Key.
+3. Behalten Sie Action, Version und Groß-/Kleinschreibung des Bodys bei.
+4. Verwenden Sie für zusammengehörige Material- und Verifizierungsrequests dasselbe `ProjectName`.
+5. Speichern Sie die von TokenLab zurückgegebenen Task-, Gruppen- und Material-IDs.
+6. Prüfen Sie Erstellen, Polling, Listen und Fehlerantworten vor der Produktionsumstellung.

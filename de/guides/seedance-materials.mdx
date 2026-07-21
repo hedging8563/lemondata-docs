@@ -1,0 +1,136 @@
+---
+title: "Seedance-Materialien und Personenverifizierung"
+description: "Erstellen Sie wiederverwendbare Seedance-Materialien, verifizieren Sie reale Personen und verwenden Sie aktive Assets in der Videogenerierung."
+---
+
+Seedance-Materialien sind innerhalb einer Organisation wiederverwendbare Bild-, Video- oder Audioreferenzen. Wählen Sie zuerst den Workflow: Normale Avatar-Materialien und verifizierte Personenmaterialien haben unterschiedliche Erstellungspfade.
+
+## Material-Workflow wählen
+
+| Ziel | Erforderlicher Ablauf |
+| --- | --- |
+| Einmalige Bild-URL verwenden | URL direkt im Videorequest senden; kompatible Modelle bereiten das Material automatisch vor |
+| Avatar, Produkt oder Stil wiederverwenden | `aigc_avatar`-Gruppe und Asset erstellen, auf `ACTIVE` warten und Asset-ID verwenden |
+| Reale Person wiederverwenden | Visuelle Verifizierung abschließen, `GroupId` erhalten, Asset erstellen, auf `ACTIVE` warten und Asset-ID verwenden |
+| Volcengine-Materialclient migrieren | Action-Format beibehalten und Volcengine-kompatible Materialreferenz verwenden: [Material-Actions (Volcengine-kompatibel)](/de/api-reference/video/volc-compatible-material-actions) |
+
+## Materialkonzepte
+
+Seedance-Materialien sind wiederverwendbare, organisationsbezogene Referenzen, die später während der Videogenerierung ausgewählt werden können.
+
+| Konzept | Öffentliches Feld | Bedeutung |
+|---------|--------------|---------------|
+| Materialgruppe | `group_id` | Eine TokenLab-Gruppe, die zugehörige Seedance-Materialien enthält. Verwenden Sie diese beim Hochladen oder Auflisten von Materialien. |
+| Material-Asset | `id` | Eine hochgeladene Bild-, Video- oder Audiodatei. Verwenden Sie diesen Wert als `material_asset_id`, nachdem das Asset den Status `ACTIVE` erreicht hat. |
+| Materialgruppe für virtuelle Avatare | `library_type: "aigc_avatar"` | Für virtuelle Personen, Avatare, Produkte, Stile und andere wiederverwendbare Referenzen, die keine Verifizierung echter Personen erfordern. |
+| Materialgruppe für echte Personen | `library_type: "liveness_face"` | Erstellt durch die Verifizierung von Material echter Personen. Eine Gruppe repräsentiert eine verifizierte echte Person. |
+
+Halten Sie `group_id` und Material-Asset `id` getrennt. `group_id` dient der Organisation von Uploads; die Material-Asset `id` dient der Videogenerierung. Wenn eine Videoanfrage `Seedance material asset not found or not accessible` zurückgibt, stellen Sie sicher, dass Sie eine Material-Asset `id` und keine `group_id` übergeben haben und dass das Asset zur selben Organisation gehört, nicht gelöscht wurde und den `status: "ACTIVE"` aufweist.
+
+## Automatische Bildmaterialien
+
+Wenn das ausgewählte Seedance-Modell die TokenLab-Materialbibliothek verwenden kann, können Sie Bild-URLs oder unterstützte Inline-data-URLs direkt in `image`, `image_url`, `image_urls`, `reference_images`, `start_image` oder `end_image` senden. TokenLab importiert diese Bilder in die Standardgruppe für virtuelle Avatar-Materialien der Organisation und behält ihre Rolle als erstes Bild, letztes Bild oder Referenzbild bei.
+
+Werden die Materialien innerhalb von 60 Sekunden `ACTIVE`, läuft die Generierung in derselben Anfrage weiter. Andernfalls gibt die API `409 seedance_material_preparing` mit `auto_material_asset_ids` zurück; fragen Sie diese Materialien ab, bis sie `ACTIVE` sind, und versuchen Sie es dann mit `material_asset_id` oder `material_asset_ids` erneut. Kann das ausgewählte Modell die Materialbibliothek nicht verwenden, bleiben normale Bild-URLs oder data-URLs auf dem regulären Bildpfad; explizite Material-IDs schlagen sicher mit einem Materialverfügbarkeitsfehler fehl. Vorhandene virtuelle Avatar- und Real-Person-Material-IDs werden unverändert verwendet und nicht erneut importiert.
+
+## Verifizierung von Material echter Personen
+
+Verwenden Sie die Verifizierung von Material echter Personen, wenn Ihr Produkt eine Zustimmung und Gesichtsverifizierung erfordert, bevor eine echte Person als wiederverwendbare Seedance-Referenz genutzt werden kann.
+
+1. Rufen Sie [Visuelle Verifizierungssitzung erstellen](/de/api-reference/video/create-visual-validation-session) mit `CallbackURL` auf und speichern Sie den zurückgegebenen `Result.BytedToken`.
+2. Öffnen Sie `Result.H5Link` für die zu verifizierende Person. Hängen Sie für eine bestimmte Sprache `lng` an den H5-Link an.
+3. Nach Abschluss des H5-Ablaufs öffnet der Browser `Result.CallbackURL` mit offiziellen Abfragenamen wie `bytedToken` und `resultCode`.
+4. Rufen Sie [Visuelles Verifizierungsergebnis abrufen](/de/api-reference/video/get-visual-validation-result) wiederholt mit `BytedToken` auf, bis `Result.GroupId` zurückgegeben wird.
+5. Speichern Sie `GroupId` und verwenden Sie sie beim Erstellen von `liveness_face`-Materialien als `group_id`.
+
+`BytedToken` ist 30 Minuten gültig. Verwenden Sie in beiden Action-Anfragen denselben `ProjectName`. Die Authentifizierung erfolgt mit `Authorization: Bearer <TOKENLAB_API_KEY>`; Volc-AK/SK-Signaturen werden nicht akzeptiert.
+
+Optional: Verwenden Sie die [Testkonsole](https://tokenlab.sh/dashboard/seedance-assets), um Ihren Anfrage- und Callback-Ablauf zu verifizieren, Materialgruppen zu untersuchen und den Verifizierungsverlauf einzusehen. Ihre Produktionsintegration sollte die APIs direkt aufrufen.
+
+## Erstellen von Materialgruppen
+
+Verwenden Sie [Material-Asset-Gruppe erstellen](/de/api-reference/video/create-material-asset-group) für `aigc_avatar`-Gruppen. Neue Gruppen für echte Personen werden über den Verifizierungsprozess erstellt, damit die verifizierte Person und die Materialgruppe verknüpft bleiben.
+
+Verwenden Sie [Material-Asset-Gruppen auflisten](/de/api-reference/video/list-material-asset-groups), [Material-Asset-Gruppe abrufen](/de/api-reference/video/get-material-asset-group), [Material-Asset-Gruppe aktualisieren](/de/api-reference/video/update-material-asset-group) und [Material-Asset-Gruppe löschen](/de/api-reference/video/delete-material-asset-group), um Gruppen zu verwalten, nachdem sie erstellt wurden.
+
+Das Löschen einer Materialgruppe löscht auch die darin enthaltenen TokenLab-Materialien und kann nicht rückgängig gemacht werden. Wenn die TokenLab-Materialbibliothek den Löschvorgang nicht abschließen kann, weil der aktuelle Autorisierungsstatus dies nicht zulässt, gibt TokenLab einen neutralen Materialbibliotheksfehler zurück.
+
+## Hochladen von Materialien
+
+Verwenden Sie [Material-Asset erstellen](/de/api-reference/video/create-material-asset), um jeweils eine öffentlich erreichbare Quell-URL zu importieren.
+
+Für `aigc_avatar` ist die `group_id` optional; TokenLab verwendet oder erstellt die standardmäßige virtuelle Avatar-Gruppe der Organisation. Für `liveness_face` ist die `group_id` erforderlich und muss die Gruppe sein, die von [Visuelles Verifizierungsergebnis abrufen](/de/api-reference/video/get-visual-validation-result) zurückgegeben wurde.
+
+| Typ | Unterstützte Eingabe |
+|------|-----------------|
+| Bild | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; Seitenverhältnis `(0.4, 2.5)`; Breite und Höhe `(300, 6000)` px; unter 30 MB. |
+| Video | `mp4`, `mov`; `480p`, `720p` oder `1080p`; 2-15 Sekunden; Seitenverhältnis `[0.4, 2.5]`; Breite und Höhe `[300, 6000]` px; Gesamtpixel zwischen 409600 und 2068676; bis zu 200 MB; 24-60 FPS. |
+| Audio | `aac`, `wav`, `mp3`; 2-15 Sekunden; bis zu 15 MB. |
+
+Die Materialaufnahme erfolgt asynchron. Pollen Sie [Material-Asset abrufen](/de/api-reference/video/get-material-asset), bis der `status` auf `ACTIVE` wechselt. Eine erfolgreiche HTTP-Antwort bedeutet lediglich, dass die Anfrage akzeptiert wurde; lesen Sie immer den Geschäftsstatus. Wenn der Status `FAILED` lautet, untersuchen Sie die `error_message`, korrigieren Sie das Quellmaterial und erstellen Sie ein neues Asset.
+
+In Anfragen zum Erstellen von Materialien ist `asset_url` nur die Importquelle. TokenLab gibt eine Material-Asset-`id` zurück; verwenden Sie diese `id` für die Generierung statt der ursprünglichen URL.
+
+TokenLab behält Material-Assets in Ihrer Organisationsbibliothek, bis Sie das Asset oder seine Materialgruppe löschen.
+
+Bei Materialgruppen für echte Personen entspricht eine Gruppe einer echten Person. Uploads werden mit dem verifizierten Gesicht abgeglichen. Assets mit mehreren Gesichtern oder einem Gesicht, das nicht mit der verifizierten Person übereinstimmt, können fehlschlagen. Für beste Ergebnisse laden Sie sowohl ein Ganzkörper-Referenzbild von vorne als auch eine Nahaufnahme von vorne hoch, auf der das Gesicht klar erkennbar ist.
+
+## Verwendung von Materialien bei der Videogenerierung
+
+Nachdem ein Asset `ACTIVE` ist, übergeben Sie die zurückgegebene TokenLab-Asset `id` als `material_asset_id` oder fügen Sie sie in `material_asset_ids` ein, wenn Sie [Video erstellen](/de/api-reference/video/create-video) aufrufen. Material-Assets zählen gegen die Seedance-Referenzlimits.
+
+## REST oder Volcengine Action
+
+TokenLab-native Integrationen können weiterhin die snake_case-REST-API `/v1/videos/assets*` verwenden. Bestehende Volcengine-Clients behalten PascalCase-Bodies und verwenden die [Volcengine-kompatiblen Material-Actions](/de/api-reference/video/volc-compatible-material-actions). Beide Varianten bearbeiten dieselben organisations- und projektgebundenen Materialdaten.
+
+## API-Beispiele
+
+Erstellen Sie eine virtuelle Avatar-Gruppe, laden Sie ein Bild hoch, pollen Sie, bis es aktiv ist, und verwenden Sie dann die Material-Asset-ID in einer Videoanfrage.
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+Erstellen Sie für eine Materialgruppe einer echten Person zuerst eine visuelle Verifizierungssitzung und rufen Sie das Ergebnis ab, bevor Sie Materialien hochladen.
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+```
+
+## Vollständiger Action-Ablauf für reale Personen
+
+Übergeben Sie die vom Verifizierungsergebnis gelieferte `GroupId` an `CreateAsset`.
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-real1",
+    "URL":"https://example.com/person-front.png",
+    "Name":"Verified front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+Pollen Sie `GetAsset`, bis der Status `Active` ist, und verwenden Sie dann die zurückgegebene Material-ID in der Videogenerierung.

@@ -1,0 +1,71 @@
+---
+title: "Volcengine から Seedance を移行"
+description: "Volcengine 形式の Seedance タスクと素材統合を、最小限の変更で TokenLab に移行します。"
+---
+
+アプリケーションがすでに Volcengine 形式の Seedance リクエストを送信している場合に使用してください。Action 名、`Version=2024-01-01`、`content[]`、素材の PascalCase JSON、Volcengine レスポンスエンベロープを維持できます。変更が必要なのはエンドポイントと認証方式です。
+
+## 変更点
+
+| 項目 | 既存の Volcengine クライアント | TokenLab |
+| --- | --- | --- |
+| ベース URL | `Volcengine API` | `https://api.tokenlab.sh/` |
+| 認証 | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Action リクエスト | `Action`, `Version` | `Action`, `Version` |
+| タスク本文 | `content[]` | `content[]` |
+| 素材本文 | `PascalCase` | `PascalCase` |
+| 非同期結果 | `タスク ID` | `cgt-...` + ポーリング |
+
+AK/SK 署名だけのリクエストは `401 InvalidCredential` を返します。Action クライアントは `POST /?Action=...&Version=2024-01-01` を使用でき、`POST /api/v3?Action=...&Version=2024-01-01` も引き続き利用できます。REST タスククライアントは `/api/v3/contents/generations/tasks` を使用します。
+
+## リクエスト形式とタスクのライフサイクル
+
+既存の連携が Volc 形式の Seedance リクエストを送っている場合、`/v1/videos/generations` の統一形式へ変換せずに互換エンドポイントを使えます。TokenLab API Key を `Authorization: Bearer ...` として送り、REST 形式の作成には `POST /api/v3/contents/generations/tasks`、Action 形式には `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` を使います。作成応答は `cgt-...` タスク ID を返し、ステータスは `queued`、`running`、`succeeded`、`failed`、`cancelled`、`expired` を使います。
+
+この互換エンドポイントは `content[]` の `text`、`image_url`、`video_url`、`audio_url`、`draft_task` を受け付けます。`first_frame`、`last_frame`、`reference_image` などの画像ロールは保持されます。`callback_url` はまだ対応していません。タスクエンドポイントをポーリングしてください。
+### リファレンス
+
+- [タスク作成（Volc 互換）](/ja/api-reference/video/create-volc-compatible-seedance-task)
+- [タスク取得（Volc 互換）](/ja/api-reference/video/get-volc-compatible-seedance-task)
+- [タスク一覧（Volc 互換）](/ja/api-reference/video/list-volc-compatible-seedance-tasks)
+- [タスク取消（Volc 互換）](/ja/api-reference/video/delete-volc-compatible-seedance-task)
+
+## タスク Action
+
+| Action | 項目 | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | ビデオタスクを作成 | `model`, `content[]` |
+| `GetContentsGenerationsTask` | 1 件のタスクを取得 | `TaskId` |
+| `ListContentsGenerationsTasks` | タスクを一覧表示 | フィルター、ページング |
+| `DeleteContentsGenerationsTasks` | タスクをキャンセルまたは削除 | `TaskId` |
+
+## 最小 Action 例
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## 素材と実在人物の認証
+
+同じ Action エンドポイントは 10 個の素材・素材グループ操作にも対応します。PascalCase 本文、フィルター、ページング、レスポンス形式、12 時間有効な素材 URL は[Volcengine 互換素材 Action](/ja/api-reference/video/volc-compatible-material-actions)を参照してください。実在人物の素材では、アップロード前に[視覚認証セッションを作成](/ja/api-reference/video/create-visual-validation-session)と[視覚認証結果を取得](/ja/api-reference/video/get-visual-validation-result)も呼び出します。
+
+## 移行チェックリスト
+
+1. API ホストを `https://api.tokenlab.sh` に変更します。
+2. AK/SK 署名を TokenLab Bearer API Key に変更します。
+3. 既存の Action、バージョン、本文の大文字・小文字を維持します。
+4. 関連する素材と人物認証リクエストで同じ `ProjectName` を使います。
+5. TokenLab が返すタスク、グループ、素材 ID を保存します。
+6. 本番トラフィックを移す前に、作成、ポーリング、一覧、エラー応答を確認します。

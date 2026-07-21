@@ -1,0 +1,126 @@
+---
+title: "素材 Action（火山兼容）"
+openapi: "POST /api/v3"
+description: "10 个火山兼容素材和素材组 Action 的接口参考。"
+---
+
+这些 Action 允许现有火山素材客户端保留 Action 名称、`Version=2024-01-01`、PascalCase JSON、筛选、排序、分页以及 `ResponseMetadata + Result` 信封。TokenLab 只替换接口地址和鉴权方式。
+
+## 接口与鉴权
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+也支持 `POST /api/v3?Action=<ACTION>&Version=2024-01-01`。所有素材 Action 只接受 POST。仅带 AK/SK 签名的请求会返回 `401 InvalidCredential`。
+
+`ProjectName` 默认是 `default`，并在当前组织内形成真实隔离边界。相关的创建、列表、读取、更新和删除请求必须使用同一个值。
+
+## 素材组 Action
+
+| Action | 目标 | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | 创建普通素材组 | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | 列出项目内的素材组 | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | 获取单个素材组 | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | 修改素材组名称或描述 | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | 删除素材组及其中素材 | `Id`; `ProjectName` |
+
+`CreateAssetGroup` 只能创建 `AIGC` 组。`LivenessFace` 组必须由真人验证成功后创建；`ListAssetGroups` 可以筛选两种组。
+
+### 创建素材组
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## 素材 Action
+
+| Action | 目标 | JSON |
+| --- | --- | --- |
+| `CreateAsset` | 导入一个公开图片、视频或音频 URL | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | 列出项目内的素材 | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | 获取素材及临时 URL | `Id`; `ProjectName` |
+| `UpdateAsset` | 重命名素材 | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | 删除单个素材 | `Id`; `ProjectName` |
+
+`AssetType` 支持 `Image`、`Video` 和 `Audio`。目标素材组决定它是普通 `AIGC` 素材还是已验证的 `LivenessFace` 素材。
+
+### 创建素材
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## 列表行为
+
+`PageNumber` 默认是 `1`，`PageSize` 默认是 `10` 且最大为 `100`。`SortBy` 支持 `CreateTime` 或 `UpdateTime`；`SortOrder` 支持 `Desc` 或 `Asc`。
+
+素材状态为 `Active`、`Processing` 或 `Failed`。`GetAsset` 和 `ListAssets` 返回有效期 12 小时的临时 `URL`；请保存 `Id`，不要把 URL 当成永久标识。
+
+`ListAssetGroups` 和 `ListAssets` 通过 `Result.Items` 返回资源，并同时返回 `TotalCount`、`PageNumber` 和 `PageSize`。
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## 真人素材
+
+先创建视觉验证会话并完成 H5 验证，再获取验证结果返回的 `GroupId`，最后用该组调用 `CreateAsset`。上传内容会与已验证的人脸比对。
+
+1. [创建视觉验证会话](/zh/api-reference/video/create-visual-validation-session)
+2. [获取视觉验证结果](/zh/api-reference/video/get-visual-validation-result)
+3. 使用返回的 `GroupId` 调用 `CreateAsset`
+
+## 错误
+
+错误继续使用火山响应信封，错误码和消息位于 `ResponseMetadata.Error`。
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## REST 替代接口
+
+TokenLab 的 `/v1/videos/assets*` REST 接口继续可用。新接入可选择 snake_case REST；已有火山客户端无需改造请求体。 [Seedance 素材与真人验证](/zh/guides/seedance-materials).

@@ -1,0 +1,71 @@
+---
+title: "從火山遷移 Seedance"
+description: "以最少的請求改動，把火山風格的 Seedance 任務與素材整合遷移到 TokenLab。"
+---
+
+如果應用程式已經傳送火山風格的 Seedance 請求，請使用本指南。Action 名稱、`Version=2024-01-01`、`content[]`、PascalCase 素材請求內容及火山回應信封都能保留；必須修改的是端點與驗證方式。
+
+## 需要修改的內容
+
+| 項目 | 既有火山用戶端 | TokenLab |
+| --- | --- | --- |
+| 基礎 URL | `Volcengine API` | `https://api.tokenlab.sh/` |
+| 驗證 | `AK/SK` | `Authorization: Bearer <TOKENLAB_API_KEY>` |
+| Action 請求 | `Action`, `Version` | `Action`, `Version` |
+| 任務請求內容 | `content[]` | `content[]` |
+| 素材請求內容 | `PascalCase` | `PascalCase` |
+| 非同步結果 | `任務 ID` | `cgt-...` + 輪詢 |
+
+僅帶 AK/SK 的請求會回傳 `401 InvalidCredential`。Action 用戶端可使用 `POST /?Action=...&Version=2024-01-01`；`POST /api/v3?Action=...&Version=2024-01-01` 仍然可用。REST 任務用戶端使用 `/api/v3/contents/generations/tasks`。
+
+## 請求格式與任務生命週期
+
+如果你的系統已經按火山風格發送 Seedance 請求，可以使用相容入口，而不必把請求體改成 `/v1/videos/generations` 的統一格式。請使用 TokenLab API Key 作為 `Authorization: Bearer ...`，REST 建立使用 `POST /api/v3/contents/generations/tasks`，Action 風格請求使用 `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01`。建立回應返回 `cgt-...` 任務 ID；狀態回應使用 `queued`、`running`、`succeeded`、`failed`、`cancelled` 或 `expired`。
+
+該入口接受 `content[]` 中的 `text`、`image_url`、`video_url`、`audio_url` 和 `draft_task`。`first_frame`、`last_frame`、`reference_image` 等圖片角色會被保留。`callback_url` 暫不支援；請輪詢任務介面。
+### 參考頁面
+
+- [建立任務（火山相容）](/zh-Hant/api-reference/video/create-volc-compatible-seedance-task)
+- [查詢任務（火山相容）](/zh-Hant/api-reference/video/get-volc-compatible-seedance-task)
+- [任務列表（火山相容）](/zh-Hant/api-reference/video/list-volc-compatible-seedance-tasks)
+- [取消任務（火山相容）](/zh-Hant/api-reference/video/delete-volc-compatible-seedance-task)
+
+## 任務 Action
+
+| Action | 項目 | JSON |
+| --- | --- | --- |
+| `CreateContentsGenerationsTasks` | 建立影片任務 | `model`, `content[]` |
+| `GetContentsGenerationsTask` | 取得單一任務 | `TaskId` |
+| `ListContentsGenerationsTasks` | 列出任務 | 篩選、分頁 |
+| `DeleteContentsGenerationsTasks` | 取消或刪除任務 | `TaskId` |
+
+## 最小 Action 範例
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model":"seedance-2.0",
+    "content":[
+      {"type":"text","text":"A cinematic product reveal"},
+      {"type":"image_url","role":"reference_image","image_url":{"url":"https://example.com/reference.png"}}
+    ],
+    "ratio":"16:9",
+    "duration":5,
+    "resolution":"720p"
+  }'
+```
+
+## 素材與真人驗證
+
+同一個 Action 端點也支援 10 個素材及素材群組操作。請參閱[火山相容素材 Action](/zh-Hant/api-reference/video/volc-compatible-material-actions)以了解 PascalCase 請求內容、篩選、分頁、回應信封及 12 小時素材 URL。真人素材在上傳前還要呼叫[建立視覺驗證工作階段](/zh-Hant/api-reference/video/create-visual-validation-session)和[取得視覺驗證結果](/zh-Hant/api-reference/video/get-visual-validation-result)。
+
+## 遷移檢查清單
+
+1. 將 API 主機替換為 `https://api.tokenlab.sh`。
+2. 以 TokenLab Bearer API Key 取代 AK/SK 簽名。
+3. 保留既有 Action、版本與請求內容大小寫。
+4. 相關素材與真人驗證請求使用相同的 `ProjectName`。
+5. 儲存 TokenLab 回傳的任務、素材群組和素材 ID。
+6. 移轉正式流量前，驗證建立、輪詢、列表及錯誤回應。

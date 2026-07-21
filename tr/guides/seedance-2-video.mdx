@@ -1,9 +1,19 @@
 ---
 title: "Seedance 2.0 Video Modelleri"
-description: "Sanal avatar ve gerçek kişi materyal gruplarıyla Seedance 2.0 video oluşturmayı kullanın."
+description: "Bir Seedance 2.0 modeli ve doğru TokenLab entegrasyon yolunu seçin."
 ---
 
-Seedance 2.0; metinden videoya, görselden videoya, başlangıç/bitiş karesi videoya, referanstan videoya, video düzenleme ve video uzatma işlemlerini destekler. `seedance-2.0`, `seedance-2.0-fast` ve `seedance-2.0-mini` gibi model kimliklerini (ID) kullanın ve ardından `operation` ile iş akışını seçin.
+Bir uygulamaya Seedance 2.0 eklerken buradan başlayın. Bu sayfa yalnızca model ve iş akışı seçimini ele alır; Volcengine geçişi, yeniden kullanılabilir materyaller ve gerçek kişi doğrulaması ayrı kılavuzlardadır.
+
+## Entegrasyon yolunu seçin
+
+| Amaç | Kullanılacak yol | Sonraki belge |
+| --- | --- | --- |
+| Yeni TokenLab video entegrasyonu oluşturmak | Birleşik `POST /v1/videos/generations` API | [Video oluşturma kılavuzu](/tr/guides/video-generation) |
+| Mevcut Volcengine Seedance istemcisini taşımak | Volcengine uyumlu REST veya Action API | [Seedance’i Volcengine’den taşıma](/tr/guides/seedance-volcengine-migration) |
+| Avatar, ürün, stil veya gerçek kişi referansını yeniden kullanmak | TokenLab materyal kitaplığı | [Seedance materyalleri ve gerçek kişi doğrulaması](/tr/guides/seedance-materials) |
+
+Üç yol da `Authorization: Bearer <TOKENLAB_API_KEY>` kullanır. Volcengine uyumlu yollar istek şeklini korur ancak AK/SK imzasını kabul etmez.
 
 ## Model Seçimi
 
@@ -26,118 +36,17 @@ Seedance 2.0; metinden videoya, görselden videoya, başlangıç/bitiş karesi v
 | `video-to-video` | `prompt`, `video_url` veya uyumlu video girdisi |
 | `video-extension` | `task_id` veya modele özel devam ettirme girdisi |
 
-## Materyal Kavramları
-
-Seedance materyalleri, video oluşturma sırasında daha sonra seçilebilen, organizasyon kapsamındaki yeniden kullanılabilir referanslardır.
-
-| Kavram | Genel alan | Anlamı |
-|---------|--------------|---------------|
-| Materyal grubu | `group_id` | İlgili Seedance materyallerine sahip olan bir TokenLab grubu. Materyalleri yüklerken veya listelerken kullanın. |
-| Materyal varlığı | `id` | Yüklenmiş bir görsel, video veya ses dosyası. Varlık `ACTIVE` durumuna geldikten sonra bu değeri `material_asset_id` olarak kullanın. |
-| Sanal avatar materyal grubu | `library_type: "aigc_avatar"` | Sanal insanlar, avatarlar, ürünler, stiller ve gerçek kişi doğrulaması gerektirmeyen diğer yeniden kullanılabilir referanslar için. |
-| Gerçek kişi materyal grubu | `library_type: "liveness_face"` | Gerçek kişi materyal doğrulaması ile oluşturulur. Bir grup, doğrulanmış bir gerçek kişiyi temsil eder. |
-
-`group_id` ve materyal varlığı `id` değerlerini ayrı tutun. `group_id` yüklemeleri düzenlemek içindir; materyal varlığı `id` ise video oluşturma içindir. Bir video isteği `Seedance material asset not found or not accessible` hatası döndürürse, `group_id` değil, bir materyal varlığı `id` değeri gönderdiğinizden; varlığın aynı organizasyona ait olduğundan, silinmediğinden ve `status: "ACTIVE"` durumunda olduğundan emin olun.
-
-## Otomatik Görsel Materyalleri
-
-Seçilen Seedance modeli TokenLab materyal kitaplığını kullanabiliyorsa, görsel URL’lerini veya desteklenen inline data URL’lerini doğrudan `image`, `image_url`, `image_urls`, `reference_images`, `start_image` ya da `end_image` alanlarında gönderebilirsiniz. TokenLab bu görselleri kuruluşun varsayılan sanal avatar materyal grubuna aktarır ve ilk kare, son kare veya referans görsel rollerini korur.
-
-Materyaller 60 saniye içinde `ACTIVE` olursa oluşturma aynı istekte devam eder. Aksi halde API, `auto_material_asset_ids` ile `409 seedance_material_preparing` döndürür; bu materyaller `ACTIVE` olana kadar sorgulayın ve ardından `material_asset_id` veya `material_asset_ids` ile tekrar deneyin. Seçilen model materyal kitaplığını kullanamıyorsa normal görsel URL’leri veya data URL’leri standart görsel yolunda kalır; açık materyal ID’leri yeniden denenebilir materyal kullanılabilirliği hatasıyla güvenli şekilde başarısız olur. Mevcut sanal avatar ve gerçek kişi materyal ID’leri olduğu gibi kullanılır ve yeniden içe aktarılmaz.
-
-## Gerçek Kişi Materyal Doğrulaması
-
-Ürününüz, bir gerçek kişinin yeniden kullanılabilir bir Seedance referansı olarak kullanılabilmesi için onay ve yüz doğrulaması gerektiriyorsa gerçek kişi materyal doğrulamasını kullanın.
-
-1. `CallbackURL` ile [Görsel doğrulama oturumu oluştur](/tr/api-reference/video/create-visual-validation-session) çağrısı yapın ve döndürülen `Result.BytedToken` değerini kaydedin.
-2. Doğrulanacak kişi için `Result.H5Link` bağlantısını açın. Belirli bir dil gerekiyorsa H5 bağlantısına `lng` ekleyin.
-3. H5 akışı tamamlandığında tarayıcı, `bytedToken` ve `resultCode` gibi resmi sorgu adlarıyla `Result.CallbackURL` adresini açar.
-4. `Result.GroupId` dönene kadar `BytedToken` ile [Görsel doğrulama sonucunu al](/tr/api-reference/video/get-visual-validation-result) çağrısını tekrarlayın.
-5. `GroupId` değerini kaydedin ve `liveness_face` materyalleri oluştururken `group_id` olarak kullanın.
-
-`BytedToken` 30 dakika geçerlidir. Her iki Action isteğinde aynı `ProjectName` değerini kullanın. Kimlik doğrulamada `Authorization: Bearer <TOKENLAB_API_KEY>` kullanılır; Volc AK/SK imzaları kabul edilmez.
-
-İsteğe bağlı: İstek ve geri çağırma (callback) akışınızı doğrulamak, materyal gruplarını incelemek ve doğrulama geçmişini gözden geçirmek için [test konsolunu](https://tokenlab.sh/dashboard/seedance-assets) kullanın. Üretim (production) entegrasyonunuz API'leri doğrudan çağırmalıdır.
-
-## Materyal Grupları Oluşturma
-
-`aigc_avatar` grupları için [Materyal Varlık Grubu Oluştur](/tr/api-reference/video/create-material-asset-group) kullanın. Yeni gerçek kişi grupları, doğrulanmış kişi ile materyal grubunun bağlantılı kalması için doğrulama akışı üzerinden oluşturulur.
-
-Gruplar oluşturulduktan sonra yönetmek için [Materyal Varlık Gruplarını Listele](/tr/api-reference/video/list-material-asset-groups), [Materyal Varlık Grubunu Getir](/tr/api-reference/video/get-material-asset-group), [Materyal Varlık Grubunu Güncelle](/tr/api-reference/video/update-material-asset-group) ve [Materyal Varlık Grubunu Sil](/tr/api-reference/video/delete-material-asset-group) kullanın.
-
-Bir materyal grubunu silmek, içindeki TokenLab materyallerini de siler ve bu işlem geri alınamaz. TokenLab materyal kütüphanesi, mevcut yetkilendirme durumu izin vermediği için silme işlemini tamamlayamazsa, TokenLab nötr bir materyal kütüphanesi hatası döndürür.
-
-## Materyal Yükleme
-
-Her seferinde genel olarak erişilebilir bir kaynak URL'sini içe aktarmak için [Materyal Varlığı Oluştur](/tr/api-reference/video/create-material-asset) kullanın.
-
-`aigc_avatar` için `group_id` isteğe bağlıdır; TokenLab, organizasyonun varsayılan sanal avatar grubunu kullanır veya oluşturur. `liveness_face` için `group_id` zorunludur ve [Görsel doğrulama sonucunu al](/tr/api-reference/video/get-visual-validation-result) tarafından döndürülen grup olmalıdır.
-
-| Tür | Desteklenen girdi |
-|------|-----------------|
-| Görsel | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; en-boy oranı `(0.4, 2.5)`; genişlik ve yükseklik `(300, 6000)` px; 30 MB altı. |
-| Video | `mp4`, `mov`; `480p`, `720p` veya `1080p`; 2-15 saniye; en-boy oranı `[0.4, 2.5]`; genişlik ve yükseklik `[300, 6000]` px; toplam piksel 409600 ile 2068676 arası; 200 MB'a kadar; 24-60 FPS. |
-| Ses | `aac`, `wav`, `mp3`; 2-15 saniye; 15 MB'a kadar. |
-
-Materyal alımı asenkrondur. `status` değeri `ACTIVE` olana kadar [Materyal Varlığını Getir](/tr/api-reference/video/get-material-asset) ile sorgulama yapın. Başarılı bir HTTP yanıtı, yalnızca isteğin kabul edildiği anlamına gelir; her zaman iş durumunu (business status) okuyun. Durum `FAILED` ise `error_message` kısmını inceleyin, kaynak materyali düzeltin ve yeni bir varlık oluşturun.
-
-Materyal oluşturma isteklerinde `asset_url` yalnızca içe aktarma kaynağıdır. TokenLab bir materyal varlığı `id` değeri döndürür; üretim için özgün URL yerine bu `id` değerini kullanın.
-
-TokenLab, materyal varlıklarını siz varlığı veya materyal grubunu silene kadar organizasyonunuzun materyal kitaplığında tutar.
-
-Gerçek kişi materyal grupları için bir grup, bir gerçek kişiyle eşleşir. Yüklemeler, doğrulanmış yüze göre kontrol edilir. Birden fazla yüz içeren veya doğrulanmış kişiyle eşleşmeyen bir yüze sahip varlıklar başarısız olabilir. En iyi sonuçlar için hem tam vücut önden referans görseli hem de yüzün net olduğu önden yakın çekim bir görsel yükleyin.
-
-## Video Oluşturmada Materyal Kullanımı
-
-Bir varlık `ACTIVE` olduktan sonra, [Video oluştur](/tr/api-reference/video/create-video) çağrısı yaparken dönen TokenLab varlık `id` değerini `material_asset_id` olarak iletin veya `material_asset_ids` içine dahil edin. Materyal varlıkları, Seedance referans limitlerine dahil edilir.
-
-## API Örnekleri
-
-Bir sanal avatar grubu oluşturun, bir görsel yükleyin, aktif olana kadar sorgulayın ve ardından video isteğinde materyal varlığı kimliğini kullanın.
-
-```bash
-curl https://api.tokenlab.sh/v1/videos/assets/groups \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
-
-curl https://api.tokenlab.sh/v1/videos/assets \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
-
-curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY"
-```
-
-Gerçek kişi materyal grubu için materyalleri yüklemeden önce bir görsel doğrulama oturumu oluşturun ve sonucu alın.
-
-```bash
-curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
-
-curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
-```
-
 ## Fiyatlandırma ve Asenkron Sonuçlar
 
 Seedance 2.0 fiyatlandırması çıktı çözünürlüğüne, girdi türüne ve modele bağlıdır. Ürün arayüzünü kodlamadan önce [Pricing API](/tr/api-reference/pricing/get-pricing) veya [Models API](/tr/api-reference/models/list-models) kullanın.
 
 Video oluşturma asenkrondur. Oluşturma istekleri tarafından döndürülen `poll_url` adresini takip edin veya dönen görev kimliği (task ID) ile [Görev Durumunu Al](/tr/api-reference/tasks/get-task-status) kullanın.
 
-## Volc uyumlu Seedance endpoint’i
+## İlgili API’ler
 
-Entegrasyonunuz zaten Volc tarzı Seedance istekleri gönderiyorsa, body’yi `/v1/videos/generations` formatına dönüştürmek yerine uyumluluk endpoint’ini kullanabilirsiniz. TokenLab API key’i `Authorization: Bearer ...` olarak gönderin; REST oluşturma için `POST /api/v3/contents/generations/tasks`, Action tarzı istekler için `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` kullanın. Oluşturma yanıtı `cgt-...` görev ID’si döndürür; durum yanıtları `queued`, `running`, `succeeded`, `failed`, `cancelled` veya `expired` kullanır.
-
-Bu uyumluluk endpoint’i `content[]` içinde `text`, `image_url`, `video_url`, `audio_url` ve `draft_task` öğelerini kabul eder. `first_frame`, `last_frame` ve `reference_image` gibi görsel rolleri korunur. `callback_url` henüz desteklenmez; görev endpoint’ini sorgulayın.
-### Referans sayfaları
-
-- [Görev oluştur (Volc uyumlu)](/tr/api-reference/video/create-volc-compatible-seedance-task)
-- [Görevi al (Volc uyumlu)](/tr/api-reference/video/get-volc-compatible-seedance-task)
-- [Görev listesi (Volc uyumlu)](/tr/api-reference/video/list-volc-compatible-seedance-tasks)
-- [Görevi iptal et (Volc uyumlu)](/tr/api-reference/video/delete-volc-compatible-seedance-task)
+| API | Sonraki belge |
+|-----|---------------|
+| `POST /v1/videos/generations` | [Video oluştur](/tr/api-reference/video/create-video) |
+| `GET /v1/tasks/{id}` | [Görev durumunu al](/tr/api-reference/tasks/get-task-status) |
+| Seedance görev uyumluluğu | [Volcengine uyumlu görev oluştur](/tr/api-reference/video/create-volc-compatible-seedance-task) |
+| Materyal Action uyumluluğu | [Materyal Action’ları (Volcengine uyumlu)](/tr/api-reference/video/volc-compatible-material-actions) |

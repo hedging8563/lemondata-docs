@@ -1,9 +1,19 @@
 ---
 title: "Model Video Seedance 2.0"
-description: "Gunakan pembuatan video Seedance 2.0 dengan grup materi avatar virtual dan orang asli."
+description: "Pilih model Seedance 2.0 dan jalur integrasi TokenLab yang tepat."
 ---
 
-Seedance 2.0 mendukung text-to-video, image-to-video, start/end-frame video, reference-to-video, pengeditan video, dan ekstensi video. Gunakan ID model seperti `seedance-2.0`, `seedance-2.0-fast`, dan `seedance-2.0-mini`, lalu pilih alur kerja dengan `operation`.
+Mulai dari sini saat menambahkan Seedance 2.0 ke aplikasi. Halaman ini hanya membahas pemilihan model dan alur; migrasi dari Volcengine, material yang dapat digunakan ulang, dan verifikasi orang asli memiliki panduan terpisah.
+
+## Pilih jalur integrasi
+
+| Tujuan | Gunakan | Lanjutkan ke |
+| --- | --- | --- |
+| Membangun integrasi video TokenLab baru | API terpadu `POST /v1/videos/generations` | [Panduan pembuatan video](/id/guides/video-generation) |
+| Memigrasikan klien Seedance Volcengine | API REST atau Action yang kompatibel dengan Volcengine | [Migrasi Seedance dari Volcengine](/id/guides/seedance-volcengine-migration) |
+| Menggunakan ulang avatar, produk, gaya, atau orang asli | Pustaka material TokenLab | [Material Seedance dan verifikasi orang asli](/id/guides/seedance-materials) |
+
+Ketiga jalur memakai `Authorization: Bearer <TOKENLAB_API_KEY>`. Jalur kompatibel Volcengine mempertahankan bentuk request, tetapi tidak menerima tanda tangan AK/SK.
 
 ## Pilihan Model
 
@@ -26,118 +36,17 @@ Seedance 2.0 mendukung text-to-video, image-to-video, start/end-frame video, ref
 | `video-to-video` | `prompt`, `video_url` atau input video yang kompatibel |
 | `video-extension` | `task_id` atau input kelanjutan khusus model |
 
-## Konsep Materi
-
-Materi Seedance adalah referensi yang dapat digunakan kembali dan dicakup oleh organisasi yang dapat dipilih nanti selama pembuatan video.
-
-| Konsep | Bidang publik | Apa artinya |
-|---------|--------------|---------------|
-| Grup materi | `group_id` | Grup TokenLab yang memiliki materi Seedance terkait. Gunakan saat mengunggah atau mencantumkan materi. |
-| Aset materi | `id` | Satu file gambar, video, atau audio yang diunggah. Gunakan nilai ini sebagai `material_asset_id` setelah aset menjadi `ACTIVE`. |
-| Grup materi avatar virtual | `library_type: "aigc_avatar"` | Untuk orang virtual, avatar, produk, gaya, dan referensi lain yang dapat digunakan kembali yang tidak memerlukan verifikasi orang asli. |
-| Grup materi orang asli | `library_type: "liveness_face"` | Dibuat melalui verifikasi materi orang asli. Satu grup mewakili satu orang asli yang terverifikasi. |
-
-Pisahkan `group_id` dan `id` aset materi. `group_id` digunakan untuk mengatur unggahan; `id` aset materi digunakan untuk pembuatan video. Jika permintaan video mengembalikan `Seedance material asset not found or not accessible`, pastikan Anda memberikan `id` aset materi, bukan `group_id`, dan bahwa aset tersebut milik organisasi yang sama, tidak dihapus, dan memiliki `status: "ACTIVE"`.
-
-## Material Gambar Otomatis
-
-Jika model Seedance yang dipilih dapat menggunakan pustaka material TokenLab, Anda dapat mengirim URL gambar atau data URL inline yang didukung langsung di `image`, `image_url`, `image_urls`, `reference_images`, `start_image`, atau `end_image`. TokenLab mengimpor gambar tersebut ke grup material avatar virtual default organisasi dan mempertahankan perannya sebagai frame pertama, frame terakhir, atau gambar referensi.
-
-Jika material menjadi `ACTIVE` dalam 60 detik, generasi berlanjut dalam request yang sama. Jika belum siap, API mengembalikan `409 seedance_material_preparing` dengan `auto_material_asset_ids`; lihat material tersebut sampai `ACTIVE`, lalu coba lagi dengan `material_asset_id` atau `material_asset_ids`. Jika model yang dipilih tidak dapat menggunakan pustaka material, URL gambar atau data URL biasa tetap berada di jalur gambar normal; ID material eksplisit gagal secara aman dengan error ketersediaan material yang dapat dicoba ulang. ID material avatar virtual atau real-person yang sudah ada digunakan apa adanya dan tidak diimpor ulang.
-
-## Verifikasi Materi Orang Asli
-
-Gunakan verifikasi materi orang asli ketika produk Anda memerlukan persetujuan dan verifikasi wajah sebelum orang asli dapat digunakan sebagai referensi Seedance yang dapat digunakan kembali.
-
-1. Panggil [Membuat sesi validasi visual](/id/api-reference/video/create-visual-validation-session) dengan `CallbackURL` dan simpan `Result.BytedToken` yang dikembalikan.
-2. Buka `Result.H5Link` untuk orang yang akan diverifikasi. Tambahkan `lng` ke tautan H5 jika Anda memerlukan bahasa tertentu.
-3. Setelah alur H5 selesai, browser membuka `Result.CallbackURL` dengan nama kueri resmi seperti `bytedToken` dan `resultCode`.
-4. Lakukan polling [Mendapatkan hasil validasi visual](/id/api-reference/video/get-visual-validation-result) dengan `BytedToken` hingga `Result.GroupId` dikembalikan.
-5. Simpan `GroupId` dan gunakan sebagai `group_id` saat membuat material `liveness_face`.
-
-`BytedToken` berlaku selama 30 menit. Gunakan `ProjectName` yang sama dalam kedua permintaan Action. Autentikasi menggunakan `Authorization: Bearer <TOKENLAB_API_KEY>`; tanda tangan AK/SK Volc tidak diterima.
-
-Opsional: gunakan [konsol pengujian](https://tokenlab.sh/dashboard/seedance-assets) untuk memverifikasi permintaan dan alur callback Anda, memeriksa grup materi, dan meninjau riwayat verifikasi. Integrasi produksi Anda harus memanggil API secara langsung.
-
-## Membuat Grup Materi
-
-Gunakan [Membuat Grup Aset Material](/id/api-reference/video/create-material-asset-group) untuk grup `aigc_avatar`. Grup orang asli yang baru dibuat melalui alur verifikasi agar orang yang terverifikasi dan grup materi tetap tertaut.
-
-Gunakan [Mencantumkan Grup Aset Material](/id/api-reference/video/list-material-asset-groups), [Mendapatkan Grup Aset Material](/id/api-reference/video/get-material-asset-group), [Memperbarui Grup Aset Material](/id/api-reference/video/update-material-asset-group), dan [Hapus Grup Aset Material](/id/api-reference/video/delete-material-asset-group) untuk mengelola grup setelah grup tersebut ada.
-
-Menghapus grup materi juga akan menghapus materi TokenLab di dalamnya dan tidak dapat dibatalkan. Jika pustaka materi TokenLab tidak dapat menyelesaikan penghapusan karena status otorisasi saat ini tidak mengizinkannya, TokenLab akan mengembalikan kesalahan pustaka materi netral.
-
-## Mengunggah Materi
-
-Gunakan [Membuat Aset Material](/id/api-reference/video/create-material-asset) untuk mengimpor satu URL sumber yang dapat diakses publik dalam satu waktu.
-
-Untuk `aigc_avatar`, `group_id` bersifat opsional; TokenLab menggunakan atau membuat grup avatar virtual default organisasi. Untuk `liveness_face`, `group_id` wajib diisi dan harus berupa grup yang dikembalikan oleh [Mendapatkan hasil validasi visual](/id/api-reference/video/get-visual-validation-result).
-
-| Tipe | Input yang didukung |
-|------|-----------------|
-| Gambar | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; rasio aspek `(0.4, 2.5)`; lebar dan tinggi `(300, 6000)` px; di bawah 30 MB. |
-| Video | `mp4`, `mov`; `480p`, `720p`, atau `1080p`; 2-15 detik; rasio aspek `[0.4, 2.5]`; lebar dan tinggi `[300, 6000]` px; total piksel antara 409600 dan 2068676; hingga 200 MB; 24-60 FPS. |
-| Audio | `aac`, `wav`, `mp3`; 2-15 detik; hingga 15 MB. |
-
-Penyerapan materi bersifat asinkron. Lakukan polling pada [Mendapatkan Material Asset](/id/api-reference/video/get-material-asset) hingga `status` menjadi `ACTIVE`. Respons HTTP yang berhasil hanya berarti permintaan telah diterima; selalu baca status bisnisnya. Jika statusnya `FAILED`, periksa `error_message`, perbaiki materi sumber, dan buat aset baru.
-
-Dalam permintaan pembuatan material, `asset_url` hanya merupakan sumber impor. TokenLab mengembalikan `id` aset material; gunakan `id` tersebut untuk pembuatan video, bukan URL asli.
-
-TokenLab menyimpan aset material di pustaka material organisasi Anda sampai Anda menghapus aset tersebut atau grup materialnya.
-
-Untuk grup materi orang asli, satu grup memetakan ke satu orang asli. Unggahan diperiksa terhadap wajah yang terverifikasi. Aset dengan banyak wajah atau wajah yang tidak cocok dengan orang yang terverifikasi dapat gagal. Untuk hasil terbaik, unggah gambar referensi seluruh tubuh dari depan dan foto close-up menghadap ke depan di mana wajah terlihat jelas.
-
-## Menggunakan Materi dalam Pembuatan Video
-
-Setelah aset berstatus `ACTIVE`, berikan `id` aset TokenLab yang dikembalikan sebagai `material_asset_id`, atau sertakan dalam `material_asset_ids`, saat memanggil [Buat video](/id/api-reference/video/create-video). Aset materi dihitung terhadap batas referensi Seedance.
-
-## Contoh API
-
-Buat grup avatar virtual, unggah gambar, lakukan polling hingga aktif, lalu gunakan ID aset materi dalam permintaan video.
-
-```bash
-curl https://api.tokenlab.sh/v1/videos/assets/groups \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
-
-curl https://api.tokenlab.sh/v1/videos/assets \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
-
-curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY"
-```
-
-Untuk grup material orang asli, buat sesi validasi visual dan dapatkan hasilnya sebelum mengunggah material.
-
-```bash
-curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
-
-curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
-  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
-```
-
 ## Harga dan Hasil Asinkron
 
 Harga Seedance 2.0 bergantung pada resolusi output, tipe input, dan model. Gunakan [Pricing API](/id/api-reference/pricing/get-pricing) atau [Models API](/id/api-reference/models/list-models) sebelum melakukan hard-coding pada UI produk.
 
 Pembuatan video bersifat asinkron. Ikuti `poll_url` yang dikembalikan oleh permintaan pembuatan, atau gunakan [Dapatkan Status Task](/id/api-reference/tasks/get-task-status) dengan ID tugas yang dikembalikan.
 
-## Endpoint Seedance kompatibel Volc
+## API terkait
 
-Jika integrasi Anda sudah mengirim permintaan Seedance bergaya Volc, gunakan endpoint kompatibel ini tanpa mengubah body menjadi format `/v1/videos/generations`. Kirim TokenLab API key sebagai `Authorization: Bearer ...`, gunakan `POST /api/v3/contents/generations/tasks` untuk pembuatan REST, atau `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` untuk permintaan Action. Respons pembuatan mengembalikan ID tugas `cgt-...`; respons status menggunakan `queued`, `running`, `succeeded`, `failed`, `cancelled`, atau `expired`.
-
-Endpoint kompatibel ini menerima item `content[]` seperti `text`, `image_url`, `video_url`, `audio_url`, dan `draft_task`. Role gambar seperti `first_frame`, `last_frame`, dan `reference_image` dipertahankan. `callback_url` belum didukung; lakukan polling endpoint tugas.
-### Halaman referensi
-
-- [Buat tugas (kompatibel Volc)](/id/api-reference/video/create-volc-compatible-seedance-task)
-- [Ambil tugas (kompatibel Volc)](/id/api-reference/video/get-volc-compatible-seedance-task)
-- [Daftar tugas (kompatibel Volc)](/id/api-reference/video/list-volc-compatible-seedance-tasks)
-- [Batalkan tugas (kompatibel Volc)](/id/api-reference/video/delete-volc-compatible-seedance-task)
+| API | Lanjutkan ke |
+|-----|---------------|
+| `POST /v1/videos/generations` | [Buat video](/id/api-reference/video/create-video) |
+| `GET /v1/tasks/{id}` | [Ambil status task](/id/api-reference/tasks/get-task-status) |
+| Kompatibilitas task Seedance | [Buat task kompatibel Volcengine](/id/api-reference/video/create-volc-compatible-seedance-task) |
+| Kompatibilitas Action material | [Action material kompatibel Volcengine](/id/api-reference/video/volc-compatible-material-actions) |

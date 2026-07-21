@@ -1,0 +1,126 @@
+---
+title: "إجراءات المواد المتوافقة مع Volcengine"
+openapi: "POST /api/v3"
+description: "مرجع لعشرة إجراءات متوافقة مع Volcengine للمواد ومجموعاتها."
+---
+
+يمكن لعميل مواد Volcengine الاحتفاظ بأسماء Action و`Version=2024-01-01` وJSON بصيغة PascalCase والفلاتر والترتيب والترقيم وغلاف `ResponseMetadata + Result`. يغير TokenLab نقطة النهاية والمصادقة فقط.
+
+## نقطة النهاية والمصادقة
+
+```text
+POST https://api.tokenlab.sh/?Action=<ACTION>&Version=2024-01-01
+Authorization: Bearer <TOKENLAB_API_KEY>
+Content-Type: application/json
+```
+
+يدعم أيضًا `POST /api/v3?Action=<ACTION>&Version=2024-01-01`. جميع إجراءات المواد تقبل POST فقط. يعيد الطلب الذي يحتوي على توقيع AK/SK فقط الخطأ `401 InvalidCredential`.
+
+القيمة الافتراضية لـ `ProjectName` هي `default` وهي حد عزل فعلي داخل المؤسسة المصادق عليها. استخدم القيمة نفسها في الطلبات المرتبطة.
+
+## إجراءات مجموعات المواد
+
+| Action | الهدف | JSON |
+| --- | --- | --- |
+| `CreateAssetGroup` | إنشاء مجموعة مواد عادية | `Name`; `Description`; `GroupType: "AIGC"`; `ProjectName` |
+| `ListAssetGroups` | عرض مجموعات المشروع | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAssetGroup` | جلب مجموعة واحدة | `Id`; `ProjectName` |
+| `UpdateAssetGroup` | تغيير الاسم أو الوصف | `Id`; `Name`; `Description`; `ProjectName` |
+| `DeleteAssetGroup` | حذف المجموعة وموادها | `Id`; `ProjectName` |
+
+ينشئ `CreateAssetGroup` مجموعات `AIGC` فقط. تنشأ مجموعة `LivenessFace` بعد نجاح التحقق من الشخص، ويمكن لـ `ListAssetGroups` تصفية النوعين.
+
+### إنشاء مجموعة
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"Name":"Product references","Description":"Reusable product shots","GroupType":"AIGC","ProjectName":"default"}'
+```
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAssetGroup",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Id":"group-20260720123456-abc12"}
+}
+```
+
+## إجراءات المواد
+
+| Action | الهدف | JSON |
+| --- | --- | --- |
+| `CreateAsset` | استيراد رابط عام لصورة أو فيديو أو صوت | `GroupId`; `URL`; `Name`; `AssetType`; `ProjectName` |
+| `ListAssets` | عرض مواد المشروع | `Filter`; `PageNumber`; `PageSize`; `SortBy`; `SortOrder`; `ProjectName` |
+| `GetAsset` | جلب مادة ورابطها المؤقت | `Id`; `ProjectName` |
+| `UpdateAsset` | إعادة تسمية مادة | `Id`; `Name`; `ProjectName` |
+| `DeleteAsset` | حذف مادة واحدة | `Id`; `ProjectName` |
+
+يقبل `AssetType` القيم `Image` و`Video` و`Audio`. تحدد المجموعة الهدف ما إذا كانت المادة `AIGC` عادية أم `LivenessFace` موثقة.
+
+### إنشاء مادة
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"GroupId":"group-20260720123456-abc12","URL":"https://example.com/reference.png","Name":"Front view","AssetType":"Image","ProjectName":"default"}'
+```
+
+## سلوك القوائم
+
+القيمة الافتراضية لـ `PageNumber` هي `1` ولـ `PageSize` هي `10` والحد الأقصى `100`. يقبل `SortBy` القيمة `CreateTime` أو `UpdateTime`، ويقبل `SortOrder` القيمة `Desc` أو `Asc`.
+
+حالات المادة هي `Active` و`Processing` و`Failed`. الروابط المؤقتة من `GetAsset` و`ListAssets` صالحة 12 ساعة. احفظ `Id` كهوية دائمة.
+
+يعيد `ListAssetGroups` و`ListAssets` الموارد داخل `Result.Items` مع `TotalCount` و`PageNumber` و`PageSize`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {"Items":[],"TotalCount":0,"PageNumber":1,"PageSize":10}
+}
+```
+
+## مواد الأشخاص الحقيقيين
+
+أنشئ جلسة تحقق مرئي وأكمل تحقق H5، ثم احصل على `GroupId` واستخدم المجموعة مع `CreateAsset`. تتم مقارنة الملفات المرفوعة بالوجه الموثق.
+
+1. [إنشاء جلسة تحقق مرئي](/ar/api-reference/video/create-visual-validation-session)
+2. [جلب نتيجة التحقق المرئي](/ar/api-reference/video/get-visual-validation-result)
+3. استدعاء `CreateAsset` باستخدام `GroupId` المعاد
+
+## الأخطاء
+
+تحافظ الأخطاء على غلاف استجابة Volcengine، ويوجد الرمز والرسالة تحت `ResponseMetadata.Error`.
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing",
+    "Error": {"Code":"InvalidParameter","Message":"GroupId is required"}
+  }
+}
+```
+
+`InvalidCredential`, `InvalidVersion`, `InvalidParameter`, `NotFound`, `Conflict`, `MethodNotAllowed`, `InternalError`.
+
+## بديل REST
+
+تبقى واجهات REST على `/v1/videos/assets*` متاحة. يمكن للتكاملات الجديدة اختيار REST بصيغة snake_case، ولا يحتاج عملاء Volcengine إلى إعادة تشكيل الأجسام. [مواد Seedance والتحقق من الأشخاص](/ar/guides/seedance-materials).

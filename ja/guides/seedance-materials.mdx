@@ -1,0 +1,136 @@
+---
+title: "Seedance 素材と実在人物の認証"
+description: "再利用可能な Seedance 素材を作成し、実在人物を認証して、有効な素材をビデオ生成で使用します。"
+---
+
+Seedance 素材は、組織内で再利用できる画像、ビデオ、音声の参照です。まずワークフローを選んでください。通常のアバター素材と認証済み実在人物素材では作成経路が異なります。
+
+## 素材ワークフローを選ぶ
+
+| 目的 | 必要なフロー |
+| --- | --- |
+| 一度だけ画像 URL を使う | ビデオリクエストに URL を直接指定すると、対応モデルが自動で素材を準備 |
+| アバター、商品、スタイルを再利用する | `aigc_avatar` グループと素材を作成し、`ACTIVE` を待って素材 ID を使用 |
+| 実在人物を再利用する | 視覚認証を完了し、`GroupId` を取得して素材を作成し、`ACTIVE` を待って素材 ID を使用 |
+| Volcengine 素材クライアントを移行する | Action 形式を維持して Volcengine 互換素材リファレンスを使用: [素材 Action（Volcengine 互換）](/ja/api-reference/video/volc-compatible-material-actions) |
+
+## 素材の概念
+
+Seedanceの素材は、ビデオ生成時に後から選択できる、組織スコープの再利用可能なリファレンスです。
+
+| 概念 | 公開フィールド | 意味 |
+|---------|--------------|---------------|
+| 素材グループ | `group_id` | 関連するSeedance素材を所有するTokenLabグループ。素材のアップロードや一覧表示時に使用します。 |
+| 素材アセット | `id` | アップロードされた画像、ビデオ、またはオーディオファイル。アセットが `ACTIVE` になった後、この値を `material_asset_id` として使用します。 |
+| バーチャルアバター素材グループ | `library_type: "aigc_avatar"` | バーチャル人物、アバター、製品、スタイル、その他実在人物の認証を必要としない再利用可能なリファレンス用。 |
+| 実在人物素材グループ | `library_type: "liveness_face"` | 実在人物の素材認証によって作成されます。1つのグループが1人の認証済み実在人物を表します。 |
+
+`group_id` と素材アセットの `id` は分けて管理してください。`group_id` はアップロードの整理用であり、素材アセットの `id` はビデオ生成用です。ビデオのリクエストで `Seedance material asset not found or not accessible` が返された場合は、`group_id` ではなく素材アセットの `id` を渡しているか、そのアセットが同じ組織に属しているか、削除されていないか、および `status: "ACTIVE"` であるかを確認してください。
+
+## 画像素材の自動準備
+
+選択した Seedance モデルが TokenLab 素材ライブラリを使用できる場合、`image`, `image_url`, `image_urls`, `reference_images`, `start_image`, `end_image` に画像 URL または対応するインライン data URL を直接送信できます。TokenLab はそれらを組織のデフォルトのバーチャルアバター素材グループに取り込み、最初のフレーム、最後のフレーム、参照画像としての役割を保持します。
+
+素材が 60 秒以内に `ACTIVE` になれば、同じリクエストで生成が続行されます。完了しない場合、API は `auto_material_asset_ids` 付きの `409 seedance_material_preparing` を返します。素材が `ACTIVE` になるまで取得または一覧で確認し、その後 `material_asset_id` または `material_asset_ids` で再試行してください。選択したモデルが素材ライブラリを使用できない場合、通常の画像 URL または data URL は通常の画像パスで処理され、明示的な素材 ID は再試行可能な素材可用性エラーで安全に失敗します。既存のバーチャルアバター素材 ID と実在人物素材 ID はそのまま使用され、再インポートされません。
+
+## 実在人物の素材認証
+
+製品において、実在人物を再利用可能なSeedanceリファレンスとして使用する前に同意と顔認証が必要な場合は、実在人物の素材認証を使用してください。
+
+1. `CallbackURL` を指定して [ビジュアル確認セッションの作成](/ja/api-reference/video/create-visual-validation-session) を呼び出し、返された `Result.BytedToken` を保存します。
+2. 確認対象者に `Result.H5Link` を開きます。言語を指定する場合は H5 リンクに `lng` を追加します。
+3. H5 フローが完了すると、ブラウザーは `bytedToken` や `resultCode` などの公式クエリ名を付けて `Result.CallbackURL` を開きます。
+4. `BytedToken` で [ビジュアル確認結果の取得](/ja/api-reference/video/get-visual-validation-result) をポーリングし、`Result.GroupId` が返るまで待ちます。
+5. `GroupId` を保存し、`liveness_face` 素材作成時の `group_id` として使用します。
+
+`BytedToken` の有効期間は30分です。両方の Action リクエストで同じ `ProjectName` を使用してください。認証には `Authorization: Bearer <TOKENLAB_API_KEY>` を使用し、Volc AK/SK 署名は受け付けません。
+
+オプション：[テストコンソール](https://tokenlab.sh/dashboard/seedance-assets) を使用して、リクエストとコールバックフローの検証、素材グループの確認、および認証履歴の確認を行ってください。本番環境の統合では、APIを直接呼び出す必要があります。
+
+## 素材グループの作成
+
+`aigc_avatar` グループには [マテリアルアセットグループの作成](/ja/api-reference/video/create-material-asset-group) を使用します。新しい実在人物グループは認証フローを通じて作成されるため、認証された人物と素材グループはリンクされた状態になります。
+
+グループ作成後の管理には、[マテリアルアセットグループの一覧取得](/ja/api-reference/video/list-material-asset-groups)、[マテリアルアセットグループの取得](/ja/api-reference/video/get-material-asset-group)、[マテリアルアセットグループの更新](/ja/api-reference/video/update-material-asset-group)、および [マテリアルアセットグループの削除](/ja/api-reference/video/delete-material-asset-group) を使用します。
+
+素材グループを削除すると、その中のTokenLab素材も削除され、元に戻すことはできません。現在の認証状態で削除が許可されていないためにTokenLab素材ライブラリが削除を完了できない場合、TokenLabは中立的な素材ライブラリエラーを返します。
+
+## 素材のアップロード
+
+[マテリアルアセットの作成](/ja/api-reference/video/create-material-asset) を使用して、公開アクセス可能なソースURLを一度に1つずつインポートします。
+
+`aigc_avatar` の場合、`group_id` はオプションです。TokenLabは組織のデフォルトのバーチャルアバターグループを使用または作成します。`liveness_face` の場合、`group_id` は必須であり、[ビジュアル確認結果の取得](/ja/api-reference/video/get-visual-validation-result) によって返されたグループである必要があります。
+
+| タイプ | サポートされている入力 |
+|------|-----------------|
+| 画像 | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`; アスペクト比 `(0.4, 2.5)`; 幅と高さ `(300, 6000)` px; 30 MB未満。 |
+| ビデオ | `mp4`, `mov`; `480p`, `720p`, または `1080p`; 2〜15秒; アスペクト比 `[0.4, 2.5]`; 幅と高さ `[300, 6000]` px; 総ピクセル数 409600〜2068676; 最大200 MB; 24〜60 FPS。 |
+| オーディオ | `aac`, `wav`, `mp3`; 2〜15秒; 最大15 MB。 |
+
+素材の取り込みは非同期で行われます。`status` が `ACTIVE` になるまで [マテリアルアセットの取得](/ja/api-reference/video/get-material-asset) をポーリングしてください。HTTPレスポンスが成功したことは、リクエストが受け付けられたことを意味するだけであり、常にビジネスステータスを確認してください。ステータスが `FAILED` の場合は、`error_message` を確認し、ソース素材を修正して新しいアセットを作成してください。
+
+マテリアル作成リクエストでは、`asset_url` はインポート元だけを表します。TokenLab は素材アセットの `id` を返します。生成時は元のURLではなく、その `id` を使用してください。
+
+TokenLab は、素材またはその素材グループを削除するまで、組織の素材ライブラリに素材を保持します。
+
+実在人物の素材グループの場合、1つのグループが1人の実在人物に対応します。アップロードされた素材は、認証された顔と照合されます。複数の顔が含まれているアセットや、認証された人物と一致しない顔が含まれているアセットは失敗する可能性があります。最良の結果を得るには、全身の正面リファレンス画像と、顔がはっきりと写っている正面のクローズアップ画像の両方をアップロードしてください。
+
+## ビデオ生成での素材の使用
+
+アセットが `ACTIVE` になった後、[動画を作成](/ja/api-reference/video/create-video) を呼び出す際に、返されたTokenLabアセットの `id` を `material_asset_id` として渡すか、`material_asset_ids` に含めてください。素材アセットはSeedanceのリファレンス制限数にカウントされます。
+
+## REST または Volcengine Action
+
+TokenLab ネイティブ統合では、snake_case の `/v1/videos/assets*` REST API を引き続き使用できます。既存の Volcengine クライアントは PascalCase 本文を維持し、[Volcengine 互換素材 Action](/ja/api-reference/video/volc-compatible-material-actions)を使用できます。どちらも同じ組織・プロジェクト内の素材データを操作します。
+
+## APIの例
+
+バーチャルアバターグループを作成し、画像をアップロードし、アクティブになるまでポーリングしてから、ビデオ生成リクエストで素材アセットIDを使用する例です。
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+実在人物の素材グループでは、素材をアップロードする前にビジュアル確認セッションを作成し、結果を取得します。
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+```
+
+## 実在人物向けの完全な Action フロー
+
+認証結果から返された `GroupId` を `CreateAsset` に渡します。
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-real1",
+    "URL":"https://example.com/person-front.png",
+    "Name":"Verified front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+`GetAsset` をポーリングし、状態が `Active` になったら、返された素材 ID をビデオ生成で使用します。

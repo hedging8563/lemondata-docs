@@ -1,0 +1,140 @@
+---
+title: "Seedance 素材与真人验证"
+description: "创建可复用的 Seedance 素材、验证真人，并在视频生成中使用已激活的资产。"
+---
+
+Seedance 素材是组织范围内可复用的图片、视频或音频引用。请先选择工作流：普通虚拟人素材与经过验证的真人素材不能使用同一条创建路径。
+
+## 选择素材工作流
+
+| 目标 | 必需流程 |
+| --- | --- |
+| 使用一次性图片 URL | 直接在视频请求中传入 URL；兼容的 Seedance 模型会自动准备素材 |
+| 复用虚拟人、商品或风格 | 创建 `aigc_avatar` 组，创建素材，等待 `ACTIVE`，再使用素材 ID |
+| 复用真人 | 完成视觉验证，取得 `GroupId`，在该组中创建素材，等待 `ACTIVE`，再使用素材 ID |
+| 迁移火山素材客户端 | 保留 Action 请求形状并使用火山兼容素材参考: [素材 Action（火山兼容）](/zh/api-reference/video/volc-compatible-material-actions) |
+
+## 素材概念
+
+Seedance 素材是可复用的、组织范围内的引用，可在后续视频生成过程中进行选择。
+
+| 概念 | 公共字段 | 含义 |
+|---------|--------------|---------------|
+| 素材组 | `group_id` | 拥有相关 Seedance 素材的 TokenLab 组。在上传或列出素材时使用。 |
+| 素材资产 | `id` | 单个上传的图像、视频或音频文件。资产变为 `ACTIVE` 后，请将此值用作 `material_asset_id`。 |
+| 虚拟人像素材组 | `library_type: "aigc_avatar"` | 用于虚拟人像、产品、风格及其他无需真人验证的可复用引用。 |
+| 真人素材组 | `library_type: "liveness_face"` | 通过真人验证创建。一个组代表一个已验证的真人。 |
+
+请区分 `group_id` 和素材资产 `id`。`group_id` 用于组织上传；素材资产 `id` 用于视频生成。如果视频请求返回 `Seedance material asset not found or not accessible`，请确认您传入的是素材资产 `id` 而非 `group_id`，并确保该资产属于同一组织、未被删除且状态为 `status: "ACTIVE"`。
+
+## 自动图片素材
+
+当所选 Seedance 模型可使用 TokenLab 素材库时，您可以直接在 `image`、`image_url`、`image_urls`、`reference_images`、`start_image` 或 `end_image` 中传入图片 URL 或受支持的内联 data URL。TokenLab 会把这些图片导入组织默认的虚拟人像素材组，并保留其首帧、尾帧或参考图角色。
+
+如果素材在 60 秒内变为 `ACTIVE`，同一个请求会继续进入生成。如果尚未准备完成，API 会返回 `409 seedance_material_preparing` 和 `auto_material_asset_ids`；请查询这些素材直到它们变为 `ACTIVE`，再使用 `material_asset_id` 或 `material_asset_ids` 重试。如果所选模型暂不可使用素材库，普通图片 URL 或 data URL 会继续走常规图片路径；显式素材 ID 会返回素材可用性错误。已有虚拟人像素材 ID 和真人素材 ID 会原样使用，不会重复导入。
+
+## 真人验证
+
+当您的产品在使用真人作为可复用的 Seedance 引用前需要获得同意并进行人脸验证时，请使用真人验证流程。
+
+1. 调用 [创建视觉验证会话](/zh/api-reference/video/create-visual-validation-session)，传入 `CallbackURL`，并保存返回的 `Result.BytedToken`。
+2. 为待验证人员打开 `Result.H5Link`。如需指定语言，请在 H5 链接后追加 `lng`。
+3. H5 流程完成后，浏览器会打开 `Result.CallbackURL`，并携带 `bytedToken`、`resultCode` 等官方查询参数。
+4. 使用 `BytedToken` 轮询 [获取视觉验证结果](/zh/api-reference/video/get-visual-validation-result)，直到返回 `Result.GroupId`。
+5. 保存 `GroupId`；创建 `liveness_face` 素材时将其作为 `group_id`。
+
+`BytedToken` 的有效期为 30 分钟。两次 Action 请求必须使用相同的 `ProjectName`。认证使用 `Authorization: Bearer <TOKENLAB_API_KEY>`，不接受火山引擎 AK/SK 签名。
+
+可选：使用 [测试控制台](https://tokenlab.sh/dashboard/seedance-assets) 来验证您的请求和回调流程、检查素材组并查看验证历史。您的生产环境集成应直接调用 API。
+
+## 创建素材组
+
+使用 [创建素材组](/zh/api-reference/video/create-material-asset-group) 创建 `aigc_avatar` 组。新的真人组通过验证流程创建，以便将已验证的个人与素材组关联。
+
+使用 [列出素材组](/zh/api-reference/video/list-material-asset-groups)、[获取素材组](/zh/api-reference/video/get-material-asset-group)、[更新素材组](/zh/api-reference/video/update-material-asset-group) 和 [删除素材组](/zh/api-reference/video/delete-material-asset-group) 管理已有素材组。
+
+删除素材组也会删除其中包含的 TokenLab 素材，且该操作不可撤销。如果 TokenLab 素材库因当前授权状态不允许而无法完成删除，TokenLab 将返回一个中性的素材库错误。
+
+## 上传素材
+
+使用 [创建素材](/zh/api-reference/video/create-material-asset) 每次导入一个可公开访问的源 URL。
+
+对于 `aigc_avatar`，`group_id` 是可选的；TokenLab 将使用或创建组织默认的虚拟人像组。对于 `liveness_face`，`group_id` 是必需的，且必须是 [获取视觉验证结果](/zh/api-reference/video/get-visual-validation-result) 返回的组 ID。
+
+| 类型 | 支持的输入 |
+|------|-----------------|
+| 图像 | `jpeg`, `png`, `webp`, `bmp`, `tiff`, `gif`, `heic`, `heif`；宽高比 `(0.4, 2.5)`；宽和高 `(300, 6000)` px；小于 30 MB。 |
+| 视频 | `mp4`, `mov`；`480p`, `720p` 或 `1080p`；2-15 秒；宽高比 `[0.4, 2.5]`；宽和高 `[300, 6000]` px；总像素在 409600 到 2068676 之间；最大 200 MB；24-60 FPS。 |
+| 音频 | `aac`, `wav`, `mp3`；2-15 秒；最大 15 MB。 |
+
+TokenLab 会校验源 URL、声明或探测到的媒体格式以及文件大小上限。宽高、宽高比、时长、分辨率、总像素和 FPS 采用 best effort 透传，最终由所选视频服务判断素材是否合格。
+
+素材导入是异步的。请轮询 [获取素材](/zh/api-reference/video/get-material-asset) 直到 `status` 变为 `ACTIVE`。成功的 HTTP 响应仅表示请求已被接受；请务必读取业务状态。如果状态为 `FAILED`，请检查 `error_message`，修复源素材并创建新素材。
+
+在创建素材请求中，`asset_url` 只表示导入来源。TokenLab 会返回素材资产 `id`；生成视频时请使用这个 `id`，不要继续使用原始 URL。
+
+素材与素材组 ID 使用火山兼容外观，例如 `asset-20260720123456-qn7wr` 和 `group-20260720123456-vrt01`，但它们仍是 TokenLab 自有映射 ID。
+
+TokenLab 会将素材保留在您的组织素材库中，直到您删除该素材或其所在素材组。
+
+对于真人素材组，一个组对应一个真人。上传内容会与已验证的人脸进行比对。包含多个人脸或人脸与已验证个人不匹配的资产可能会失败。为获得最佳效果，请同时上传一张全身正面参考图和一张人脸清晰的正面特写图。
+
+## 在视频生成中使用素材
+
+资产变为 `ACTIVE` 后，在调用 [创建视频](/zh/api-reference/video/create-video) 时，将返回的 TokenLab 资产 `id` 作为 `material_asset_id` 传入，或将其包含在 `material_asset_ids` 中。素材资产计入 Seedance 参考限制。
+
+## REST 还是火山 Action
+
+TokenLab 原生接入可以继续使用 snake_case 的 `/v1/videos/assets*` REST 接口。已有火山客户端可以保留 PascalCase 请求体并使用[火山兼容素材 Action](/zh/api-reference/video/volc-compatible-material-actions)。两套接口操作同一份组织和项目范围内的素材数据。
+
+## API 示例
+
+创建一个虚拟人像组，上传一张图像，轮询直到其处于激活状态，然后在视频请求中使用该素材资产 ID。
+
+```bash
+curl https://api.tokenlab.sh/v1/videos/assets/groups \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_name":"Product references"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"library_type":"aigc_avatar","group_id":"group-20260720123456-abc12","asset_url":"https://example.com/reference.png","asset_type":"Image"}'
+
+curl https://api.tokenlab.sh/v1/videos/assets/asset-20260720123457-def45 \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY"
+```
+
+对于真人素材组，请先创建视觉验证会话并获取验证结果，再上传素材。
+
+```bash
+curl 'https://api.tokenlab.sh/api/v3?Action=CreateVisualValidateSession&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"CallbackURL":"https://yourapp.example.com/seedance/callback","ProjectName":"default"}'
+
+curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
+```
+
+## 完整的真人 Action 流程
+
+取得验证结果返回的 `GroupId` 后，将它传给 `CreateAsset`：
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-real1",
+    "URL":"https://example.com/person-front.png",
+    "Name":"Verified front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+轮询 `GetAsset`，直到状态变为 `Active`，然后在视频生成中使用返回的素材 ID。
