@@ -154,6 +154,58 @@ curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024
   -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
+## Volcengine-Compatible Material Actions
+
+Existing Volcengine material clients can keep the same `Action`, `Version=2024-01-01`, PascalCase JSON bodies, pagination fields, filters, sorting, and `ResponseMetadata + Result` response envelope. Change the endpoint to `https://api.tokenlab.sh/` and replace AK/SK signing with `Authorization: Bearer <TOKENLAB_API_KEY>`.
+
+The root endpoint gives SDKs and hand-written clients the smallest migration:
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-abc12",
+    "URL":"https://example.com/reference.png",
+    "Name":"Front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+`POST /api/v3?Action=...&Version=2024-01-01` is also supported. Material Actions require `POST`; AK/SK-signed requests are rejected explicitly.
+
+| Action             | Request body                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CreateAssetGroup` | `Name`, optional `Description`, optional `GroupType: "AIGC"`, `ProjectName`                                                                      |
+| `ListAssetGroups`  | `Filter.GroupType`, optional `Filter.GroupIds` and `Filter.Name`; `PageNumber`, `PageSize`, `SortBy`, `SortOrder`, `ProjectName`                 |
+| `GetAssetGroup`    | `Id`, `ProjectName`                                                                                                                              |
+| `UpdateAssetGroup` | `Id`, `Name` and/or `Description`, `ProjectName`                                                                                                 |
+| `DeleteAssetGroup` | `Id`, `ProjectName`                                                                                                                              |
+| `CreateAsset`      | `GroupId`, `URL`, `Name`, `AssetType`, `ProjectName`                                                                                             |
+| `ListAssets`       | optional `Filter.GroupIds`, `Filter.GroupType`, `Filter.Statuses`, `Filter.Name`; `PageNumber`, `PageSize`, `SortBy`, `SortOrder`, `ProjectName` |
+| `GetAsset`         | `Id`, `ProjectName`                                                                                                                              |
+| `UpdateAsset`      | `Id`, optional `Name`, `ProjectName`                                                                                                             |
+| `DeleteAsset`      | `Id`, `ProjectName`                                                                                                                              |
+
+List responses return resources in `Result.Items`, with `TotalCount`, `PageNumber`, and `PageSize`. Asset status values are `Active`, `Processing`, or `Failed`; `GetAsset` and `ListAssets` return a temporary `URL` valid for 12 hours. `ProjectName` defaults to `default` and is an actual isolation boundary within the authenticated organization.
+
+Successful Action responses use the Volcengine envelope:
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": { "Id": "asset-20260720123457-def45" }
+}
+```
+
+The existing `/v1/videos/assets*` REST endpoints remain available, so current TokenLab integrations do not need to migrate.
 
 ## Pricing And Async Results
 

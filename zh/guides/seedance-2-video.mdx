@@ -128,6 +128,59 @@ curl 'https://api.tokenlab.sh/api/v3?Action=GetVisualValidateResult&Version=2024
   -d '{"BytedToken":"ZXhhbXBsZS10b2tlbg","ProjectName":"default"}'
 ```
 
+## 火山兼容素材 Action
+
+已有火山素材客户端可以保留原来的 `Action`、`Version=2024-01-01`、PascalCase JSON 请求体、分页/筛选/排序字段，以及 `ResponseMetadata + Result` 响应信封。只需把 endpoint 改成 `https://api.tokenlab.sh/`，并把 AK/SK 签名替换为 `Authorization: Bearer <TOKENLAB_API_KEY>`。
+
+根路径最适合火山 SDK 或既有封装做最小迁移：
+
+```bash
+curl 'https://api.tokenlab.sh/?Action=CreateAsset&Version=2024-01-01' \
+  -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "GroupId":"group-20260720123456-abc12",
+    "URL":"https://example.com/reference.png",
+    "Name":"Front view",
+    "AssetType":"Image",
+    "ProjectName":"default"
+  }'
+```
+
+同时兼容 `POST /api/v3?Action=...&Version=2024-01-01`。素材 Action 只接受 `POST`；仅带 AK/SK 签名的请求会被明确拒绝。
+
+| Action             | 请求体                                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CreateAssetGroup` | `Name`、可选 `Description`、可选 `GroupType: "AIGC"`、`ProjectName`                                                                          |
+| `ListAssetGroups`  | `Filter.GroupType`，可选 `Filter.GroupIds` 和 `Filter.Name`；`PageNumber`、`PageSize`、`SortBy`、`SortOrder`、`ProjectName`                  |
+| `GetAssetGroup`    | `Id`、`ProjectName`                                                                                                                          |
+| `UpdateAssetGroup` | `Id`、`Name` 和/或 `Description`、`ProjectName`                                                                                              |
+| `DeleteAssetGroup` | `Id`、`ProjectName`                                                                                                                          |
+| `CreateAsset`      | `GroupId`、`URL`、`Name`、`AssetType`、`ProjectName`                                                                                         |
+| `ListAssets`       | 可选 `Filter.GroupIds`、`Filter.GroupType`、`Filter.Statuses`、`Filter.Name`；`PageNumber`、`PageSize`、`SortBy`、`SortOrder`、`ProjectName` |
+| `GetAsset`         | `Id`、`ProjectName`                                                                                                                          |
+| `UpdateAsset`      | `Id`、可选 `Name`、`ProjectName`                                                                                                             |
+| `DeleteAsset`      | `Id`、`ProjectName`                                                                                                                          |
+
+列表响应通过 `Result.Items` 返回资源，并包含 `TotalCount`、`PageNumber` 和 `PageSize`。素材状态使用 `Active`、`Processing`、`Failed`；`GetAsset` 和 `ListAssets` 返回有效期 12 小时的临时 `URL`。`ProjectName` 默认是 `default`，并在当前组织内形成真实的数据隔离边界。
+
+成功 Action 使用火山响应信封：
+
+```json
+{
+  "ResponseMetadata": {
+    "RequestId": "req-id",
+    "Action": "CreateAsset",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": { "Id": "asset-20260720123457-def45" }
+}
+```
+
+原有 `/v1/videos/assets*` REST 接口继续保留，已有 TokenLab 接入无需迁移。
+
 ## 定价与异步结果
 
 Seedance 2.0 的定价取决于输出分辨率、输入类型和模型。在硬编码产品 UI 之前，请使用 [Pricing API](/zh/api-reference/pricing/get-pricing) 或 [Models API](/zh/api-reference/models/list-models)。
