@@ -4,15 +4,16 @@ openapi: "POST /v1/responses"
 description: "Crée une réponse en utilisant le format OpenAI Responses API"
 ---
 
-L'API Responses est la nouvelle API de conversation stateful d'OpenAI. TokenLab prend en charge ce format comme un chemin optionnel avancé pour les modèles compatibles ; utilisez `POST /v1/chat/completions` comme route compatible OpenAI par défaut, sauf si vous avez explicitement besoin d'un comportement spécifique à Responses.
-
+Responses est le protocole natif stateful d’OpenAI. TokenLab ne l’expose que lorsque les détails du modèle annoncent le format Responses et qu’une route upstream du même protocole est disponible ; cela n’est pas déduit du nom du modèle ou du fournisseur, et la requête ne se replie jamais sur Chat Completions. TokenLab conserve la forme JSON, y compris les champs inconnus, `null` explicite et les tableaux vides, puis la transmet au mieux.
 ## Corps de la requête
 
 <ParamField body="model" type="string" required>
   ID du modèle à utiliser. Voir [Models](https://tokenlab.sh/fr/models) pour les options disponibles.
 </ParamField>
 
-<ParamField body="input" type="array" required>
+<ParamField body="input" type="string | array">
+  L’entrée est facultative lorsque la requête utilise à la place un `prompt` réutilisable ou poursuit une réponse stockée avec `previous_response_id`.
+
   Une liste d'éléments d'entrée constituant la conversation.
 
   Chaque élément peut être :
@@ -41,9 +42,7 @@ L'API Responses est la nouvelle API de conversation stateful d'OpenAI. TokenLab 
 </ParamField>
 
 <ParamField body="tools" type="array">
-  Une liste d'outils que le modèle peut appeler.
-
-  Pour les outils hébergés `image_generation` qui utilisent le modèle d'outil image par défaut ou définissent explicitement `model: "gpt-image-2"`, TokenLab supprime `input_fidelity` avant de transmettre la requête, car GPT Image 2 traite déjà les entrées image en haute fidélité. N'envoyez pas `background: "transparent"` pour cet outil ; TokenLab ne le supprime pas silencieusement, car cela changerait la sémantique de sortie.
+  Liste des outils que le modèle peut appeler. TokenLab transmet les définitions natives sans allowlist locale ; l’upstream sélectionné décide des types et combinaisons pris en charge.
 </ParamField>
 
 <ParamField body="stream" type="boolean" default="false">
@@ -90,7 +89,7 @@ L'API Responses est la nouvelle API de conversation stateful d'OpenAI. TokenLab 
   Toujours `response`.
 </ResponseField>
 
-<ResponseField name="created" type="integer">
+<ResponseField name="created_at" type="integer">
   Timestamp Unix de création de la réponse.
 </ResponseField>
 

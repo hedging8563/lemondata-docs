@@ -5,12 +5,16 @@ description: "Gunakan format OpenAI, Anthropic, atau Gemini dengan satu API key"
 
 ## Ikhtisar
 
-TokenLab mendukung **tiga format API native** dengan satu API key. Pilih format yang paling sesuai dengan kasus penggunaan Anda - tidak perlu mengubah konfigurasi.
+TokenLab menyediakan empat permukaan protokol dengan satu API key: Chat Completions, Responses, Anthropic Messages, dan Gemini native. Endpoint native hanya tersedia ketika model mengiklankan format tersebut dan ada rute upstream dengan protokol yang sama; endpoint native tidak pernah fallback ke Chat Completions. Hanya endpoint Chat yang dapat dikompilasi satu arah ke protokol target yang kompatibel.
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="Format OpenAI" icon="plug">
     `/v1/chat/completions`
     Format standar, kompatibilitas paling luas
+  </Card>
+  <Card title="Responses" icon="bolt">
+    `/v1/responses`
+    Siklus hidup dan event Responses native
   </Card>
   <Card title="Format Anthropic" icon="message">
     `/v1/messages`
@@ -26,7 +30,7 @@ TokenLab mendukung **tiga format API native** dengan satu API key. Pilih format 
 
 | Manfaat | Deskripsi |
 |---------|-----------|
-| **Tanpa berpindah SDK** | Gunakan model apa pun dengan SDK pilihan Anda |
+| **SDK native protokol** | Gunakan SDK native hanya untuk model yang mengiklankan format itu; Chat tetap menjadi permukaan portabel terluas |
 | **Fitur native** | Akses kemampuan spesifik format |
 | **Migrasi native-first** | Pertahankan rute native penyedia saat perilaku penting; gunakan `/v1` OpenAI compatibility untuk klien bergaya OpenAI yang sudah ada |
 | **Penagihan tunggal** | Satu akun, satu API key, semua format |
@@ -158,13 +162,13 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:streamGenerateConte
 
 ## Batas kompatibilitas tool
 
-Function tool dapat dikonversi antar format jika rute tujuan mendukungnya. Tool native milik provider harus tetap berada di rute native-nya:
+Function tool hanya dapat dikompilasi satu arah dari endpoint Chat jika target dapat merepresentasikan seluruh loop tool. Tool native milik provider harus tetap berada di rute native-nya:
 
 - Tool hosted dan native OpenAI Responses seperti `tool_search`, `web_search`, `file_search`, `code_interpreter`, MCP, shell/apply_patch, dan tool computer-use memerlukan `/v1/responses`.
 - Tool server/native Anthropic seperti `web_search_*`, `web_fetch_*`, `code_execution_*`, `tool_search_*`, bash, computer-use, dan text-editor memerlukan `/v1/messages`.
 - Tool bawaan Gemini seperti `googleSearch`, `codeExecution`, `urlContext`, `computerUse`, dan field `tools` serupa memerlukan `/v1beta`.
 
-Jika TokenLab tidak dapat merutekan request dengan tool native ke upstream yang mendukung format native, TokenLab mengembalikan error unsupported-field yang eksplisit, bukan menghapus tool secara diam-diam atau berpura-pura tool itu adalah fungsi Chat Completions. Function tool buatan pengguna tetap menjadi jalur tool yang paling portabel.
+TokenLab tidak menurunkan request protokol native ke Chat Completions. Field yang tidak dikenal dan kombinasi tool diteruskan secara best-effort; upstream terpilih yang menentukan dukungannya.
 
 ## Memilih Format yang Tepat
 
@@ -227,54 +231,13 @@ response = requests.post(
 )
 ```
 
-## Kompatibilitas Lintas-Model
 
-Keajaiban TokenLab: gunakan **SDK apa pun** dengan **model apa pun**. Gateway secara otomatis menangani konversi format.
+## Kompatibilitas Chat Portabel
 
-### Kompatibilitas SDK → Portable Chat
+Gunakan `/v1/chat/completions` ketika satu client perlu menjangkau model yang didukung oleh protokol upstream berbeda. Request Chat portabel dapat dikompilasi satu arah ke Responses, Messages, atau Gemini jika dapat direpresentasikan secara lengkap. Request native Responses, Messages, dan Gemini tidak pernah dikonversi ke Chat; nama model atau provider tidak menyiratkan ketersediaan native.
 
-```python
-# Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
-from anthropic import Anthropic
+## Batas Responses dan Gemini
 
-client = Anthropic(
-    api_key="sk-tokenlab-key",
-    base_url="https://api.tokenlab.sh"
-)
+Permukaan Responses saat ini mencakup create, compact, retrieve, delete, dan SSE. Background hanya berjalan melalui HTTP. WebSocket hanya menerima `response.create`; streaming bersifat implisit, sedangkan `background` dan `response.cancel` tidak tersedia pada transport ini. Delete bukan cancel.
 
-response = client.messages.create(
-    model="gpt-4o",  # ✅ Works! Auto-converted
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-# Same compatibility SDK for portable chat; native-only features still need native routes
-response = client.messages.create(model="gemini-3.5-flash", ...)  # ✅ Works!
-response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
-```
-
-### OpenAI SDK → Model Portable Chat
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="https://api.tokenlab.sh/v1", api_key="sk-...")
-
-# These portable chat calls use the same /v1 compatibility SDK:
-response = client.chat.completions.create(model="gpt-4o", ...)
-response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
-response = client.chat.completions.create(model="gemini-3.5-flash", ...)
-```
-
-### Perbandingan Industri
-
-| Platforma | Format OpenAI | Format Anthropic | Format Gemini | API Responses |
-|----------|:---:|:---:|:---:|:---:|
-| **TokenLab** | ✅ Semua model | ✅ Semua model | ✅ Semua model | ✅ Semua model |
-| OpenRouter | ✅ Semua model | ❌ | ❌ | ❌ |
-| Together AI | ✅ Semua model | ❌ | ❌ | ❌ |
-| Fireworks | ✅ Semua model | ❌ | ❌ | ❌ |
-
-<Note>
-Meskipun cross-format bekerja untuk sebagian besar fitur, fitur spesifik format (seperti Anthropic extended thinking) memerlukan format native.
-</Note>
+Di Gemini, nama ProtoJSON lowerCamelCase dan nama proto asli snake_case sama-sama resmi dan dipertahankan, termasuk dalam request campuran. Permukaan saat ini mencakup list/get models, `generateContent`, `streamGenerateContent`, `countTokens`, `embedContent`, dan `batchEmbedContents`; Interactions dan Live tidak termasuk. Field yang tidak dikenal diteruskan secara best-effort dan upstream menentukan dukungannya.

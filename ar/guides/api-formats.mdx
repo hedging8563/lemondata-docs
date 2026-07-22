@@ -5,12 +5,16 @@ description: "استخدم صيغ OpenAI أو Anthropic أو Gemini بمفتاح
 
 ## نظرة عامة
 
-تدعم TokenLab **ثلاث صيغ API أصلية** باستخدام مفتاح API واحد. اختر الصيغة التي تناسب حالة الاستخدام لديك — لا حاجة لتغيير أي إعدادات.
+تعرض TokenLab أربع واجهات بروتوكول بمفتاح API واحد: Chat Completions وResponses وAnthropic Messages وGemini الأصلي. لا يتوفر المدخل الأصلي إلا عندما يعلن النموذج عن الصيغة وتوجد له قناة upstream من البروتوكول نفسه؛ ولا يعود أي مدخل أصلي إلى Chat Completions. يمكن لمدخل Chat فقط التحويل باتجاه واحد إلى بروتوكول آخر متوافق.
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="صيغة OpenAI" icon="plug">
     `/v1/chat/completions`
     صيغة قياسية، أوسع توافق
+  </Card>
+  <Card title="Responses" icon="bolt">
+    `/v1/responses`
+    دورة حياة وأحداث Responses الأصلية
   </Card>
   <Card title="صيغة Anthropic" icon="message">
     `/v1/messages`
@@ -26,7 +30,7 @@ description: "استخدم صيغ OpenAI أو Anthropic أو Gemini بمفتاح
 
 | الميزة | الوصف |
 |---------|-------------|
-| **لا حاجة لتبديل SDK** | استخدم أي نموذج مع SDK المفضل لديك |
+| **SDK أصلي للبروتوكول** | استخدم SDK الأصلي فقط مع النماذج التي تعلن عن هذه الصيغة؛ ويظل Chat المسار المحمول الأوسع |
 | **ميزات أصلية** | الوصول إلى قدرات خاصة بكل صيغة |
 | **ترحيل سهل** | الانتقال من واجهات API الرسمية بتغيير عنوان الأساس فقط |
 | **فوترة واحدة** | حساب واحد، مفتاح API واحد، جميع الصيغ |
@@ -158,13 +162,13 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:streamGenerateConte
 
 ## حدود توافق الأدوات
 
-يمكن تحويل أدوات الدوال بين الصيغ عندما يدعمها المسار الهدف. أما أدوات المزوّد الأصلية فيجب أن تبقى على مسارها الأصلي:
+يمكن تحويل أدوات الدوال من مدخل Chat باتجاه واحد عندما يستطيع المسار الهدف تمثيل دورة الأداة كاملة. أما أدوات المزوّد الأصلية فيجب أن تبقى على مسارها الأصلي:
 
 - أدوات OpenAI Responses المستضافة والأصلية مثل `tool_search` و`web_search` و`file_search` و`code_interpreter` وMCP وshell/apply_patch وأدوات computer-use تتطلب `/v1/responses`.
 - أدوات Anthropic server/native مثل `web_search_*` و`web_fetch_*` و`code_execution_*` و`tool_search_*` وbash وcomputer-use وtext-editor تتطلب `/v1/messages`.
 - أدوات Gemini المدمجة مثل `googleSearch` و`codeExecution` و`urlContext` و`computerUse` وحقول `tools` المشابهة تتطلب `/v1beta`.
 
-إذا لم يتمكن TokenLab من توجيه طلب يحتوي على أدوات أصلية إلى مسار upstream يدعم الصيغة الأصلية، فإنه يعيد خطأ unsupported-field واضحًا بدلًا من إسقاط الأداة بصمت أو تقديمها كدالة Chat Completions. تظل أدوات الدوال التي يعرّفها المستخدم هي المسار الأكثر قابلية للنقل.
+لا تخفض TokenLab طلبات البروتوكول الأصلي إلى Chat Completions. تُمرر الحقول غير المعروفة وتركيبات الأدوات بأفضل جهد، ويحدد upstream المختار ما إذا كانت مدعومة.
 
 ## اختيار الصيغة المناسبة
 
@@ -227,54 +231,13 @@ response = requests.post(
 )
 ```
 
-## التوافق بين النماذج
 
-ميزة TokenLab: استخدم **أي SDK** مع **أي نموذج**. تقوم البوابة تلقائيًا بتحويل الصيغ.
+## توافق Chat المحمول
 
-### أي SDK → أي نموذج
+استخدم `/v1/chat/completions` عندما يحتاج عميل واحد إلى الوصول إلى نماذج تدعمها بروتوكولات upstream مختلفة. يمكن لطلب Chat المحمول أن يُترجم باتجاه واحد إلى Responses أو Messages أو Gemini عندما يمكن تمثيله بالكامل. لا تُحوَّل طلبات Responses أو Messages أو Gemini الأصلية إلى Chat، ولا يعني اسم النموذج أو المزوّد أن البروتوكول الأصلي متاح.
 
-```python
-# Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
-from anthropic import Anthropic
+## حدود Responses وGemini
 
-client = Anthropic(
-    api_key="sk-tokenlab-key",
-    base_url="https://api.tokenlab.sh"
-)
+تشمل واجهة Responses الحالية الإنشاء والضغط والاسترجاع والحذف وSSE. يعمل background عبر HTTP فقط. يقبل WebSocket أحداث `response.create` فقط؛ التدفق ضمني، و`background` و`response.cancel` غير مدعومين على هذا النقل. الحذف ليس إلغاءً.
 
-response = client.messages.create(
-    model="gpt-4o",  # ✅ Works! Auto-converted
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-# Same compatibility SDK for portable chat; native-only features still need native routes
-response = client.messages.create(model="gemini-3.5-flash", ...)  # ✅ Works!
-response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
-```
-
-### OpenAI SDK → جميع النماذج
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="https://api.tokenlab.sh/v1", api_key="sk-...")
-
-# These portable chat calls use the same /v1 compatibility SDK:
-response = client.chat.completions.create(model="gpt-4o", ...)
-response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
-response = client.chat.completions.create(model="gemini-3.5-flash", ...)
-```
-
-### مقارنة الصناعة
-
-| المنصة | OpenAI Format | Anthropic Format | Gemini Format | Responses API |
-|----------|:---:|:---:|:---:|:---:|
-| **TokenLab** | ✅ جميع النماذج | ✅ جميع النماذج | ✅ جميع النماذج | ✅ جميع النماذج |
-| OpenRouter | ✅ جميع النماذج | ❌ | ❌ | ❌ |
-| Together AI | ✅ جميع النماذج | ❌ | ❌ | ❌ |
-| Fireworks | ✅ جميع النماذج | ❌ | ❌ | ❌ |
-
-<Note>
-بينما يعمل التوافق عبر الصيغ لمعظم الميزات، تتطلب الميزات الخاصة بكل صيغة (مثل التفكير الموسّع في Anthropic) استخدام الصيغة الأصلية.
-</Note>
+في Gemini، أسماء ProtoJSON بصيغة lowerCamelCase وأسماء proto الأصلية بصيغة snake_case رسمية معًا، وتُحفظ حتى في الطلبات المختلطة. تشمل الواجهة الحالية list/get models و`generateContent` و`streamGenerateContent` و`countTokens` و`embedContent` و`batchEmbedContents`؛ ولا تشمل Interactions أو Live. تُمرر الحقول غير المعروفة بأفضل جهد، ويقرر upstream ما إذا كانت مدعومة.

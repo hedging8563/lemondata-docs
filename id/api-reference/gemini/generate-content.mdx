@@ -4,17 +4,11 @@ openapi: "POST /v1beta/models/{model}:generateContent"
 description: "Menghasilkan konten menggunakan format Google Gemini API"
 ---
 
-TokenLab mendukung format native Google Gemini API untuk model Gemini. Hal ini memungkinkan kompatibilitas langsung dengan Google AI SDK.
-
+TokenLab hanya menampilkan rute ini untuk model yang mengiklankan kontrak Gemini native dan memiliki rute upstream dengan protokol yang sama; tidak ada fallback ke Chat Completions. Nama ProtoJSON lowerCamelCase dan nama proto asli snake_case sama-sama resmi dan dipertahankan, termasuk dalam request campuran. Field yang tidak dikenal diteruskan secara best-effort dan upstream menentukan dukungannya.
 ## Parameter Path
 
 <ParamField path="model" type="string" required>
   Nama model (misalnya, `gemini-2.5-pro`, `gemini-3.5-flash`).
-
-
-  Untuk integrasi produksi, utamakan bagian media `fileData` / `file_data` berbasis URL dengan URL `https` publik.
-  TokenLab menggunakan jalur Gemini native jika tersedia dan beralih ke jalur publik yang kompatibel jika penanganan native tidak tersedia untuk request multimodal tersebut.
-
 </ParamField>
 
 ## Parameter Query
@@ -33,18 +27,7 @@ Endpoint Gemini mendukung beberapa metode autentikasi:
 ## Isi Permintaan
 
 <ParamField body="contents" type="array" required>
-  Isi percakapan.
-
-  Setiap objek konten berisi:
-  - `role` (string): `user` atau `model`
-  - `parts` (array): bagian konten. TokenLab saat ini mendukung:
-    - bagian teks: `{ "text": "..." }`
-    - bagian media inline: `inlineData` / `inline_data`
-    - bagian file berbasis URL: `fileData` / `file_data`
-
-  Untuk bagian media, TokenLab saat ini menerima MIME type gambar, audio, dan video lalu meneruskannya melalui detail model yang kompatibel dengan Gemini.
-
-  Nilai role `user` dan `model` dinormalisasi tanpa membedakan huruf besar/kecil. `inlineData` / `inline_data` dengan `application/octet-stream` hanya diterima jika TokenLab dapat mengenali byte gambar atau video yang didukung; jika tidak, request gagal sebelum routing. Untuk request native image-output, hanya keluarga tool Google search/maps yang diterima, dan kombinasi tool yang tidak didukung gagal sebelum retry upstream.
+  Konten percakapan. Nilai `role` dan semua `parts` dipertahankan seperti dikirim; TokenLab tidak melakukan trim/lowercase, penulisan ulang Base64, atau inferensi MIME. `inlineData` / `inline_data` dan `fileData` / `file_data` adalah ejaan resmi, dan TokenLab tidak mewajibkan `fileData.mimeType` secara lokal. ID Files atau Cache buatan TokenLab diperiksa kepemilikannya dan mempertahankan binding upstream; aturan media dan tool lain ditentukan provider.
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -52,17 +35,7 @@ Endpoint Gemini mendukung beberapa metode autentikasi:
 </ParamField>
 
 <ParamField body="generationConfig" type="object">
-  Konfigurasi generasi:
-  - `temperature` (number): Suhu sampling
-  - `topP` (number): Probabilitas nucleus sampling
-  - `topK` (integer): Sampling Top-K
-  - `maxOutputTokens` (integer): Token output maksimum
-  - `stopSequences` (array): Urutan stop
-  - `candidateCount` (integer): Jumlah kandidat untuk generasi non-streaming. Permintaan streaming harus menghapusnya atau mempertahankannya di `1`.
-  - `responseModalities` (array): Modalitas output yang diminta untuk rute native yang kompatibel.
-  - `responseMimeType` (string): Tipe MIME output seperti `text/plain` atau `application/json`.
-  - `responseSchema` (object): JSON schema untuk output terstruktur saat `responseMimeType` meminta JSON.
-  - `thinkingConfig` / `thinking_config` (object): Opsi anggaran berpikir untuk model yang kompatibel.
+  Konfigurasi generasi native. Nama lowerCamelCase seperti `maxOutputTokens`, `candidateCount`, dan `thinkingConfig` serta padanan snake_case diterima tanpa perubahan. TokenLab tidak menghapus `thinkingConfig` setelah kegagalan atau memberlakukan batas lokal `candidateCount` untuk streaming; upstream menentukan rentang dan kombinasinya.
 </ParamField>
 
 <ParamField body="safetySettings" type="array">

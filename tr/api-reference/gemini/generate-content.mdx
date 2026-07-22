@@ -4,17 +4,11 @@ openapi: "POST /v1beta/models/{model}:generateContent"
 description: "Google Gemini API formatını kullanarak içerik oluşturur"
 ---
 
-TokenLab, Gemini modelleri için yerel Google Gemini API formatını destekler. Bu, Google AI SDK'ları ile doğrudan uyumluluk sağlar.
-
+TokenLab bu rotayı yalnızca yerel Gemini sözleşmesini yayımlayan ve aynı protokolde upstream rotası bulunan modeller için sunar; Chat Completions’a fallback yoktur. ProtoJSON lowerCamelCase ve özgün proto snake_case adlarının ikisi de resmidir ve karma isteklerde de korunur. Bilinmeyen alanlar best-effort iletilir ve desteğe upstream karar verir.
 ## Yol Parametreleri
 
 <ParamField path="model" type="string" required>
   Model adı (örneğin, `gemini-2.5-pro`, `gemini-3.5-flash`).
-
-
-  Üretim entegrasyonları için, herkese açık bir `fileData` URL'si olan URL tabanlı `file_data` / `https` medya parçalarını tercih edin.
-  TokenLab, mümkün olduğunda desteklenen Gemini yerel kanallarını yerel yol üzerinden yönlendirecek ve yerel olarak kullanıma hazır bir rota bu çok modlu istek için mevcut olmadığında otomatik olarak uyumlu dahili dönüştürme yoluna geri dönecektir.
-
 </ParamField>
 
 ## Sorgu Parametreleri
@@ -33,18 +27,7 @@ Gemini uç noktaları birden fazla kimlik doğrulama yöntemini destekler:
 ## İstek Gövdesi
 
 <ParamField body="contents" type="array" required>
-  Sohbet içerikleri.
-
-  Her içerik nesnesi şunları içerir:
-  - `role` (string): `user` veya `model`
-  - `parts` (array): içerik part'ları. TokenLab şu anda şunları destekler:
-    - metin part'ları: `{ "text": "..." }`
-    - satır içi medya part'ları: `inlineData` / `inline_data`
-    - URL tabanlı dosya part'ları: `fileData` / `file_data`
-
-  Medya part'ları için TokenLab şu anda image, audio ve video MIME type'larını kabul eder ve bunları Gemini uyumlu genel sözleşme üzerinden iletir.
-
-  `user` ve `model` role değerleri büyük/küçük harfe duyarsız biçimde normalize edilir. `application/octet-stream` içeren `inlineData` / `inline_data`, TokenLab desteklenen görsel veya video baytlarını tanıyabildiğinde kabul edilir; aksi halde istek routing öncesinde başarısız olur. Yerel image-output isteklerinde yalnızca Google search/maps araç ailesi kabul edilir ve desteklenmeyen araç kombinasyonları upstream retry başlamadan önce başarısız olur.
+  Konuşma içeriği. `role` değerleri ve tüm `parts` gönderildiği gibi korunur; TokenLab trim/lowercase, Base64 yeniden yazımı veya MIME çıkarımı yapmaz. `inlineData` / `inline_data` ve `fileData` / `file_data` resmi yazımlardır; TokenLab `fileData.mimeType` alanını yerel olarak zorunlu tutmaz. TokenLab’de oluşturulan Files/Cache kimliklerinde sahiplik denetlenir ve özgün upstream binding korunur; diğer medya ve araç kurallarına sağlayıcı karar verir.
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -52,17 +35,7 @@ Gemini uç noktaları birden fazla kimlik doğrulama yöntemini destekler:
 </ParamField>
 
 <ParamField body="generationConfig" type="object">
-  Oluşturma yapılandırması:
-  - `temperature` (number): Örnekleme sıcaklığı
-  - `topP` (number): Çekirdek (nucleus) örnekleme olasılığı
-  - `topK` (integer): Top-K örnekleme
-  - `maxOutputTokens` (integer): Maksimum çıktı token'ları
-  - `stopSequences` (array): Durdurma dizileri
-  - `candidateCount` (integer): Stream olmayan üretim için aday sayısı. Streaming istekleri bu alanı kaldırmalı veya `1` olarak tutmalıdır.
-  - `responseModalities` (array): Uyumlu native rotalar için istenen çıktı modaliteleri.
-  - `responseMimeType` (string): `text/plain` veya `application/json` gibi çıktı MIME tipi.
-  - `responseSchema` (object): `responseMimeType` JSON istediğinde yapılandırılmış çıktı için JSON schema.
-  - `thinkingConfig` / `thinking_config` (object): Uyumlu modeller için düşünme bütçesi seçenekleri.
+  Yerel üretim yapılandırması. `maxOutputTokens`, `candidateCount`, `thinkingConfig` gibi lowerCamelCase adları ve karşılık gelen snake_case adları değiştirilmeden kabul edilir. TokenLab hata sonrasında `thinkingConfig` silmez veya streaming için yerel `candidateCount` sınırı uygulamaz; aralık ve kombinasyonlara upstream karar verir.
 </ParamField>
 
 <ParamField body="safetySettings" type="array">

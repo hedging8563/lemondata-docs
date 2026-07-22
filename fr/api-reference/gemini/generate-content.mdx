@@ -4,17 +4,11 @@ openapi: "POST /v1beta/models/{model}:generateContent"
 description: "Génère du contenu en utilisant le format de l'API Google Gemini"
 ---
 
-TokenLab prend en charge le format natif de l'API Google Gemini pour les modèles Gemini. Cela permet une compatibilité directe avec les SDK Google AI.
-
+TokenLab n’expose cette route que pour les modèles qui annoncent un contrat Gemini natif et disposent d’une route upstream du même protocole ; aucun repli vers Chat Completions n’a lieu. Les noms ProtoJSON lowerCamelCase et les noms proto originaux snake_case sont tous deux officiels et sont conservés, y compris dans les requêtes mixtes. Les champs inconnus sont transmis au mieux et l’upstream décide de leur prise en charge.
 ## Paramètres de chemin
 
 <ParamField path="model" type="string" required>
   Nom du modèle (par ex., `gemini-2.5-pro`, `gemini-3.5-flash`).
-
-
-  Pour les intégrations en production, privilégiez les parties média `fileData` / `file_data` basées sur une URL avec une URL publique `https`.
-  TokenLab utilise le chemin Gemini natif lorsqu’il est disponible et bascule vers un chemin public compatible lorsque le traitement natif n’est pas disponible pour cette requête multimodale.
-
 </ParamField>
 
 ## Paramètres de requête
@@ -33,18 +27,7 @@ Les points de terminaison Gemini prennent en charge plusieurs méthodes d'authen
 ## Corps de la requête
 
 <ParamField body="contents" type="array" required>
-  Contenu de la conversation.
-
-  Chaque objet de contenu contient :
-  - `role` (string) : `user` ou `model`
-  - `parts` (array) : parties du contenu. TokenLab prend actuellement en charge :
-    - les parties texte : `{ "text": "..." }`
-    - les parties média inline : `inlineData` / `inline_data`
-    - les parties fichier basées sur URL : `fileData` / `file_data`
-
-  Pour les parties média, TokenLab accepte actuellement les types MIME image, audio et vidéo, puis les transmet via le détails du modèle compatible Gemini.
-
-  Les rôles `user` et `model` sont normalisés sans tenir compte de la casse. `inlineData` / `inline_data` avec `application/octet-stream` n’est accepté que si TokenLab peut identifier des octets image ou vidéo pris en charge ; sinon, la requête échoue avant le routage. Pour les requêtes natives avec sortie image, seule la famille d’outils Google search/maps est acceptée, et les combinaisons non prises en charge échouent avant les nouvelles tentatives upstream.
+  Contenu de la conversation. Les valeurs `role` et tous les `parts` sont conservés tels qu’envoyés ; TokenLab n’effectue ni trim/lowercase, ni réécriture Base64, ni inférence MIME. `inlineData` / `inline_data` et `fileData` / `file_data` sont des graphies officielles, et TokenLab n’impose pas localement `fileData.mimeType`. Les identifiants Files ou Cache créés par TokenLab font l’objet d’un contrôle de propriété et conservent leur liaison upstream ; le fournisseur décide des autres règles média et outils.
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -52,17 +35,7 @@ Les points de terminaison Gemini prennent en charge plusieurs méthodes d'authen
 </ParamField>
 
 <ParamField body="generationConfig" type="object">
-  Configuration de génération :
-  - `temperature` (number) : Température d'échantillonnage
-  - `topP` (number) : Probabilité d'échantillonnage nucleus
-  - `topK` (integer) : Échantillonnage Top-K
-  - `maxOutputTokens` (integer) : Nombre maximum de tokens de sortie
-  - `stopSequences` (array) : Séquences d'arrêt
-  - `candidateCount` (integer) : Nombre de candidats pour la génération non streamée. Les requêtes en streaming doivent l'omettre ou le garder à `1`.
-  - `responseModalities` (array) : Modalités de sortie demandées pour les routes natives compatibles.
-  - `responseMimeType` (string) : Type MIME de sortie, par exemple `text/plain` ou `application/json`.
-  - `responseSchema` (object) : JSON schema pour la sortie structurée lorsque `responseMimeType` demande du JSON.
-  - `thinkingConfig` / `thinking_config` (object) : Options de budget de réflexion pour les modèles compatibles.
+  Configuration native de génération. Les noms lowerCamelCase tels que `maxOutputTokens`, `candidateCount` et `thinkingConfig`, ainsi que leurs équivalents snake_case, sont acceptés sans modification. TokenLab ne supprime pas `thinkingConfig` après un échec et n’impose pas de limite locale à `candidateCount` en streaming ; l’upstream décide des plages et combinaisons.
 </ParamField>
 
 <ParamField body="safetySettings" type="array">

@@ -5,10 +5,7 @@ description: "Triển khai phản hồi streaming theo thời gian thực"
 
 ## Tổng quan
 
-Streaming cho phép bạn nhận đầu ra từng phần ngay khi nó được tạo ra, giúp cải thiện độ trễ cảm nhận và trải nghiệm người dùng.
-
-Đối với các tích hợp kiểu OpenAI mới, hãy ưu tiên **Responses streaming** trước. Nếu framework của bạn vẫn sử dụng Chat Completions streaming, TokenLab cũng hỗ trợ lộ trình tương thích đó.
-
+Streaming chuyển đầu ra theo từng phần. Dùng Responses streaming khi mô hình công bố hợp đồng Responses gốc và có tuyến upstream cùng giao thức; nếu không, dùng Chat Completions hoặc giao thức gốc mà mô hình công bố.
 ## Khuyến nghị: Responses Streaming
 
 <CodeGroup>
@@ -66,6 +63,14 @@ for await (const event of stream) {
 
 </CodeGroup>
 
+
+## Ranh giới Streaming Responses và Gemini
+
+Với Responses SSE, TokenLab giữ nguyên tên, thứ tự và trường sự kiện upstream, đồng thời đọc usage và trạng thái kết thúc ngoài luồng mà không đổi wire. Sau sự kiện đầu tiên đã gửi, không thử channel hoặc credential khác.
+
+Responses WebSocket chỉ nhận sự kiện chính thức `response.create`. Stream là ngầm định; `background` và `response.cancel` không được cung cấp trên transport này, còn background chỉ chạy qua HTTP. Mỗi kết nối xử lý tuần tự, không multiplexing và giới hạn 60 phút.
+
+Gemini SSE giữ nguyên chunk gốc. Sự kiện chỉ có metadata, chunk trung gian không có `finishReason` và EOF tự nhiên đều hợp lệ; TokenLab không thêm dấu Chat `[DONE]`.
 ## Phát trực tuyến Chat Completions
 
 Nếu framework của bạn vẫn yêu cầu các chunk SSE từ `/v1/chat/completions`, cách này cũng hoạt động:

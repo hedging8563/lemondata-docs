@@ -5,10 +5,7 @@ description: "實作即時串流回應"
 
 ## 概覽
 
-串流可讓您在輸出生成的同時接收部分內容，從而改善感知延遲與使用者體驗。
-
-對於新的 OpenAI 風格整合，建議優先使用 **Responses streaming**。如果您的框架仍在使用 Chat Completions streaming，TokenLab 也支援該相容路徑。
-
+串流會逐步交付輸出。只有模型公開 Responses 原生契約且存在同協議 upstream 路徑時，才使用 Responses streaming；否則請使用 Chat Completions 或模型公開的原生協議。
 ## 建議：Responses Streaming
 
 <CodeGroup>
@@ -66,6 +63,14 @@ for await (const event of stream) {
 
 </CodeGroup>
 
+
+## Responses 與 Gemini 串流邊界
+
+Responses SSE 會保留 upstream 事件名稱、順序與欄位，只在旁路讀取 usage 與終態，不改寫 wire。第一個事件交付後，絕不再嘗試其他 channel 或 credential。
+
+Responses WebSocket 只接受官方 `response.create` 事件。stream 是隱含行為；此 transport 不提供 `background` 或 `response.cancel`，background 只透過 HTTP 執行。每個連線採序列處理、不做 multiplexing，最長 60 分鐘。
+
+Gemini SSE 保留原生 chunk。只有 metadata 的事件、沒有 `finishReason` 的中間 chunk，以及自然 EOF 都合法；TokenLab 不會加入 Chat `[DONE]`.
 ## Chat Completions 串流
 
 如果您的框架仍預期從 `/v1/chat/completions` 接收 SSE 區塊，這同樣可行：

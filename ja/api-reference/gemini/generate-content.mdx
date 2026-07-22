@@ -4,17 +4,11 @@ openapi: "POST /v1beta/models/{model}:generateContent"
 description: "Google Gemini API形式を使用してコンテンツを生成します"
 ---
 
-TokenLabは、Geminiモデル向けのネイティブなGoogle Gemini API形式をサポートしています。これにより、Google AI SDKとの直接的な互換性が確保されます。
-
+TokenLab は、ネイティブ Gemini 契約を公開し、同一プロトコルの upstream ルートを持つモデルにのみこのルートを提供します。Chat Completions へのフォールバックはありません。ProtoJSON の lowerCamelCase と proto 元来の snake_case はどちらも公式で、混在リクエストも保持されます。未知のフィールドは best-effort で転送され、対応可否は upstream が判断します。
 ## パスパラメータ
 
 <ParamField path="model" type="string" required>
   モデル名 (例: `gemini-2.5-pro`、`gemini-3.5-flash`)。
-
-
-  本番環境の統合では、公開 `fileData` URL を使う URL ベースの `file_data` / `https` メディアパーツを優先してください。
-  TokenLab は、可能な場合はサポート対象の Gemini ネイティブチャネルをネイティブパスにルーティングし、そのマルチモーダル要求に対してネイティブ対応ルートが利用できない場合は、互換性のある内部変換パスへ自動的にフォールバックします。
-
 </ParamField>
 
 ## クエリパラメータ
@@ -33,18 +27,7 @@ Geminiエンドポイントは、複数の認証方法をサポートしてい�
 ## リクエストボディ
 
 <ParamField body="contents" type="array" required>
-  会話の内容。
-
-  各コンテンツオブジェクトには以下が含まれます：
-  - `role` (string)：`user` または `model`
-  - `parts` (array)：コンテンツ part。TokenLab では現在次をサポートします：
-    - テキスト part：`{ "text": "..." }`
-    - インライン媒体 part：`inlineData` / `inline_data`
-    - URL ベースのファイル part：`fileData` / `file_data`
-
-  媒体 part では、TokenLab は現在 image / audio / video の MIME type を受け付け、Gemini 互換の支援說明として下流へ転送します。
-
-  `user` と `model` の role 値は大文字小文字を区別せず正規化されます。`application/octet-stream` の `inlineData` / `inline_data` は、TokenLab が対応する画像または動画バイト列として識別できる場合のみ受け付けます。それ以外はルーティング前に失敗します。ネイティブ画像出力リクエストでは Google search/maps 系ツールのみ受け付け、非対応のツール組み合わせは上流リトライ前に失敗します。
+  会話コンテンツです。`role` 値とすべての `parts` は送信時のまま保持され、trim/lowercase、Base64 の書き換え、MIME 推論は行いません。`inlineData` / `inline_data` と `fileData` / `file_data` はいずれも公式表記で、TokenLab は `fileData.mimeType` をローカル必須にしません。TokenLab で作成した Files/Cache ID は所有権を確認して元の upstream binding を維持し、その他のメディアやツール規則は provider に委ねます。
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -52,17 +35,7 @@ Geminiエンドポイントは、複数の認証方法をサポートしてい�
 </ParamField>
 
 <ParamField body="generationConfig" type="object">
-  生成設定：
-  - `temperature` (number): サンプリング温度
-  - `topP` (number): 核サンプリング（Nucleus sampling）確率
-  - `topK` (integer): Top-Kサンプリング
-  - `maxOutputTokens` (integer): 最大出力トークン数
-  - `stopSequences` (array): 停止シーケンス
-  - `candidateCount` (integer): 非ストリーミング生成の候補数。ストリーミングリクエストでは省略するか `1` にしてください。
-  - `responseModalities` (array): 互換性のあるネイティブルートで要求する出力モダリティ。
-  - `responseMimeType` (string): `text/plain` や `application/json` などの出力 MIME タイプ。
-  - `responseSchema` (object): `responseMimeType` が JSON を要求する場合の構造化出力用 JSON schema。
-  - `thinkingConfig` / `thinking_config` (object): 互換モデル向けの thinking budget オプション。
+  ネイティブ生成設定です。`maxOutputTokens`、`candidateCount`、`thinkingConfig` などの lowerCamelCase と対応する snake_case をそのまま受け付けます。失敗後に `thinkingConfig` を削除したり、streaming の `candidateCount` にローカル制限を設けたりせず、範囲や組み合わせは upstream が判断します。
 </ParamField>
 
 <ParamField body="safetySettings" type="array">

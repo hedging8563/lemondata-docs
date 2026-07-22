@@ -5,12 +5,16 @@ description: "Usa los formatos OpenAI, Anthropic o Gemini con una sola clave API
 
 ## Descripción general
 
-TokenLab admite **tres formatos de API nativos** con una sola clave API. Elige el formato que mejor se adapte a tu caso de uso: no se necesitan cambios de configuración.
+TokenLab expone cuatro superficies de protocolo con una sola clave API: Chat Completions, Responses, Anthropic Messages y Gemini nativo. Una entrada nativa solo está disponible cuando el modelo anuncia ese formato y existe una ruta upstream del mismo protocolo; las entradas nativas nunca vuelven a Chat Completions. Solo la entrada Chat puede compilarse en una dirección hacia otro protocolo compatible.
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="Formato OpenAI" icon="plug">
     `/v1/chat/completions`
     Formato estándar, la mayor compatibilidad
+  </Card>
+  <Card title="Responses" icon="bolt">
+    `/v1/responses`
+    Ciclo de vida y eventos nativos de Responses
   </Card>
   <Card title="Formato Anthropic" icon="message">
     `/v1/messages`
@@ -26,7 +30,7 @@ TokenLab admite **tres formatos de API nativos** con una sola clave API. Elige e
 
 | Beneficio | Descripción |
 |---------|-------------|
-| **No SDK switching** | Usa cualquier modelo con tu SDK preferido |
+| **SDK nativo del protocolo** | Usa un SDK nativo solo con modelos que anuncien ese formato; Chat sigue siendo la superficie portable más amplia |
 | **Native features** | Accede a capacidades específicas del formato |
 | **Easy migration** | Cambia desde las APIs oficiales con solo modificar la URL base |
 | **Single billing** | Una cuenta, una clave API, todos los formatos |
@@ -158,13 +162,13 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:streamGenerateConte
 
 ## Límite de compatibilidad de herramientas
 
-Las herramientas de función pueden convertirse entre formatos cuando la ruta de destino las admite. Las herramientas nativas del proveedor deben permanecer en su ruta nativa:
+Las herramientas de función solo pueden compilarse en una dirección desde la entrada Chat cuando el destino puede representar el ciclo completo. Las herramientas nativas del proveedor deben permanecer en su ruta nativa:
 
 - Las herramientas alojadas y nativas de OpenAI Responses, como `tool_search`, `web_search`, `file_search`, `code_interpreter`, MCP, shell/apply_patch y herramientas computer-use, requieren `/v1/responses`.
 - Las herramientas server/native de Anthropic, como `web_search_*`, `web_fetch_*`, `code_execution_*`, `tool_search_*`, bash, computer-use y text-editor, requieren `/v1/messages`.
 - Las herramientas integradas de Gemini, como `googleSearch`, `codeExecution`, `urlContext`, `computerUse` y campos `tools` similares, requieren `/v1beta`.
 
-Si TokenLab no puede enrutar una solicitud con herramientas nativas a una ruta upstream compatible con formato nativo, devuelve un error unsupported-field explícito en lugar de descartar la herramienta en silencio o fingir que es una función de Chat Completions. Las herramientas de función definidas por el usuario siguen siendo la ruta más portable.
+TokenLab no degrada solicitudes de protocolo nativo a Chat Completions. Los campos desconocidos y las combinaciones de herramientas se reenvían con el mejor esfuerzo; el upstream elegido decide si son compatibles.
 
 ## Cómo elegir el formato correcto
 
@@ -229,54 +233,13 @@ response = requests.post(
 )
 ```
 
-## Compatibilidad entre modelos
 
-La magia de TokenLab: usa **cualquier SDK** con **cualquier modelo**. La pasarela gestiona automáticamente la conversión de formatos.
+## Compatibilidad portable de Chat
 
-### Cualquier SDK → Cualquier modelo
+Usa `/v1/chat/completions` cuando un cliente deba acceder a modelos respaldados por distintos protocolos upstream. Una solicitud Chat portable puede compilarse en una dirección a Responses, Messages o Gemini si puede representarse por completo. Las solicitudes nativas de Responses, Messages y Gemini nunca se convierten a Chat; el nombre del modelo o proveedor no implica disponibilidad nativa.
 
-```python
-# Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
-from anthropic import Anthropic
+## Límites de Responses y Gemini
 
-client = Anthropic(
-    api_key="sk-tokenlab-key",
-    base_url="https://api.tokenlab.sh"
-)
+La superficie actual de Responses incluye crear, compactar, recuperar, eliminar y SSE. Background funciona solo por HTTP. WebSocket acepta únicamente `response.create`; el streaming es implícito y `background` y `response.cancel` no se ofrecen en este transporte. Eliminar no significa cancelar.
 
-response = client.messages.create(
-    model="gpt-4o",  # ✅ Works! Auto-converted
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-# Same compatibility SDK for portable chat; native-only features still need native routes
-response = client.messages.create(model="gemini-3.5-flash", ...)  # ✅ Works!
-response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
-```
-
-### OpenAI SDK → Todos los modelos
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="https://api.tokenlab.sh/v1", api_key="sk-...")
-
-# These portable chat calls use the same /v1 compatibility SDK:
-response = client.chat.completions.create(model="gpt-4o", ...)
-response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
-response = client.chat.completions.create(model="gemini-3.5-flash", ...)
-```
-
-### Comparación por plataforma
-
-| Plataforma | Formato OpenAI | Formato Anthropic | Formato Gemini | API de Responses |
-|----------|:---:|:---:|:---:|:---:|
-| **TokenLab** | ✅ Todos los modelos | ✅ Todos los modelos | ✅ Todos los modelos | ✅ Todos los modelos |
-| OpenRouter | ✅ Todos los modelos | ❌ | ❌ | ❌ |
-| Together AI | ✅ Todos los modelos | ❌ | ❌ | ❌ |
-| Fireworks | ✅ Todos los modelos | ❌ | ❌ | ❌ |
-
-<Note>
-Aunque el uso entre formatos funciona para la mayoría de las funcionalidades, las funciones específicas de cada formato (como el razonamiento extendido de Anthropic) requieren el formato nativo.
-</Note>
+En Gemini, tanto lowerCamelCase de ProtoJSON como los nombres proto originales en snake_case son oficiales y se conservan incluso en solicitudes mixtas. La superficie actual incluye list/get models, `generateContent`, `streamGenerateContent`, `countTokens`, `embedContent` y `batchEmbedContents`; no incluye Interactions ni Live. Los campos desconocidos se reenvían con el mejor esfuerzo y el upstream decide su compatibilidad.

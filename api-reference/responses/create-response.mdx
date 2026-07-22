@@ -4,7 +4,9 @@ openapi: "POST /v1/responses"
 description: "Creates a response using the OpenAI Responses API format"
 ---
 
-The Responses API is OpenAI's newer stateful conversation API. TokenLab supports this format as an advanced optional path for compatible models; use `POST /v1/chat/completions` as the default OpenAI-compatible route unless you explicitly need Responses-specific behavior.
+The Responses API is OpenAI's stateful response protocol. TokenLab exposes it only when the model details advertise the Responses request format and a same-protocol route is currently available; this is not inferred from a `gpt-*` name or provider. Native Responses requests stay on Responses endpoints and never fall back through Chat Completions.
+
+TokenLab preserves the request JSON shape, including unknown fields, explicit `null`, and empty arrays, and forwards it best-effort. Unknown or future fields remain subject to the selected upstream's support.
 
 ## Request Body
 
@@ -12,8 +14,8 @@ The Responses API is OpenAI's newer stateful conversation API. TokenLab supports
   ID of the model to use. See [Models](https://tokenlab.sh/en/models) for available options.
 </ParamField>
 
-<ParamField body="input" type="array" required>
-  A list of input items comprising the conversation.
+<ParamField body="input" type="string | array">
+  Input for the response. It is optional when the request instead uses a reusable `prompt` or continues a stored response with `previous_response_id`.
 
   Each item can be:
   - `message`: A conversation message with role and content
@@ -41,9 +43,7 @@ The Responses API is OpenAI's newer stateful conversation API. TokenLab supports
 </ParamField>
 
 <ParamField body="tools" type="array">
-  A list of tools the model may call.
-
-  For hosted `image_generation` tools that use the default image tool model or explicitly set `model: "gpt-image-2"`, TokenLab removes unsupported `input_fidelity` before forwarding the request because GPT Image 2 already treats image inputs as high fidelity. Do not send `background: "transparent"` for this tool; TokenLab does not silently remove it because that changes output semantics.
+  A list of tools the model may call. TokenLab forwards native tool definitions without maintaining a local hosted-tool whitelist; the selected upstream decides which types and combinations are supported.
 </ParamField>
 
 <ParamField body="stream" type="boolean" default="false">
@@ -56,6 +56,14 @@ The Responses API is OpenAI's newer stateful conversation API. TokenLab supports
 
 <ParamField body="store" type="boolean" default="true">
   Whether to store the response for later retrieval.
+</ParamField>
+
+<ParamField body="background" type="boolean" default="false">
+  Whether to ask the selected native Responses upstream to run asynchronously. TokenLab does not infer support from the provider or model name: a clear upstream rejection is returned unchanged, while an accepted queued or in-progress response keeps its billing reservation and original route affinity until a terminal response is reconciled, even if the client never retrieves it.
+</ParamField>
+
+<ParamField body="prompt" type="object">
+  Reference to a reusable prompt template and variables.
 </ParamField>
 
 <ParamField body="metadata" type="object">
@@ -90,7 +98,7 @@ The Responses API is OpenAI's newer stateful conversation API. TokenLab supports
   Always `response`.
 </ResponseField>
 
-<ResponseField name="created" type="integer">
+<ResponseField name="created_at" type="integer">
   Unix timestamp of when the response was created.
 </ResponseField>
 
@@ -101,6 +109,15 @@ The Responses API is OpenAI's newer stateful conversation API. TokenLab supports
 <ResponseField name="usage" type="object">
   Token usage statistics.
 </ResponseField>
+
+Valid response states include `queued`, `in_progress`, `completed`, `incomplete`, `failed`, and `cancelled`. An HTTP 200 response whose native status is `failed` or `incomplete` is returned as-is; it is not rewritten to a gateway 502.
+
+## Lifecycle boundaries
+
+- `GET /v1/responses/{id}` retrieves the original same-protocol response using its stored route affinity and supports `include`, `include_obfuscation`, `stream`, and `starting_after`.
+- `DELETE /v1/responses/{id}` deletes a stored response. It is not a cancellation endpoint.
+- `POST /v1/responses/compact` returns the native `response.compaction` contract.
+- Public cancel, input-items, and input-tokens endpoints are not currently exposed.
 
 <RequestExample>
 ```bash cURL

@@ -5,10 +5,7 @@ description: "تنفيذ استجابات بث في الوقت الفعلي"
 
 ## نظرة عامة
 
-يتيح لك البث تلقي مخرجات جزئية أثناء إنشائها، مما يحسّن زمن الاستجابة المُدرَك وتجربة المستخدم.
-
-بالنسبة إلى عمليات التكامل الجديدة بأسلوب OpenAI، يُفضَّل استخدام **Responses streaming** أولًا. وإذا كان إطار العمل لديك لا يزال يستخدم Chat Completions streaming، فإن TokenLab يدعم مسار التوافق هذا أيضًا.
-
+يتيح البث استلام الخرج تدريجيًا. استخدم Responses streaming عندما يعلن النموذج عن عقد Responses الأصلي وتوجد قناة upstream من البروتوكول نفسه؛ وإلا استخدم Chat Completions أو البروتوكول الأصلي الذي يعلنه النموذج.
 ## الموصى به: Responses Streaming
 
 <CodeGroup>
@@ -66,6 +63,14 @@ for await (const event of stream) {
 
 </CodeGroup>
 
+
+## حدود Responses وGemini المتدفقة
+
+تحافظ TokenLab في Responses SSE على أسماء أحداث upstream وترتيبها وحقولها، وتقرأ usage والحالة النهائية خارج المسار من دون تغيير wire. بعد تسليم أول حدث لا تُعاد المحاولة على قناة أو credential أخرى.
+
+يقبل Responses WebSocket أحداث `response.create` الرسمية فقط. يكون stream ضمنيًا، ولا تتوفر `background` أو `response.cancel` على هذا النقل؛ تعمل background عبر HTTP فقط. كل اتصال تسلسلي، لا يدعم multiplex، وحده الأقصى 60 دقيقة.
+
+يحافظ Gemini SSE على الأجزاء الأصلية. أحداث metadata فقط، والأجزاء الوسيطة بلا `finishReason`، وEOF الطبيعي حالات صحيحة، ولا تضيف TokenLab علامة Chat `[DONE]`.
 ## بث Chat Completions
 
 إذا كان إطار العمل لديك لا يزال يتوقع مقاطع SSE من `/v1/chat/completions`، فهذا يعمل أيضًا:

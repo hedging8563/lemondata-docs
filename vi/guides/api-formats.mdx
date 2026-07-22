@@ -5,12 +5,16 @@ description: "Sử dụng định dạng OpenAI, Anthropic hoặc Gemini với m
 
 ## Tổng quan
 
-TokenLab hỗ trợ **ba định dạng API gốc** với một khóa API duy nhất. Chọn định dạng phù hợp nhất với trường hợp sử dụng của bạn — không cần thay đổi cấu hình.
+TokenLab cung cấp bốn bề mặt giao thức với một khóa API: Chat Completions, Responses, Anthropic Messages và Gemini gốc. Điểm vào gốc chỉ khả dụng khi mô hình công bố định dạng đó và có tuyến upstream cùng giao thức; điểm vào gốc không fallback sang Chat Completions. Chỉ điểm vào Chat có thể biên dịch một chiều sang giao thức đích tương thích.
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="Định dạng OpenAI" icon="plug">
     `/v1/chat/completions`
     Định dạng tiêu chuẩn, tương thích rộng nhất
+  </Card>
+  <Card title="Responses" icon="bolt">
+    `/v1/responses`
+    Vòng đời và sự kiện Responses gốc
   </Card>
   <Card title="Định dạng Anthropic" icon="message">
     `/v1/messages`
@@ -26,7 +30,7 @@ TokenLab hỗ trợ **ba định dạng API gốc** với một khóa API duy nh
 
 | Lợi ích | Mô tả |
 |---------|-------------|
-| **No SDK switching** | Sử dụng bất kỳ mô hình nào với SDK bạn ưa thích |
+| **SDK gốc của giao thức** | Chỉ dùng SDK gốc với mô hình công bố định dạng đó; Chat vẫn là bề mặt di động rộng nhất |
 | **Native features** | Truy cập các khả năng riêng theo định dạng |
 | **Di chuyển ưu tiên gốc** | Giữ các tuyến gốc của nhà cung cấp khi hành vi là quan trọng; dùng khả năng tương thích OpenAI `/v1` cho các client kiểu OpenAI hiện có |
 | **Single billing** | Một tài khoản, một khóa API, tất cả các định dạng |
@@ -158,13 +162,13 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:streamGenerateConte
 
 ## Ranh giới tương thích công cụ
 
-Công cụ hàm có thể được chuyển đổi giữa các định dạng khi tuyến đích hỗ trợ. Công cụ gốc của nhà cung cấp phải ở lại tuyến gốc của nó:
+Công cụ hàm chỉ có thể được biên dịch một chiều từ điểm vào Chat khi đích biểu diễn được toàn bộ vòng lặp công cụ. Công cụ gốc của nhà cung cấp phải ở lại tuyến gốc của nó:
 
 - Công cụ hosted và native của OpenAI Responses như `tool_search`, `web_search`, `file_search`, `code_interpreter`, MCP, shell/apply_patch và công cụ computer-use cần `/v1/responses`.
 - Công cụ server/native của Anthropic như `web_search_*`, `web_fetch_*`, `code_execution_*`, `tool_search_*`, bash, computer-use và text-editor cần `/v1/messages`.
 - Công cụ tích hợp của Gemini như `googleSearch`, `codeExecution`, `urlContext`, `computerUse` và các trường `tools` tương tự cần `/v1beta`.
 
-Nếu TokenLab không thể định tuyến yêu cầu có công cụ native tới một đường upstream hỗ trợ định dạng native, hệ thống sẽ trả lỗi unsupported-field rõ ràng thay vì âm thầm bỏ công cụ hoặc giả vờ đó là hàm Chat Completions. Công cụ hàm do người dùng định nghĩa vẫn là đường công cụ dễ di chuyển nhất.
+TokenLab không hạ yêu cầu giao thức gốc xuống Chat Completions. Trường chưa biết và tổ hợp công cụ được chuyển tiếp theo best-effort; upstream được chọn quyết định khả năng hỗ trợ.
 
 ## Chọn định dạng phù hợp
 
@@ -227,54 +231,13 @@ response = requests.post(
 )
 ```
 
-## Tương thích đa mô hình
 
-Sức mạnh của TokenLab: sử dụng **bất kỳ SDK nào** với **bất kỳ mô hình nào**. Cổng sẽ tự động xử lý việc chuyển đổi định dạng.
+## Khả năng tương thích Chat di động
 
-### Bất kỳ SDK → Bất kỳ mô hình
+Dùng `/v1/chat/completions` khi một client cần truy cập các mô hình được cung cấp bởi nhiều giao thức upstream khác nhau. Yêu cầu Chat di động có thể được biên dịch một chiều sang Responses, Messages hoặc Gemini nếu có thể biểu diễn đầy đủ. Yêu cầu Responses, Messages và Gemini gốc không bao giờ được chuyển thành Chat; tên mô hình hay nhà cung cấp không đồng nghĩa với khả năng gốc.
 
-```python
-# Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
-from anthropic import Anthropic
+## Ranh giới Responses và Gemini
 
-client = Anthropic(
-    api_key="sk-tokenlab-key",
-    base_url="https://api.tokenlab.sh"
-)
+Bề mặt Responses hiện tại gồm create, compact, retrieve, delete và SSE. Background chỉ hoạt động qua HTTP. WebSocket chỉ nhận `response.create`; stream là ngầm định, còn `background` và `response.cancel` không được cung cấp trên transport này. Delete không phải cancel.
 
-response = client.messages.create(
-    model="gpt-4o",  # ✅ Works! Auto-converted
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-# Same compatibility SDK for portable chat; native-only features still need native routes
-response = client.messages.create(model="gemini-3.5-flash", ...)  # ✅ Works!
-response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
-```
-
-### OpenAI SDK → Tất cả các mô hình
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="https://api.tokenlab.sh/v1", api_key="sk-...")
-
-# These portable chat calls use the same /v1 compatibility SDK:
-response = client.chat.completions.create(model="gpt-4o", ...)
-response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
-response = client.chat.completions.create(model="gemini-3.5-flash", ...)
-```
-
-### So sánh giữa các nhà cung cấp
-
-| Nền tảng | Định dạng OpenAI | Định dạng Anthropic | Định dạng Gemini | Responses API |
-|----------|:---:|:---:|:---:|:---:|
-| **TokenLab** | ✅ Tất cả mô hình | ✅ Tất cả mô hình | ✅ Tất cả mô hình | ✅ Tất cả mô hình |
-| OpenRouter | ✅ Tất cả mô hình | ❌ | ❌ | ❌ |
-| Together AI | ✅ Tất cả mô hình | ❌ | ❌ | ❌ |
-| Fireworks | ✅ Tất cả mô hình | ❌ | ❌ | ❌ |
-
-<Note>
-Mặc dù chuyển đổi giữa các định dạng hoạt động với hầu hết các tính năng, các tính năng đặc thù theo định dạng (như tính năng tư duy mở rộng của Anthropic) yêu cầu sử dụng định dạng gốc.
-</Note>
+Trong Gemini, tên ProtoJSON lowerCamelCase và tên proto gốc snake_case đều là chính thức và được giữ nguyên kể cả trong yêu cầu trộn lẫn. Bề mặt hiện tại gồm list/get models, `generateContent`, `streamGenerateContent`, `countTokens`, `embedContent` và `batchEmbedContents`; không gồm Interactions hoặc Live. Trường chưa biết được chuyển tiếp theo best-effort và upstream quyết định khả năng hỗ trợ.

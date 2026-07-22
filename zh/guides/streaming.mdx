@@ -5,10 +5,7 @@ description: "实现实时流式响应"
 
 ## 概述
 
-流式传输让你能够在输出生成过程中接收部分结果，从而改善感知延迟和用户体验。
-
-对于新的 OpenAI 风格集成，优先选择**Responses 流式传输**。如果你的框架仍在使用 Chat Completions 流式传输，TokenLab 也支持该兼容路径。
-
+流式会逐步交付输出。只有模型公开 Responses 原生契约且存在同协议 upstream 路径时，才使用 Responses streaming；否则请使用 Chat Completions 或模型公开的原生协议。
 ## 推荐：Responses 流式传输
 
 <CodeGroup>
@@ -66,6 +63,14 @@ for await (const event of stream) {
 
 </CodeGroup>
 
+
+## Responses 与 Gemini 流式边界
+
+Responses SSE 会保留 upstream 事件名称、顺序和字段，只在旁路读取 usage 和终态，不改写 wire。第一个事件交付后，绝不再尝试其他 channel 或 credential。
+
+Responses WebSocket 只接受官方 `response.create` 事件。stream 是隐含行为；该 transport 不提供 `background` 或 `response.cancel`，background 只通过 HTTP 运行。每个连接串行处理、不做 multiplexing，最长 60 分钟。
+
+Gemini SSE 保留原生 chunk。只有 metadata 的事件、没有 `finishReason` 的中间 chunk，以及自然 EOF 都合法；TokenLab 不会添加 Chat `[DONE]`.
 ## Chat Completions 流式传输
 
 如果你的框架仍然需要来自 `/v1/chat/completions` 的 SSE 分块，这同样可行：

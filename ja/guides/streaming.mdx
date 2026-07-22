@@ -5,10 +5,7 @@ description: "リアルタイムのストリーミング応答を実装します
 
 ## 概要
 
-ストリーミングを使用すると、生成中の部分的な出力を受け取ることができ、体感レイテンシとユーザー体験が向上します。
-
-新しい OpenAI-style の統合では、まず **Responses streaming** を優先してください。フレームワークが依然として Chat Completions streaming を使用している場合でも、TokenLab はその互換パスをサポートしています。
-
+Streaming は出力を段階的に配信します。モデルがネイティブ Responses 契約を公開し、同一プロトコルの upstream ルートがある場合に Responses streaming を使用してください。それ以外は Chat Completions またはモデルが公開するネイティブプロトコルを使用します。
 ## 推奨: Responses Streaming
 
 <CodeGroup>
@@ -66,6 +63,14 @@ for await (const event of stream) {
 
 </CodeGroup>
 
+
+## Responses と Gemini の streaming 境界
+
+Responses SSE では upstream イベントの名前、順序、フィールドを保持し、wire を変えずに usage と終端状態を帯域外で読み取ります。最初のイベントを配信した後は、別の channel や credential を試しません。
+
+Responses WebSocket が受け付けるのは公式の `response.create` イベントだけです。stream は暗黙で、この transport では `background` と `response.cancel` を提供しません。background は HTTP のみです。接続は直列で multiplexing を行わず、上限は 60 分です。
+
+Gemini SSE はネイティブ chunk を保持します。metadata のみのイベント、`finishReason` のない中間 chunk、自然な EOF は有効で、Chat の `[DONE]` を追加しません。
 ## Chat Completions ストリーミング
 
 フレームワークが依然として `/v1/chat/completions` からの SSE チャンクを想定している場合でも、これも動作します。

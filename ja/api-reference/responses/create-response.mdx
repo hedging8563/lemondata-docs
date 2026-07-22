@@ -4,15 +4,16 @@ openapi: "POST /v1/responses"
 description: "OpenAI Responses API 形式を使用してレスポンスを作成します"
 ---
 
-Responses API は、OpenAI のより新しいステートフルな会話 API です。TokenLab は、互換性のあるモデル向けの上級者向けオプション経路としてこの形式をサポートしています。Responses 固有の動作が明示的に必要でない限り、既定の OpenAI 互換 ルートとして `POST /v1/chat/completions` を使用してください。
-
+Responses は OpenAI のネイティブなステートフル応答プロトコルです。TokenLab は、モデル詳細が Responses 形式を公開し、同一プロトコルの upstream ルートがある場合にのみ提供します。モデル名やプロバイダー名から推測せず、Chat Completions へフォールバックしません。未知のフィールド、明示的な `null`、空配列を含む JSON 形状を保持し、best-effort で転送します。
 ## リクエストボディ
 
 <ParamField body="model" type="string" required>
   使用するモデルの ID。利用可能なオプションは [Models](https://tokenlab.sh/ja/models) を参照してください。
 </ParamField>
 
-<ParamField body="input" type="array" required>
+<ParamField body="input" type="string | array">
+  再利用可能な `prompt` を使う場合、または `previous_response_id` で保存済みレスポンスを継続する場合、input は省略できます。
+
   会話を構成する入力アイテムのリスト。
 
   各アイテムは次のいずれかになります:
@@ -41,9 +42,7 @@ Responses API は、OpenAI のより新しいステートフルな会話 API で
 </ParamField>
 
 <ParamField body="tools" type="array">
-  モデルが呼び出す可能性のあるツールのリスト。
-
-  デフォルトの画像ツールモデルを使う、または明示的に `model: "gpt-image-2"` を指定するホスト型 `image_generation` ツールでは、GPT Image 2 が画像入力をすでに高 fidelity として扱うため、TokenLab は未対応の `input_fidelity` を転送前に削除します。このツールでは `background: "transparent"` を送らないでください。出力の意味が変わるため、TokenLab はこれを黙って削除しません。
+  モデルが呼び出せるツール一覧です。TokenLab はローカル allowlist を設けずネイティブ定義を転送し、対応する種類や組み合わせは選択された upstream が判断します。
 </ParamField>
 
 <ParamField body="stream" type="boolean" default="false">
@@ -90,7 +89,7 @@ Responses API は、OpenAI のより新しいステートフルな会話 API で
   常に `response` です。
 </ResponseField>
 
-<ResponseField name="created" type="integer">
+<ResponseField name="created_at" type="integer">
   レスポンスが作成された時刻の Unix タイムスタンプ。
 </ResponseField>
 

@@ -4,17 +4,11 @@ openapi: "POST /v1beta/models/{model}:generateContent"
 description: "Generiert Inhalte im Google Gemini API-Format"
 ---
 
-TokenLab unterstützt das native Google Gemini API-Format für Gemini-Modelle. Dies ermöglicht eine direkte Kompatibilität mit Google AI SDKs.
-
+TokenLab bietet diese Route nur für Modelle mit veröffentlichtem nativen Gemini-Vertrag und einer gleichartigen Upstream-Route an; ein Fallback auf Chat Completions findet nicht statt. ProtoJSON-lowerCamelCase und ursprüngliche proto-snake_case-Namen sind beide offiziell und werden auch in gemischten Anfragen erhalten. Unbekannte Felder werden bestmöglich weitergeleitet, und der Upstream entscheidet über ihre Unterstützung.
 ## Pfadparameter
 
 <ParamField path="model" type="string" required>
   Modellname (z. B. `gemini-2.5-pro`, `gemini-3.5-flash`).
-
-
-  Für Produktionsintegrationen bevorzugen Sie URL-basierte `fileData` / `file_data`-Medienbestandteile mit einer öffentlichen `https`-URL.
-  TokenLab verwendet den nativen Gemini-Pfad, wenn er verfügbar ist, und wechselt zu einem kompatiblen öffentlichen Pfad, wenn natives Handling für diese multimodale Anfrage nicht verfügbar ist.
-
 </ParamField>
 
 ## Abfrageparameter
@@ -33,18 +27,7 @@ Gemini-Endpunkte unterstützen mehrere Authentifizierungsmethoden:
 ## Request-Body
 
 <ParamField body="contents" type="array" required>
-  Inhalte der Konversation.
-
-  Jedes Inhaltsobjekt enthält:
-  - `role` (string): `user` oder `model`
-  - `parts` (array): Inhalts-Parts. TokenLab unterstützt aktuell:
-    - Text-Parts: `{ "text": "..." }`
-    - Inline-Medien-Parts: `inlineData` / `inline_data`
-    - URL-basierte Datei-Parts: `fileData` / `file_data`
-
-  Für Medien-Parts akzeptiert TokenLab derzeit Bild-, Audio- und Video-MIME-Typen und leitet sie über den Gemini-kompatiblen Supported Operations weiter.
-
-  Rollenwerte `user` und `model` werden ohne Beachtung der Groß-/Kleinschreibung normalisiert. `inlineData` / `inline_data` mit `application/octet-stream` wird nur akzeptiert, wenn TokenLab unterstützte Bild- oder Videobytes erkennen kann; andernfalls schlägt die Anfrage vor dem Routing fehl. Bei nativen Image-Output-Anfragen ist nur die Google-search/maps-Toolfamilie erlaubt, und nicht unterstützte Tool-Kombinationen schlagen vor Upstream-Retries fehl.
+  Konversationsinhalte. `role`-Werte und alle `parts` bleiben unverändert; TokenLab führt weder trim/lowercase noch Base64-Umschreibung oder MIME-Erkennung durch. `inlineData` / `inline_data` und `fileData` / `file_data` sind offizielle Schreibweisen, und `fileData.mimeType` ist lokal nicht vorgeschrieben. Bei TokenLab Files- oder Cache-IDs werden Eigentum und ursprüngliche Upstream-Bindung geprüft; andere Medien- und Toolregeln bleiben beim Anbieter.
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -52,17 +35,7 @@ Gemini-Endpunkte unterstützen mehrere Authentifizierungsmethoden:
 </ParamField>
 
 <ParamField body="generationConfig" type="object">
-  Generierungskonfiguration:
-  - `temperature` (number): Sampling-Temperatur
-  - `topP` (number): Nucleus-Sampling-Wahrscheinlichkeit
-  - `topK` (integer): Top-K-Sampling
-  - `maxOutputTokens` (integer): Maximale Anzahl an Output-Tokens
-  - `stopSequences` (array): Stoppsequenzen
-  - `candidateCount` (integer): Kandidatenanzahl für nicht-streamende Generierung. Streaming-Anfragen müssen das Feld weglassen oder auf `1` setzen.
-  - `responseModalities` (array): Angeforderte Output-Modalitäten für kompatible native Routen.
-  - `responseMimeType` (string): Output-MIME-Typ, z. B. `text/plain` oder `application/json`.
-  - `responseSchema` (object): JSON schema für strukturierte Ausgabe, wenn `responseMimeType` JSON anfordert.
-  - `thinkingConfig` / `thinking_config` (object): Thinking-Budget-Optionen für kompatible Modelle.
+  Native Generierungskonfiguration. lowerCamelCase-Namen wie `maxOutputTokens`, `candidateCount` und `thinkingConfig` sowie die entsprechenden snake_case-Namen werden unverändert akzeptiert. TokenLab entfernt `thinkingConfig` nicht nach einem Fehler und erzwingt kein lokales Streaming-Limit für `candidateCount`; der Upstream entscheidet über Bereiche und Kombinationen.
 </ParamField>
 
 <ParamField body="safetySettings" type="array">

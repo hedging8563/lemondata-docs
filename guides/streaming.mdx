@@ -7,7 +7,7 @@ description: "Implement real-time streaming responses"
 
 Streaming lets you receive partial output as it is generated, which improves perceived latency and user experience.
 
-For new OpenAI-style integrations, prefer **Responses streaming** first. If your framework still uses Chat Completions streaming, TokenLab supports that compatibility path too.
+For new OpenAI-style integrations whose selected model exposes a native Responses endpoint, prefer **Responses streaming**. Responses availability requires the model details to advertise that request format and a same-protocol route to be currently available. If your framework or model uses Chat Completions streaming, TokenLab supports that compatibility path too.
 
 ## Recommended: Responses Streaming
 
@@ -66,6 +66,14 @@ for await (const event of stream) {
 
 </CodeGroup>
 
+TokenLab preserves native Responses SSE event names, order, and fields. It parses usage and terminal state out of band but does not rewrite the wire events. Once the first event has been delivered, the gateway does not retry the request on another channel or credential.
+
+## Responses WebSocket
+
+Connect to `wss://api.tokenlab.sh/v1/responses` and send official `response.create` events. The WebSocket surface does not expose `response.cancel`; `stream` is implicit and `background` is unsupported on this transport. A `response.create` with `generate: false` creates a warmup response with no model output or charge and returns an ID that can be continued.
+
+Each connection processes one active response at a time, does not multiplex responses, and has a 60-minute maximum lifetime. Gateway-created response events use a response-scoped monotonic `sequence_number`. Stream events named `error` use the flat event shape; connection and protocol errors retain their nested `error` object.
+
 ## Chat Completions Streaming
 
 If your framework still expects SSE chunks from `/v1/chat/completions`, that also works:
@@ -82,6 +90,10 @@ for chunk in stream:
     if content:
         print(content, end="", flush=True)
 ```
+
+## Gemini Streaming
+
+`POST /v1beta/models/{model}:streamGenerateContent?alt=sse` preserves Gemini-native chunks. Metadata-only events, intermediate chunks without `finishReason`, and natural EOF are valid. TokenLab does not append a Chat Completions `[DONE]` marker.
 
 ## Stream End Conditions
 

@@ -3,9 +3,11 @@ title: "Error Handling"
 description: "Handle API errors gracefully"
 ---
 
-## Error Response Format
+## Error response families
 
-All errors return a consistent JSON format with optional [Agent-First hints](/guides/agent-first-api):
+Chat Completions, Responses, Messages, and Gemini are public protocol boundaries, not Web dashboard APIs. They return the error shape of the requested protocol and are never wrapped in the Web application's `{ success, data, error }` envelope. Upstream validation errors are preserved whenever they can be returned safely.
+
+OpenAI-compatible Chat Completions and Responses gateway errors use the OpenAI-style shape below, with optional [Agent-First hints](/guides/agent-first-api):
 
 ```json
 {
@@ -23,9 +25,11 @@ All errors return a consistent JSON format with optional [Agent-First hints](/gu
 }
 ```
 
-The required base fields (`message`, `type`) are always present. `code` and `param` are optional and appear only when relevant. The hint fields (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) are optional extensions for AI agent self-correction. See the [Agent-First API guide](/guides/agent-first-api) for details.
+For gateway-originated OpenAI-compatible errors, the required base fields (`message`, `type`) are present. `code` and `param` are optional and appear only when relevant. The hint fields (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) are optional extensions for AI agent self-correction. See the [Agent-First API guide](/guides/agent-first-api) for details.
 
-OpenAI-compatible endpoints use TokenLab's stable gateway error types. Anthropic-compatible and Gemini-compatible endpoints use their own native error families and response shapes.
+Anthropic Messages and Gemini `/v1beta` endpoints use their native error families and response shapes. Do not write one parser that assumes every TokenLab endpoint uses the OpenAI shape above.
+
+TokenLab does not reroute a deterministic upstream 400/422 to another channel or credential. Precisely classified authentication failures may rotate a credential, while rate limits, 5xx responses, and timeouts may use bounded retries before the response starts. No protocol retries after response bytes have been delivered.
 
 ## HTTP Status Codes
 

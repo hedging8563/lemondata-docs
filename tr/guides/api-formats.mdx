@@ -5,12 +5,16 @@ description: "OpenAI, Anthropic veya Gemini biçimlerini tek bir API anahtarıyl
 
 ## Genel Bakış
 
-TokenLab tek bir API anahtarıyla **üç yerel API biçimini** destekler. Kullanım durumunuza en uygun biçimi seçin — herhangi bir yapılandırma değişikliği gerekli değildir.
+TokenLab tek bir API anahtarıyla dört protokol yüzeyi sunar: Chat Completions, Responses, Anthropic Messages ve yerel Gemini. Yerel giriş yalnızca model bu biçimi yayımladığında ve aynı protokolde bir upstream rota bulunduğunda kullanılabilir; yerel girişler Chat Completions'a geri dönmez. Başka bir protokole tek yönlü derlenebilen tek giriş Chat'tir.
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="OpenAI Biçimi" icon="plug">
     `/v1/chat/completions`
     Standart biçim, en geniş uyumluluk
+  </Card>
+  <Card title="Responses" icon="bolt">
+    `/v1/responses`
+    Yerel Responses yaşam döngüsü ve olayları
   </Card>
   <Card title="Anthropic Biçimi" icon="message">
     `/v1/messages`
@@ -26,7 +30,7 @@ TokenLab tek bir API anahtarıyla **üç yerel API biçimini** destekler. Kullan
 
 | Avantaj | Açıklama |
 |---------|-------------|
-| **SDK değişikliği gerekmez** | Tercih ettiğiniz SDK ile herhangi bir modeli kullanın |
+| **Protokole özgü SDK** | Yerel SDK'yı yalnızca bu biçimi yayımlayan modellerle kullanın; Chat en geniş taşınabilir yüzeydir |
 | **Yerel özellikler** | Biçime özgü yeteneklere erişin |
 | **Yerel öncelikli geçiş** | Davranış önemli olduğunda yerel sağlayıcı rotalarını koruyun; mevcut OpenAI tarzı istemciler için `/v1` OpenAI uyumluluğunu kullanın |
 | **Tek faturalama** | Tek hesap, tek API anahtarı, tüm biçimler |
@@ -158,13 +162,13 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:streamGenerateConte
 
 ## Araç Uyumluluğu Sınırı
 
-Fonksiyon araçları, hedef rota desteklediğinde formatlar arasında dönüştürülebilir. Sağlayıcıya özgü yerel araçlar kendi yerel rotasında kalmalıdır:
+Fonksiyon araçları yalnızca Chat girişinden tek yönlü derlenebilir ve hedefin tam araç döngüsünü temsil etmesi gerekir. Sağlayıcıya özgü yerel araçlar kendi yerel rotasında kalmalıdır:
 
 - OpenAI Responses barındırılan ve yerel araçları, örneğin `tool_search`, `web_search`, `file_search`, `code_interpreter`, MCP, shell/apply_patch ve computer-use araçları için `/v1/responses` gerekir.
 - Anthropic server/native araçları, örneğin `web_search_*`, `web_fetch_*`, `code_execution_*`, `tool_search_*`, bash, computer-use ve text-editor araçları için `/v1/messages` gerekir.
 - Gemini yerleşik araçları, örneğin `googleSearch`, `codeExecution`, `urlContext`, `computerUse` ve benzer `tools` alanları için `/v1beta` gerekir.
 
-TokenLab, yerel araç içeren bir isteği yerel formatı destekleyen upstream rotasına yönlendiremiyorsa aracı sessizce düşürmek veya Chat Completions fonksiyonu gibi göstermek yerine açık bir unsupported-field hatası döndürür. Kullanıcı tanımlı fonksiyon araçları en taşınabilir araç yolu olmaya devam eder.
+TokenLab yerel protokol isteklerini Chat Completions'a düşürmez. Bilinmeyen alanlar ve araç kombinasyonları best-effort olarak iletilir; desteğe seçilen upstream karar verir.
 
 ## Doğru Biçimi Seçme
 
@@ -227,54 +231,13 @@ response = requests.post(
 )
 ```
 
-## Çapraz Model Uyumluluğu
 
-TokenLab'nin gücü: **herhangi bir SDK** ile **herhangi bir modeli** kullanın. Ağ geçidi biçim dönüşümünü otomatik olarak yönetir.
+## Taşınabilir Chat Uyumluluğu
 
-### Herhangi bir SDK → Herhangi bir Model
+Tek bir istemcinin farklı upstream protokolleriyle sunulan modellere erişmesi gerektiğinde `/v1/chat/completions` kullanın. Taşınabilir bir Chat isteği bütünüyle temsil edilebildiğinde Responses, Messages veya Gemini'ye tek yönlü derlenebilir. Yerel Responses, Messages ve Gemini istekleri Chat'e dönüştürülmez; model veya sağlayıcı adı yerel kullanılabilirlik anlamına gelmez.
 
-```python
-# Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
-from anthropic import Anthropic
+## Responses ve Gemini Sınırları
 
-client = Anthropic(
-    api_key="sk-tokenlab-key",
-    base_url="https://api.tokenlab.sh"
-)
+Mevcut Responses yüzeyi oluşturma, sıkıştırma, alma, silme ve SSE'yi kapsar. Background yalnızca HTTP üzerinden çalışır. WebSocket yalnızca `response.create` kabul eder; streaming örtüktür ve bu transport üzerinde `background` ile `response.cancel` sunulmaz. Silme, iptal etme değildir.
 
-response = client.messages.create(
-    model="gpt-4o",  # ✅ Works! Auto-converted
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-# Same compatibility SDK for portable chat; native-only features still need native routes
-response = client.messages.create(model="gemini-3.5-flash", ...)  # ✅ Works!
-response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
-```
-
-### OpenAI SDK → Tüm Modeller
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="https://api.tokenlab.sh/v1", api_key="sk-...")
-
-# These portable chat calls use the same /v1 compatibility SDK:
-response = client.chat.completions.create(model="gpt-4o", ...)
-response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
-response = client.chat.completions.create(model="gemini-3.5-flash", ...)
-```
-
-### Sektör Karşılaştırması
-
-| Platform | OpenAI Biçimi | Anthropic Biçimi | Gemini Biçimi | Responses API |
-|----------|:---:|:---:|:---:|:---:|
-| **TokenLab** | ✅ Tüm modeller | ✅ Tüm modeller | ✅ Tüm modeller | ✅ Tüm modeller |
-| OpenRouter | ✅ Tüm modeller | ❌ | ❌ | ❌ |
-| Together AI | ✅ Tüm modeller | ❌ | ❌ | ❌ |
-| Fireworks | ✅ Tüm modeller | ❌ | ❌ | ❌ |
-
-<Note>
-Çapraz biçim çoğu özellik için çalışsa da, biçime özgü özellikler (ör. Anthropic genişletilmiş düşünme) yerel biçimi gerektirir.
-</Note>
+Gemini'de ProtoJSON lowerCamelCase ve özgün proto snake_case adlarının ikisi de resmidir ve karma isteklerde de korunur. Mevcut yüzey model list/get, `generateContent`, `streamGenerateContent`, `countTokens`, `embedContent` ve `batchEmbedContents` işlemlerini kapsar; Interactions ve Live kapsam dışıdır. Bilinmeyen alanlar best-effort iletilir ve desteğe upstream karar verir.

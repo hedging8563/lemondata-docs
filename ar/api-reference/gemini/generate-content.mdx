@@ -4,17 +4,11 @@ openapi: "POST /v1beta/models/{model}:generateContent"
 description: "إنشاء المحتوى باستخدام تنسيق Google Gemini API"
 ---
 
-يدعم TokenLab تنسيق Google Gemini API الأصلي لنماذج Gemini. يتيح ذلك التوافق المباشر مع Google AI SDKs.
-
+يعرض TokenLab هذا المسار فقط للنماذج التي تعلن عقد Gemini الأصلي ولها قناة upstream من البروتوكول نفسه؛ ولا يعود الطلب إلى Chat Completions. أسماء ProtoJSON بصيغة lowerCamelCase وأسماء proto الأصلية بصيغة snake_case رسمية معًا، وتُحفظ بما في ذلك الطلبات المختلطة. تُمرر الحقول غير المعروفة بأفضل جهد ويقرر upstream دعمها.
 ## معلمات المسار
 
 <ParamField path="model" type="string" required>
   اسم النموذج (على سبيل المثال، `gemini-2.5-pro`، `gemini-3.5-flash`).
-
-
-  للتكاملات الإنتاجية، فضّل أجزاء الوسائط المعتمدة على URL من `fileData` / `file_data` مع عنوان URL عام يبدأ بـ `https`.
-  سيوجه TokenLab القنوات الأصلية المدعومة من Gemini عبر المسار الأصلي عندما يكون ذلك ممكنًا، وسيتراجع تلقائيًا إلى مسار التحويل الداخلي المتوافق عندما لا يتوفر مسار جاهز أصليًا لذلك الطلب متعدد الوسائط.
-
 </ParamField>
 
 ## معلمات الاستعلام
@@ -33,18 +27,7 @@ description: "إنشاء المحتوى باستخدام تنسيق Google Gemin
 ## جسم الطلب
 
 <ParamField body="contents" type="array" required>
-  محتويات المحادثة.
-
-  يحتوي كل كائن محتوى على:
-  - `role` (string): `user` أو `model`
-  - `parts` (array): أجزاء المحتوى. يدعم TokenLab حالياً:
-    - أجزاء نصية: `{ "text": "..." }`
-    - أجزاء وسائط مضمّنة: `inlineData` / `inline_data`
-    - أجزاء ملفات معتمدة على URL: `fileData` / `file_data`
-
-  بالنسبة إلى أجزاء الوسائط، يقبل TokenLab حالياً أنواع MIME الخاصة بالصور والصوت والفيديو ويمررها عبر تفاصيل النموذج المتوافق مع Gemini.
-
-  تتم مطابقة قيم الدور `user` و`model` بدون حساسية لحالة الأحرف. يتم قبول `inlineData` / `inline_data` مع `application/octet-stream` فقط عندما يستطيع TokenLab التعرف على بايتات صورة أو فيديو مدعومة؛ وإلا يفشل الطلب قبل التوجيه. في طلبات إخراج الصور الأصلية، تُقبل فقط عائلة أدوات Google search/maps، وتفشل تركيبات الأدوات غير المدعومة قبل إعادة المحاولة مع المزود.
+  محتوى المحادثة. تُحفظ قيم `role` وكل `parts` كما أرسلها العميل من دون trim أو lowercase أو إعادة ترميز Base64 أو استنتاج MIME. الصيغتان `inlineData` / `inline_data` و`fileData` / `file_data` رسميتان؛ ولا تشترط TokenLab محليًا `fileData.mimeType`. عند الإشارة إلى Files أو Cache أنشأتها TokenLab، يُفحص المالك ويُربط مع upstream الأصلي، وتُترك صلاحية باقي الوسائط والأدوات للمزوّد.
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -52,17 +35,7 @@ description: "إنشاء المحتوى باستخدام تنسيق Google Gemin
 </ParamField>
 
 <ParamField body="generationConfig" type="object">
-  تكوين الإنشاء:
-  - `temperature` (number): درجة حرارة أخذ العينات
-  - `topP` (number): احتمالية أخذ عينات النواة (Nucleus sampling)
-  - `topK` (integer): أخذ عينات Top-K
-  - `maxOutputTokens` (integer): الحد الأقصى لـ tokens المخرجات
-  - `stopSequences` (array): تسلسلات التوقف
-  - `candidateCount` (integer): عدد المرشحين للإنشاء غير المتدفق. يجب حذفها في طلبات البث أو إبقاؤها عند `1`.
-  - `responseModalities` (array): أنماط الإخراج المطلوبة للمسارات الأصلية المتوافقة.
-  - `responseMimeType` (string): نوع MIME للإخراج، مثل `text/plain` أو `application/json`.
-  - `responseSchema` (object): JSON schema للإخراج المنظم عندما يطلب `responseMimeType` JSON.
-  - `thinkingConfig` / `thinking_config` (object): خيارات ميزانية التفكير للنماذج المتوافقة.
+  إعدادات الإنشاء الأصلية. يُقبل كل من أسماء lowerCamelCase مثل `maxOutputTokens` و`candidateCount` و`thinkingConfig` وأسماء snake_case المناظرة كما هو. لا تزيل TokenLab `thinkingConfig` بعد الفشل ولا تفرض حدًا محليًا لـ `candidateCount` في البث؛ ويقرر upstream النطاقات والتركيبات المدعومة.
 </ParamField>
 
 <ParamField body="safetySettings" type="array">

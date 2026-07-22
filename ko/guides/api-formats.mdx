@@ -5,12 +5,16 @@ description: "하나의 API 키로 OpenAI, Anthropic 또는 Gemini 형식 사용
 
 ## 개요
 
-TokenLab는 하나의 API 키로 **세 가지 네이티브 API 형식**을 지원합니다. 구성 변경 없이 사용 사례에 가장 적합한 형식을 선택하세요.
+TokenLab는 하나의 API 키로 Chat Completions, Responses, Anthropic Messages, Gemini 네이티브의 네 가지 프로토콜 표면을 제공합니다. 네이티브 진입점은 모델이 해당 형식을 공개하고 동일 프로토콜 upstream 경로가 있을 때만 사용할 수 있으며 Chat Completions로 fallback하지 않습니다. 다른 프로토콜로 단방향 컴파일할 수 있는 것은 Chat 진입점뿐입니다.
 
-<CardGroup cols={3}>
+<CardGroup cols={2}>
   <Card title="OpenAI 형식" icon="plug">
     `/v1/chat/completions`
     표준 형식, 가장 넓은 호환성
+  </Card>
+  <Card title="Responses" icon="bolt">
+    `/v1/responses`
+    네이티브 Responses 수명 주기와 이벤트
   </Card>
   <Card title="Anthropic 형식" icon="message">
     `/v1/messages`
@@ -26,7 +30,7 @@ TokenLab는 하나의 API 키로 **세 가지 네이티브 API 형식**을 지�
 
 | 이점 | 설명 |
 |---------|-------------|
-| **SDK 전환 불필요** | 선호하는 SDK로 아무 모델이나 사용 가능 |
+| **프로토콜 네이티브 SDK** | 해당 형식을 공개한 모델에만 네이티브 SDK를 사용하고, 가장 넓은 이식 경로에는 Chat을 사용합니다 |
 | **네이티브 기능 접근** | 형식별 고유 기능 사용 가능 |
 | **네이티브 우선 마이그레이션** | 동작이 중요할 때는 네이티브 공급자 경로를 유지하고; 기존 OpenAI 스타일 클라이언트에는 `/v1` OpenAI 호환성을 사용하세요 |
 | **단일 청구** | 하나의 계정, 하나의 API 키로 모든 형식 사용 |
@@ -158,13 +162,13 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:streamGenerateConte
 
 ## 도구 호환성 경계
 
-함수 도구는 대상 경로가 지원할 때 형식 간 변환할 수 있습니다. 공급자 네이티브 도구는 해당 네이티브 경로에 그대로 남아 있어야 합니다.
+함수 도구의 단방향 컴파일은 Chat 진입점에서만 가능하며 대상이 전체 도구 루프를 표현할 수 있어야 합니다. 공급자 네이티브 도구는 해당 네이티브 경로에 그대로 남아 있어야 합니다.
 
 - OpenAI Responses의 호스팅 및 네이티브 도구, 예를 들어 `tool_search`, `web_search`, `file_search`, `code_interpreter`, MCP, shell/apply_patch, computer-use 도구는 `/v1/responses`가 필요합니다.
 - Anthropic server/native 도구, 예를 들어 `web_search_*`, `web_fetch_*`, `code_execution_*`, `tool_search_*`, bash, computer-use, text-editor 도구는 `/v1/messages`가 필요합니다.
 - Gemini 내장 도구, 예를 들어 `googleSearch`, `codeExecution`, `urlContext`, `computerUse` 및 유사한 `tools` 필드는 `/v1beta`가 필요합니다.
 
-TokenLab가 네이티브 도구가 포함된 요청을 네이티브 지원 업스트림 경로로 라우팅할 수 없으면, 도구를 조용히 제거하거나 Chat Completions 함수처럼 처리하지 않고 명시적인 unsupported-field 오류를 반환합니다. 사용자 정의 함수 도구는 계속 가장 이식성 높은 도구 경로입니다.
+TokenLab는 네이티브 프로토콜 요청을 Chat Completions로 낮추지 않습니다. 알 수 없는 필드와 도구 조합은 best-effort로 전달되며 지원 여부는 선택된 upstream이 결정합니다.
 
 ## 적절한 형식 선택
 
@@ -227,54 +231,13 @@ response = requests.post(
 )
 ```
 
-## 모델 간 호환성
 
-TokenLab의 마법: **어떤 SDK**로도 **어떤 모델**이든 사용 가능합니다. 게이트웨이가 형식 변환을 자동으로 처리합니다.
+## 이식 가능한 Chat 호환성
 
-### 호환 SDK → Portable Chat
+하나의 client가 서로 다른 upstream 프로토콜로 제공되는 모델에 접근해야 할 때는 `/v1/chat/completions`를 사용하세요. 이식 가능한 Chat 요청은 완전히 표현할 수 있을 때 Responses, Messages 또는 Gemini로 단방향 컴파일할 수 있습니다. Responses, Messages, Gemini 네이티브 요청은 Chat으로 변환되지 않으며 모델명이나 공급자명만으로 네이티브 가용성을 판단하지 않습니다.
 
-```python
-# Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
-from anthropic import Anthropic
+## Responses 및 Gemini 경계
 
-client = Anthropic(
-    api_key="sk-tokenlab-key",
-    base_url="https://api.tokenlab.sh"
-)
+현재 Responses 표면은 create, compact, retrieve, delete와 SSE를 포함합니다. background는 HTTP에서만 동작합니다. WebSocket은 `response.create`만 받으며 stream은 암시적입니다. 이 transport에서는 `background`와 `response.cancel`을 제공하지 않습니다. delete는 cancel이 아닙니다.
 
-response = client.messages.create(
-    model="gpt-4o",  # ✅ Works! Auto-converted
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-# Same compatibility SDK for portable chat; native-only features still need native routes
-response = client.messages.create(model="gemini-3.5-flash", ...)  # ✅ Works!
-response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
-```
-
-### OpenAI SDK → 모든 모델
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="https://api.tokenlab.sh/v1", api_key="sk-...")
-
-# These portable chat calls use the same /v1 compatibility SDK:
-response = client.chat.completions.create(model="gpt-4o", ...)
-response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
-response = client.chat.completions.create(model="gemini-3.5-flash", ...)
-```
-
-### 업계 비교
-
-| 플랫폼 | OpenAI 형식 | Anthropic 형식 | Gemini 형식 | Responses API |
-|----------|:---:|:---:|:---:|:---:|
-| **TokenLab** | ✅ 모든 모델 | ✅ 모든 모델 | ✅ 모든 모델 | ✅ 모든 모델 |
-| OpenRouter | ✅ 모든 모델 | ❌ | ❌ | ❌ |
-| Together AI | ✅ 모든 모델 | ❌ | ❌ | ❌ |
-| Fireworks | ✅ 모든 모델 | ❌ | ❌ | ❌ |
-
-<Note>
-대부분의 기능은 형식 간에 작동하지만, Anthropic의 확장 사고와 같은 형식 고유 기능은 네이티브 형식을 사용해야 합니다.
-</Note>
+Gemini에서는 ProtoJSON lowerCamelCase와 원래 proto snake_case 이름이 모두 공식이며 혼합 요청에서도 그대로 보존됩니다. 현재 표면은 model list/get, `generateContent`, `streamGenerateContent`, `countTokens`, `embedContent`, `batchEmbedContents`를 포함하고 Interactions와 Live는 포함하지 않습니다. 알 수 없는 필드는 best-effort로 전달되며 지원 여부는 upstream이 결정합니다.

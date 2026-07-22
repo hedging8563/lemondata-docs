@@ -4,17 +4,11 @@ openapi: "POST /v1beta/models/{model}:generateContent"
 description: "使用 Google Gemini API 格式生成內容"
 ---
 
-TokenLab 支援 Gemini 模型的原生 Google Gemini API 格式。這使得與 Google AI SDK 具有直接的相容性。
-
+TokenLab 只對公開 Gemini 原生契約且具備同協議 upstream 路徑的模型提供此入口，絕不回落 Chat Completions。ProtoJSON lowerCamelCase 與原始 proto snake_case 名稱都是官方拼法，混合請求也會原樣保留。未知欄位會 best-effort 透傳，由 upstream 決定是否支援。
 ## 路徑參數
 
 <ParamField path="model" type="string" required>
   模型名稱（例如：`gemini-2.5-pro`、`gemini-3.5-flash`）。
-
-
-  在正式整合中，建議使用以 URL 為基礎的 `fileData` / `file_data` 媒體片段，並搭配公開的 `https` URL。
-  當可行時，TokenLab 會將受支援的 Gemini 原生通道透過原生路徑轉送，並在某個多模態請求沒有可用的原生就緒路由時，自動回退到相容的內部轉換路徑。
-
 </ParamField>
 
 ## 查詢參數
@@ -33,18 +27,7 @@ Gemini 端點支援多種驗證方式：
 ## 請求主體
 
 <ParamField body="contents" type="array" required>
-  對話內容。
-
-  每個內容物件包含：
-  - `role` (string)：`user` 或 `model`
-  - `parts` (array)：內容 part。TokenLab 目前支援：
-    - 文字 part：`{ "text": "..." }`
-    - 內嵌媒體 part：`inlineData` / `inline_data`
-    - 基於 URL 的檔案 part：`fileData` / `file_data`
-
-  對於媒體 part，TokenLab 目前接受圖片、音訊、影片三類 MIME type，並透過 Gemini 相容支援說明向下游轉發。
-
-  `user` 和 `model` role 會以不區分大小寫的方式正規化。`application/octet-stream` 的 `inlineData` / `inline_data` 只有在 TokenLab 能辨識為支援的圖片或影片位元組時才會接受，否則會在路由前失敗。原生圖片輸出請求只接受 Google search/maps 工具族，不支援的工具組合會在處理開始前失敗。
+  對話內容。`role` 值與所有 `parts` 都會保持客戶端原樣；TokenLab 不做 trim/lowercase、Base64 改寫或 MIME 推斷。`inlineData` / `inline_data` 與 `fileData` / `file_data` 都是官方拼法，TokenLab 不會在本地強制要求 `fileData.mimeType`。引用 TokenLab 建立的 Files/Cache ID 時會檢查所有權並保留原 upstream 綁定；其他媒體與工具規則交由供應商判斷。
 </ParamField>
 
 <ParamField body="systemInstruction" type="object">
@@ -52,17 +35,7 @@ Gemini 端點支援多種驗證方式：
 </ParamField>
 
 <ParamField body="generationConfig" type="object">
-  生成配置：
-  - `temperature` (number)：取樣溫度
-  - `topP` (number)：核取樣機率
-  - `topK` (integer)：Top-K 取樣
-  - `maxOutputTokens` (integer)：最大輸出 token 數
-  - `stopSequences` (array)：停止序列
-  - `candidateCount` (integer)：非串流生成的候選數量。串流請求必須省略它，或保持為 `1`。
-  - `responseModalities` (array)：相容 native 路由要求的輸出模態。
-  - `responseMimeType` (string)：輸出 MIME 類型，例如 `text/plain` 或 `application/json`。
-  - `responseSchema` (object)：當 `responseMimeType` 要求 JSON 時，用於結構化輸出的 JSON schema。
-  - `thinkingConfig` / `thinking_config` (object)：相容模型的思考預算選項。
+  原生生成設定。`maxOutputTokens`、`candidateCount`、`thinkingConfig` 等 lowerCamelCase 與對應 snake_case 名稱都會原樣接受。TokenLab 不會在失敗後刪除 `thinkingConfig`，也不會對 streaming 的 `candidateCount` 設本地限制；範圍與組合由 upstream 判斷。
 </ParamField>
 
 <ParamField body="safetySettings" type="array">

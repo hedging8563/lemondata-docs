@@ -4,15 +4,16 @@ openapi: "POST /v1/responses"
 description: "使用 OpenAI Responses API 格式建立回應"
 ---
 
-Responses API 是 OpenAI 較新的有狀態對話 API。TokenLab 以進階可選路徑的方式支援這種格式，適用於相容模型；除非您明確需要 Responses 特定行為，否則請使用 `POST /v1/chat/completions` 作為預設的相容 OpenAI 路由。
-
+Responses 是 OpenAI 原生的有狀態回應協議。只有模型詳情公開 Responses 格式且存在同協議 upstream 路徑時，TokenLab 才提供此入口；不會依模型名或供應商名推斷，也絕不回落 Chat Completions。TokenLab 會保留未知欄位、明確的 `null`、空陣列等 JSON 形狀，並 best-effort 透傳。
 ## 請求主體
 
 <ParamField body="model" type="string" required>
   要使用的模型 ID。請參見 [Models](https://tokenlab.sh/zh-TW/models) 以了解可用選項。
 </ParamField>
 
-<ParamField body="input" type="array" required>
+<ParamField body="input" type="string | array">
+  當請求改用可重用 `prompt`，或透過 `previous_response_id` 延續已儲存回應時，可以省略 input。
+
   由對話組成的輸入項目清單。
 
   每個項目可以是：
@@ -41,9 +42,7 @@ Responses API 是 OpenAI 較新的有狀態對話 API。TokenLab 以進階可選
 </ParamField>
 
 <ParamField body="tools" type="array">
-  模型可能呼叫的工具清單。
-
-  對於使用預設圖片工具模型，或明確設定 `model: "gpt-image-2"` 的 hosted `image_generation` 工具，TokenLab 會在轉發請求前移除不支援的 `input_fidelity`，因為 GPT Image 2 已經以高保真處理圖片輸入。請不要對這個工具傳入 `background: "transparent"`；TokenLab 不會靜默移除它，因為這會改變輸出語義。
+  模型可呼叫的工具清單。TokenLab 不維護本地 allowlist，而是原樣轉發原生工具定義；支援的類型與組合由選中的 upstream 決定。
 </ParamField>
 
 <ParamField body="stream" type="boolean" default="false">
@@ -90,7 +89,7 @@ Responses API 是 OpenAI 較新的有狀態對話 API。TokenLab 以進階可選
   恆為 `response`。
 </ResponseField>
 
-<ResponseField name="created" type="integer">
+<ResponseField name="created_at" type="integer">
   回應建立的 Unix 時間戳。
 </ResponseField>
 

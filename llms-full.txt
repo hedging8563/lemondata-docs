@@ -2,7 +2,7 @@
 
 > Unified AI API Gateway - Access hundreds of AI models through a single API
 
-Generated: 2026-07-21
+Generated: 2026-07-22
 Source: https://docs.tokenlab.sh
 
 ---
@@ -281,11 +281,11 @@ URL: https://docs.tokenlab.sh/guides/agent-first-api
 
 TokenLab's Agent-First API enriches error responses with structured hints that AI agents can parse and act on immediately — no web searches, no doc lookups, no guesswork.
 
-Every error response includes optional fields like `did_you_mean`, `suggestions`, `hint`, `retryable`, and `retry_after` inside the standard `error` object. These fields are backward-compatible — clients that don't use them see no difference.
+OpenAI-compatible Chat Completions and Responses gateway errors may include optional fields such as `did_you_mean`, `suggestions`, `hint`, `retryable`, and `retry_after` inside the `error` object. Anthropic Messages and Gemini endpoints keep their native error shapes and do not promise these extensions.
 
 ## Error Hint Fields
 
-All hint fields are optional extensions inside the `error` object:
+For OpenAI-compatible gateway errors, all hint fields are optional extensions inside the `error` object:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -582,43 +582,44 @@ async function smartChat(messages, model = 'gpt-4o') {
 
 ---
 
-### ✨ Multi-Format API
+### ✨ API Protocols
 
-> Use OpenAI, Anthropic, or Gemini formats with a single API key
+> Choose Chat Completions, Responses, Messages, or Gemini native endpoints
 
 URL: https://docs.tokenlab.sh/guides/api-formats
 
 ## Overview
 
-TokenLab supports **three native API formats** with a single API key. Choose the format that best fits your use case - no configuration changes needed.
+TokenLab exposes four protocol surfaces with one API key: OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, and Gemini native REST. Protocol availability is model-specific: a native endpoint is listed only when the model details advertise that request format and a same-protocol route is currently available. A provider or model name alone does not imply native protocol support.
 
 
 
+
+
+TokenLab preserves unknown request fields on same-protocol routes and forwards them on a best-effort basis. Their presence in a request does not guarantee that the selected upstream or model supports them.
 
 ## Why Multi-Format?
 
 | Benefit | Description |
 |---------|-------------|
-| **No SDK switching** | Use any model with your preferred SDK |
+| **Protocol-native SDKs** | Keep the request and response shape expected by your SDK |
 | **Native features** | Access format-specific capabilities |
 | **Native-first migration** | Keep native provider routes when behavior matters; use `/v1` OpenAI compatibility for existing OpenAI-style clients |
 | **Single billing** | One account, one API key, all formats |
 
 ## Format Comparison
 
-| Feature | OpenAI | Anthropic | Gemini |
-|---------|--------|-----------|--------|
-| **Endpoint** | `/v1/chat/completions` | `/v1/messages` | `/v1beta/models/:model:generateContent` |
-| **Auth Header** | `Authorization: Bearer` | `x-api-key` | `Authorization: Bearer` |
-| **System Prompt** | In messages array | Separate `system` field | In `systemInstruction` |
-| **Extended Thinking** | ❌ | ✅ | ❌ |
-| **Streaming** | ✅ SSE | ✅ SSE | ✅ SSE |
-| **Tool Calling** | ✅ | ✅ | ✅ |
-| **Vision** | ✅ | ✅ | ✅ |
+| Feature | Chat Completions | Responses | Messages | Gemini native |
+|---------|------------------|-----------|----------|---------------|
+| **Endpoint** | `/v1/chat/completions` | `/v1/responses` | `/v1/messages` | `/v1beta/models/:model:generateContent` |
+| **Auth Header** | `Authorization: Bearer` | `Authorization: Bearer` | `x-api-key` | `Authorization: Bearer` |
+| **Native state** | No | `previous_response_id`, stored/background responses | Messages request history | Cached content and Gemini resources |
+| **Streaming** | Chat SSE | Responses SSE / WebSocket | Messages SSE | Gemini SSE |
+| **Availability** | Widest portable surface | Responses request format + same-protocol route | Messages request format + same-protocol route | Gemini request format + same-protocol route |
 
 ## OpenAI Format
 
-Use this compatibility route for existing OpenAI SDK integrations and portable chat or embedding flows. For Claude or Gemini native behavior, use the Anthropic or Gemini format below.
+Use this compatibility route for existing OpenAI SDK integrations and portable chat flows. Chat requests can be compiled one-way to a compatible Responses, Messages, or Gemini route. Native Responses, Messages, and Gemini requests are never converted back through Chat Completions.
 
 ```python
 from openai import OpenAI
@@ -646,6 +647,8 @@ response = client.chat.completions.create(
 ## Anthropic Format
 
 Native Anthropic Messages API. Required for Claude-specific features like extended thinking.
+
+The native Messages endpoint is available only when the model details publish the Messages request format and a same-protocol route is currently available. It does not fall back to Chat Completions.
 
 ```python
 from anthropic import Anthropic
@@ -697,6 +700,8 @@ for block in message.content:
 
 Native Google Gemini API format for Google ecosystem integration.
 
+Gemini lowerCamelCase field names and original proto `snake_case` field names are both official ProtoJSON spellings. TokenLab preserves either spelling, including mixed requests; when both spellings of a field are present, TokenLab does not merge them or assign a local precedence.
+
 ```bash
 curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:generateContent" \
   -H "Authorization: Bearer sk-your-tokenlab-key" \
@@ -729,29 +734,38 @@ curl "https://api.tokenlab.sh/v1beta/models/gemini-3.5-flash:streamGenerateConte
 
 **Gemini Files and Cache:** `/upload/v1beta/files`, `/v1beta/files`, `/v1beta/files:register`, and `/v1beta/cachedContents` are available on the native Gemini route. Files use Gemini File API-compatible upstream channels; explicit cache resources can also route through Vertex AI channels. Resources created through TokenLab are bound to the same upstream channel/key for later `generateContent` calls.
 
+The supported legacy Gemini surface includes model list/get, `generateContent`, `streamGenerateContent`, `countTokens`, `embedContent`, and `batchEmbedContents`. Gemini Interactions and Live are not exposed by this surface.
+
+## Responses Format
+
+Use `/v1/responses` only for models that advertise a Responses contract. The native surface includes create, compact, retrieve, delete, SSE, WebSocket create/continuation, and durable background completion. Delete remains deletion; it is not a cancellation endpoint. Public cancel, input-items, and input-tokens endpoints are not currently exposed.
+
+Responses WebSocket accepts `response.create` events. `generate: false` creates a local warmup response that can be continued; `stream` and `background` are not valid WebSocket request fields. Connections are serial, do not multiplex active responses, and are limited to 60 minutes.
+
 ## Tool Compatibility Boundary
 
-Function tools can be converted between formats when the target route supports them. Provider-native tools must stay on their native route:
+Chat function tools can be compiled to another protocol when the selected route can represent the complete tool-call loop. Provider-native tools must stay on their native route:
 
 - OpenAI Responses hosted and native tools such as `tool_search`, `web_search`, `file_search`, `code_interpreter`, MCP, shell/apply_patch, and computer-use tools require `/v1/responses`.
 - Anthropic server/native tools such as `web_search_*`, `web_fetch_*`, `code_execution_*`, `tool_search_*`, bash, computer-use, and text-editor tools require `/v1/messages`.
 - Gemini built-in tools such as `googleSearch`, `codeExecution`, `urlContext`, `computerUse`, and similar `tools` fields require `/v1beta`.
 
-If TokenLab cannot route a request with native tools to a native-capable provider path, it returns an explicit unsupported-field error instead of dropping the tool or pretending it is a Chat Completions function. User-defined function tools remain the portable path.
+Native protocol requests are not downgraded to Chat Completions. Field enumerations, tool combinations, parameter ranges, and future extensions are otherwise left to the selected upstream instead of being rejected by a TokenLab compatibility validator.
 
 ## Choosing the Right Format
 
 ```mermaid
 graph TD
-    A[Which format?] --> B{Need Claude extended thinking?}
-    B -->|Yes| C[Use Anthropic Format]
-    B -->|No| D{Existing codebase?}
-    D -->|OpenAI SDK| E[Use OpenAI Format]
-    D -->|Anthropic SDK| C
-    D -->|Gemini SDK| F[Use Gemini Format]
-    D -->|New project| G{Need provider-native behavior?}
-    G -->|Yes| H[Use native Anthropic or Gemini Format]
-    G -->|No| E
+    A[Which protocol?] --> B{Need native state or tools?}
+    B -->|Responses lifecycle| C[Use Responses]
+    B -->|Messages behavior| D[Use Anthropic Messages]
+    B -->|Gemini behavior| E[Use Gemini native]
+    B -->|No| F[Use Chat Completions]
+    A --> G{Existing native SDK?}
+    G -->|Anthropic| D
+    G -->|Gemini| E
+    G -->|OpenAI Responses| C
+    G -->|OpenAI Chat| F
 ```
 
 ## Migration Guides
@@ -800,33 +814,9 @@ response = requests.post(
 )
 ```
 
-## Cross-Model Compatibility
+## Portable Chat Compatibility
 
-TokenLab supports cross-format conversion for portable chat workflows. Use native routes when provider-specific features matter.
-
-### Compatibility SDK → Portable Chat
-
-```python
-# Anthropic SDK with GPT-4o (auto-converts to OpenAI format)
-from anthropic import Anthropic
-
-client = Anthropic(
-    api_key="sk-tokenlab-key",
-    base_url="https://api.tokenlab.sh"
-)
-
-response = client.messages.create(
-    model="gpt-4o",  # ✅ Works! Auto-converted
-    max_tokens=1024,
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-
-# Same compatibility SDK for portable chat; native-only features still need native routes
-response = client.messages.create(model="gemini-3.5-flash", ...)  # ✅ Works!
-response = client.messages.create(model="deepseek-r1", ...)       # ✅ Works!
-```
-
-### OpenAI SDK → Portable Chat Models
+Use Chat Completions when one client must reach models backed by different physical protocols:
 
 ```python
 from openai import OpenAI
@@ -839,16 +829,7 @@ response = client.chat.completions.create(model="claude-sonnet-4-6", ...)
 response = client.chat.completions.create(model="gemini-3.5-flash", ...)
 ```
 
-### Industry Comparison
-
-| Platform | OpenAI Format | Anthropic Format | Gemini Format | Responses API |
-|----------|:---:|:---:|:---:|:---:|
-| **TokenLab** | ✅ All models | ✅ All models | ✅ All models | ✅ All models |
-| OpenRouter | ✅ All models | ❌ | ❌ | ❌ |
-| Together AI | ✅ All models | ❌ | ❌ | ❌ |
-| Fireworks | ✅ All models | ❌ | ❌ | ❌ |
-
-> Note: While cross-format works for most features, format-specific features (like Anthropic extended thinking) require the native format.
+> Note: Native protocol availability is never inferred from a `gpt-*`, Claude, Gemini, or provider name. Consult the model's published request formats before choosing a native endpoint.
 
 ---
 
@@ -1064,7 +1045,7 @@ URL: https://docs.tokenlab.sh/guides/streaming
 
 Streaming lets you receive partial output as it is generated, which improves perceived latency and user experience.
 
-For new OpenAI-style integrations, prefer **Responses streaming** first. If your framework still uses Chat Completions streaming, TokenLab supports that compatibility path too.
+For new OpenAI-style integrations whose selected model exposes a native Responses endpoint, prefer **Responses streaming**. Responses availability requires the model details to advertise that request format and a same-protocol route to be currently available. If your framework or model uses Chat Completions streaming, TokenLab supports that compatibility path too.
 
 ## Recommended: Responses Streaming
 
@@ -1078,6 +1059,14 @@ curl https://api.tokenlab.sh/v1/responses \
     "stream": true
   }'
 ```
+
+TokenLab preserves native Responses SSE event names, order, and fields. It parses usage and terminal state out of band but does not rewrite the wire events. Once the first event has been delivered, the gateway does not retry the request on another channel or credential.
+
+## Responses WebSocket
+
+Connect to `wss://api.tokenlab.sh/v1/responses` and send official `response.create` events. The WebSocket surface does not expose `response.cancel`; `stream` is implicit and `background` is unsupported on this transport. A `response.create` with `generate: false` creates a warmup response with no model output or charge and returns an ID that can be continued.
+
+Each connection processes one active response at a time, does not multiplex responses, and has a 60-minute maximum lifetime. Gateway-created response events use a response-scoped monotonic `sequence_number`. Stream events named `error` use the flat event shape; connection and protocol errors retain their nested `error` object.
 
 ## Chat Completions Streaming
 
@@ -1095,6 +1084,10 @@ for chunk in stream:
     if content:
         print(content, end="", flush=True)
 ```
+
+## Gemini Streaming
+
+`POST /v1beta/models/{model}:streamGenerateContent?alt=sse` preserves Gemini-native chunks. Metadata-only events, intermediate chunks without `finishReason`, and natural EOF are valid. TokenLab does not append a Chat Completions `[DONE]` marker.
 
 ## Stream End Conditions
 
@@ -1168,9 +1161,11 @@ Treat network drops and upstream disconnects as normal failure modes and reconne
 
 URL: https://docs.tokenlab.sh/guides/error-handling
 
-## Error Response Format
+## Error response families
 
-All errors return a consistent JSON format with optional [Agent-First hints](/guides/agent-first-api):
+Chat Completions, Responses, Messages, and Gemini are public protocol boundaries, not Web dashboard APIs. They return the error shape of the requested protocol and are never wrapped in the Web application's `{ success, data, error }` envelope. Upstream validation errors are preserved whenever they can be returned safely.
+
+OpenAI-compatible Chat Completions and Responses gateway errors use the OpenAI-style shape below, with optional [Agent-First hints](/guides/agent-first-api):
 
 ```json
 {
@@ -1188,9 +1183,11 @@ All errors return a consistent JSON format with optional [Agent-First hints](/gu
 }
 ```
 
-The required base fields (`message`, `type`) are always present. `code` and `param` are optional and appear only when relevant. The hint fields (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) are optional extensions for AI agent self-correction. See the [Agent-First API guide](/guides/agent-first-api) for details.
+For gateway-originated OpenAI-compatible errors, the required base fields (`message`, `type`) are present. `code` and `param` are optional and appear only when relevant. The hint fields (`did_you_mean`, `suggestions`, `hint`, `retryable`, `retry_after`, `balance_usd`, `estimated_cost_usd`) are optional extensions for AI agent self-correction. See the [Agent-First API guide](/guides/agent-first-api) for details.
 
-OpenAI-compatible endpoints use TokenLab's stable gateway error types. Anthropic-compatible and Gemini-compatible endpoints use their own native error families and response shapes.
+Anthropic Messages and Gemini `/v1beta` endpoints use their native error families and response shapes. Do not write one parser that assumes every TokenLab endpoint uses the OpenAI shape above.
+
+TokenLab does not reroute a deterministic upstream 400/422 to another channel or credential. Precisely classified authentication failures may rotate a credential, while rate limits, 5xx responses, and timeouts may use bounded retries before the response starts. No protocol retries after response bytes have been delivered.
 
 ## HTTP Status Codes
 
@@ -3760,11 +3757,22 @@ URL: https://docs.tokenlab.sh/api-reference/chat/create-completion
 
 URL: https://docs.tokenlab.sh/api-reference/responses/create-response
 
-The Responses API is OpenAI's newer stateful conversation API. TokenLab supports this format as an advanced optional path for compatible models; use `POST /v1/chat/completions` as the default OpenAI-compatible route unless you explicitly need Responses-specific behavior.
+The Responses API is OpenAI's stateful response protocol. TokenLab exposes it only when the model details advertise the Responses request format and a same-protocol route is currently available; this is not inferred from a `gpt-*` name or provider. Native Responses requests stay on Responses endpoints and never fall back through Chat Completions.
+
+TokenLab preserves the request JSON shape, including unknown fields, explicit `null`, and empty arrays, and forwards it best-effort. Unknown or future fields remain subject to the selected upstream's support.
 
 ## Request Body
 
 ## Response
+
+Valid response states include `queued`, `in_progress`, `completed`, `incomplete`, `failed`, and `cancelled`. An HTTP 200 response whose native status is `failed` or `incomplete` is returned as-is; it is not rewritten to a gateway 502.
+
+## Lifecycle boundaries
+
+- `GET /v1/responses/{id}` retrieves the original same-protocol response using its stored route affinity and supports `include`, `include_obfuscation`, `stream`, and `starting_after`.
+- `DELETE /v1/responses/{id}` deletes a stored response. It is not a cancellation endpoint.
+- `POST /v1/responses/compact` returns the native `response.compaction` contract.
+- Public cancel, input-items, and input-tokens endpoints are not currently exposed.
 
 ---
 
@@ -6178,7 +6186,9 @@ Authentication is not required for the public model metadata read endpoint.
 
 URL: https://docs.tokenlab.sh/api-reference/gemini/generate-content
 
-TokenLab supports the native Google Gemini API format for Gemini models. This allows direct compatibility with Google AI SDKs.
+TokenLab supports the native Google Gemini API shape when the model details advertise Gemini requests and a same-protocol route is currently available. A model or provider name alone does not imply that this route is available, and native Gemini requests never fall back through Chat Completions.
+
+Google ProtoJSON accepts both lowerCamelCase JSON names and original proto `snake_case` field names. TokenLab preserves camelCase, snake_case, and mixed requests without normalizing them. If both spellings of one field are present, TokenLab forwards both without merging them or assigning a local precedence. Unknown fields are also forwarded best-effort; the selected upstream decides whether they are supported.
 
 ## Path Parameters
 
@@ -6192,6 +6202,12 @@ Gemini endpoints support multiple authentication methods:
 - `Authorization: Bearer YOUR_API_KEY` header
 
 ## Request Body
+
+Every lowerCamelCase field shown above may also use its official proto `snake_case` spelling, for example `system_instruction`, `generation_config`, `safety_settings`, `tool_config`, `cached_content`, `file_data.file_uri`, and `inline_data.mime_type`.
+
+## Supported native methods
+
+The current legacy Gemini surface includes model list/get, `generateContent`, `streamGenerateContent`, `countTokens`, `embedContent`, and `batchEmbedContents`. Gemini Interactions and Live are not currently exposed.
 
 ## Response
 
@@ -6358,11 +6374,11 @@ Streaming version of the Gemini generateContent endpoint. Returns Server-Sent Ev
 
 Same as [Generate Content](/api-reference/gemini/generate-content). This includes multimodal `parts` arrays with structured `inline_data` image parts for vision requests.
 
-For streaming requests, omit `generationConfig.candidateCount` or keep it at `1`; requests with a larger value are rejected instead of silently dropping extra candidates.
+TokenLab preserves camelCase, original proto snake_case, mixed spellings, unknown fields, explicit `null`, and empty arrays. It does not pre-reject `candidateCount` or tool combinations; the selected Gemini upstream determines support.
 
 ## Response
 
-Returns a stream of JSON objects, each containing a partial response.
+Returns native Gemini Server-Sent Events. Metadata-only events, intermediate chunks without `finishReason`, and natural EOF are valid. TokenLab does not append Chat Completions' `[DONE]` sentinel.
 
 ---
 
@@ -8048,13 +8064,13 @@ responses_websockets = true
 responses_websockets_v2 = true
 ```
 
-This WebSocket mode is a Responses-over-WebSocket bridge for Codex clients. It accepts `response.create` and `response.cancel`; it is not the OpenAI Realtime API and does not accept `session.update`, `conversation.item.*`, `input_audio_buffer.*`, binary audio, or nested Realtime `response.create.response` envelopes.
+This WebSocket mode is a Responses-over-WebSocket bridge for Codex clients. It accepts only official `response.create` events; `stream` is implicit, and `background` and `response.cancel` are not available on this transport. It is not the OpenAI Realtime API and does not accept `session.update`, `conversation.item.*`, `input_audio_buffer.*`, binary audio, or nested Realtime `response.create.response` envelopes.
 
 > Note: If the config file doesn't exist, run `codex` once to generate it, then edit the file. Restart Codex completely after changing `config.toml` so the new provider settings are reloaded.
 
 > Warning: Codex is deprecating `chat/completions` support for custom providers. Keep `wire_api = "responses"` for TokenLab unless you are intentionally using an older compatibility path.
 
-> Note: If a request uses Responses-only fields that are not supported on the selected model or route, TokenLab returns an explicit error instead of silently downgrading the request.
+> Note: TokenLab forwards unknown Responses fields best-effort without silently downgrading the request to Chat Completions. The selected upstream decides whether a field or combination is supported.
 
 ## Basic Usage
 

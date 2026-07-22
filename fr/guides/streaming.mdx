@@ -5,10 +5,7 @@ description: "Implémenter des réponses en streaming en temps réel"
 
 ## Vue d’ensemble
 
-Le streaming vous permet de recevoir une sortie partielle au fur et à mesure de sa génération, ce qui améliore la latence perçue et l’expérience utilisateur.
-
-Pour les nouvelles intégrations de style OpenAI, privilégiez d’abord le **streaming Responses**. Si votre framework utilise encore le streaming Chat Completions, TokenLab prend également en charge cette voie de compatibilité.
-
+Le streaming livre la sortie progressivement. Utilisez le streaming Responses lorsque le modèle annonce un contrat Responses natif et qu’une route upstream du même protocole est disponible ; sinon, utilisez Chat Completions ou le protocole natif publié par le modèle.
 ## Recommandé : streaming Responses
 
 <CodeGroup>
@@ -66,6 +63,14 @@ for await (const event of stream) {
 
 </CodeGroup>
 
+
+## Limites de streaming Responses et Gemini
+
+Pour Responses SSE, TokenLab conserve les noms, l’ordre et les champs des événements upstream et lit usage ainsi que l’état terminal hors bande, sans modifier le wire. Après le premier événement livré, aucun autre canal ni credential n’est essayé.
+
+Responses WebSocket n’accepte que les événements officiels `response.create`. Stream est implicite ; `background` et `response.cancel` ne sont pas proposés sur ce transport, et background fonctionne uniquement en HTTP. Chaque connexion est sérielle, sans multiplexage, et limitée à 60 minutes.
+
+Gemini SSE conserve les chunks natifs. Les événements contenant uniquement des métadonnées, les chunks intermédiaires sans `finishReason` et une fin EOF naturelle sont valides ; TokenLab n’ajoute aucun marqueur Chat `[DONE]`.
 ## Streaming Chat Completions
 
 Si votre framework attend encore des chunks SSE provenant de `/v1/chat/completions`, cela fonctionne également :
