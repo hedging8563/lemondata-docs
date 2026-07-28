@@ -3,7 +3,7 @@ title: "Migrate Seedance from Volcengine"
 description: "Move Volcengine-style Seedance task and material integrations to TokenLab with minimal request changes."
 ---
 
-Use this guide when your application already sends Volcengine-style Seedance requests. You can retain Action names, `Version=2024-01-01`, `content[]`, PascalCase material bodies, and the Volcengine response envelope. The required migration is the endpoint and authentication method.
+Use this guide when your application already sends Volcengine-style Seedance requests. Task APIs retain the official REST paths, `content[]` body, response fields, error envelope, and callback lifecycle. Material and real-person validation APIs continue to use their PascalCase Action contracts. The required migration is the host and authentication credential.
 
 ## What Changes
 
@@ -11,31 +11,31 @@ Use this guide when your application already sends Volcengine-style Seedance req
 |---------|----------------------------|----------|
 | Base URL | Your Volcengine endpoint | `https://api.tokenlab.sh/` |
 | Authentication | AK/SK request signing | `Authorization: Bearer <TOKENLAB_API_KEY>` |
-| Action requests | `Action` and `Version` query parameters | Preserved |
+| Task transport | Official `/api/v3/contents/generations/tasks` REST paths | Preserved |
+| Material/validation Actions | `Action` and `Version` query parameters | Preserved |
 | Task body | Volcengine-style `content[]` | Preserved |
 | Material body | PascalCase fields such as `GroupId` and `ProjectName` | Preserved |
-| Async result | Provider task lifecycle | TokenLab `cgt-...` task ID and polling |
+| Async result | Provider task lifecycle | TokenLab `cgt-...` task ID with polling and optional callback |
 
-AK/SK signing is the only intentionally unsupported part. A request that contains only an AK/SK signature returns `401 InvalidCredential` with a Bearer-authentication message.
+AK/SK signing is the only intentional wire-level difference. A request that contains only an AK/SK signature returns the official four-field error envelope with `401 AuthenticationError` and a Bearer-authentication message.
 
 ## Choose A Request Shape
 
 | Existing client | TokenLab endpoint |
 |-----------------|-------------------|
-| Volcengine Action client | `POST /?Action=...&Version=2024-01-01` |
-| Action client using the TokenLab v3 prefix | `POST /api/v3?Action=...&Version=2024-01-01` |
-| Volcengine-style REST task client | `/api/v3/contents/generations/tasks` and its task paths |
+| Volcengine REST task client | `/api/v3/contents/generations/tasks` and its task paths |
+| Material or validation Action client | `POST /?Action=...&Version=2024-01-01` or `POST /api/v3?Action=...&Version=2024-01-01` |
 
-The API root produces the smallest change for an Action client: replace the host and authentication, then keep the Action query and JSON body. The `/api/v3` Action endpoint remains available for existing TokenLab integrations.
+For task generation, replace the host and credential while keeping the official REST method, path, and JSON shape. Action aliases for task operations remain a legacy TokenLab compatibility surface and are not part of the one-to-one official task contract.
 
-## Task Actions
+## Official Task Paths
 
-| Action | Purpose | Important input |
-|--------|---------|-----------------|
-| `CreateContentsGenerationsTasks` | Create a video task | `model`, `content[]`, and generation options |
-| `GetContentsGenerationsTask` | Read one task | `TaskId` |
-| `ListContentsGenerationsTasks` | List tasks | Pagination and filters |
-| `DeleteContentsGenerationsTasks` | Cancel or delete a task | `TaskId` |
+| Method and path | Purpose |
+|-----------------|---------|
+| `POST /api/v3/contents/generations/tasks` | Create a video task |
+| `GET /api/v3/contents/generations/tasks/{id}` | Read one task |
+| `GET /api/v3/contents/generations/tasks` | List tasks |
+| `DELETE /api/v3/contents/generations/tasks/{id}` | Cancel or delete a task |
 
 REST clients can use these equivalent references:
 
@@ -49,13 +49,13 @@ REST clients can use these equivalent references:
 - `content[]` accepts `text`, `image_url`, `video_url`, `audio_url`, and `draft_task` items.
 - For `image_url`, omit `role` or use `first_frame` for image-to-video. Use `last_frame` together with a first frame, or `reference_image` for reference-to-video.
 - A public material URI such as `asset://asset-YYYYMMDDHHMMSS-xxxxx` can be used where the selected Seedance workflow accepts that media role.
-- Common fields include `model`, `ratio`, `duration`, `resolution`, `generate_audio`, `watermark`, `return_last_frame`, `seed`, `priority`, `execution_expires_after`, and `safety_identifier`.
-- `callback_url` is not supported on the task-compatibility endpoint. Poll the returned task instead.
+- The REST body accepts only official fields, including `model`, `content`, `ratio`, `duration`, `resolution`, `generate_audio`, `watermark`, `return_last_frame`, `seed`, `execution_expires_after`, and `safety_identifier`. `generate_audio` defaults to `false`.
+- `callback_url` accepts a public HTTP(S) endpoint. TokenLab sends the same query-task body for `queued`, `running`, `succeeded`, `failed`, and `expired`; only `succeeded` and `failed` use the official five-second, three-retry behavior.
 
-## Minimal Action Example
+## Minimal REST Example
 
 ```bash
-curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -70,7 +70,7 @@ curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=202
   }'
 ```
 
-Store the returned `cgt-...` ID. Poll until `status` becomes `succeeded`, `failed`, `cancelled`, or `expired`; do not treat the create response as a completed video.
+Store the returned `cgt-...` ID. Poll until `status` becomes `succeeded`, `failed`, `cancelled`, or `expired`; do not treat the create response as a completed video. If you provide `callback_url`, allow repeated `succeeded` or `failed` notifications and keep polling as a recovery path.
 
 ## Materials And Real-Person Verification
 
@@ -87,7 +87,7 @@ The second Action returns the verified `GroupId`. Use that ID with `CreateAsset`
 
 1. Replace the API host with `https://api.tokenlab.sh`.
 2. Replace AK/SK signing with a TokenLab Bearer API key.
-3. Keep the existing Action, version, and request-body casing.
+3. Keep the official REST task method, path, and request-body casing; keep Action and version only for material or validation operations.
 4. Keep the same `ProjectName` across related material and verification requests.
 5. Store TokenLab task, group, and asset IDs instead of upstream-only identifiers.
 6. Verify one create, poll, list, and error response before moving production traffic.

@@ -16,13 +16,13 @@ Ce guide s’adresse aux applications qui envoient déjà des requêtes Seedance
 | Corps de ressource | `PascalCase` | `PascalCase` |
 | Résultat asynchrone | `ID de tâche` | `cgt-...` + Polling |
 
-Les requêtes contenant uniquement une signature AK/SK renvoient `401 InvalidCredential`. Les clients Action peuvent utiliser `POST /?Action=...&Version=2024-01-01` ; `POST /api/v3?Action=...&Version=2024-01-01` reste disponible. Les clients REST utilisent `/api/v3/contents/generations/tasks`.
+Les requêtes contenant uniquement une signature AK/SK renvoient `401 AuthenticationError`. Les clients Action peuvent utiliser `POST /?Action=...&Version=2024-01-01` ; `POST /api/v3?Action=...&Version=2024-01-01` reste disponible. Les clients REST utilisent `/api/v3/contents/generations/tasks`.
 
 ## Format des requêtes et cycle de vie des tâches
 
 Si votre intégration envoie déjà des requêtes Seedance de style Volc, vous pouvez utiliser le point de terminaison compatible au lieu de remodeler le body pour `/v1/videos/generations`. Envoyez votre clé API TokenLab avec `Authorization: Bearer ...`, utilisez `POST /api/v3/contents/generations/tasks` pour la création REST ou `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` pour les requêtes Action. La création retourne un ID `cgt-...`; les statuts utilisent `queued`, `running`, `succeeded`, `failed`, `cancelled` ou `expired`.
 
-Ce point de terminaison compatible accepte les éléments `content[]` comme `text`, `image_url`, `video_url`, `audio_url` et `draft_task`. Les rôles d’image comme `first_frame`, `last_frame` et `reference_image` sont conservés. `callback_url` n’est pas encore pris en charge; interrogez plutôt l’endpoint de tâche.
+Ce point de terminaison accepte les éléments `content[]` comme `text`, `image_url`, `video_url`, `audio_url` et `draft_task`. `callback_url` reçoit le même objet de requête à chaque passage à `queued`, `running`, `succeeded`, `failed` ou `expired` ; `succeeded` et `failed` sont réessayés jusqu’à trois fois après cinq secondes. Conservez l’interrogation comme solution de repli.
 ### Pages de référence
 
 - [Créer une tâche (compatible Volc)](/fr/api-reference/video/create-volc-compatible-seedance-task)
@@ -39,10 +39,10 @@ Ce point de terminaison compatible accepte les éléments `content[]` comme `tex
 | `ListContentsGenerationsTasks` | Lister les tâches | Filtres, pagination |
 | `DeleteContentsGenerationsTasks` | Annuler ou supprimer une tâche | `TaskId` |
 
-## Exemple Action minimal
+## Exemple REST minimal
 
 ```bash
-curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

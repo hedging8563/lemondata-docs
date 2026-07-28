@@ -16,13 +16,13 @@ description: "Volcengine 形式の Seedance タスクと素材統合を、最小
 | 素材本文 | `PascalCase` | `PascalCase` |
 | 非同期結果 | `タスク ID` | `cgt-...` + ポーリング |
 
-AK/SK 署名だけのリクエストは `401 InvalidCredential` を返します。Action クライアントは `POST /?Action=...&Version=2024-01-01` を使用でき、`POST /api/v3?Action=...&Version=2024-01-01` も引き続き利用できます。REST タスククライアントは `/api/v3/contents/generations/tasks` を使用します。
+AK/SK 署名だけのリクエストは `401 AuthenticationError` を返します。Action クライアントは `POST /?Action=...&Version=2024-01-01` を使用でき、`POST /api/v3?Action=...&Version=2024-01-01` も引き続き利用できます。REST タスククライアントは `/api/v3/contents/generations/tasks` を使用します。
 
 ## リクエスト形式とタスクのライフサイクル
 
 既存の連携が Volc 形式の Seedance リクエストを送っている場合、`/v1/videos/generations` の統一形式へ変換せずに互換エンドポイントを使えます。TokenLab API Key を `Authorization: Bearer ...` として送り、REST 形式の作成には `POST /api/v3/contents/generations/tasks`、Action 形式には `/api/v3?Action=CreateContentsGenerationsTasks&Version=2024-01-01` を使います。作成応答は `cgt-...` タスク ID を返し、ステータスは `queued`、`running`、`succeeded`、`failed`、`cancelled`、`expired` を使います。
 
-この互換エンドポイントは `content[]` の `text`、`image_url`、`video_url`、`audio_url`、`draft_task` を受け付けます。`first_frame`、`last_frame`、`reference_image` などの画像ロールは保持されます。`callback_url` はまだ対応していません。タスクエンドポイントをポーリングしてください。
+このエンドポイントは `content[]` の `text`、`image_url`、`video_url`、`audio_url`、`draft_task` を受け付けます。`callback_url` には公開 HTTP(S) アドレスを指定でき、`queued`、`running`、`succeeded`、`failed`、`expired` への各変更時に照会オブジェクトと同じ内容を送ります。`succeeded` と `failed` は 5 秒後に最大 3 回再試行します。復旧用のポーリングも維持してください。
 ### リファレンス
 
 - [タスク作成（Volc 互換）](/ja/api-reference/video/create-volc-compatible-seedance-task)
@@ -39,10 +39,10 @@ AK/SK 署名だけのリクエストは `401 InvalidCredential` を返します�
 | `ListContentsGenerationsTasks` | タスクを一覧表示 | フィルター、ページング |
 | `DeleteContentsGenerationsTasks` | タスクをキャンセルまたは削除 | `TaskId` |
 
-## 最小 Action 例
+## 最小 REST 例
 
 ```bash
-curl 'https://api.tokenlab.sh/?Action=CreateContentsGenerationsTasks&Version=2024-01-01' \
+curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
