@@ -60,6 +60,16 @@ description: "使用与火山官方一致的 REST 请求和响应形状创建 Se
 
 创建响应只包含兼容任务 ID。即使启用了 callback，也应保存这个 ID 并保留任务轮询，作为回调失败时的兜底。
 
+## 幂等重试与创建响应丢失
+
+生产创建请求建议携带唯一的 `Idempotency-Key`，并把该 key 与完整 JSON 请求体一起保存。如果连接在收到创建响应前断开，请使用同一个 TokenLab API 凭据、同一个 key 和不变的请求体重试：
+
+- 原任务已经创建时，TokenLab 返回相同的 `cgt-...` ID，并附带 `Idempotency-Replayed: true`。
+- 原请求仍在注册时，返回 `409 IdempotencyRequestInProgress` 和 `Retry-After`；等待指定时间后继续用同一 key 和请求体重试。
+- 同一个 key 配不同请求体时返回 `409 IdempotencyConflict`，不会再创建第二个任务。
+
+幂等只作用于官方 v3 REST 创建路径，不改变 JSON 响应形状；TokenLab 不会把 `X-Request-ID` 或“请求体碰巧相同”自动当成幂等键。
+
 ## 示例
 
 ### REST 创建
@@ -67,6 +77,7 @@ description: "使用与火山官方一致的 REST 请求和响应形状创建 Se
 ```bash
 curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Idempotency-Key: $CLIENT_JOB_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "doubao-seedance-2-0-260128",

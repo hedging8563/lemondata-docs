@@ -2905,6 +2905,7 @@ REST clients can use these equivalent references:
 ```bash
 curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Idempotency-Key: $CLIENT_JOB_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "seedance-2.0",
@@ -2919,6 +2920,12 @@ curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
 ```
 
 Store the returned `cgt-...` ID. Poll until `status` becomes `succeeded`, `failed`, `cancelled`, or `expired`; do not treat the create response as a completed video. If you provide `callback_url`, allow repeated `succeeded` or `failed` notifications and keep polling as a recovery path.
+
+### Keep v1 And v3 Types Separate
+
+Do not reuse a `/v1/tasks/{id}` response struct for this endpoint. The unified v1 API reports `pending`, `processing`, `completed`, and `failed`; the Volc-compatible v3 API reports `queued`, `running`, `succeeded`, `failed`, `cancelled`, and `expired`. The official v3 response also represents `duration` as a JSON string and omits `error` on non-failed tasks.
+
+For safe recovery after a create timeout or disconnect, add a unique `Idempotency-Key` to the REST create request. Retrying the same body with the same key returns the original `cgt-...` ID; the same key with a different body returns `409`.
 
 ## Materials And Real-Person Verification
 
@@ -5017,6 +5024,16 @@ For existing materials, use the public `asset-YYYYMMDDHHMMSS-xxxxx` ID rather th
 
 The create response contains only the compatibility task ID. Store it and poll the task endpoint, even when callback delivery is enabled, so you retain a recovery path.
 
+## Idempotent Retries And Lost Responses
+
+For production creates, send a unique `Idempotency-Key` header and persist it with the exact JSON request body. If the connection closes before you receive the create response, retry the same REST request with the same TokenLab API credential, key, and unchanged body:
+
+- If the original task was created, TokenLab returns the same `cgt-...` ID and adds `Idempotency-Replayed: true`.
+- If the original request is still being registered, TokenLab returns `409 IdempotencyRequestInProgress` with `Retry-After`; retry the same key and body after that delay.
+- Reusing the key with a different body returns `409 IdempotencyConflict` and never creates a second task.
+
+Idempotency applies to the official v3 REST create path. It does not change the JSON response shape, and it is not inferred from `X-Request-ID` or from identical request bodies without a key.
+
 ## Example
 
 ### REST Create
@@ -5024,6 +5041,7 @@ The create response contains only the compatibility task ID. Store it and poll t
 ```bash
 curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Idempotency-Key: $CLIENT_JOB_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "doubao-seedance-2-0-260128",
@@ -5072,6 +5090,8 @@ URL: https://docs.tokenlab.sh/api-reference/video/get-volc-compatible-seedance-t
 
 Use the `cgt-...` ID returned by create. Poll every few seconds while the task is `queued` or `running`. Stop when the task is `succeeded`, `failed`, `cancelled`, or `expired`.
 
+> Warning: Do not reuse the unified v1 task enum or response struct here. `/v1/tasks/{id}` uses `pending`, `processing`, `completed`, and `failed`; this v3 endpoint uses the official enum above. In the v3 JSON object, `duration` is a string when present and `error` is omitted unless the task failed. A strict Go client should declare `Duration` as `string` with the JSON tag `duration,omitempty`, and stop on every v3 terminal status.
+
 See also [Seedance 2.0 Video Models](/guides/seedance-2-video) and [Video Generation](/guides/video-generation).
 
 ## Status Values
@@ -5114,6 +5134,23 @@ curl https://api.tokenlab.sh/api/v3/contents/generations/tasks/cgt-0123456789abc
   "usage": {
     "completion_tokens": 123456
   }
+}
+```
+
+```go Go
+type SeedanceTask struct {
+    ID       string `json:"id"`
+    Status   string `json:"status"`
+    Duration string `json:"duration,omitempty"`
+}
+
+func isTerminal(status string) bool {
+    switch status {
+    case "succeeded", "failed", "cancelled", "expired":
+        return true
+    default:
+        return false
+    }
 }
 ```
 

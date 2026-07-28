@@ -6242,8 +6242,21 @@
           "Seedance Volc Compatible"
         ],
         "summary": "Create Seedance task (Volc wire-compatible)",
-        "description": "Creates a Seedance 2.0 video task with the official Volc REST body and response shape. Authentication uses a TokenLab Bearer API key.",
+        "description": "Creates a Seedance 2.0 video task with the official Volc REST body and response shape. Authentication uses a TokenLab Bearer API key. TokenLab additionally accepts an optional Idempotency-Key header so a client can recover the same task ID after a lost create response.",
         "operationId": "createVolcCompatibleSeedanceTask",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "Client-generated key for idempotent REST task creation. Under the same TokenLab API credential, reusing the same key with the same JSON body returns the original cgt task ID; reusing it with a different body returns 409. Keep the credential, key, and request body unchanged when retrying after a timeout or disconnect."
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -6277,6 +6290,17 @@
         "responses": {
           "200": {
             "description": "Task created",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "Present with value true when this response recovered an earlier create request.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -6305,8 +6329,44 @@
               }
             }
           },
+          "409": {
+            "description": "Idempotency key conflict or original request still in progress",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying an in-progress request with the same key and body.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolcSeedanceError"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolcSeedanceError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Idempotency state temporarily unavailable",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying with the same key and body.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {

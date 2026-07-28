@@ -60,6 +60,16 @@ For existing materials, use the public `asset-YYYYMMDDHHMMSS-xxxxx` ID rather th
 
 The create response contains only the compatibility task ID. Store it and poll the task endpoint, even when callback delivery is enabled, so you retain a recovery path.
 
+## Idempotent Retries And Lost Responses
+
+For production creates, send a unique `Idempotency-Key` header and persist it with the exact JSON request body. If the connection closes before you receive the create response, retry the same REST request with the same TokenLab API credential, key, and unchanged body:
+
+- If the original task was created, TokenLab returns the same `cgt-...` ID and adds `Idempotency-Replayed: true`.
+- If the original request is still being registered, TokenLab returns `409 IdempotencyRequestInProgress` with `Retry-After`; retry the same key and body after that delay.
+- Reusing the key with a different body returns `409 IdempotencyConflict` and never creates a second task.
+
+Idempotency applies to the official v3 REST create path. It does not change the JSON response shape, and it is not inferred from `X-Request-ID` or from identical request bodies without a key.
+
 ## Example
 
 ### REST Create
@@ -67,6 +77,7 @@ The create response contains only the compatibility task ID. Store it and poll t
 ```bash
 curl https://api.tokenlab.sh/api/v3/contents/generations/tasks \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Idempotency-Key: $CLIENT_JOB_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "doubao-seedance-2-0-260128",

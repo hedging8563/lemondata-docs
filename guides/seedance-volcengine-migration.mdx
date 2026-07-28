@@ -57,6 +57,7 @@ REST clients can use these equivalent references:
 ```bash
 curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Idempotency-Key: $CLIENT_JOB_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "seedance-2.0",
@@ -71,6 +72,12 @@ curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
 ```
 
 Store the returned `cgt-...` ID. Poll until `status` becomes `succeeded`, `failed`, `cancelled`, or `expired`; do not treat the create response as a completed video. If you provide `callback_url`, allow repeated `succeeded` or `failed` notifications and keep polling as a recovery path.
+
+### Keep v1 And v3 Types Separate
+
+Do not reuse a `/v1/tasks/{id}` response struct for this endpoint. The unified v1 API reports `pending`, `processing`, `completed`, and `failed`; the Volc-compatible v3 API reports `queued`, `running`, `succeeded`, `failed`, `cancelled`, and `expired`. The official v3 response also represents `duration` as a JSON string and omits `error` on non-failed tasks.
+
+For safe recovery after a create timeout or disconnect, add a unique `Idempotency-Key` to the REST create request. Retrying the same body with the same key returns the original `cgt-...` ID; the same key with a different body returns `409`.
 
 ## Materials And Real-Person Verification
 

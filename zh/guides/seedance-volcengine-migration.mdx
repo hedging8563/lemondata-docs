@@ -58,6 +58,7 @@ description: "以最小请求改动把火山风格的 Seedance 任务和素材�
 ```bash
 curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
   -H "Authorization: Bearer $TOKENLAB_API_KEY" \
+  -H "Idempotency-Key: $CLIENT_JOB_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "model":"seedance-2.0",
@@ -83,3 +84,9 @@ curl 'https://api.tokenlab.sh/api/v3/contents/generations/tasks' \
 4. 相关素材和真人验证请求使用相同的 `ProjectName`。
 5. 保存 TokenLab 返回的任务、素材组和素材 ID。
 6. 迁移生产流量前验证创建、轮询、列表和错误响应。
+
+## 不要混用 v1 与 v3 类型
+
+不要把 `/v1/tasks/{id}` 的响应 struct 直接用于本接口。统一 v1 的状态是 `pending`、`processing`、`completed`、`failed`；火山兼容 v3 的状态是 `queued`、`running`、`succeeded`、`failed`、`cancelled`、`expired`。官方 v3 响应中的 `duration` 是 JSON 字符串，非失败任务不返回 `error`。
+
+为避免创建超时或连接断开后重复生成，REST 创建请求应携带唯一的 `Idempotency-Key`。使用同一 key 和不变请求体重试会找回原 `cgt-...` ID；同一 key 配不同请求体返回 `409`。
