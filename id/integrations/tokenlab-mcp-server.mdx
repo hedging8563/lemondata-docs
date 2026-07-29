@@ -1,11 +1,13 @@
 ---
 title: "Server MCP TokenLab"
-description: "Hubungkan klien MCP ke alat yang dihasilkan OpenAPI TokenLab untuk endpoint AI native, media multimodal, file, dan tugas asinkron."
+description: "Hubungkan Claude Code, Cursor, VS Code, Codex, dan klien MCP lainnya ke alat model, harga, inferensi, media, file, dan tugas TokenLab."
 ---
 
 [Server MCP TokenLab](https://github.com/hedging8563/tokenlab-mcp-server) menghasilkan alat MCP dari kontrak OpenAPI publik TokenLab. Agen yang kompatibel dengan MCP dapat menemukan model dan harga, memanggil endpoint LLM native dan yang kompatibel dengan OpenAI, membuat media multimodal, mengunggah file, dan mengelola tugas asinkron.
 
 Gunakan server ini saat agen memerlukan kontrak API TokenLab terkini alih-alih daftar alat yang dikelola secara manual. Profil `core` default mengekspos 29 alat endpoint yang dihasilkan ditambah dua alat penemuan komposit. Profil `full` mengekspos 78 alat endpoint yang dihasilkan ditambah dua alat komposit yang sama.
+
+Halaman ini menjelaskan cara menambahkan TokenLab sebagai server alat di Claude Code, Cursor, VS Code, Codex, Claude Desktop, Cline, Windsurf, atau klien MCP lainnya. Untuk memanggil TokenLab langsung dari kode aplikasi, mulai dari [panduan cepat API](/id/quickstart).
 
 <Note>
 Alat katalog publik dan harga tidak memerlukan kunci API TokenLab. Atur `TOKENLAB_API_KEY` untuk operasi inferensi, media, audio, file, tugas, embedding, rerank, dan terjemahan yang memerlukan kredensial. Jangan pernah menempatkan kunci API dalam argumen alat.
@@ -23,42 +25,139 @@ Alat katalog publik dan harga tidak memerlukan kunci API TokenLab. Atur `TOKENLA
 - Ringkasan tugas asinkron yang dinormalisasi untuk operasi pembuatan gambar, video, musik, 3D, dan dunia.
 - Sinkronisasi kontrak harian yang mengambil dokumen OpenAPI publik, membuat ulang skema alat, menjalankan pengujian endpoint dan file, serta memperbarui `main` hanya jika setiap pemeriksaan berhasil.
 
-## Instalasi dari GitHub
+## Mulai cepat
 
-Klon repositori publik dan instal dependensi:
+Cara paling cepat dan aman untuk memulai adalah mengaktifkan hanya enam alat katalog publik. Anda tidak memerlukan kunci API TokenLab dan dapat mengaktifkan alat berkredensial nanti.
 
-```bash
-git clone https://github.com/hedging8563/tokenlab-mcp-server.git
-cd tokenlab-mcp-server
-npm install
-npm test
-```
+<CardGroup cols={2}>
+  <Card title="Instal di Cursor" icon="arrow-pointer" href="https://cursor.com/en/install-mcp?name=tokenlab-model-catalog&config=eyJ0eXBlIjoic3RkaW8iLCJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkB0b2tlbmxhYmFpL21jcC1zZXJ2ZXIiXSwiZW52Ijp7IlRPS0VOTEFCX01DUF9UT09MX1BST0ZJTEUiOiJjYXRhbG9nIn19">
+    Tambahkan profil publik `catalog` ke Cursor dengan sekali klik
+  </Card>
+  <Card title="Instal di VS Code" icon="code" href="https://vscode.dev/redirect/mcp/install?name=tokenlab-model-catalog&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40tokenlabai%2Fmcp-server%22%5D%2C%22env%22%3A%7B%22TOKENLAB_MCP_TOOL_PROFILE%22%3A%22catalog%22%7D%7D">
+    Tambahkan profil publik `catalog` ke konfigurasi pengguna VS Code
+  </Card>
+</CardGroup>
 
-Jalankan server melalui stdio:
+<Steps>
+  <Step title="Periksa persyaratan">
+    Instal Node.js 18.17 atau yang lebih baru dan pastikan `npx` tersedia.
 
-```bash
-npm start
-```
+    ```bash
+    node --version
+    npx --version
+    ```
 
-Variabel lingkungan opsional `TOKENLAB_API_BASE` memiliki nilai default `https://api.tokenlab.sh`. Atur `TOKENLAB_MCP_TOOL_PROFILE=full` jika klien perlu mengekspos API pengembang yang lebih luas alih-alih profil `core` default.
+    Anda tidak perlu memasang paket MCP secara global atau mengkloning repositorinya.
+  </Step>
 
-Profil `core` dan `full` secara default menerbitkan skema alat `portable` dengan batas ukuran dan kedalaman, sementara server tetap memvalidasi setiap panggilan terhadap kontrak OpenAPI lengkap. Gunakan `TOKENLAB_MCP_SCHEMA_MODE=exact` untuk skema bertingkat lengkap atau `TOKENLAB_MCP_SCHEMA_MODE=strict` untuk provider yang mewajibkan objek tertutup dan setiap properti di `required`; mode strict merepresentasikan nilai tingkat atas yang kompleks sebagai string JSON.
+  <Step title="Pilih tingkat akses">
+    | Tujuan | Kunci API | Profil |
+    |---|---|---|
+    | Menelusuri model, detail, dan harga | Tidak diperlukan | `catalog` (6 alat) |
+    | Menggunakan operasi inferensi, media, file, dan tugas umum | Diperlukan untuk panggilan berbayar | `core` (31 alat, default) |
+    | Menampilkan semua operasi developer yang diizinkan | Diperlukan untuk panggilan berbayar | `full` (80 alat) |
 
-## Konfigurasi untuk semua klien MCP stdio
+    Buat kunci di [Dashboard → API Keys](https://tokenlab.sh/dashboard/api) hanya untuk panggilan API berkredensial. Simpan kunci di lingkungan rahasia klien dan jangan tempelkan ke prompt atau argumen alat MCP.
+  </Step>
 
-Gunakan nilai yang sama pada setiap klien yang mendukung server MCP stdio lokal. Klien dapat menampilkannya sebagai bidang formulir atau menyimpannya dalam JSON, TOML, maupun YAML; arti setiap bidang tetap sama. Tambahkan setiap argumen sebagai item terpisah.
+  <Step title="Konfigurasikan klien">
+    Contoh publik secara eksplisit memilih `catalog` agar semua alat yang ditampilkan bekerja tanpa kunci.
 
-| Bidang | Nilai | Catatan |
-|---|---|---|
-| Nama server | `tokenlab-model-catalog` | Nama unik apa pun dapat digunakan. |
-| Transport | `stdio` | TokenLab MCP berjalan sebagai proses anak lokal. |
-| Perintah mulai | `npx` | Menjalankan paket npm yang telah dipublikasikan. |
-| Argumen | `-y`, lalu `@tokenlabai/mcp-server` | Gunakan `@tokenlabai/mcp-server@0.6.17` untuk mengunci rilis yang saat ini telah diverifikasi. |
-| Variabel lingkungan | `TOKENLAB_API_KEY` = `<TOKENLAB_API_KEY>` | Opsional untuk katalog publik dan wajib untuk alat inferensi serta media. |
-| Penerusan variabel lingkungan | Biarkan kosong atau isi `TOKENLAB_API_KEY` | Gunakan nama variabel hanya jika kunci sudah diekspor di lingkungan lokal klien. Jangan mengatur kunci yang sama di kedua tempat. |
-| Direktori kerja | Biarkan kosong | `npx` tidak memerlukan direktori proyek untuk paket ini. |
+    <Tabs>
+      <Tab title="Claude Code">
+        Tambahkan TokenLab pada cakupan pengguna agar tersedia di semua proyek.
 
-Salin konfigurasi lengkap berikut ke klien yang menerima objek JSON `mcpServers`:
+        ```bash
+        claude mcp add --env TOKENLAB_MCP_TOOL_PROFILE=catalog --scope user tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+
+        Untuk mengaktifkan profil `core` default, tambahkan kunci API Anda.
+
+        ```bash
+        claude mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key --scope user tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+
+        Gunakan `--scope local` hanya untuk proyek saat ini atau `--scope project` untuk membuat `.mcp.json` bersama. Jangan commit kunci asli ke konfigurasi proyek.
+      </Tab>
+
+      <Tab title="Cursor">
+        Gunakan instalasi sekali klik di atas, atau simpan konfigurasi di `~/.cursor/mcp.json` untuk semua proyek maupun `.cursor/mcp.json` untuk satu proyek.
+
+        ```json
+        {
+          "mcpServers": {
+            "tokenlab-model-catalog": {
+              "command": "npx",
+              "args": ["-y", "@tokenlabai/mcp-server"],
+              "env": { "TOKENLAB_MCP_TOOL_PROFILE": "catalog" }
+            }
+          }
+        }
+        ```
+      </Tab>
+
+      <Tab title="VS Code">
+        Gunakan instalasi sekali klik, jalankan **MCP: Add Server**, atau simpan file sebagai `.vscode/mcp.json`.
+
+        ```json
+        {
+          "servers": {
+            "tokenlab-model-catalog": {
+              "type": "stdio",
+              "command": "npx",
+              "args": ["-y", "@tokenlabai/mcp-server"],
+              "env": { "TOKENLAB_MCP_TOOL_PROFILE": "catalog" }
+            }
+          }
+        }
+        ```
+
+        Untuk konfigurasi yang berlaku di semua proyek, jalankan **MCP: Open User Configuration** dan tambahkan objek server yang sama.
+      </Tab>
+
+      <Tab title="Codex">
+        ```bash
+        # Katalog publik
+        codex mcp add --env TOKENLAB_MCP_TOOL_PROFILE=catalog tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+
+        # Profil core default dengan kunci API
+        codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+      </Tab>
+
+      <Tab title="Claude Desktop">
+        Dalam `claude_desktop_config.json`, tambahkan perintah `npx` serta argumen `-y` dan `@tokenlabai/mcp-server` ke objek standar `mcpServers`. Jika hanya memerlukan alat publik, atur `TOKENLAB_MCP_TOOL_PROFILE=catalog`.
+      </Tab>
+
+      <Tab title="Klien lain">
+        Cline CLI dapat memasang server stdio yang dipublikasikan secara langsung.
+
+        ```bash
+        cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
+        ```
+
+        Untuk Windsurf, simpan konfigurasi standar `mcpServers` di `~/.codeium/windsurf/mcp_config.json`. Klien stdio lainnya memakai perintah dan argumen yang sama tanpa direktori kerja.
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Mulai ulang dan verifikasi">
+    Mulai ulang atau muat ulang klien MCP, setujui server lokal saat diminta, lalu pastikan `tokenlab-model-catalog` terhubung.
+
+    ```bash
+    claude mcp list
+    codex mcp list
+    ```
+
+    Setelah itu, minta agen memanggil `list_models`. Daftar model yang tidak kosong membuktikan server telah dimulai, penemuan MCP selesai, dan katalog publik TokenLab dapat dijangkau. Pemeriksaan ini tidak memerlukan kunci API.
+  </Step>
+</Steps>
+
+## Referensi konfigurasi
+
+Pada klien stdio lokal, gunakan nama `tokenlab-model-catalog`, perintah `npx`, argumen terpisah `-y` dan `@tokenlabai/mcp-server`, serta biarkan direktori kerja kosong. Gunakan `@tokenlabai/mcp-server@0.6.17` untuk mengunci rilis yang saat ini telah diverifikasi.
+
+Konfigurasi standar untuk alat berkredensial:
 
 ```json
 {
@@ -67,77 +166,44 @@ Salin konfigurasi lengkap berikut ke klien yang menerima objek JSON `mcpServers`
       "command": "npx",
       "args": ["-y", "@tokenlabai/mcp-server"],
       "env": {
-        "TOKENLAB_API_KEY": "<TOKENLAB_API_KEY>"
+        "TOKENLAB_API_KEY": "<TOKENLAB_API_KEY>",
+        "TOKENLAB_MCP_TOOL_PROFILE": "core"
       }
     }
   }
 }
 ```
 
-Hapus blok `env` jika Anda hanya memerlukan alat model dan harga publik. Jika klien mengharapkan satu objek server, bukan pembungkus `mcpServers`, salin hanya objek bagian dalam yang berisi `command`, `args`, dan `env`.
+VS Code memakai objek `servers` di tingkat teratas. Jika klien hanya meminta satu objek server, salin objek bagian dalam yang berisi `command`, `args`, dan `env`.
+
+| Variabel lingkungan | Default | Tujuan |
+|---|---|---|
+| `TOKENLAB_API_BASE` | `https://api.tokenlab.sh` | Mengganti URL dasar API tanpa garis miring di akhir. |
+| `TOKENLAB_API_KEY` | Tidak diatur | Diperlukan untuk panggilan inferensi, media, file, tugas, embedding, rerank, dan terjemahan berkredensial. |
+| `TOKENLAB_MCP_TOOL_PROFILE` | `core` | Pilih `catalog`, `core`, atau `full`. |
+| `TOKENLAB_MCP_SCHEMA_MODE` | Default profil | Pilih `portable`, `exact`, atau `strict`; biasanya pertahankan `portable`. |
+| `TOKENLAB_REQUEST_TIMEOUT_MS` | `120000` | Batas waktu permintaan API dalam milidetik. |
+| `TOKENLAB_MCP_MAX_FILE_BYTES` | `104857600` | Ukuran maksimum setiap file lokal yang diunggah dalam byte. |
+| `TOKENLAB_MCP_INLINE_BYTES` | `2097152` | Ukuran maksimum hasil biner atau JSON yang dikembalikan secara inline. |
+| `TOKENLAB_ARTIFACT_DIR` | Direktori sementara sistem operasi | Lokasi penulisan artefak respons yang lebih besar. |
 
 <Warning>
-Jangan pernah memublikasikan tangkapan layar, log, atau file konfigurasi yang berisi kunci API asli. Gunakan placeholder pada contoh dan segera cabut kunci yang telah terekspos.
+Jangan publikasikan tangkapan layar, log, riwayat shell, atau file konfigurasi yang berisi kunci API asli. Utamakan masukan rahasia atau variabel lingkungan klien, gunakan placeholder pada contoh bersama, dan rotasi kunci yang terpapar.
 </Warning>
 
-## Instalasi di Codex
+## Instalasi dari sumber
 
-Tambahkan server katalog publik ke konfigurasi Codex Anda:
-
-```bash
-codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
-```
-
-Mulai sesi Codex baru setelah menambahkan server. Alat katalog publik tidak memerlukan `TOKENLAB_API_KEY`.
-
-Untuk mengaktifkan alat inferensi, sertakan kunci API TokenLab Anda saat menambahkan server:
+Gunakan checkout sumber hanya untuk mengaudit atau mengembangkan server MCP. Konfigurasi klien biasa harus memakai paket npm terpublikasi yang ditampilkan di atas.
 
 ```bash
-codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+npm start
 ```
 
-## Instalasi di Cline
-
-Instal server stdio yang dipublikasikan dengan Cline CLI:
-
-```bash
-cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
-```
-
-Perintah ini telah diverifikasi dengan Cline CLI dan selesai tanpa peringatan pengaturan. Alat katalog publik langsung berfungsi; atur `TOKENLAB_API_KEY` di lingkungan Cline Anda saat memerlukan alat inferensi.
-
-## Konfigurasi Claude Desktop
-
-Tambahkan paket npm yang dipublikasikan ke konfigurasi klien MCP Anda:
-
-```json
-{
-  "mcpServers": {
-    "tokenlab-model-catalog": {
-      "command": "npx",
-      "args": ["-y", "@tokenlabai/mcp-server"]
-    }
-  }
-}
-```
-
-Mulai ulang klien MCP setelah menyimpan konfigurasi.
-
-## Cursor, Windsurf, dan Klien MCP Lainnya
-
-Gunakan perintah dan argumen yang sama di klien mana pun yang mendukung server MCP stdio:
-
-```json
-{
-  "command": "npx",
-  "args": ["-y", "@tokenlabai/mcp-server"],
-  "env": {
-    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
-  }
-}
-```
-
-Jika klien Anda menyimpan server bernama, gunakan `tokenlab-model-catalog` sebagai nama server.
+Profil `core` dan `full` secara default menerbitkan schema `portable` dengan batas ukuran dan kedalaman, sementara server memvalidasi setiap panggilan memakai definisi OpenAPI lengkap. Gunakan `exact` untuk schema bertingkat lengkap atau `strict` jika penyedia model mewajibkan objek tertutup dan semua properti dalam `required`.
 
 ## Profil Alat yang Dihasilkan
 
@@ -223,7 +289,15 @@ Gunakan keduanya jika tersedia:
 
 <AccordionGroup>
   <Accordion title="Klien tidak dapat memulai server">
-    Pastikan Node.js minimal versi 18.17, lalu jalankan `npx -y @tokenlabai/mcp-server` sekali di terminal untuk memunculkan kesalahan npm atau jaringan.
+    Pastikan Node.js minimal versi 18.17 dan klien dapat menemukan `npx`. Jalankan `npx -y @tokenlabai/mcp-server` di terminal untuk menampilkan kesalahan npm atau jaringan. Jika stdio berhasil dimulai, proses akan menunggu pesan MCP tanpa keluaran; tekan **Ctrl+C** setelah memeriksa.
+  </Accordion>
+
+  <Accordion title="Server sudah dikonfigurasi tetapi alat tidak muncul">
+    Mulai ulang klien dan setujui server lokal. Di Claude Code, periksa `claude mcp list` atau `/mcp`; di VS Code, gunakan **MCP: List Servers** lalu **Show Output**; di Cursor, buka **Settings → Tools & MCP**.
+  </Accordion>
+
+  <Accordion title="Claude Code menampilkan Pending approval">
+    Server `.mcp.json` tingkat proyek memerlukan kepercayaan workspace dan persetujuan eksplisit. Mulai Claude Code secara interaktif di proyek, terima kepercayaan, lalu setujui `tokenlab-model-catalog` di `/mcp`. Gunakan `--scope user` untuk konfigurasi pribadi yang tersedia di semua proyek.
   </Accordion>
 
   <Accordion title="Daftar model kosong">
@@ -236,6 +310,18 @@ Gunakan keduanya jika tersedia:
 
   <Accordion title="Bisakah server ini memanggil API inferensi TokenLab berbayar?">
     Ya. Atur `TOKENLAB_API_KEY`, lalu gunakan alat LLM, media, audio, tugas, file, embedding, rerank, atau terjemahan yang dihasilkan. Alat katalog dan harga tetap tersedia tanpa kunci.
+  </Accordion>
+
+  <Accordion title="Alat berkredensial mengembalikan kesalahan autentikasi">
+    Atur `TOKENLAB_API_KEY` di lingkungan server MCP, bukan di argumen alat atau prompt, lalu mulai ulang klien. Rotasi kunci yang pernah muncul dalam file bersama, gambar, log, atau riwayat shell.
+  </Accordion>
+
+  <Accordion title="Klien menolak schema atau memuat terlalu banyak alat">
+    Gunakan `TOKENLAB_MCP_TOOL_PROFILE=catalog` untuk 6 alat penemuan atau profil `core` default untuk 31 alat. Biasanya pertahankan `portable`; gunakan `exact` untuk struktur bertingkat lengkap dan `strict` untuk objek tertutup dengan semua properti dalam `required`.
+  </Accordion>
+
+  <Accordion title="Bagaimana cara mengunci atau memperbarui versi paket?">
+    Gunakan `@tokenlabai/mcp-server@0.6.17` untuk mengunci rilis yang saat ini diverifikasi. Untuk mengganti versi, perbarui argumen paket, mulai ulang server, dan tinjau repositori publik sebelum memakai rilis yang lebih baru.
   </Accordion>
 </AccordionGroup>
 
@@ -268,5 +354,14 @@ Gunakan keduanya jika tersedia:
   </Card>
   <Card title="Model Explorer yang Di-host" icon="rocket" href="https://tokenlab-model-explorer.vercel.app/widget">
     Buka explorer model publik dan endpoint MCP jarak jauh
+  </Card>
+  <Card title="Panduan MCP Claude Code" icon="terminal" href="https://code.claude.com/docs/en/mcp">
+    Cakupan, persetujuan, pemeriksaan status, dan konfigurasi MCP
+  </Card>
+  <Card title="Panduan MCP Cursor" icon="arrow-pointer" href="https://docs.cursor.com/context/model-context-protocol">
+    Lokasi konfigurasi, kontrol alat, dan panduan keamanan
+  </Card>
+  <Card title="Panduan MCP VS Code" icon="code" href="https://code.visualstudio.com/docs/agent-customization/mcp-servers">
+    Konfigurasi pengguna dan workspace, kepercayaan, log, dan pengelolaan server
   </Card>
 </CardGroup>

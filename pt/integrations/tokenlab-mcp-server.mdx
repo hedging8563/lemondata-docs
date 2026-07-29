@@ -1,11 +1,13 @@
 ---
 title: "Servidor MCP do TokenLab"
-description: "Conecte clientes MCP às ferramentas geradas por OpenAPI do TokenLab para endpoints de IA nativos, mídia multimodal, arquivos e tarefas assíncronas."
+description: "Conecte Claude Code, Cursor, VS Code, Codex e outros clientes MCP às ferramentas de modelos, preços, inferência, mídia, arquivos e tarefas do TokenLab."
 ---
 
 O [servidor MCP do TokenLab](https://github.com/hedging8563/tokenlab-mcp-server) gera ferramentas MCP a partir do contrato OpenAPI público do TokenLab. Agentes compatíveis com MCP podem descobrir modelos e preços, chamar endpoints de LLM nativos e compatíveis com OpenAI, criar mídia multimodal, fazer upload de arquivos e gerenciar tarefas assíncronas.
 
 Use-o quando um agente precisar do contrato atual da API do TokenLab em vez de uma lista de ferramentas mantida manualmente. O perfil `core` padrão expõe 29 ferramentas de endpoint geradas, além de duas ferramentas de descoberta compostas. O perfil `full` expõe 78 ferramentas de endpoint geradas, além das mesmas duas ferramentas compostas.
+
+Esta página mostra como adicionar o TokenLab como servidor de ferramentas no Claude Code, Cursor, VS Code, Codex, Claude Desktop, Cline, Windsurf ou outro cliente MCP. Para chamar o TokenLab diretamente pelo código da aplicação, comece pelo [início rápido da API](/pt/quickstart).
 
 <Note>
 As ferramentas de catálogo público e preços não exigem uma chave de API do TokenLab. Defina `TOKENLAB_API_KEY` para operações de inferência, mídia, áudio, arquivos, tarefas, embeddings, rerank e tradução que exijam credenciais. Nunca coloque uma chave de API nos argumentos das ferramentas.
@@ -23,42 +25,139 @@ As ferramentas de catálogo público e preços não exigem uma chave de API do T
 - Resumos de tarefas assíncronas normalizados para operações de imagem, vídeo, música, 3D e geração de mundos.
 - Uma sincronização diária de contrato que busca o documento OpenAPI público, regenera esquemas de ferramentas, executa testes de endpoint e arquivos, e atualiza a `main` apenas quando todas as verificações passam.
 
-## Instalação via GitHub
+## Início rápido
 
-Clone o repositório público e instale as dependências:
+A forma mais rápida e segura de começar é ativar apenas as seis ferramentas do catálogo público. Não é necessário ter uma chave de API do TokenLab, e você pode habilitar ferramentas autenticadas depois.
 
-```bash
-git clone https://github.com/hedging8563/tokenlab-mcp-server.git
-cd tokenlab-mcp-server
-npm install
-npm test
-```
+<CardGroup cols={2}>
+  <Card title="Instalar no Cursor" icon="arrow-pointer" href="https://cursor.com/en/install-mcp?name=tokenlab-model-catalog&config=eyJ0eXBlIjoic3RkaW8iLCJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkB0b2tlbmxhYmFpL21jcC1zZXJ2ZXIiXSwiZW52Ijp7IlRPS0VOTEFCX01DUF9UT09MX1BST0ZJTEUiOiJjYXRhbG9nIn19">
+    Adicione o perfil público `catalog` ao Cursor com um clique
+  </Card>
+  <Card title="Instalar no VS Code" icon="code" href="https://vscode.dev/redirect/mcp/install?name=tokenlab-model-catalog&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40tokenlabai%2Fmcp-server%22%5D%2C%22env%22%3A%7B%22TOKENLAB_MCP_TOOL_PROFILE%22%3A%22catalog%22%7D%7D">
+    Adicione o perfil público `catalog` à configuração de usuário do VS Code
+  </Card>
+</CardGroup>
 
-Inicie o servidor via stdio:
+<Steps>
+  <Step title="Verificar os requisitos">
+    Instale o Node.js 18.17 ou mais recente e confirme que o `npx` está disponível.
 
-```bash
-npm start
-```
+    ```bash
+    node --version
+    npx --version
+    ```
 
-A variável de ambiente opcional `TOKENLAB_API_BASE` tem como padrão `https://api.tokenlab.sh`. Defina `TOKENLAB_MCP_TOOL_PROFILE=full` quando um cliente precisar expor a API de desenvolvedor mais ampla em vez do perfil `core` padrão.
+    Não é necessário instalar globalmente o pacote MCP nem clonar o repositório.
+  </Step>
 
-Os perfis `core` e `full` publicam por padrão esquemas de ferramentas `portable` com limites de tamanho e profundidade, enquanto o servidor valida cada chamada com o contrato OpenAPI completo. Use `TOKENLAB_MCP_SCHEMA_MODE=exact` para esquemas aninhados completos ou `TOKENLAB_MCP_SCHEMA_MODE=strict` para providers que exigem objetos fechados e todas as propriedades em `required`; o modo strict representa valores complexos de nível superior como strings JSON.
+  <Step title="Escolher um nível de acesso">
+    | Objetivo | Chave de API | Perfil |
+    |---|---|---|
+    | Consultar modelos, detalhes e preços | Não é necessária | `catalog` (6 ferramentas) |
+    | Usar operações comuns de inferência, mídia, arquivo e tarefa | Necessária para chamadas pagas | `core` (31 ferramentas, padrão) |
+    | Expor todas as operações de desenvolvimento permitidas | Necessária para chamadas pagas | `full` (80 ferramentas) |
 
-## Configurar qualquer cliente MCP stdio
+    Crie uma chave em [Dashboard → API Keys](https://tokenlab.sh/dashboard/api) somente para chamadas autenticadas. Guarde-a no ambiente secreto do cliente e nunca a cole em um prompt ou argumento de ferramenta MCP.
+  </Step>
 
-Use os mesmos valores em qualquer cliente com suporte a servidores MCP stdio locais. O cliente pode exibi-los como campos de formulário ou armazená-los em JSON, TOML ou YAML; o significado dos campos permanece igual. Adicione cada argumento como um item separado.
+  <Step title="Configurar o cliente">
+    Os exemplos públicos selecionam explicitamente `catalog`, para que todas as ferramentas expostas funcionem sem chave.
 
-| Campo | Valor | Observações |
-|---|---|---|
-| Nome do servidor | `tokenlab-model-catalog` | Qualquer nome exclusivo funciona. |
-| Transporte | `stdio` | O TokenLab MCP é executado como um processo filho local. |
-| Comando de inicialização | `npx` | Inicia o pacote npm publicado. |
-| Argumentos | `-y` e depois `@tokenlabai/mcp-server` | Use `@tokenlabai/mcp-server@0.6.17` para fixar a versão atualmente verificada. |
-| Variável de ambiente | `TOKENLAB_API_KEY` = `<TOKENLAB_API_KEY>` | Opcional para o catálogo público e obrigatória para ferramentas de inferência e mídia. |
-| Repasse de variável de ambiente | Deixar em branco ou usar `TOKENLAB_API_KEY` | Use apenas o nome da variável quando a chave já estiver exportada no ambiente local do cliente. Não configure a mesma chave nos dois locais. |
-| Diretório de trabalho | Deixar em branco | O `npx` não exige um diretório de projeto para este pacote. |
+    <Tabs>
+      <Tab title="Claude Code">
+        Adicione o TokenLab no escopo do usuário para usá-lo em todos os projetos.
 
-Copie esta configuração completa nos clientes que aceitam um objeto JSON `mcpServers`:
+        ```bash
+        claude mcp add --env TOKENLAB_MCP_TOOL_PROFILE=catalog --scope user tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+
+        Para ativar o perfil `core` padrão, adicione sua chave de API.
+
+        ```bash
+        claude mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key --scope user tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+
+        Use `--scope local` apenas no projeto atual ou `--scope project` para criar um `.mcp.json` compartilhado. Não envie uma chave real para a configuração do projeto.
+      </Tab>
+
+      <Tab title="Cursor">
+        Use a instalação com um clique ou salve a configuração em `~/.cursor/mcp.json` para todos os projetos ou em `.cursor/mcp.json` para apenas um projeto.
+
+        ```json
+        {
+          "mcpServers": {
+            "tokenlab-model-catalog": {
+              "command": "npx",
+              "args": ["-y", "@tokenlabai/mcp-server"],
+              "env": { "TOKENLAB_MCP_TOOL_PROFILE": "catalog" }
+            }
+          }
+        }
+        ```
+      </Tab>
+
+      <Tab title="VS Code">
+        Use a instalação com um clique, execute **MCP: Add Server** ou salve este arquivo como `.vscode/mcp.json`.
+
+        ```json
+        {
+          "servers": {
+            "tokenlab-model-catalog": {
+              "type": "stdio",
+              "command": "npx",
+              "args": ["-y", "@tokenlabai/mcp-server"],
+              "env": { "TOKENLAB_MCP_TOOL_PROFILE": "catalog" }
+            }
+          }
+        }
+        ```
+
+        Para uma configuração disponível em todos os projetos, execute **MCP: Open User Configuration** e adicione o mesmo objeto de servidor.
+      </Tab>
+
+      <Tab title="Codex">
+        ```bash
+        # Catálogo público
+        codex mcp add --env TOKENLAB_MCP_TOOL_PROFILE=catalog tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+
+        # Perfil core padrão com chave de API
+        codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+      </Tab>
+
+      <Tab title="Claude Desktop">
+        Adicione ao objeto padrão `mcpServers` de `claude_desktop_config.json` o comando `npx` e os argumentos `-y` e `@tokenlabai/mcp-server`. Se precisar apenas das ferramentas públicas, defina `TOKENLAB_MCP_TOOL_PROFILE=catalog`.
+      </Tab>
+
+      <Tab title="Outros clientes">
+        O Cline CLI pode instalar diretamente o servidor stdio publicado.
+
+        ```bash
+        cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
+        ```
+
+        No Windsurf, salve a configuração padrão `mcpServers` em `~/.codeium/windsurf/mcp_config.json`. Outros clientes stdio usam o mesmo comando e argumentos, sem diretório de trabalho.
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Reiniciar e verificar">
+    Reinicie ou recarregue o cliente MCP, aprove o servidor local quando solicitado e confirme que `tokenlab-model-catalog` está conectado.
+
+    ```bash
+    claude mcp list
+    codex mcp list
+    ```
+
+    Depois, peça ao agente para chamar `list_models`. Uma lista de modelos não vazia confirma a inicialização do servidor, a descoberta MCP e o acesso ao catálogo público do TokenLab. Essa verificação não requer chave de API.
+  </Step>
+</Steps>
+
+## Referência de configuração
+
+Em qualquer cliente stdio local, use o nome `tokenlab-model-catalog`, o comando `npx`, os argumentos separados `-y` e `@tokenlabai/mcp-server`, e deixe o diretório de trabalho vazio. Use `@tokenlabai/mcp-server@0.6.17` para fixar a versão atualmente verificada.
+
+Configuração padrão para ferramentas autenticadas:
 
 ```json
 {
@@ -67,77 +166,44 @@ Copie esta configuração completa nos clientes que aceitam um objeto JSON `mcpS
       "command": "npx",
       "args": ["-y", "@tokenlabai/mcp-server"],
       "env": {
-        "TOKENLAB_API_KEY": "<TOKENLAB_API_KEY>"
+        "TOKENLAB_API_KEY": "<TOKENLAB_API_KEY>",
+        "TOKENLAB_MCP_TOOL_PROFILE": "core"
       }
     }
   }
 }
 ```
 
-Remova o bloco `env` se você precisar apenas das ferramentas públicas de modelos e preços. Se um cliente esperar um único objeto de servidor em vez do contêiner `mcpServers`, copie somente o objeto interno com `command`, `args` e `env`.
+O VS Code usa um objeto `servers` no nível superior. Se o cliente espera um único objeto de servidor, copie apenas o objeto interno com `command`, `args` e `env`.
+
+| Variável de ambiente | Padrão | Finalidade |
+|---|---|---|
+| `TOKENLAB_API_BASE` | `https://api.tokenlab.sh` | Alterar a URL base da API, sem barra final. |
+| `TOKENLAB_API_KEY` | Não definida | Necessária para chamadas autenticadas de inferência, mídia, arquivo, tarefa, embedding, rerank e tradução. |
+| `TOKENLAB_MCP_TOOL_PROFILE` | `core` | Escolher `catalog`, `core` ou `full`. |
+| `TOKENLAB_MCP_SCHEMA_MODE` | Padrão do perfil | Escolher `portable`, `exact` ou `strict`; normalmente mantenha `portable`. |
+| `TOKENLAB_REQUEST_TIMEOUT_MS` | `120000` | Tempo limite da solicitação de API em milissegundos. |
+| `TOKENLAB_MCP_MAX_FILE_BYTES` | `104857600` | Tamanho máximo em bytes de cada arquivo local enviado. |
+| `TOKENLAB_MCP_INLINE_BYTES` | `2097152` | Tamanho máximo de um resultado binário ou JSON retornado em linha. |
+| `TOKENLAB_ARTIFACT_DIR` | Diretório temporário do sistema | Local de gravação de artefatos de resposta maiores. |
 
 <Warning>
-Nunca publique capturas de tela, logs ou arquivos de configuração com uma chave de API real. Use um placeholder nos exemplos e revogue imediatamente qualquer chave exposta.
+Não publique capturas de tela, logs, histórico do shell ou arquivos de configuração que contenham uma chave de API real. Prefira entradas secretas ou variáveis de ambiente do cliente, use marcadores em exemplos compartilhados e troque qualquer chave exposta.
 </Warning>
 
-## Instalação no Codex
+## Instalação pelo código-fonte
 
-Adicione o servidor de catálogo público à sua configuração do Codex:
-
-```bash
-codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
-```
-
-Inicie uma nova sessão do Codex após adicionar o servidor. As ferramentas de catálogo público não exigem `TOKENLAB_API_KEY`.
-
-Para habilitar ferramentas de inferência, inclua sua chave de API do TokenLab ao adicionar o servidor:
+Use uma cópia do código-fonte apenas para auditar ou desenvolver o servidor MCP. A configuração normal do cliente deve usar o pacote npm publicado mostrado acima.
 
 ```bash
-codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+npm start
 ```
 
-## Instalação no Cline
-
-Instale o servidor stdio publicado com o Cline CLI:
-
-```bash
-cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
-```
-
-O comando foi verificado com o Cline CLI e é concluído sem avisos de configuração. As ferramentas de catálogo público funcionam imediatamente; defina `TOKENLAB_API_KEY` no seu ambiente Cline quando precisar de ferramentas de inferência.
-
-## Configuração do Claude Desktop
-
-Adicione o pacote npm publicado à sua configuração de cliente MCP:
-
-```json
-{
-  "mcpServers": {
-    "tokenlab-model-catalog": {
-      "command": "npx",
-      "args": ["-y", "@tokenlabai/mcp-server"]
-    }
-  }
-}
-```
-
-Reinicie o cliente MCP após salvar a configuração.
-
-## Cursor, Windsurf e outros clientes MCP
-
-Use o mesmo comando e argumentos em qualquer cliente que suporte servidores MCP via stdio:
-
-```json
-{
-  "command": "npx",
-  "args": ["-y", "@tokenlabai/mcp-server"],
-  "env": {
-    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
-  }
-}
-```
-
-Se o seu cliente armazena servidores nomeados, use `tokenlab-model-catalog` como o nome do servidor.
+Os perfis `core` e `full` publicam por padrão esquemas `portable` com limites de tamanho e profundidade, enquanto o servidor valida cada chamada com a definição OpenAPI completa. Use `exact` para esquemas aninhados completos ou `strict` quando o provedor do modelo exigir objetos fechados e todas as propriedades em `required`.
 
 ## Perfis de Ferramentas Geradas
 
@@ -223,7 +289,15 @@ Use ambos quando disponíveis:
 
 <AccordionGroup>
   <Accordion title="O cliente não consegue iniciar o servidor">
-    Confirme se o Node.js está na versão 18.17 ou superior, então execute `npx -y @tokenlabai/mcp-server` uma vez no terminal para identificar erros de npm ou de rede.
+    Confirme que o Node.js está na versão 18.17 ou superior e que o cliente encontra `npx`. Execute `npx -y @tokenlabai/mcp-server` no terminal para mostrar erros de npm ou rede. Uma inicialização stdio bem-sucedida aguarda silenciosamente mensagens MCP; encerre com **Ctrl+C** após a verificação.
+  </Accordion>
+
+  <Accordion title="O servidor está configurado, mas nenhuma ferramenta aparece">
+    Reinicie o cliente e aprove o servidor local. No Claude Code, verifique `claude mcp list` ou `/mcp`; no VS Code, **MCP: List Servers** e **Show Output**; no Cursor, **Settings → Tools & MCP**.
+  </Accordion>
+
+  <Accordion title="O Claude Code mostra Pending approval">
+    Servidores `.mcp.json` do projeto exigem confiança no workspace e aprovação explícita. Inicie o Claude Code de forma interativa no projeto, aceite a confiança e aprove `tokenlab-model-catalog` em `/mcp`. Use `--scope user` para uma configuração privada disponível em todos os projetos.
   </Accordion>
 
   <Accordion title="A lista de modelos está vazia">
@@ -236,6 +310,18 @@ Use ambos quando disponíveis:
 
   <Accordion title="Este servidor pode chamar APIs de inferência pagas do TokenLab?">
     Sim. Defina `TOKENLAB_API_KEY` e, em seguida, use as ferramentas geradas de LLM, mídia, áudio, tarefas, arquivos, embedding, rerank ou tradução. As ferramentas de catálogo e preços permanecem disponíveis sem uma chave.
+  </Accordion>
+
+  <Accordion title="Uma ferramenta autenticada retorna erro de autenticação">
+    Defina `TOKENLAB_API_KEY` no ambiente do servidor MCP, nunca nos argumentos da ferramenta ou no prompt, e reinicie o cliente após a alteração. Troque qualquer chave exposta em arquivo compartilhado, imagem, log ou histórico do shell.
+  </Accordion>
+
+  <Accordion title="O cliente rejeita schemas ou carrega ferramentas demais">
+    Use `TOKENLAB_MCP_TOOL_PROFILE=catalog` para 6 ferramentas de descoberta ou o perfil `core` padrão para 31. Normalmente mantenha `portable`; use `exact` para aninhamento completo e `strict` para objetos fechados com todas as propriedades em `required`.
+  </Accordion>
+
+  <Accordion title="Como fixar ou atualizar a versão do pacote?">
+    Use `@tokenlabai/mcp-server@0.6.17` para fixar a versão atualmente verificada. Para alterar, atualize o argumento do pacote, reinicie o servidor e revise o repositório público antes de adotar uma versão mais recente.
   </Accordion>
 </AccordionGroup>
 
@@ -268,5 +354,14 @@ Use ambos quando disponíveis:
   </Card>
   <Card title="Explorador de Modelos Hospedado" icon="rocket" href="https://tokenlab-model-explorer.vercel.app/widget">
     Abra o explorador de modelos público e o endpoint MCP remoto
+  </Card>
+  <Card title="Guia MCP do Claude Code" icon="terminal" href="https://code.claude.com/docs/en/mcp">
+    Escopos, aprovações, verificações de status e configuração MCP
+  </Card>
+  <Card title="Guia MCP do Cursor" icon="arrow-pointer" href="https://docs.cursor.com/context/model-context-protocol">
+    Locais de configuração, controle de ferramentas e segurança
+  </Card>
+  <Card title="Guia MCP do VS Code" icon="code" href="https://code.visualstudio.com/docs/agent-customization/mcp-servers">
+    Configuração de usuário e workspace, confiança, logs e gerenciamento de servidores
   </Card>
 </CardGroup>

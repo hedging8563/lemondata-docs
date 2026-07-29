@@ -1,11 +1,13 @@
 ---
 title: "TokenLab MCP Server"
-description: "Kết nối các MCP client với các công cụ được tạo từ OpenAPI của TokenLab cho các endpoint AI gốc, phương tiện đa phương thức, tệp tin và các tác vụ bất đồng bộ."
+description: "Kết nối Claude Code, Cursor, VS Code, Codex và các MCP client khác với công cụ mô hình, giá, suy luận, phương tiện, tệp và tác vụ của TokenLab."
 ---
 
 [TokenLab MCP server](https://github.com/hedging8563/tokenlab-mcp-server) tạo ra các công cụ MCP từ hợp đồng OpenAPI công khai của TokenLab. Các tác nhân (agent) tương thích với MCP có thể khám phá các mô hình và giá cả, gọi các endpoint LLM gốc và tương thích với OpenAI, tạo phương tiện đa phương thức, tải lên tệp tin và quản lý các tác vụ bất đồng bộ.
 
 Hãy sử dụng nó khi một tác nhân cần hợp đồng API TokenLab hiện tại thay vì danh sách công cụ được duy trì thủ công. Cấu hình `core` mặc định cung cấp 29 công cụ endpoint được tạo sẵn cộng với hai công cụ khám phá tổng hợp. Cấu hình `full` cung cấp 78 công cụ endpoint được tạo sẵn cộng với hai công cụ tổng hợp tương tự.
+
+Trang này hướng dẫn thêm TokenLab làm máy chủ công cụ trong Claude Code, Cursor, VS Code, Codex, Claude Desktop, Cline, Windsurf hoặc MCP client khác. Để gọi TokenLab trực tiếp từ mã ứng dụng, hãy bắt đầu với [hướng dẫn nhanh API](/vi/quickstart).
 
 <Note>
 Các công cụ danh mục và giá cả công khai không yêu cầu khóa API TokenLab. Hãy thiết lập `TOKENLAB_API_KEY` cho các hoạt động suy luận (inference), phương tiện, âm thanh, tệp tin, tác vụ, embedding, rerank và dịch thuật được xác thực. Không bao giờ đặt khóa API vào các đối số của công cụ.
@@ -23,42 +25,139 @@ Các công cụ danh mục và giá cả công khai không yêu cầu khóa API 
 - Tóm tắt tác vụ bất đồng bộ đã chuẩn hóa cho các hoạt động tạo hình ảnh, video, âm nhạc, 3D và thế giới.
 - Đồng bộ hóa hợp đồng hàng ngày giúp lấy tài liệu OpenAPI công khai, tạo lại lược đồ công cụ, chạy các bài kiểm tra endpoint và tệp tin, và chỉ cập nhật `main` khi mọi kiểm tra đều vượt qua.
 
-## Cài đặt từ GitHub
+## Bắt đầu nhanh
 
-Sao chép kho lưu trữ công khai và cài đặt các phụ thuộc:
+Cách bắt đầu nhanh và an toàn nhất là chỉ bật sáu công cụ danh mục công khai. Bạn không cần khóa API TokenLab và có thể bật các công cụ cần xác thực sau.
 
-```bash
-git clone https://github.com/hedging8563/tokenlab-mcp-server.git
-cd tokenlab-mcp-server
-npm install
-npm test
-```
+<CardGroup cols={2}>
+  <Card title="Cài đặt trong Cursor" icon="arrow-pointer" href="https://cursor.com/en/install-mcp?name=tokenlab-model-catalog&config=eyJ0eXBlIjoic3RkaW8iLCJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkB0b2tlbmxhYmFpL21jcC1zZXJ2ZXIiXSwiZW52Ijp7IlRPS0VOTEFCX01DUF9UT09MX1BST0ZJTEUiOiJjYXRhbG9nIn19">
+    Thêm cấu hình `catalog` công khai vào Cursor bằng một lần nhấp
+  </Card>
+  <Card title="Cài đặt trong VS Code" icon="code" href="https://vscode.dev/redirect/mcp/install?name=tokenlab-model-catalog&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40tokenlabai%2Fmcp-server%22%5D%2C%22env%22%3A%7B%22TOKENLAB_MCP_TOOL_PROFILE%22%3A%22catalog%22%7D%7D">
+    Thêm cấu hình `catalog` công khai vào cài đặt người dùng VS Code
+  </Card>
+</CardGroup>
 
-Khởi động server qua stdio:
+<Steps>
+  <Step title="Kiểm tra yêu cầu">
+    Cài đặt Node.js 18.17 trở lên và xác nhận rằng `npx` khả dụng.
 
-```bash
-npm start
-```
+    ```bash
+    node --version
+    npx --version
+    ```
 
-Biến môi trường tùy chọn `TOKENLAB_API_BASE` mặc định là `https://api.tokenlab.sh`. Hãy thiết lập `TOKENLAB_MCP_TOOL_PROFILE=full` khi client cần hiển thị API nhà phát triển rộng hơn thay vì cấu hình `core` mặc định.
+    Bạn không cần cài đặt gói MCP toàn hệ thống hoặc sao chép kho mã nguồn.
+  </Step>
 
-Các cấu hình `core` và `full` mặc định công bố lược đồ công cụ `portable` có giới hạn về kích thước và độ sâu, trong khi máy chủ vẫn xác thực mọi lệnh gọi theo hợp đồng OpenAPI đầy đủ. Dùng `TOKENLAB_MCP_SCHEMA_MODE=exact` cho lược đồ lồng nhau đầy đủ hoặc `TOKENLAB_MCP_SCHEMA_MODE=strict` cho provider yêu cầu đối tượng đóng và mọi thuộc tính đều nằm trong `required`; chế độ strict biểu diễn các giá trị cấp cao phức tạp dưới dạng chuỗi JSON.
+  <Step title="Chọn mức truy cập">
+    | Mục tiêu | Khóa API | Cấu hình |
+    |---|---|---|
+    | Duyệt mô hình, chi tiết và giá | Không cần | `catalog` (6 công cụ) |
+    | Dùng các thao tác suy luận, phương tiện, tệp và tác vụ phổ biến | Cần cho lệnh gọi trả phí | `core` (31 công cụ, mặc định) |
+    | Hiển thị mọi thao tác dành cho nhà phát triển được cho phép | Cần cho lệnh gọi trả phí | `full` (80 công cụ) |
 
-## Cấu hình cho mọi client MCP stdio
+    Chỉ tạo khóa tại [Dashboard → API Keys](https://tokenlab.sh/dashboard/api) khi bạn cần lệnh gọi API có xác thực. Giữ khóa trong môi trường bí mật của client và không dán khóa vào prompt hoặc đối số công cụ MCP.
+  </Step>
 
-Sử dụng cùng một bộ giá trị trong mọi client hỗ trợ server MCP stdio cục bộ. Client có thể hiển thị chúng dưới dạng trường biểu mẫu hoặc lưu trong JSON, TOML hay YAML; ý nghĩa của các trường không thay đổi. Hãy thêm từng đối số thành một mục riêng.
+  <Step title="Cấu hình client">
+    Các ví dụ công khai chọn rõ `catalog` để mọi công cụ được hiển thị đều hoạt động mà không cần khóa.
 
-| Trường | Giá trị | Ghi chú |
-|---|---|---|
-| Tên server | `tokenlab-model-catalog` | Có thể dùng bất kỳ tên duy nhất nào. |
-| Giao thức truyền | `stdio` | TokenLab MCP chạy dưới dạng tiến trình con cục bộ. |
-| Lệnh khởi động | `npx` | Khởi động gói npm đã phát hành. |
-| Đối số | `-y`, sau đó `@tokenlabai/mcp-server` | Dùng `@tokenlabai/mcp-server@0.6.17` để ghim bản phát hành hiện đã được xác minh. |
-| Biến môi trường | `TOKENLAB_API_KEY` = `<TOKENLAB_API_KEY>` | Không bắt buộc cho danh mục công khai nhưng bắt buộc cho công cụ suy luận và đa phương tiện. |
-| Chuyển tiếp biến môi trường | Để trống hoặc nhập `TOKENLAB_API_KEY` | Chỉ dùng tên biến khi khóa đã được xuất trong môi trường cục bộ của client. Không cấu hình cùng một khóa ở cả hai nơi. |
-| Thư mục làm việc | Để trống | `npx` không yêu cầu thư mục dự án cho gói này. |
+    <Tabs>
+      <Tab title="Claude Code">
+        Thêm TokenLab ở phạm vi người dùng để sử dụng trong mọi dự án.
 
-Sao chép cấu hình đầy đủ sau vào các client chấp nhận đối tượng JSON `mcpServers`:
+        ```bash
+        claude mcp add --env TOKENLAB_MCP_TOOL_PROFILE=catalog --scope user tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+
+        Để bật cấu hình `core` mặc định, hãy thêm khóa API thay thế.
+
+        ```bash
+        claude mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key --scope user tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+
+        Dùng `--scope local` cho riêng dự án hiện tại hoặc `--scope project` để tạo `.mcp.json` dùng chung. Không đưa khóa thật vào cấu hình dự án.
+      </Tab>
+
+      <Tab title="Cursor">
+        Dùng cài đặt một lần nhấp ở trên, hoặc lưu cấu hình vào `~/.cursor/mcp.json` cho mọi dự án hay `.cursor/mcp.json` cho một dự án.
+
+        ```json
+        {
+          "mcpServers": {
+            "tokenlab-model-catalog": {
+              "command": "npx",
+              "args": ["-y", "@tokenlabai/mcp-server"],
+              "env": { "TOKENLAB_MCP_TOOL_PROFILE": "catalog" }
+            }
+          }
+        }
+        ```
+      </Tab>
+
+      <Tab title="VS Code">
+        Dùng cài đặt một lần nhấp, chạy **MCP: Add Server**, hoặc lưu tệp dưới tên `.vscode/mcp.json`.
+
+        ```json
+        {
+          "servers": {
+            "tokenlab-model-catalog": {
+              "type": "stdio",
+              "command": "npx",
+              "args": ["-y", "@tokenlabai/mcp-server"],
+              "env": { "TOKENLAB_MCP_TOOL_PROFILE": "catalog" }
+            }
+          }
+        }
+        ```
+
+        Để dùng trong mọi dự án, chạy **MCP: Open User Configuration** và thêm cùng đối tượng máy chủ.
+      </Tab>
+
+      <Tab title="Codex">
+        ```bash
+        # Danh mục công khai
+        codex mcp add --env TOKENLAB_MCP_TOOL_PROFILE=catalog tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+
+        # Cấu hình core mặc định với khóa API
+        codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+        ```
+      </Tab>
+
+      <Tab title="Claude Desktop">
+        Trong `claude_desktop_config.json`, thêm lệnh `npx` và các đối số `-y`, `@tokenlabai/mcp-server` vào đối tượng `mcpServers` chuẩn. Nếu chỉ cần công cụ công khai, đặt `TOKENLAB_MCP_TOOL_PROFILE=catalog`.
+      </Tab>
+
+      <Tab title="Client khác">
+        Cline CLI có thể cài trực tiếp máy chủ stdio đã phát hành.
+
+        ```bash
+        cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
+        ```
+
+        Với Windsurf, lưu cấu hình `mcpServers` chuẩn tại `~/.codeium/windsurf/mcp_config.json`. Các client stdio khác dùng cùng lệnh và đối số, không cần thư mục làm việc.
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Khởi động lại và xác minh">
+    Khởi động lại hoặc tải lại MCP client, phê duyệt máy chủ cục bộ khi được hỏi và xác nhận `tokenlab-model-catalog` đã kết nối.
+
+    ```bash
+    claude mcp list
+    codex mcp list
+    ```
+
+    Sau đó yêu cầu tác nhân gọi `list_models`. Danh sách mô hình không rỗng xác nhận máy chủ đã khởi động, MCP đã khám phá công cụ và đã truy cập danh mục công khai TokenLab. Kiểm tra này không cần khóa API.
+  </Step>
+</Steps>
+
+## Tham chiếu cấu hình
+
+Trong mọi client stdio cục bộ, dùng tên `tokenlab-model-catalog`, lệnh `npx`, hai đối số riêng `-y` và `@tokenlabai/mcp-server`, đồng thời để trống thư mục làm việc. Dùng `@tokenlabai/mcp-server@0.6.17` để ghim bản phát hành hiện đã được xác minh.
+
+Cấu hình chuẩn cho công cụ có xác thực:
 
 ```json
 {
@@ -67,77 +166,44 @@ Sao chép cấu hình đầy đủ sau vào các client chấp nhận đối tư
       "command": "npx",
       "args": ["-y", "@tokenlabai/mcp-server"],
       "env": {
-        "TOKENLAB_API_KEY": "<TOKENLAB_API_KEY>"
+        "TOKENLAB_API_KEY": "<TOKENLAB_API_KEY>",
+        "TOKENLAB_MCP_TOOL_PROFILE": "core"
       }
     }
   }
 }
 ```
 
-Xóa khối `env` nếu bạn chỉ cần các công cụ mô hình và giá công khai. Nếu client yêu cầu một đối tượng server thay vì lớp bọc `mcpServers`, chỉ sao chép đối tượng bên trong có `command`, `args` và `env`.
+VS Code dùng đối tượng `servers` ở cấp cao nhất. Nếu client yêu cầu một đối tượng máy chủ duy nhất, chỉ sao chép đối tượng bên trong chứa `command`, `args` và `env`.
+
+| Biến môi trường | Mặc định | Mục đích |
+|---|---|---|
+| `TOKENLAB_API_BASE` | `https://api.tokenlab.sh` | Thay URL cơ sở của API, không thêm dấu gạch chéo cuối. |
+| `TOKENLAB_API_KEY` | Chưa đặt | Cần cho lệnh gọi suy luận, phương tiện, tệp, tác vụ, embedding, rerank và dịch có xác thực. |
+| `TOKENLAB_MCP_TOOL_PROFILE` | `core` | Chọn `catalog`, `core` hoặc `full`. |
+| `TOKENLAB_MCP_SCHEMA_MODE` | Mặc định của cấu hình | Chọn `portable`, `exact` hoặc `strict`; thông thường giữ `portable`. |
+| `TOKENLAB_REQUEST_TIMEOUT_MS` | `120000` | Thời gian chờ yêu cầu API theo mili giây. |
+| `TOKENLAB_MCP_MAX_FILE_BYTES` | `104857600` | Kích thước tối đa theo byte của mỗi tệp cục bộ tải lên. |
+| `TOKENLAB_MCP_INLINE_BYTES` | `2097152` | Kích thước tối đa của kết quả nhị phân hoặc JSON trả về trực tiếp. |
+| `TOKENLAB_ARTIFACT_DIR` | Thư mục tạm của hệ điều hành | Vị trí ghi các tạo tác phản hồi lớn. |
 
 <Warning>
-Không đăng ảnh chụp màn hình, nhật ký hoặc tệp cấu hình có chứa khóa API thật. Hãy dùng giá trị giữ chỗ trong ví dụ và thu hồi ngay mọi khóa đã bị lộ.
+Không công khai ảnh chụp màn hình, log, lịch sử shell hoặc tệp cấu hình chứa khóa API thật. Ưu tiên đầu vào bí mật hoặc biến môi trường của client, dùng giá trị giữ chỗ trong ví dụ chia sẻ và thay mọi khóa đã lộ.
 </Warning>
 
-## Cài đặt trong Codex
+## Cài đặt từ mã nguồn
 
-Thêm server danh mục công khai vào cấu hình Codex của bạn:
-
-```bash
-codex mcp add tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
-```
-
-Bắt đầu một phiên Codex mới sau khi thêm server. Các công cụ danh mục công khai không yêu cầu `TOKENLAB_API_KEY`.
-
-Để kích hoạt các công cụ suy luận, hãy bao gồm khóa API TokenLab của bạn khi thêm server:
+Chỉ dùng bản sao mã nguồn khi kiểm tra hoặc phát triển máy chủ MCP. Cấu hình client thông thường nên dùng gói npm đã phát hành ở trên.
 
 ```bash
-codex mcp add --env TOKENLAB_API_KEY=your-tokenlab-api-key tokenlab-model-catalog -- npx -y @tokenlabai/mcp-server
+git clone https://github.com/hedging8563/tokenlab-mcp-server.git
+cd tokenlab-mcp-server
+npm install
+npm test
+npm start
 ```
 
-## Cài đặt trong Cline
-
-Cài đặt server stdio đã xuất bản bằng Cline CLI:
-
-```bash
-cline mcp add tokenlab --yes -- npx -y @tokenlabai/mcp-server
-```
-
-Lệnh này đã được xác minh với Cline CLI và hoàn tất mà không có cảnh báo thiết lập. Các công cụ danh mục công khai hoạt động ngay lập tức; hãy thiết lập `TOKENLAB_API_KEY` trong môi trường Cline của bạn khi bạn cần các công cụ suy luận.
-
-## Cấu hình Claude Desktop
-
-Thêm gói npm đã xuất bản vào cấu hình MCP client của bạn:
-
-```json
-{
-  "mcpServers": {
-    "tokenlab-model-catalog": {
-      "command": "npx",
-      "args": ["-y", "@tokenlabai/mcp-server"]
-    }
-  }
-}
-```
-
-Khởi động lại MCP client sau khi lưu cấu hình.
-
-## Cursor, Windsurf và các MCP Client khác
-
-Sử dụng cùng lệnh và đối số trong bất kỳ client nào hỗ trợ MCP server stdio:
-
-```json
-{
-  "command": "npx",
-  "args": ["-y", "@tokenlabai/mcp-server"],
-  "env": {
-    "TOKENLAB_API_BASE": "https://api.tokenlab.sh"
-  }
-}
-```
-
-Nếu client của bạn lưu trữ các server có tên, hãy sử dụng `tokenlab-model-catalog` làm tên server.
+`core` và `full` mặc định cung cấp schema `portable` có giới hạn kích thước và độ sâu, trong khi máy chủ xác thực mỗi lệnh gọi bằng định nghĩa OpenAPI đầy đủ. Dùng `exact` cho schema lồng nhau đầy đủ hoặc `strict` khi nhà cung cấp mô hình yêu cầu đối tượng đóng và mọi thuộc tính nằm trong `required`.
 
 ## Các cấu hình công cụ được tạo sẵn
 
@@ -223,7 +289,15 @@ Sử dụng cả hai khi có sẵn:
 
 <AccordionGroup>
   <Accordion title="Client không thể khởi động server">
-    Xác nhận Node.js từ phiên bản 18.17 trở lên, sau đó chạy `npx -y @tokenlabai/mcp-server` một lần trong terminal để hiển thị các lỗi npm hoặc mạng.
+    Xác nhận Node.js từ phiên bản 18.17 trở lên và client tìm thấy `npx`. Chạy `npx -y @tokenlabai/mcp-server` trong terminal để hiển thị lỗi npm hoặc mạng. Khi stdio khởi động thành công, tiến trình sẽ im lặng chờ thông điệp MCP; nhấn **Ctrl+C** sau khi xác minh.
+  </Accordion>
+
+  <Accordion title="Server đã cấu hình nhưng không thấy công cụ">
+    Khởi động lại client và phê duyệt máy chủ cục bộ. Trong Claude Code, kiểm tra `claude mcp list` hoặc `/mcp`; trong VS Code, dùng **MCP: List Servers** rồi **Show Output**; trong Cursor, mở **Settings → Tools & MCP**.
+  </Accordion>
+
+  <Accordion title="Claude Code hiển thị Pending approval">
+    Server `.mcp.json` theo dự án cần sự tin cậy của workspace và phê duyệt rõ ràng. Khởi động Claude Code tương tác trong dự án, chấp nhận tin cậy rồi phê duyệt `tokenlab-model-catalog` trong `/mcp`. Dùng `--scope user` cho cấu hình riêng tư khả dụng trong mọi dự án.
   </Accordion>
 
   <Accordion title="Danh sách mô hình trống">
@@ -236,6 +310,18 @@ Sử dụng cả hai khi có sẵn:
 
   <Accordion title="Server này có thể gọi các API suy luận trả phí của TokenLab không?">
     Có. Thiết lập `TOKENLAB_API_KEY`, sau đó sử dụng các công cụ LLM, phương tiện, âm thanh, tác vụ, tệp tin, embedding, rerank hoặc dịch thuật được tạo sẵn. Các công cụ danh mục và giá cả vẫn khả dụng mà không cần khóa.
+  </Accordion>
+
+  <Accordion title="Công cụ có xác thực trả về lỗi xác thực">
+    Đặt `TOKENLAB_API_KEY` trong môi trường của máy chủ MCP, không đặt trong đối số công cụ hoặc prompt, rồi khởi động lại client. Thay mọi khóa đã xuất hiện trong tệp chia sẻ, ảnh, log hoặc lịch sử shell.
+  </Accordion>
+
+  <Accordion title="Client từ chối schema hoặc tải quá nhiều công cụ">
+    Dùng `TOKENLAB_MCP_TOOL_PROFILE=catalog` cho 6 công cụ khám phá hoặc cấu hình `core` mặc định cho 31 công cụ. Thông thường giữ `portable`; dùng `exact` cho cấu trúc lồng đầy đủ và `strict` cho đối tượng đóng với mọi thuộc tính trong `required`.
+  </Accordion>
+
+  <Accordion title="Làm thế nào để ghim hoặc cập nhật phiên bản gói?">
+    Dùng `@tokenlabai/mcp-server@0.6.17` để ghim bản phát hành hiện đã xác minh. Khi đổi phiên bản, cập nhật đối số gói, khởi động lại máy chủ và xem kho công khai trước khi dùng bản mới hơn.
   </Accordion>
 </AccordionGroup>
 
@@ -268,5 +354,14 @@ Sử dụng cả hai khi có sẵn:
   </Card>
   <Card title="Trình khám phá mô hình được lưu trữ" icon="rocket" href="https://tokenlab-model-explorer.vercel.app/widget">
     Mở trình khám phá mô hình công khai và endpoint MCP từ xa
+  </Card>
+  <Card title="Hướng dẫn MCP cho Claude Code" icon="terminal" href="https://code.claude.com/docs/en/mcp">
+    Phạm vi, phê duyệt, kiểm tra trạng thái và cấu hình MCP
+  </Card>
+  <Card title="Hướng dẫn MCP cho Cursor" icon="arrow-pointer" href="https://docs.cursor.com/context/model-context-protocol">
+    Vị trí cấu hình, điều khiển công cụ và hướng dẫn bảo mật
+  </Card>
+  <Card title="Hướng dẫn MCP cho VS Code" icon="code" href="https://code.visualstudio.com/docs/agent-customization/mcp-servers">
+    Cấu hình người dùng và workspace, tin cậy, log và quản lý máy chủ
   </Card>
 </CardGroup>
