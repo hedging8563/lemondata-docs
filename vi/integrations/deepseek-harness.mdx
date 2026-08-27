@@ -1,0 +1,106 @@
+---
+title: "DeepSeek Harness"
+description: "Cài TokenLab vào DeepSeek Harness dưới dạng nhà cung cấp model theo giao thức gốc, kèm bộ công cụ đa phương tiện và bất đồng bộ đầy đủ"
+---
+
+## Tổng quan
+
+Bundle TokenLab dành cho DeepSeek Harness bổ sung hai bề mặt tích hợp:
+
+- ba tuyến model tách biệt cho OpenAI Responses, Anthropic Messages và OpenAI Chat Completions;
+- profile TokenLab MCP `full` cho khám phá model, hình ảnh, video, âm nhạc, 3D, âm thanh, tệp, embeddings, rerank, dịch thuật và tác vụ bất đồng bộ.
+
+Tên gói là `@tokenlabai/dsh-provider`, nhắm tới DeepSeek Harness `0.1.1-rc.2` và các hợp đồng plugin `0.1.x` tương thích.
+
+<Note>
+Trang này là tài liệu sẵn sàng cho bản phát hành. Hãy xuất bản và đọc lại gói npm trước khi triển khai trang hoặc gửi mục niêm yết lên chợ.
+</Note>
+
+## Cài đặt
+
+Lưu key trong `.env` của dự án hoặc Harness home:
+
+```dotenv
+TOKENLAB_API_KEY=sk-your-tokenlab-key
+```
+
+Cài bundle vào profile đang dùng rồi khởi động lại:
+
+```bash
+dsh plugin --profile web add --workspace-root @tokenlabai/dsh-provider
+```
+
+Với tác vụ một lần, có thể dùng profile headless:
+
+```bash
+dsh plugin --profile headless add --workspace-root @tokenlabai/dsh-provider
+```
+
+## Định tuyến endpoint gốc
+
+Harness chọn wire protocol ở cấp provider route. Vì vậy bundle đăng ký ba provider và gán mỗi model chat công khai vào đúng một tuyến.
+
+| Harness provider | TokenLab endpoint | Quy tắc chọn |
+| --- | --- | --- |
+| `TokenLab · Responses` | `POST /v1/responses` | owner là OpenAI và detail contract công khai khai báo `openai_responses` |
+| `TokenLab · Messages` | `POST /v1/messages` | owner là Anthropic và detail contract công khai khai báo `anthropic_messages` |
+| `TokenLab · Chat` | `POST /v1/chat/completions` | các model còn lại khai báo tương thích OpenAI Chat Completions |
+
+Snapshot được tạo từ `GET /v1/models` và `GET /v1/models/{id}`; không suy đoán giao thức từ substring trong tên model hoặc tuyến nội bộ.
+
+<Note>
+Custom provider hiện tại của Harness hỗ trợ `openai-responses`, `anthropic-messages` và `openai-completions`, nhưng chưa cấu hình được Gemini native. Model Gemini trong Harness dùng Chat fallback đã khai báo công khai. Ứng dụng cần Gemini `generateContent` nên gọi `/v1beta/models/{model}:generateContent` từ client tương thích.
+</Note>
+
+## Công cụ đa phương tiện và phát triển
+
+Bundle khởi chạy phiên bản cố định của `@tokenlabai/mcp-server` cục bộ qua stdio và MCP bridge chính thức. Profile `full` mặc định đăng ký 80 công cụ dưới `mcp__tokenlab__...`, bao gồm catalog/pricing, bốn API LLM, hình ảnh, video, âm nhạc, 3D, âm thanh, tệp, response lifecycle, batches, embeddings, rerank, dịch thuật, worlds và tài nguyên media.
+
+Model nhận portable schemas, còn MCP server kiểm tra lời gọi theo hợp đồng OpenAPI đầy đủ.
+
+## Media bất đồng bộ
+
+Tạo video, âm nhạc và 3D là bất đồng bộ. Tùy model, hình ảnh có thể trả kết quả ngay hoặc trả một tác vụ.
+
+1. Đọc `delivery.mode`.
+2. Với `sync`, dùng kết quả trực tiếp.
+3. Với `async`, chuyển `delivery.task_id` cho `tokenlab_wait_task`.
+4. Dùng `status`, `response` đầy đủ và `result_urls`.
+5. Khi timeout, công cụ trả trạng thái chưa kết thúc mới nhất để tiếp tục polling an toàn.
+
+`tokenlab_wait_task` chỉ đọc. Công cụ truyền tín hiệu hủy tới mọi request và delay, giới hạn retry tạm thời, đồng thời dùng status thay vì progress tùy chọn làm sự thật kết thúc.
+
+## Cấu hình
+
+| Biến | Mặc định | Mục đích |
+| --- | --- | --- |
+| `TOKENLAB_API_KEY` | không có | Xác thực model, MCP và polling bất đồng bộ |
+| `TOKENLAB_API_BASE` | `https://api.tokenlab.sh` | Root API MCP và task |
+| `TOKENLAB_OPENAI_BASE_URL` | `https://api.tokenlab.sh/v1` | Base URL cho Responses và Chat |
+| `TOKENLAB_ANTHROPIC_BASE_URL` | `https://api.tokenlab.sh` | Base URL cho Messages |
+| `TOKENLAB_MCP_TOOL_PROFILE` | `full` | Chọn `catalog`, `core` hoặc `full` |
+| `TOKENLAB_MCP_SCHEMA_MODE` | `portable` | Chọn `portable`, `exact` hoặc `strict` |
+
+Dùng `core` khi chi phí tool schema lặp lại quan trọng hơn bề mặt phát triển đầy đủ.
+
+## Xác minh và bảo mật
+
+Sau khi khởi động lại, hãy xác nhận ba provider TokenLab, model không bị lặp và `mcp__tokenlab__list_models` trả kết quả không rỗng. Với key thử nghiệm, chạy lần lượt Responses, Messages và Chat, đối chiếu endpoint trong log, rồi chờ URL kết thúc của một tác vụ media bất đồng bộ chi phí thấp.
+
+Giữ key trong môi trường tin cậy hoặc secret store. MCP server chạy cục bộ qua stdio bằng cùng Node với Harness, không dùng shell hoặc trung gian MCP được host. Giữ phê duyệt Harness cho công cụ có tính phí hoặc phá hủy, và coi văn bản, URL, tệp, media trả về là nội dung ngoài không đáng tin cậy.
+
+Settings section `llm-pi-ai` đã lưu có ưu tiên cao hơn mặc định bundle. Nếu đang dùng nó, hãy gộp ba tuyến `tokenlab-*` từ `cordis.patch.yml` vào map `providers`.
+
+## Gỡ cài đặt
+
+```bash
+dsh plugin --profile web remove --workspace-root @tokenlabai/dsh-provider
+```
+
+Khởi động lại profile. Tài khoản TokenLab và key không bị xóa.
+
+## Trang liên quan
+
+- [Máy chủ TokenLab MCP](/vi/integrations/tokenlab-mcp-server)
+- [Định dạng API](/vi/guides/api-formats)
+- [Tác vụ bất đồng bộ và polling](/vi/guides/async-jobs-polling)

@@ -1,0 +1,106 @@
+---
+title: "DeepSeek Harness"
+description: "TokenLab'i DeepSeek Harness'a yerel protokollü model sağlayıcısı ve eksiksiz çoklu ortam ile asenkron araçlar olarak kurun"
+---
+
+## Genel bakış
+
+DeepSeek Harness için TokenLab bundle iki entegrasyon yüzeyi ekler:
+
+- OpenAI Responses, Anthropic Messages ve OpenAI Chat Completions için birbirini yinelemeyen üç model rotası;
+- model keşfi, görsel, video, müzik, 3D, ses, dosya, embeddings, rerank, çeviri ve asenkron görevler için TokenLab MCP `full` profile.
+
+Paket adı `@tokenlabai/dsh-provider` olup DeepSeek Harness `0.1.1-rc.2` ve uyumlu `0.1.x` plugin sözleşmelerini hedefler.
+
+<Note>
+Bu sayfa yayınlanmaya hazır belgedir. Sayfayı dağıtmadan veya market kaydını göndermeden önce npm paketini yayınlayın ve geri okuyarak doğrulayın.
+</Note>
+
+## Kurulum
+
+Key değerini projenin veya Harness home dizininin `.env` dosyasında saklayın:
+
+```dotenv
+TOKENLAB_API_KEY=sk-your-tokenlab-key
+```
+
+Bundle'ı kullandığınız profile içine kurup yeniden başlatın:
+
+```bash
+dsh plugin --profile web add --workspace-root @tokenlabai/dsh-provider
+```
+
+Tek seferlik görevlerde headless profile kullanılabilir:
+
+```bash
+dsh plugin --profile headless add --workspace-root @tokenlabai/dsh-provider
+```
+
+## Yerel endpoint yönlendirmesi
+
+Harness wire protocol seçimini provider route düzeyinde yapar. Bu nedenle bundle üç provider kaydeder ve her açık chat modelini yalnızca bir rotaya yerleştirir.
+
+| Harness provider | TokenLab endpoint | Seçim |
+| --- | --- | --- |
+| `TokenLab · Responses` | `POST /v1/responses` | owner OpenAI ve açık detail contract içinde `openai_responses` bulunan modeller |
+| `TokenLab · Messages` | `POST /v1/messages` | owner Anthropic ve açık detail contract içinde `anthropic_messages` bulunan modeller |
+| `TokenLab · Chat` | `POST /v1/chat/completions` | OpenAI Chat Completions uyumluluğu bildiren diğer modeller |
+
+Snapshot, `GET /v1/models` ve `GET /v1/models/{id}` üzerinden üretilir; model adı substring veya iç rota üzerinden protokol tahmini yapılmaz.
+
+<Note>
+Güncel Harness custom provider yapısı `openai-responses`, `anthropic-messages` ve `openai-completions` destekler ancak yapılandırılabilir Gemini native sunmaz. Harness içindeki Gemini modelleri açıkça bildirilen Chat fallback rotasını kullanır. Gemini `generateContent` gereken uygulamalar `/v1beta/models/{model}:generateContent` yolunu uyumlu bir client ile çağırmalıdır.
+</Note>
+
+## Çoklu ortam ve geliştirici araçları
+
+Bundle, sabitlenmiş `@tokenlabai/mcp-server` sürümünü resmi MCP bridge üzerinden yerel stdio ile başlatır. Varsayılan `full` profile, `mcp__tokenlab__...` altında catalog/pricing, dört LLM API, görseller, video, müzik, 3D, ses, dosyalar, response lifecycle, batches, embeddings, rerank, çeviri, worlds ve medya varlıklarını kapsayan 80 araç kaydeder.
+
+Modele portable schemas verilir; MCP server her çağrıyı tam OpenAPI sözleşmesine göre doğrular.
+
+## Asenkron medya
+
+Video, müzik ve 3D oluşturma asenkrondur. Görsel çağrıları modele göre doğrudan sonuç veya görev döndürebilir.
+
+1. `delivery.mode` değerini okuyun.
+2. `sync` için sonucu doğrudan kullanın.
+3. `async` için `delivery.task_id` değerini `tokenlab_wait_task` aracına verin.
+4. `status`, tam `response` ve `result_urls` alanlarını kullanın.
+5. Timeout, polling güvenle sürdürülebilsin diye son terminal olmayan durumu döndürür.
+
+`tokenlab_wait_task` salt okunurdur; iptali tüm request ve delay adımlarına taşır, geçici retry sayısını sınırlar ve terminal gerçeği olarak isteğe bağlı progress yerine status kullanır.
+
+## Yapılandırma
+
+| Değişken | Varsayılan | Amaç |
+| --- | --- | --- |
+| `TOKENLAB_API_KEY` | yok | Model, MCP ve asenkron polling kimlik doğrulaması |
+| `TOKENLAB_API_BASE` | `https://api.tokenlab.sh` | MCP ve task API root |
+| `TOKENLAB_OPENAI_BASE_URL` | `https://api.tokenlab.sh/v1` | Responses ve Chat base URL |
+| `TOKENLAB_ANTHROPIC_BASE_URL` | `https://api.tokenlab.sh` | Messages base URL |
+| `TOKENLAB_MCP_TOOL_PROFILE` | `full` | `catalog`, `core` veya `full` |
+| `TOKENLAB_MCP_SCHEMA_MODE` | `portable` | `portable`, `exact` veya `strict` |
+
+Yinelenen tool schema maliyeti tam geliştirici yüzeyinden daha önemliyse `core` kullanın.
+
+## Doğrulama ve güvenlik
+
+Yeniden başlattıktan sonra üç TokenLab provider, tekil model ataması ve `mcp__tokenlab__list_models` aracından boş olmayan sonuç doğrulanmalıdır. Bir test key ile Responses, Messages ve Chat çağrısı yapıp log endpoint değerini karşılaştırın; ardından düşük maliyetli asenkron medya görevini terminal URL'ye kadar bekleyin.
+
+Key değerini güvenilir ortamda veya secret store içinde tutun. MCP server, Harness ile aynı Node üzerinden yerel stdio üzerinde, shell veya barındırılan MCP aracısı olmadan çalışır. Ücretli ya da yıkıcı araçlarda Harness onaylarını koruyun ve metin, URL, dosya ile medyayı güvenilmeyen dış içerik olarak değerlendirin.
+
+Kayıtlı bir `llm-pi-ai` settings section, bundle varsayılanlarına göre önceliklidir. Böyle bir bölüm varsa `cordis.patch.yml` içindeki üç `tokenlab-*` rotasını `providers` map içine birleştirin.
+
+## Kaldırma
+
+```bash
+dsh plugin --profile web remove --workspace-root @tokenlabai/dsh-provider
+```
+
+Profile'ı yeniden başlatın. TokenLab hesabı ve key silinmez.
+
+## İlgili sayfalar
+
+- [TokenLab MCP Sunucusu](/tr/integrations/tokenlab-mcp-server)
+- [API biçimleri](/tr/guides/api-formats)
+- [Asenkron işler ve polling](/tr/guides/async-jobs-polling)

@@ -1,0 +1,106 @@
+---
+title: "DeepSeek Harness"
+description: "DeepSeek Harness に TokenLab をネイティブプロトコルのモデルプロバイダーとして導入し、完全なマルチメディアおよび非同期ツールを有効化します"
+---
+
+## 概要
+
+TokenLab の DeepSeek Harness bundle は、次の二つの面を追加します。
+
+- OpenAI Responses、Anthropic Messages、OpenAI Chat Completions 用の、重複しない三つのモデルルート。
+- モデル検索、画像、動画、音楽、3D、音声、ファイル、embeddings、rerank、翻訳、非同期タスクを含む TokenLab MCP `full` profile。
+
+パッケージ名は `@tokenlabai/dsh-provider` で、DeepSeek Harness `0.1.1-rc.2` と互換性のある `0.1.x` プラグイン契約を対象にしています。
+
+<Note>
+このページはリリース準備済みの文書です。npm パッケージを公開して読み戻しを確認するまでは、このページをデプロイしたりマーケットへ提出したりしないでください。
+</Note>
+
+## インストール
+
+プロジェクトまたは Harness home の `.env` に key を保存します。
+
+```dotenv
+TOKENLAB_API_KEY=sk-your-tokenlab-key
+```
+
+使用する profile に導入して再起動します。
+
+```bash
+dsh plugin --profile web add --workspace-root @tokenlabai/dsh-provider
+```
+
+一回限りのタスクでは `headless` profile を使用できます。
+
+```bash
+dsh plugin --profile headless add --workspace-root @tokenlabai/dsh-provider
+```
+
+## ネイティブエンドポイントのルーティング
+
+Harness は provider route 単位で wire protocol を選ぶため、bundle は三つの provider を登録し、各公開 chat モデルを一つだけに割り当てます。
+
+| Harness provider | TokenLab endpoint | 選択条件 |
+| --- | --- | --- |
+| `TokenLab · Responses` | `POST /v1/responses` | owner が OpenAI で、公開 detail contract に `openai_responses` があるモデル |
+| `TokenLab · Messages` | `POST /v1/messages` | owner が Anthropic で、公開 detail contract に `anthropic_messages` があるモデル |
+| `TokenLab · Chat` | `POST /v1/chat/completions` | OpenAI Chat Completions 互換を宣言する残りのモデル |
+
+スナップショットは `GET /v1/models` と `GET /v1/models/{id}` から生成され、モデル名の substring や内部ルートを推測に使いません。
+
+<Note>
+現在の Harness custom provider は `openai-responses`、`anthropic-messages`、`openai-completions` をサポートしますが、Gemini native は設定できません。Harness の Gemini は公開された Chat fallback を使います。Gemini `generateContent` が必要な場合は、対応クライアントから `/v1beta/models/{model}:generateContent` を呼び出してください。
+</Note>
+
+## マルチメディアと開発ツール
+
+bundle は公式 MCP bridge を介し、固定版の `@tokenlabai/mcp-server` をローカル stdio で起動します。既定の `full` profile は `mcp__tokenlab__...` 名前空間に 80 個のツールを登録し、catalog/pricing、四つの LLM API、画像、動画、音楽、3D、音声、ファイル、response lifecycle、batches、embeddings、rerank、翻訳、worlds、メディア素材を網羅します。
+
+モデルには portable schema を提示し、MCP server は完全な OpenAPI contract で実行時入力を検証します。
+
+## 非同期メディア
+
+動画、音楽、3D の作成は非同期です。画像はモデルにより同期結果またはタスクを返します。
+
+1. `delivery.mode` を確認します。
+2. `sync` なら結果を直接利用します。
+3. `async` なら `delivery.task_id` を `tokenlab_wait_task` に渡します。
+4. `status`、完全な `response`、`result_urls` を利用します。
+5. timeout では最新の非終端状態が返り、安全に polling を再開できます。
+
+`tokenlab_wait_task` は読み取り専用で、キャンセルを全リクエストと delay に伝播し、一時エラーの再試行を制限し、任意の progress ではなく status を終端判定に使います。
+
+## 設定
+
+| 変数 | 既定値 | 用途 |
+| --- | --- | --- |
+| `TOKENLAB_API_KEY` | なし | モデル、MCP、非同期 polling の認証 |
+| `TOKENLAB_API_BASE` | `https://api.tokenlab.sh` | MCP と task API root |
+| `TOKENLAB_OPENAI_BASE_URL` | `https://api.tokenlab.sh/v1` | Responses と Chat の base URL |
+| `TOKENLAB_ANTHROPIC_BASE_URL` | `https://api.tokenlab.sh` | Messages の base URL |
+| `TOKENLAB_MCP_TOOL_PROFILE` | `full` | `catalog`、`core`、`full` |
+| `TOKENLAB_MCP_SCHEMA_MODE` | `portable` | `portable`、`exact`、`strict` |
+
+毎回の tool schema コストを抑えたい場合は `core` を選択できます。
+
+## 検証と安全性
+
+再起動後、三つの TokenLab provider、モデルの非重複、`mcp__tokenlab__list_models` の非空結果を確認します。テスト key で Responses、Messages、Chat を一回ずつ実行してログの endpoint を照合し、低コストの非同期メディアタスクを終端 URL まで確認してください。
+
+key は信頼できる環境または secret store に保管します。MCP server は Harness と同じ Node でローカル stdio 実行され、shell やホスト型 MCP を経由しません。課金・破壊的ツールには Harness の承認を残し、返された文字列、URL、ファイル、メディアを信頼しないでください。
+
+既存の `llm-pi-ai` settings section は bundle の既定値より優先されます。すでに使用している場合、パッケージの `cordis.patch.yml` にある三つの `tokenlab-*` route を `providers` map へ統合してください。
+
+## アンインストール
+
+```bash
+dsh plugin --profile web remove --workspace-root @tokenlabai/dsh-provider
+```
+
+profile を再起動します。TokenLab のアカウントや key は削除されません。
+
+## 関連項目
+
+- [TokenLab MCP Server](/ja/integrations/tokenlab-mcp-server)
+- [API 形式](/ja/guides/api-formats)
+- [非同期ジョブとポーリング](/ja/guides/async-jobs-polling)

@@ -1,0 +1,116 @@
+---
+title: "DeepSeek Harness"
+description: "在 DeepSeek Harness 中將 TokenLab 安裝為原生協定模型供應商，並啟用完整多媒體與非同步工具"
+---
+
+## 概覽
+
+TokenLab 的 DeepSeek Harness bundle 同時提供兩層能力：
+
+- 三條互斥的模型路由，分別使用 OpenAI Responses、Anthropic Messages 與 OpenAI Chat Completions；
+- TokenLab MCP `full` profile，涵蓋模型探索、圖像、影片、音樂、3D、音訊、檔案、embeddings、rerank、翻譯與非同步任務。
+
+套件名稱為 `@tokenlabai/dsh-provider`，目標版本是 DeepSeek Harness `0.1.1-rc.2` 與相容的 `0.1.x` 插件契約。
+
+<Note>
+本頁是待發佈套件的完整文件。必須先發佈並讀回 npm 套件，之後才能部署本頁或提交市場條目。
+</Note>
+
+## 安裝
+
+將 key 儲存在專案 `.env` 或 Harness home 的 `.env`：
+
+```dotenv
+TOKENLAB_API_KEY=sk-your-tokenlab-key
+```
+
+安裝到實際使用的 profile，然後重新啟動：
+
+```bash
+dsh plugin --profile web add --workspace-root @tokenlabai/dsh-provider
+```
+
+一次性任務可安裝到 headless profile：
+
+```bash
+dsh plugin --profile headless add --workspace-root @tokenlabai/dsh-provider
+```
+
+## 原生端點路由
+
+DeepSeek Harness 在 provider route 層選擇 wire protocol，因此 bundle 註冊三條 provider，且每個公開 chat 模型只出現一次。
+
+| Harness provider | TokenLab 端點 | 選擇規則 |
+| --- | --- | --- |
+| `TokenLab · Responses` | `POST /v1/responses` | owner 為 OpenAI，且公開 detail contract 宣告 `openai_responses` |
+| `TokenLab · Messages` | `POST /v1/messages` | owner 為 Anthropic，且公開 detail contract 宣告 `anthropic_messages` |
+| `TokenLab · Chat` | `POST /v1/chat/completions` | 其餘宣告相容 OpenAI Chat Completions 的模型 |
+
+模型快照由 `GET /v1/models` 與 `GET /v1/models/{id}` 產生，不會依模型名稱 substring 或內部渠道推測協定。
+
+<Note>
+目前 Harness custom provider 支援 `openai-responses`、`anthropic-messages` 與 `openai-completions`，但無法設定 Gemini native。Gemini 在 Harness 中使用公開宣告的 Chat fallback；需要 Gemini `generateContent` 的應用程式應從相容用戶端呼叫 `/v1beta/models/{model}:generateContent`。
+</Note>
+
+## 多媒體與開發工具
+
+bundle 透過官方 Harness MCP bridge，在本機 stdio 啟動固定版本的 `@tokenlabai/mcp-server`。預設 `full` profile 會註冊 80 個 `mcp__tokenlab__...` 工具，涵蓋 catalog/pricing、四種 LLM API、圖像、影片、音樂、3D、音訊、檔案、response lifecycle、batches、embeddings、rerank、翻譯、worlds 與媒體素材。
+
+模型側使用 portable schema；MCP server 仍以完整生成的 OpenAPI contract 驗證每次呼叫。
+
+## 非同步媒體
+
+影片、音樂與 3D 建立工具會回傳非同步任務；圖像依模型可能同步回傳，也可能回傳任務。
+
+1. 讀取建立結果的 `delivery.mode`。
+2. `sync` 直接使用媒體結果。
+3. `async` 將 `delivery.task_id` 傳給 `tokenlab_wait_task`。
+4. 使用其 `status`、完整 `response` 與 `result_urls`。
+5. wait 逾時會回傳最新非終態，可安全繼續 poll。
+
+`tokenlab_wait_task` 為唯讀工具，會將呼叫者取消訊號傳到請求與 delay，限制暫態重試，並以 status 而非可選 progress 判定終態。只有意圖明確且模型支援時才使用取消工具。
+
+## 設定
+
+| 變數 | 預設值 | 用途 |
+| --- | --- | --- |
+| `TOKENLAB_API_KEY` | 無 | 模型路由、MCP 工具與非同步 poll 憑證 |
+| `TOKENLAB_API_BASE` | `https://api.tokenlab.sh` | MCP 與 task API root |
+| `TOKENLAB_OPENAI_BASE_URL` | `https://api.tokenlab.sh/v1` | Responses 與 Chat base URL |
+| `TOKENLAB_ANTHROPIC_BASE_URL` | `https://api.tokenlab.sh` | Messages base URL |
+| `TOKENLAB_MCP_TOOL_PROFILE` | `full` | 可選 `catalog`、`core`、`full` |
+| `TOKENLAB_MCP_SCHEMA_MODE` | `portable` | 可選 `portable`、`exact`、`strict` |
+
+若更重視每輪重複的 tool schema 成本，而非完整開發介面，可改用 `core`。
+
+## 驗證
+
+重新啟動後確認：模型選擇器顯示三條 TokenLab provider；相同模型只出現一次；`mcp__tokenlab__list_models` 回傳非空；以測試 key 分別執行 Responses、Messages、Chat 並從日誌核對 endpoint；最後提交一個低成本非同步媒體任務並取得終態 URL。
+
+若用戶端為取得 HTTP 200 而刪除歷史、工具、簽名或媒體輸入，這不構成嚴格相容證明。
+
+## 既有 `llm-pi-ai` 設定
+
+Harness 目前只有一個共用 `llm-pi-ai` settings section。Models 頁面儲存的設定優先於 bundle 預設值，可能覆蓋三條 TokenLab 路由。已有該 section 時，請把套件 `cordis.patch.yml` 中的 `tokenlab-responses`、`tokenlab-messages`、`tokenlab-chat` 合併到其 `providers` map。
+
+## 安全
+
+- key 只存於可信環境或 secret store，不提交到儲存庫。
+- MCP server 使用與 Harness 相同的 Node，在本機 stdio 執行，不經過 shell 或託管 MCP 中介。
+- `full` 工具包含計費生成與破壞性操作，應保留 Harness 核准流程。
+- 模型文字、URL、檔案與生成媒體都視為不可信外部內容。
+
+## 解除安裝
+
+```bash
+dsh plugin --profile web remove --workspace-root @tokenlabai/dsh-provider
+```
+
+重新啟動 profile。解除安裝只移除 provider 與工具，不會刪除 TokenLab 帳號或 key。
+
+## 相關文件
+
+- [TokenLab MCP Server](/zh-Hant/integrations/tokenlab-mcp-server)
+- [API 格式](/zh-Hant/guides/api-formats)
+- [非同步任務與輪詢](/zh-Hant/guides/async-jobs-polling)
+- [模型詳細資料 API](/zh-Hant/api-reference/models/get-model)

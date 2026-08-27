@@ -1,0 +1,106 @@
+---
+title: "DeepSeek Harness"
+description: "Installer TokenLab dans DeepSeek Harness comme fournisseur de modèles à protocoles natifs, avec des outils multimédias et asynchrones complets"
+---
+
+## Présentation
+
+Le bundle TokenLab pour DeepSeek Harness ajoute deux surfaces d'intégration :
+
+- trois routes de modèles exclusives pour OpenAI Responses, Anthropic Messages et OpenAI Chat Completions ;
+- le profil TokenLab MCP `full` pour la découverte des modèles, les images, la vidéo, la musique, la 3D, l'audio, les fichiers, embeddings, rerank, la traduction et les tâches asynchrones.
+
+Le paquet s'appelle `@tokenlabai/dsh-provider` et cible DeepSeek Harness `0.1.1-rc.2` ainsi que les contrats de plugin `0.1.x` compatibles.
+
+<Note>
+Cette page constitue la documentation prête pour la publication. Publiez puis relisez le paquet npm avant de déployer cette page ou de soumettre sa fiche au marché.
+</Note>
+
+## Installation
+
+Enregistrez la key dans le fichier `.env` du projet ou du Harness home :
+
+```dotenv
+TOKENLAB_API_KEY=sk-your-tokenlab-key
+```
+
+Installez le bundle dans le profile utilisé, puis redémarrez-le :
+
+```bash
+dsh plugin --profile web add --workspace-root @tokenlabai/dsh-provider
+```
+
+Pour les tâches ponctuelles, utilisez le profile headless :
+
+```bash
+dsh plugin --profile headless add --workspace-root @tokenlabai/dsh-provider
+```
+
+## Routage des endpoints natifs
+
+Harness choisit le wire protocol au niveau de la provider route. Le bundle enregistre donc trois fournisseurs et affecte chaque modèle chat public à un seul d'entre eux.
+
+| Harness provider | TokenLab endpoint | Sélection |
+| --- | --- | --- |
+| `TokenLab · Responses` | `POST /v1/responses` | owner OpenAI et `openai_responses` déclaré dans le detail contract public |
+| `TokenLab · Messages` | `POST /v1/messages` | owner Anthropic et `anthropic_messages` déclaré dans le detail contract public |
+| `TokenLab · Chat` | `POST /v1/chat/completions` | autres modèles déclarant la compatibilité OpenAI Chat Completions |
+
+L'instantané est généré depuis `GET /v1/models` et `GET /v1/models/{id}`. Aucun substring du nom de modèle ni aucune route interne ne sert de preuve de compatibilité.
+
+<Note>
+Les custom providers Harness actuels prennent en charge `openai-responses`, `anthropic-messages` et `openai-completions`, mais pas un protocole Gemini native configurable. Dans Harness, Gemini utilise son Chat fallback déclaré publiquement. Une application nécessitant Gemini `generateContent` doit appeler `/v1beta/models/{model}:generateContent` depuis un client compatible.
+</Note>
+
+## Outils multimédias et développeur
+
+Le bundle lance localement, sur stdio et via la MCP bridge officielle, une version épinglée de `@tokenlabai/mcp-server`. Le profil `full` par défaut enregistre 80 outils sous `mcp__tokenlab__...` : catalog/pricing, quatre API LLM, images, vidéo, musique, 3D, audio, fichiers, response lifecycle, batches, embeddings, rerank, traduction, worlds et ressources média.
+
+Le modèle reçoit des portable schemas, tandis que le MCP server valide chaque appel avec le contrat OpenAPI complet.
+
+## Médias asynchrones
+
+La création de vidéo, de musique et de 3D est asynchrone. Selon le modèle, une image peut être renvoyée immédiatement ou sous forme de tâche.
+
+1. Lire `delivery.mode`.
+2. Pour `sync`, utiliser directement le résultat.
+3. Pour `async`, transmettre `delivery.task_id` à `tokenlab_wait_task`.
+4. Exploiter `status`, la `response` complète et `result_urls`.
+5. En cas de timeout, le dernier état non terminal est renvoyé afin de reprendre le polling.
+
+`tokenlab_wait_task` est en lecture seule. Il propage l'annulation aux requêtes et aux delays, limite les nouvelles tentatives transitoires et utilise status, non un progress facultatif, comme vérité terminale.
+
+## Configuration
+
+| Variable | Valeur par défaut | Usage |
+| --- | --- | --- |
+| `TOKENLAB_API_KEY` | aucune | Authentification des modèles, de MCP et du polling asynchrone |
+| `TOKENLAB_API_BASE` | `https://api.tokenlab.sh` | Root des API MCP et task |
+| `TOKENLAB_OPENAI_BASE_URL` | `https://api.tokenlab.sh/v1` | Base URL de Responses et Chat |
+| `TOKENLAB_ANTHROPIC_BASE_URL` | `https://api.tokenlab.sh` | Base URL de Messages |
+| `TOKENLAB_MCP_TOOL_PROFILE` | `full` | `catalog`, `core` ou `full` |
+| `TOKENLAB_MCP_SCHEMA_MODE` | `portable` | `portable`, `exact` ou `strict` |
+
+Choisissez `core` si le coût récurrent des tool schemas compte davantage que la surface développeur complète.
+
+## Vérification et sécurité
+
+Après redémarrage, vérifiez les trois fournisseurs TokenLab, l'absence de doublons de modèles et un résultat non vide de `mcp__tokenlab__list_models`. Avec une key de test, exécutez un appel Responses, Messages et Chat, contrôlez l'endpoint dans les journaux, puis attendez l'URL terminale d'une tâche média asynchrone peu coûteuse.
+
+Conservez la key dans un environnement fiable ou un secret store. Le MCP server s'exécute localement sur stdio avec le même Node que Harness, sans shell ni intermédiaire MCP hébergé. Gardez l'approbation Harness pour les outils facturables ou destructifs et traitez les textes, URL, fichiers et médias comme du contenu externe non fiable.
+
+Une section de settings `llm-pi-ai` existante prévaut sur les valeurs du bundle. Dans ce cas, fusionnez les trois routes `tokenlab-*` de `cordis.patch.yml` dans sa map `providers`.
+
+## Désinstallation
+
+```bash
+dsh plugin --profile web remove --workspace-root @tokenlabai/dsh-provider
+```
+
+Redémarrez le profile. Le compte TokenLab et la key ne sont pas supprimés.
+
+## Pages associées
+
+- [Serveur MCP TokenLab](/fr/integrations/tokenlab-mcp-server)
+- [Formats d'API](/fr/guides/api-formats)
+- [Tâches asynchrones et interrogation](/fr/guides/async-jobs-polling)
